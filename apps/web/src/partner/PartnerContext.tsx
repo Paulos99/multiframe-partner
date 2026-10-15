@@ -22,6 +22,7 @@ import { flushAnalyticsQueue, trackPartnerAnalytics } from './analytics';
 import {
   createExecutorAccount,
   createPartnerAccount,
+  deletePartnerAccount,
   listActivity,
   listExecutorsForOrg,
   listPartners,
@@ -51,6 +52,7 @@ type PartnerApi = {
     companyName: string;
   }) => Promise<{ login: string; password: string }>;
   adminResetPassword: (partnerUserId: string, password: string) => Promise<string>;
+  adminDeletePartner: (partnerUserId: string) => Promise<void>;
   adminListPartners: () => Array<{
     user: StoredUser;
     org: StoredOrg | undefined;
@@ -152,6 +154,15 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const adminDeletePartner = useCallback(
+    async (partnerUserId: string) => {
+      if (!user) throw new Error('Нет сессии');
+      deletePartnerAccount(partnerUserId, user);
+      setTick((n) => n + 1);
+    },
+    [user],
+  );
+
   const partnerCreateExecutor = useCallback(
     async (input: { login: string; password: string; displayName: string }) => {
       if (!user) throw new Error('Нет сессии');
@@ -196,6 +207,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       saveOrg,
       adminCreatePartner,
       adminResetPassword,
+      adminDeletePartner,
       adminListPartners: () => listPartners(),
       adminActivity: () => listActivity(),
       partnerCreateExecutor,
@@ -217,6 +229,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       saveOrg,
       adminCreatePartner,
       adminResetPassword,
+      adminDeletePartner,
       partnerCreateExecutor,
       partnerResetExecutorPassword,
       noteTool,

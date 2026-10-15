@@ -76,6 +76,19 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     }
   }
 
+  async function onDelete(id: string, loginName: string, company: string, executorCount: number) {
+    const ok = confirm(
+      `Удалить партнёра «${company || loginName}» (${loginName})?\n` +
+        `Будут удалены организация и ${executorCount} исполнител(ей). Это необратимо.`,
+    );
+    if (!ok) return;
+    try {
+      await api.adminDeletePartner(id);
+    } catch (ex) {
+      alert(ex instanceof Error ? ex.message : 'Ошибка');
+    }
+  }
+
   return (
     <div className={styles.shellWide}>
       <header className={styles.top}>
@@ -132,13 +145,29 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                   {p.lastLogin ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}` : ''}
                 </div>
               </div>
-              <button
-                type="button"
-                className={styles.ghost}
-                onClick={() => void onReset(p.user.id, p.user.login)}
-              >
-                Сменить пароль
-              </button>
+              <div className={styles.rowActions}>
+                <button
+                  type="button"
+                  className={styles.ghost}
+                  onClick={() => void onReset(p.user.id, p.user.login)}
+                >
+                  Сменить пароль
+                </button>
+                <button
+                  type="button"
+                  className={styles.danger}
+                  onClick={() =>
+                    void onDelete(
+                      p.user.id,
+                      p.user.login,
+                      p.org?.settings.companyName || p.user.displayName,
+                      p.executorCount,
+                    )
+                  }
+                >
+                  Удалить
+                </button>
+              </div>
             </div>
           ))}
           {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}

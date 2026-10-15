@@ -263,6 +263,29 @@
   color: #5a6b62;
 }
 
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.danger {
+  appearance: none;
+  border: 1px solid rgba(180, 35, 24, 0.35);
+  background: transparent;
+  color: #b42318;
+  font: inherit;
+  font-weight: 700;
+  padding: 12px 16px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.danger:hover {
+  background: rgba(180, 35, 24, 0.06);
+}
+
 .toolHost {
   min-height: 100dvh;
   display: flex;

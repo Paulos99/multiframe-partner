@@ -315,6 +315,32 @@ export function resetPartnerPassword(
   return newPassword;
 }
 
+export function deletePartnerAccount(partnerUserId: string, admin: SessionUser): void {
+  if (admin.role !== 'admin') throw new Error('Только администратор');
+  const db = loadDb();
+  const partner = db.users.find((u) => u.id === partnerUserId && u.role === 'partner');
+  if (!partner) throw new Error('Партнёр не найден');
+  const orgId = partner.orgId;
+  const users = db.users.filter(
+    (u) => u.id !== partnerUserId && !(u.role === 'executor' && orgId && u.orgId === orgId),
+  );
+  const orgs = orgId ? db.orgs.filter((o) => o.id !== orgId) : db.orgs;
+  const links = orgId ? db.links.filter((l) => l.orgId !== orgId) : db.links;
+  let next: PartnerDb = { ...db, users, orgs, links };
+  next = pushActivity(next, {
+    orgId,
+    userId: admin.id,
+    login: admin.login,
+    action: 'delete_partner',
+    detail: `${partner.login} · ${partner.displayName}`,
+  });
+  saveDb(next);
+  const session = loadSession();
+  if (session && (session.id === partnerUserId || (orgId && session.orgId === orgId))) {
+    saveSession(null);
+  }
+}
+
 export function updateOrgSettings(
   orgId: string,
   patch: Partial<OrgSettings>,
