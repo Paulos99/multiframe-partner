@@ -1,0 +1,35 @@
+.box {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.box p {
+  margin: 0;
+}
+
+.compact {
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.mark {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-color);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  font-style: italic;
+}

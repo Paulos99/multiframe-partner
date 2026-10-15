@@ -1,0 +1,106 @@
+.screen {
+  animation: fadeUp var(--duration-slow) var(--ease-out);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hero .head h1 {
+  font-size: clamp(1.55rem, 4vw, 2.05rem);
+  letter-spacing: -0.02em;
+}
+
+.head h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.3rem, 3.2vw, 1.65rem);
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+/* Room questions: larger uppercase titles for readability after leadership review */
+.headSticky h1 {
+  font-size: clamp(1.35rem, 3.4vw, 1.75rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-color);
+}
+
+.lead {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  max-width: 46ch;
+}
+
+.head .lead {
+  margin: 0 0 8px;
+  font-size: 12px;
+  max-width: none;
+}
+
+/* Sticks under header + progress so the question stays in view on input steps */
+.headSticky {
+  position: sticky;
+  top: calc(var(--safe-top) + var(--header-h) + var(--progress-h));
+  z-index: 25;
+  margin: -4px -4px 0;
+  padding: 8px 4px 10px;
+  background: color-mix(in srgb, var(--bg-page) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+@media (max-width: 520px) {
+  .headSticky h1 {
+    font-size: 1.28rem;
+    margin-bottom: 4px;
+    letter-spacing: 0.035em;
+  }
+
+  .headSticky p {
+    font-size: 13px;
+    max-width: none;
+  }
+
+  .headSticky .lead {
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .screen:has(.headSticky) {
+    gap: 12px;
+  }
+
+  .screen:has(.headSticky) .body {
+    gap: 12px;
+  }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dense {
+  gap: 14px;
+}
+
+.dense .body {
+  gap: 12px;
+}

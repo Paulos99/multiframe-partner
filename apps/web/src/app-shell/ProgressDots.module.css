@@ -1,0 +1,71 @@
+.wrap {
+  position: sticky;
+  top: calc(var(--safe-top) + var(--header-h));
+  z-index: 35;
+  width: 100%;
+  margin: 0;
+  padding: 8px 16px 6px;
+  background: color-mix(in srgb, var(--bg-page) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.list {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  width: min(100%, var(--max-w));
+  display: flex;
+  gap: 4px;
+  justify-content: space-between;
+}
+
+.item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dot {
+  width: 100%;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-color);
+  transition: background var(--duration-normal), transform var(--duration-fast);
+}
+
+.done .dot {
+  background: rgba(1, 100, 79, 0.45);
+}
+
+.active .dot {
+  background: var(--accent-color);
+  transform: scaleY(1.35);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.active .label {
+  color: var(--accent-color);
+  font-weight: 650;
+}
+
+@media (max-width: 520px) {
+  .wrap {
+    padding: 6px 16px 4px;
+  }
+
+  .label {
+    display: none;
+  }
+}

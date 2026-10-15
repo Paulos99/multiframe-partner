@@ -1,0 +1,41 @@
+.btn {
+  appearance: none;
+  border: 1px solid rgba(1, 100, 79, 0.28);
+  background: rgba(1, 100, 79, 0.08);
+  color: var(--text-primary, #152018);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: rgba(1, 100, 79, 0.14);
+}
+
+.iosWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.hint {
+  margin: 0;
+  max-width: 12rem;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted, #5a6b62);
+  text-align: right;
+}
+
+:global(body.theme-dark) .btn {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8f2ef;
+}

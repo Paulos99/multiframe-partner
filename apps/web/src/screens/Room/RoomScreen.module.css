@@ -1,0 +1,96 @@
+.subLead {
+  margin: -8px 0 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.progressWrap {
+  margin: -2px 0 6px;
+}
+
+.progressTrack {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-color);
+  transition: width var(--duration-normal) var(--ease-out);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  animation: fadeUp var(--duration-normal) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressFill {
+    transition: none;
+  }
+
+  .grid {
+    animation: none;
+  }
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.block h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.edu {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.edu strong {
+  color: var(--accent-color);
+}
+
+.edu p {
+  margin: 4px 0 0;
+}
+
+.validation {
+  margin: -4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #9a6700;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  border: 1px solid color-mix(in srgb, #9a6700 25%, transparent);
+}

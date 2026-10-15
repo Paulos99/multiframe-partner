@@ -1,0 +1,24 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.count {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.count strong {
+  color: var(--accent-color);
+}
+
+.countWarn {
+  font-weight: 600;
+  color: #9a6700;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  border: 1px solid color-mix(in srgb, #9a6700 25%, transparent);
+}

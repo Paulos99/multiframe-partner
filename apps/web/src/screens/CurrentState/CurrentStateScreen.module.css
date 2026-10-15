@@ -1,0 +1,40 @@
+.simWrap {
+  /* Keep SimCompare metrics fully above sticky «Далее» on showroom phones. */
+  scroll-margin-bottom: calc(var(--footer-h) + var(--safe-bottom) + 40px);
+  padding-bottom: 16px;
+  margin-bottom: 8px;
+}
+
+.block h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.why {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+}
+
+.why h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.why p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}

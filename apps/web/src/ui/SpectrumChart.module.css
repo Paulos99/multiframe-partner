@@ -1,0 +1,416 @@
+.wrap {
+  margin: 0;
+  padding: 10px 10px 8px;
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition:
+    border-color var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
+}
+
+.wrapTall {
+  padding: 14px 14px 12px;
+  border-radius: 18px;
+  background: var(--bg-card);
+  gap: 8px;
+}
+
+.wrap:hover {
+  border-color: rgba(1, 100, 79, 0.28);
+  box-shadow: var(--shadow-md);
+}
+
+.captionRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.captionText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.captionText strong {
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.captionText span {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+.captionRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.seriesToggles {
+  display: inline-flex;
+  gap: 0;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color);
+  background: var(--bg-subtle);
+}
+
+.seriesBtn {
+  appearance: none;
+  border: none;
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.seriesBtnOn {
+  color: #fff;
+  background: var(--accent-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.indexBadge {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--text-secondary);
+}
+
+.wrapTall .indexBadge {
+  background: var(--bg-subtle);
+}
+
+.indexBadge b {
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.indexBadge span {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.quieterBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-top: 2px;
+  color: var(--accent-color);
+  font-weight: 750;
+}
+
+.plot {
+  position: relative;
+}
+
+.svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.hoverLayer {
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out);
+}
+
+.hoverLayerOn {
+  opacity: 1;
+}
+
+.hoverLine {
+  stroke: var(--accent-color);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 3;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+}
+
+.dotBefore {
+  fill: #7a8790;
+  stroke: var(--bg-card);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+}
+
+.dotAfter {
+  fill: var(--accent-color);
+  stroke: var(--bg-card);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 3px rgba(1, 100, 79, 0.35));
+}
+
+.tooltip {
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 118px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-card) 92%, #000 8%);
+  border: 1px solid rgba(1, 100, 79, 0.22);
+  box-shadow: 0 8px 22px rgba(1, 100, 79, 0.14);
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  pointer-events: none;
+  will-change: left, opacity, transform;
+  transition: opacity 160ms var(--ease-out);
+  backdrop-filter: blur(8px);
+}
+
+.tooltip strong {
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--text-primary);
+}
+
+.tooltip b {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltipDash {
+  min-width: 140px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  gap: 4px;
+  font-size: 12px;
+  box-shadow: 0 12px 28px rgba(17, 24, 39, 0.14);
+}
+
+.tooltipDelta {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-color);
+  color: var(--accent-color);
+  font-weight: 650;
+}
+
+.tooltipDelta b {
+  color: var(--accent-color);
+}
+
+.grid {
+  stroke: var(--border-color);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* SVG user units — sized for readable ticks on classic / tall plots. */
+.tick {
+  fill: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.axisLabel {
+  fill: var(--text-secondary);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.wrapTall .tick {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.wrapTall .axisLabel {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.gain {
+  fill: var(--accent-color);
+  opacity: 0.14;
+}
+
+.afterArea {
+  opacity: 1;
+}
+
+.before {
+  stroke: #7a8790;
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.after {
+  stroke: var(--accent-color);
+  stroke-width: 2.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.wrapTall .before {
+  stroke-width: 2.25;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.wrapTall .after {
+  stroke-width: 2.75;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.wrapTall .gain,
+.wrapTall .afterArea {
+  opacity: 0;
+}
+
+:global([data-reveal].is-revealed) .wrapTall .before {
+  animation: chartDraw 1.05s cubic-bezier(0.22, 1, 0.36, 1) 0.08s forwards;
+}
+
+:global([data-reveal].is-revealed) .wrapTall .after {
+  animation: chartDraw 1.05s cubic-bezier(0.22, 1, 0.36, 1) 0.22s forwards;
+}
+
+:global([data-reveal].is-revealed) .wrapTall .afterArea {
+  animation: chartFadeIn 0.7s ease-out 0.45s forwards;
+}
+
+:global([data-reveal].is-revealed) .wrapTall .gain {
+  animation: chartFadeInGain 0.7s ease-out 0.45s forwards;
+}
+
+@keyframes chartDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes chartFadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes chartFadeInGain {
+  to {
+    opacity: 0.14;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrapTall .before,
+  .wrapTall .after {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+
+  .wrapTall .gain {
+    opacity: 0.14;
+    animation: none;
+  }
+
+  .wrapTall .afterArea {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .wrapTall {
+    padding: 12px 10px 10px;
+    border-radius: 16px;
+  }
+
+  .captionRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .captionRight {
+    align-items: flex-start;
+  }
+
+  .wrapTall .tick {
+    font-size: 11px;
+  }
+
+  .wrapTall .axisLabel {
+    font-size: 11px;
+  }
+
+  .indexBadge {
+    align-items: flex-start;
+  }
+}
+
+.legend {
+  margin: 0;
+  padding: 0 2px 2px;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatchBefore,
+.swatchAfter {
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  display: inline-block;
+}
+
+.swatchBefore {
+  background: #7a8790;
+}
+
+.swatchAfter {
+  background: var(--accent-color);
+}

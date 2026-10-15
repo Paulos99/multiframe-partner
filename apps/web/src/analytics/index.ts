@@ -1,0 +1,11 @@
+export { captureChannelFromUrl, getChannel, channelLabel } from './channel';
+export type { ChannelAttribution } from './channel';
+export { getConsent, setConsent, onConsentChange } from './consent';
+export { initMetrika, hasMetrikaConfigured } from './metrika';
+export { getAnalyticsSessionId, resetAnalyticsSessionId } from './sessionId';
+export { track } from './track';
+export type { AnalyticsEvent } from './track';
+export { buildAnalyticsPayload, eventParamsFromSession } from './payload';
+export type { AnalyticsPayload } from './payload';
+export { ingestAnalyticsPayload, hasIngestConfigured } from './ingest';
+export { CookieNotice } from './CookieNotice';

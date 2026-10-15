@@ -1,0 +1,89 @@
+:root {
+  --accent-color: #01644f;
+  --accent-hover: #015a47;
+  --accent-soft: rgba(1, 100, 79, 0.12);
+  --text-primary: #111111;
+  --text-secondary: #5f6b73;
+  --bg-page: #f4f7f6;
+  --bg-card: #ffffff;
+  --bg-subtle: #f5f7f8;
+  --border-color: #e1e5e8;
+  --success-color: #1a7f5f;
+  --danger-soft: #fef2f2;
+  --warn-soft: #fff7ed;
+  --ok-soft: #ecfdf5;
+
+  --shadow: 0 6px 20px rgba(17, 24, 39, 0.07);
+  --shadow-lg: 0 12px 30px rgba(17, 24, 39, 0.12);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 16px rgba(1, 100, 79, 0.08);
+  --shadow-accent: 0 8px 24px rgba(1, 100, 79, 0.22);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  --touch-min: 44px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --header-h: 64px;
+  /* Sticky CTA clearance: keep SimCompare metrics/chips above «Далее» on phones. */
+  --footer-h: 120px;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --max-w: 720px;
+}
+
+/* Wider column on large screens — no zoom (it ballooned buttons/charts). */
+@media (min-width: 900px) {
+  :root {
+    --max-w: 760px;
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --max-w: 800px;
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --max-w: 840px;
+  }
+}
+
+body.theme-dark {
+  --text-primary: #e6e7ea;
+  --text-secondary: #a4acb4;
+  --bg-page: #2d2e33;
+  --bg-card: #2f3036;
+  --bg-subtle: #26272c;
+  --border-color: #3a3b42;
+  --success-color: #2ab38b;
+  --accent-soft: rgba(42, 179, 139, 0.16);
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-accent: 0 8px 24px rgba(1, 100, 79, 0.35);
+  --danger-soft: #3a2424;
+  --warn-soft: #3a2e22;
+  --ok-soft: #1e2f28;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

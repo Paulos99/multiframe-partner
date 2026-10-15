@@ -1,0 +1,167 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg-page) 88%, transparent);
+  border-bottom: 1px solid var(--border-color);
+  padding-top: var(--safe-top);
+}
+
+.inner {
+  width: min(100%, var(--max-w));
+  margin: 0 auto;
+  min-height: var(--header-h);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Logos are near-white PNGs — darken on light header, keep bright on dark. */
+.stp {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  filter: brightness(0) saturate(100%);
+  opacity: 0.88;
+}
+
+.mf {
+  height: 26px;
+  width: auto;
+  max-width: 150px;
+  object-fit: contain;
+  filter: brightness(0) saturate(100%);
+  opacity: 0.9;
+}
+
+.dark .stp {
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+  opacity: 1;
+}
+
+.dark .mf {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  opacity: 1;
+}
+
+.product {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-color);
+}
+
+/* Pill theme switch — same pattern as MF_StP calculator */
+.themeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.themeLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.themeSwitch {
+  display: inline-block;
+  cursor: pointer;
+}
+
+.themeSwitch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switchTrack {
+  position: relative;
+  width: 64px;
+  height: 32px;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.switchThumb {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  right: 3px;
+  transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+}
+
+.iconSun,
+.iconMoon {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+}
+
+.iconSun {
+  background: #4a4a4a;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+}
+
+.iconMoon {
+  background: radial-gradient(circle at 70% 30%, transparent 8px, #ffffff 9px);
+  border-radius: 50%;
+}
+
+.themeSwitch input:checked + .switchTrack {
+  background: #26272c;
+  border-color: #2f3036;
+}
+
+.themeSwitch input:checked + .switchTrack .switchThumb {
+  transform: translateX(-32px);
+  background: #2f3036;
+  border-color: #3a3b42;
+}
+
+.themeSwitch input:checked + .switchTrack .iconSun {
+  opacity: 0.5;
+}
+
+.themeSwitch input:not(:checked) + .switchTrack .iconMoon {
+  opacity: 0.5;
+}
+
+@media (max-width: 420px) {
+  .product {
+    display: none;
+  }
+  .mf {
+    max-width: 120px;
+  }
+  .themeLabel {
+    display: none;
+  }
+}

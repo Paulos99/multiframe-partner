@@ -1,0 +1,15 @@
+﻿node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.yc/
+**/agent-project-creator-key.json
+apps/api/node_modules/
+apps/api/*.zip
+apps/web/dist/
+infra/.cache/
+apps/web/public/calculator/node_modules/
+apps/web/public/calculator/dist/

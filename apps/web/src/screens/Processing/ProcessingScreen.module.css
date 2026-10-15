@@ -1,0 +1,240 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 28px calc(28px + var(--safe-bottom));
+  background: #01644f;
+  color: #fff;
+  opacity: 0;
+  transform: scale(1.018);
+  transition:
+    opacity 0.95s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.entered {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.exiting {
+  opacity: 0;
+  transform: scale(0.985);
+  pointer-events: none;
+  transition:
+    opacity 0.75s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.85s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.exiting .center,
+.exiting .brand {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.exiting .brand {
+  transform: translate(-50%, 6px);
+}
+
+.brand {
+  position: absolute;
+  z-index: 1;
+  top: max(28px, calc(var(--safe-top, 0px) + 20px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(88vw, 340px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.logo {
+  width: min(78vw, 300px);
+  height: auto;
+  max-height: 88px;
+  object-fit: contain;
+  /* PNG уже светлый — на зелёном фоне остаётся белым */
+  filter: brightness(0) invert(1);
+  opacity: 0.98;
+}
+
+.tagline {
+  margin: 0;
+  max-width: 22em;
+  font-size: clamp(0.85rem, 2.8vw, 1.05rem);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.glow {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 40%, rgba(255, 255, 255, 0.14), transparent 62%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(0, 0, 0, 0.18), transparent 55%);
+  opacity: 0.85;
+  transition: opacity 0.8s ease;
+}
+
+.exiting .glow {
+  opacity: 0;
+}
+
+.center {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  text-align: center;
+  transition:
+    opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.statusStage {
+  position: relative;
+  width: 100%;
+  height: 1.7em;
+  overflow: hidden;
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 18%,
+    #000 82%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 18%,
+    #000 82%,
+    transparent 100%
+  );
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 8px;
+  font-size: clamp(1.05rem, 3.8vw, 1.35rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.statusIn {
+  animation: statusIn 1.05s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.statusOut {
+  animation: statusOut 0.95s cubic-bezier(0.33, 0, 0.15, 1) both;
+}
+
+.bar {
+  width: 100%;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.22);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.45);
+  transform-origin: left center;
+  transform: scaleX(0.02);
+  will-change: transform;
+}
+
+@keyframes statusIn {
+  from {
+    opacity: 0;
+    transform: translateY(-0.75em) scale(0.985);
+    filter: blur(5px);
+    letter-spacing: 0.05em;
+  }
+  45% {
+    opacity: 0.55;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+    letter-spacing: -0.02em;
+  }
+}
+
+@keyframes statusOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+    letter-spacing: -0.02em;
+  }
+  40% {
+    opacity: 0.45;
+    filter: blur(3px);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(0.9em) scale(1.03);
+    filter: blur(9px);
+    letter-spacing: 0.12em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .exiting,
+  .exiting .center,
+  .exiting .brand,
+  .center,
+  .brand,
+  .fill {
+    transition: none !important;
+  }
+
+  .overlay {
+    opacity: 1;
+    transform: none;
+  }
+
+  .statusIn,
+  .statusOut {
+    animation: none;
+  }
+
+  .fill {
+    transition: none;
+  }
+}

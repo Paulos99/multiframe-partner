@@ -1,0 +1,61 @@
+.shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.withFooter {
+  padding-bottom: calc(var(--footer-h) + var(--safe-bottom) + 40px);
+}
+
+.main {
+  width: min(100%, var(--max-w));
+  margin: 0 auto;
+  padding: 12px 16px 28px;
+  flex: 1;
+}
+
+.mainProcessing {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Result dashboard: full instrument canvas on every viewport */
+.shellWide {
+  --max-w: 1400px;
+}
+
+.mainWide {
+  width: min(100%, 1400px);
+  padding: 12px 14px 32px;
+  padding-bottom: calc(32px + var(--safe-bottom, 0px));
+}
+
+.processing {
+  /* Full-bleed green ceremony owns the viewport */
+  background: #01644f;
+}
+
+@media (min-width: 640px) {
+  .main {
+    padding: 28px 24px 40px;
+  }
+
+  .mainProcessing {
+    padding: 0;
+  }
+
+  .mainWide {
+    padding: 18px 22px 44px;
+    padding-bottom: calc(44px + var(--safe-bottom, 0px));
+  }
+}
+
+@media (min-width: 1024px) {
+  .mainWide {
+    padding: 20px 28px 48px;
+    padding-bottom: calc(48px + var(--safe-bottom, 0px));
+  }
+}

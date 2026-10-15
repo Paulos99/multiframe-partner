@@ -1,0 +1,11 @@
+{
+  "name": "multiframe-partner-api",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "jose": "^6.0.11"
+  }
+}

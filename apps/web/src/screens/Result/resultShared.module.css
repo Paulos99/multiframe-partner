@@ -1,0 +1,364 @@
+.feltScale {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(1, 100, 79, 0.16);
+  background: var(--bg-subtle);
+  overflow: hidden;
+  transition:
+    border-color var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    background var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
+}
+
+.feltScale:hover {
+  border-color: rgba(1, 100, 79, 0.38);
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--bg-subtle));
+  box-shadow: 0 8px 24px rgba(1, 100, 79, 0.1);
+  transform: translateY(-1px);
+}
+
+.feltHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.feltHead strong {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.feltHead b {
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  color: var(--accent-color);
+}
+
+.quieterLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.feltDb {
+  margin: -2px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+.feltDb b {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.feltTrack {
+  position: relative;
+  height: 72px;
+  margin: 10px 0 0;
+  overflow: visible;
+}
+
+.feltLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(122, 135, 144, 0.55),
+    rgba(1, 100, 79, 0.25) 45%,
+    var(--accent-color)
+  );
+}
+
+.feltStep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  transform: translateX(-50%);
+}
+
+.feltStep[data-edge='start'] {
+  transform: none;
+}
+
+.feltStep[data-edge='end'] {
+  transform: translateX(-100%);
+}
+
+.feltDot {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  margin: 0;
+  border-radius: 50%;
+  background: #9aa4ab;
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 0 0 1px rgba(122, 135, 144, 0.35);
+  transform: translateX(-50%);
+  z-index: 1;
+  transition:
+    transform var(--duration-normal) var(--ease-spring),
+    background var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.feltStep:hover .feltDot {
+  transform: translateX(-50%) scale(1.35);
+  background: var(--accent-color);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.feltStep[data-edge='start']:hover .feltDot,
+.feltStep[data-edge='end']:hover .feltDot {
+  transform: scale(1.35);
+}
+
+.feltStep:hover .feltLabel {
+  color: var(--accent-color);
+  font-weight: 750;
+}
+
+.feltStep[data-edge='start'] .feltDot {
+  left: 0;
+  transform: none;
+}
+
+.feltStep[data-edge='end'] .feltDot {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.feltDot[data-danger] {
+  background: #8a6a5a;
+}
+
+.feltStepActive .feltDot {
+  background: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+:global([data-reveal].is-revealed) .feltStepActive .feltDot {
+  animation: feltDotPop 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+}
+
+:global([data-reveal].is-revealed) .feltStepActive[data-edge='start'] .feltDot,
+:global([data-reveal].is-revealed) .feltStepActive[data-edge='end'] .feltDot {
+  animation-name: feltDotPopEdge;
+}
+
+:global([data-reveal].is-revealed) .feltStepActive .feltMark,
+:global([data-reveal].is-revealed) .feltStepActive .feltMarkMf,
+:global([data-reveal].is-revealed) .feltStepActive .feltMarkBoth {
+  animation: feltMarkIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+:global([data-reveal].is-revealed) .feltStepActive[data-edge='start'] .feltMark,
+:global([data-reveal].is-revealed) .feltStepActive[data-edge='start'] .feltMarkMf,
+:global([data-reveal].is-revealed) .feltStepActive[data-edge='start'] .feltMarkBoth,
+:global([data-reveal].is-revealed) .feltStepActive[data-edge='end'] .feltMark,
+:global([data-reveal].is-revealed) .feltStepActive[data-edge='end'] .feltMarkMf,
+:global([data-reveal].is-revealed) .feltStepActive[data-edge='end'] .feltMarkBoth {
+  animation-name: feltMarkInEdge;
+}
+
+@keyframes feltDotPop {
+  from {
+    transform: translateX(-50%) scale(0.55);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes feltDotPopEdge {
+  from {
+    transform: scale(0.55);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes feltMarkIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes feltMarkInEdge {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global([data-reveal].is-revealed) .feltStepActive .feltDot,
+  :global([data-reveal].is-revealed) .feltStepActive .feltMark,
+  :global([data-reveal].is-revealed) .feltStepActive .feltMarkMf,
+  :global([data-reveal].is-revealed) .feltStepActive .feltMarkBoth {
+    animation: none;
+  }
+}
+
+.feltLabel {
+  position: absolute;
+  top: 42px;
+  left: 50%;
+  width: 7.2em;
+  font-size: 8px;
+  font-weight: 650;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--text-secondary);
+  transform: translateX(-50%);
+}
+
+.feltStep[data-edge='start'] .feltLabel {
+  left: 0;
+  transform: none;
+  text-align: left;
+}
+
+.feltStep[data-edge='end'] .feltLabel {
+  left: auto;
+  right: 0;
+  transform: none;
+  text-align: right;
+}
+
+.feltStepActive .feltLabel {
+  color: var(--text-primary);
+  font-weight: 750;
+}
+
+.feltMark,
+.feltMarkMf,
+.feltMarkBoth {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  animation: markerIn 360ms var(--ease-out) both;
+  z-index: 2;
+}
+
+.feltStep[data-edge='start'] .feltMark,
+.feltStep[data-edge='start'] .feltMarkMf,
+.feltStep[data-edge='start'] .feltMarkBoth {
+  left: 0;
+  transform: none;
+  animation-name: markerInEdge;
+}
+
+.feltStep[data-edge='end'] .feltMark,
+.feltStep[data-edge='end'] .feltMarkMf,
+.feltStep[data-edge='end'] .feltMarkBoth {
+  left: auto;
+  right: 0;
+  transform: none;
+  animation-name: markerInEdge;
+}
+
+.feltMark {
+  color: #fff;
+  background: #68757e;
+}
+
+.feltMarkMf {
+  color: #fff;
+  background: var(--accent-color);
+  box-shadow: 0 3px 10px rgba(1, 100, 79, 0.18);
+}
+
+.feltMarkBoth {
+  color: var(--accent-color);
+  background: var(--bg-card);
+  border: 1px solid rgba(1, 100, 79, 0.35);
+}
+
+.feltStep .feltMark + .feltMarkMf {
+  top: 22px;
+}
+
+@keyframes markerIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes markerInEdge {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .feltTrack {
+    margin-inline: 0;
+    height: 76px;
+  }
+
+  .feltLabel {
+    width: 4.6em;
+    font-size: 8px;
+  }
+
+  .feltMark,
+  .feltMarkMf,
+  .feltMarkBoth {
+    font-size: 8px;
+    padding-inline: 6px;
+  }
+}
+
