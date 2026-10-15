@@ -464,12 +464,30 @@ function animateStatValue(el, toValue, formatter, { duration = 520 } = {}) {
   statAnimRafs[key] = requestAnimationFrame(tick);
 }
 
+function partnerGrandTotal(bom, area, panelsCost) {
+  if (!PARTNER_PRICING.enabled) return null;
+  if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
+  const install =
+    PARTNER_PRICING.installPerM2 != null && area > 0
+      ? Math.round(area * PARTNER_PRICING.installPerM2)
+      : 0;
+  const dowels =
+    bom?.total?.dowelsWithReserve ??
+    Math.ceil((bom?.total?.panelsWithReserve ?? 0) * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels));
+  const dowelCost =
+    PARTNER_PRICING.dowelPrice != null && dowels > 0
+      ? Math.round(dowels * PARTNER_PRICING.dowelPrice)
+      : 0;
+  return (panelsCost ?? 0) + install + dowelCost;
+}
+
 function updateStatCards() {
   const bom = state.bom;
   if (!resultsUnlockedForUi() || !bom?.total) {
     animateStatValue($('totalPanels'), 0, formatStatPanels, { duration: 280 });
     animateStatValue($('coverageArea'), 0, formatStatArea, { duration: 280 });
     animateStatValue($('totalCost'), 0, formatStatCost, { duration: 280 });
+    animateStatValue($('partnerTotalCost'), 0, formatStatCost, { duration: 280 });
     updateMobileSummary();
     return;
   }
@@ -480,6 +498,8 @@ function updateStatCards() {
   animateStatValue($('totalPanels'), panels, formatStatPanels);
   animateStatValue($('coverageArea'), area, formatStatArea);
   animateStatValue($('totalCost'), cost, formatStatCost);
+  const grand = partnerGrandTotal(bom, area, cost);
+  if (grand != null) animateStatValue($('partnerTotalCost'), grand, formatStatCost);
   updateMobileSummary();
 }
 
@@ -1251,7 +1271,7 @@ function markPanelPreviewStale() {
   document.querySelectorAll('.workspace-stats .stat-card:not(.stat-card-button)').forEach((card) => {
     card.classList.add('is-recalculating');
   });
-  ['totalPanels', 'coverageArea', 'totalCost'].forEach((id) => {
+  ['totalPanels', 'coverageArea', 'totalCost', 'partnerTotalCost'].forEach((id) => {
     $(id)?.classList.add('is-stale');
   });
 }
@@ -1260,7 +1280,7 @@ function markStatsRecalculating() {
   document.querySelectorAll('.workspace-stats .stat-card:not(.stat-card-button)').forEach((card) => {
     card.classList.add('is-recalculating');
   });
-  ['totalPanels', 'coverageArea', 'totalCost'].forEach((id) => {
+  ['totalPanels', 'coverageArea', 'totalCost', 'partnerTotalCost'].forEach((id) => {
     $(id)?.classList.add('is-stale');
   });
 }
@@ -1277,7 +1297,24 @@ function updatePreviewStatsFromCeiling(ceilingResult) {
   $('totalPanels').textContent = `${panels} шт.`;
   $('coverageArea').textContent = `${area.toFixed(2)} м²`;
   $('totalCost').textContent = `${cost.toLocaleString('ru-RU')} ₽`;
-  ['totalPanels', 'coverageArea', 'totalCost'].forEach((id) => $(id)?.classList.remove('is-stale'));
+  const grand = partnerGrandTotal(
+    {
+      total: {
+        panelsWithReserve: panels,
+        totalCost: cost,
+        dowelsWithReserve: Math.ceil(panels * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels)),
+      },
+    },
+    area,
+    cost,
+  );
+  if (grand != null && $('partnerTotalCost')) {
+    $('partnerTotalCost').textContent = `${Math.round(grand).toLocaleString('ru-RU')} ₽`;
+    $('partnerTotalCost').dataset.raw = String(grand);
+  }
+  ['totalPanels', 'coverageArea', 'totalCost', 'partnerTotalCost'].forEach((id) =>
+    $(id)?.classList.remove('is-stale'),
+  );
 }
 
 function setupTabs() {
@@ -2158,8 +2195,28 @@ function mountPartnerBanner() {
   else document.body.prepend(banner);
 }
 
+/** Replace store CTA with green «Итого» card (panels + install + fasteners). */
+function mountPartnerTotalCard() {
+  if (!PARTNER_PRICING.enabled) return;
+  if (document.getElementById('partnerTotalCard')) return;
+  const buy = document.getElementById('buyMultiframeBtn');
+  if (!buy) return;
+  const card = document.createElement('div');
+  card.id = 'partnerTotalCard';
+  card.className = 'stat-card stat-card--partner-total';
+  card.dataset.stat = 'partner-total';
+  card.innerHTML = `
+    <div class="stat-label">Итого</div>
+    <div class="stat-value" id="partnerTotalCost" data-raw="0">0 ₽</div>
+    <div class="stat-label__hint">панели · монтаж · крепёж</div>
+  `;
+  buy.replaceWith(card);
+  document.body.classList.add('partner-calc-mode');
+}
+
 function init() {
   mountPartnerBanner();
+  mountPartnerTotalCard();
   cacheElements();
   setupSketchEditor();
 

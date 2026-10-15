@@ -97,12 +97,15 @@ export function buildBOM({ room, ceilingResult, wallResult, options }) {
   const areaTotal = (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
   const extras = partnerExtras(areaTotal, dowelsTotal);
 
+  const grandTotal = costTotal + (extras.install ?? 0) + (extras.dowelCost ?? 0);
+
   bom.total = {
     panelsWithReserve: panelsTotal,
     totalCost: costTotal,
     dowelsWithReserve: dowelsTotal,
     installCost: extras.install,
     dowelsCost: extras.dowelCost,
+    grandTotal,
     partnerCompany: PARTNER_PRICING.company || '',
     frame: mergeFrameTotals([bom.ceiling?.frame, bom.walls?.frame].filter(Boolean)),
     profileLengthM:
@@ -309,6 +312,11 @@ export function renderResultsHtml(bom, { mode = null } = {}) {
     }
     if (bom.total.totalCost != null) {
       rows.push(`<div class="rb-kv"><span>Панели (РРЦ)</span><strong>${fmtNum(bom.total.totalCost)} ₽</strong></div>`);
+    }
+    if (bom.total.grandTotal != null) {
+      rows.push(
+        `<div class="rb-kv rb-kv--total"><span>Итого</span><strong>${fmtNum(bom.total.grandTotal)} ₽</strong></div>`,
+      );
     }
     parts.push(`
       <section class="rb-block">

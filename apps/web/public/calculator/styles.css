@@ -6776,13 +6776,58 @@ body.theme-dark .entry-block.is-open .entry-card {
 }
 
 /* Declutter: idle chrome */
-.workspace-stats.is-idle .stat-card:not(.stat-card-button) {
+.workspace-stats.is-idle .stat-card:not(.stat-card-button):not(.stat-card--partner-total) {
   opacity: 0.45;
   pointer-events: none;
 }
-.workspace-stats.is-idle .stat-card-button {
+.workspace-stats.is-idle .stat-card-button,
+.workspace-stats.is-idle .stat-card--partner-total {
   pointer-events: auto;
   opacity: 1;
+}
+
+.workspace-stats .stat-card--partner-total {
+  background: var(--accent-color, #01644f) !important;
+  border: 1px solid var(--accent-color, #01644f) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  color: #fff;
+  justify-content: center;
+  gap: 2px;
+}
+
+.workspace-stats .stat-card--partner-total::before {
+  display: none;
+}
+
+.workspace-stats .stat-card--partner-total .stat-label {
+  color: rgba(255, 255, 255, 0.88) !important;
+  margin-bottom: 2px;
+  cursor: default;
+}
+
+.workspace-stats .stat-card--partner-total .stat-value {
+  color: #fff !important;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.workspace-stats .stat-card--partner-total .stat-label__hint {
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.workspace-stats .stat-card--partner-total.is-recalculating,
+.workspace-stats .stat-card--partner-total.is-updating {
+  background: #015a47 !important;
+  border-color: #015a47 !important;
+}
+
+body.theme-dark .workspace-stats .stat-card--partner-total {
+  background: #01644f !important;
+  border-color: #015a47 !important;
 }
 .secondary-toolbar[hidden],
 .results-card[hidden],
