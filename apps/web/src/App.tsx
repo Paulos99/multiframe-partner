@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { SessionProvider } from './state/SessionContext';
 import { AppShell } from './app-shell/AppShell';
 import { SmoothScroll } from './ui/SmoothScroll';
@@ -11,23 +11,10 @@ import styles from './partner/partner.module.css';
 type Route = 'cabinet' | 'problemomer' | 'calculator';
 
 function PartnerShell() {
-  const { partner, loading } = usePartner();
+  const { user, loading } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
 
-  const calcSrc = useMemo(() => {
-    if (!partner) return '';
-    const q = new URLSearchParams();
-    if (partner.panelPriceRub != null) q.set('panelPrice', String(partner.panelPriceRub));
-    if (partner.pricePerM2 != null) q.set('pricePerM2', String(partner.pricePerM2));
-    if (partner.installPricePerM2 != null) q.set('installPerM2', String(partner.installPricePerM2));
-    q.set('dowelsPerPanel', String(partner.dowelsPerPanel || 2));
-    if (partner.dowelPriceRub != null) q.set('dowelPrice', String(partner.dowelPriceRub));
-    if (partner.companyName) q.set('company', partner.companyName);
-    const base = `${import.meta.env.BASE_URL}calculator/index.html`;
-    return `${base}?${q.toString()}`;
-  }, [partner]);
-
-  if (loading && !partner) {
+  if (loading && !user) {
     return (
       <div className={styles.shell}>
         <p className={styles.lead}>Загрузка…</p>
@@ -35,36 +22,19 @@ function PartnerShell() {
     );
   }
 
-  if (!partner) return <LoginScreen />;
+  if (!user) return <LoginScreen />;
 
   if (route === 'cabinet') {
     return <CabinetScreen onNavigate={setRoute} />;
   }
 
-  if (route === 'calculator') {
-    return (
-      <div>
-        <div className={styles.toolBar}>
-          <button type="button" onClick={() => setRoute('cabinet')}>
-            ← Кабинет
-          </button>
-          <button type="button" onClick={() => setRoute('problemomer')}>
-            Проблемомер
-          </button>
-        </div>
-        <iframe title="Калькулятор MultiFrame" className={styles.calcFrame} src={calcSrc} />
-      </div>
-    );
-  }
-
+  // Calculator opens via full navigation from cabinet (calcUrlFromOrg).
+  // Keep problemomer embed here.
   return (
     <div>
       <div className={styles.toolBar}>
         <button type="button" onClick={() => setRoute('cabinet')}>
           ← Кабинет
-        </button>
-        <button type="button" onClick={() => setRoute('calculator')}>
-          Калькулятор
         </button>
       </div>
       <SmoothScroll>

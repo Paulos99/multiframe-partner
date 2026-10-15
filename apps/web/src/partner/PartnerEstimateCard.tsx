@@ -36,14 +36,14 @@ export function PartnerEstimateCard({ areaM2 }: { areaM2: number | null }) {
             <strong>{formatRub(est.installCost)}</strong>
           </div>
         ) : null}
-        {est.installPlusFasteners != null ? (
-          <div className={styles.field}>
-            Монтаж + крепёж
-            <strong>{formatRub(est.installPlusFasteners)}</strong>
-          </div>
-        ) : null}
       </div>
-      <p className={styles.hint}>Стоимость панелей по РРЦ партнёра; детальный расклад — в калькуляторе.</p>
+      <div className={styles.estimateTotal}>
+        <span>Итого</span>
+        <strong>{formatRub(est.totalCost)}</strong>
+      </div>
+      <p className={styles.hint}>
+        Общая сумма по проекту: панели (РРЦ) + монтаж + крепёж. Детальный расклад — в калькуляторе.
+      </p>
     </section>
   );
 }

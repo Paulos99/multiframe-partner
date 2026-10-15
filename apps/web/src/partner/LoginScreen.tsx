@@ -3,7 +3,7 @@ import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
 export function LoginScreen() {
-  const { login, loading, error, apiBase } = usePartner();
+  const { login, loading, error } = usePartner();
   const [loginName, setLoginName] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -11,10 +11,6 @@ export function LoginScreen() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setLocalError(null);
-    if (!apiBase) {
-      setLocalError('Не задан VITE_API_URL — API партнёров недоступен.');
-      return;
-    }
     try {
       await login(loginName.trim(), password);
     } catch (err) {
@@ -27,7 +23,7 @@ export function LoginScreen() {
       <form className={styles.card} onSubmit={(e) => void onSubmit(e)}>
         <h1>Кабинет партнёра MultiFrame</h1>
         <p className={styles.lead}>
-          Проблемомер и калькулятор с вашими ценами монтажа и крепежа.
+          Проблемомер и калькулятор с корпоративными параметрами. Сессия сохраняется в браузере.
         </p>
         <label className={styles.field}>
           Логин
@@ -56,6 +52,10 @@ export function LoginScreen() {
         <button type="submit" className={styles.primary} disabled={loading}>
           {loading ? 'Входим…' : 'Войти'}
         </button>
+        <p className={styles.hint}>
+          Демо: <code>admin</code> / <code>admin1234</code> · <code>partner1</code> /{' '}
+          <code>demo1234</code>
+        </p>
       </form>
     </div>
   );

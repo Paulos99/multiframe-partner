@@ -31,6 +31,11 @@ import { buildLeadHandoff, withDerived } from './session';
 import { buildAirSpectrum, buildImpactSpectrum } from './spectrum';
 import { comfortRingSvg, spectrumChartSvg } from './chartSvg';
 import { wishLabelsJoined } from './wish';
+import {
+  FIXED_PANEL_PRICE_RUB,
+  type OrgSettings,
+} from '../../../../packages/shared/partner';
+import { buildEstimateFromOrg, formatRub } from '../partner/estimate';
 
 /** Keep in sync with ResultWideScreen — hide frequency page until clients ask. */
 const SHOW_FREQUENCY_CHARTS = false;
@@ -349,6 +354,58 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
 
   const TOTAL = SHOW_FREQUENCY_CHARTS ? 4 : 3;
 
+  const partnerOrg =
+    typeof window !== 'undefined'
+      ? ((window as Window & { __MF_PARTNER_ORG__?: OrgSettings | null }).__MF_PARTNER_ORG__ ??
+        null)
+      : null;
+  const partnerCompany =
+    typeof window !== 'undefined'
+      ? (window as Window & { __MF_PARTNER_COMPANY__?: string }).__MF_PARTNER_COMPANY__ ||
+        partnerOrg?.companyName ||
+        ''
+      : '';
+  const estimate =
+    room.ceilingAreaM2 != null ? buildEstimateFromOrg(room.ceilingAreaM2, partnerOrg) : null;
+  const estimateHtml = estimate
+    ? `<div class="card estimate-card">
+      <h2><span class="sec-idx">КП</span>Смета для КП</h2>
+      ${
+        partnerCompany
+          ? `<p class="muted" style="margin:0 0 10px">Подготовлено: <b style="color:#152018">${escapeHtml(partnerCompany)}</b> · площадь ${escapeHtml(String(estimate.areaM2))} м²</p>`
+          : `<p class="muted" style="margin:0 0 10px">Площадь ${escapeHtml(String(estimate.areaM2))} м²</p>`
+      }
+      <table class="estimate">
+        <tbody>
+          <tr>
+            <td>Панели MultiFrame</td>
+            <td>${estimate.panels} шт. · РРЦ ${formatRub(FIXED_PANEL_PRICE_RUB)}</td>
+            <td class="num">${formatRub(estimate.panelsCost)}</td>
+          </tr>
+          <tr>
+            <td>Дюбели (запас 15%)</td>
+            <td>${estimate.dowels} шт.</td>
+            <td class="num">${estimate.dowelsCost != null ? formatRub(estimate.dowelsCost) : '—'}</td>
+          </tr>
+          ${
+            estimate.installCost != null
+              ? `<tr>
+            <td>Монтаж</td>
+            <td>${escapeHtml(String(partnerOrg?.installPricePerM2 ?? ''))} ₽/м²</td>
+            <td class="num">${formatRub(estimate.installCost)}</td>
+          </tr>`
+              : ''
+          }
+          <tr class="total">
+            <td colspan="2"><strong>Итого</strong> · общая сумма по проекту</td>
+            <td class="num"><strong>${formatRub(estimate.totalCost)}</strong></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted" style="margin:8px 0 0;font-size:10px">Ориентир для коммерческого предложения. Детальный расклад панелей — в калькуляторе комплектации.</p>
+    </div>`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8" />
 <style>
@@ -576,6 +633,27 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
   .norms tr.marked td { background: #e7f3ef; }
   .norm-name { font-weight: 700; }
 
+  .estimate-card { margin: 10px 0 0; padding: 12px 14px !important; }
+  .estimate-card h2 { margin-bottom: 4px !important; }
+  .estimate {
+    width: 100%; border-collapse: collapse; font-size: 11px;
+    border: 1px solid #dce6e1; background: #fff; border-radius: 10px; overflow: hidden;
+  }
+  .estimate td {
+    padding: 7px 10px; border-bottom: 1px solid #e4ebe7;
+    vertical-align: middle; color: #152018;
+  }
+  .estimate tr:last-child td { border-bottom: none; }
+  .estimate td.num {
+    text-align: right; white-space: nowrap;
+    font-variant-numeric: tabular-nums; font-weight: 750;
+  }
+  .estimate tr.total td {
+    background: #0c332c; color: #e8f2ef; font-size: 12px;
+    padding-top: 9px; padding-bottom: 9px;
+  }
+  .estimate tr.total td.num { font-size: 14px; font-weight: 800; }
+
   .note {
     margin: 0 0 12px; font-size: 12px; color: #5f6b73; line-height: 1.4;
   }
@@ -703,11 +781,8 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
     <h1 class="hero-title">Акустический профиль помещения</h1>
     <p class="hero-sub">Объект: <b>${escapeHtml(roomName)}</b>, ${escapeHtml(area)}. Эффект MultiFrame для этого помещения.</p>
     ${
-      typeof window !== 'undefined' &&
-      (window as Window & { __MF_PARTNER_COMPANY__?: string }).__MF_PARTNER_COMPANY__
-        ? `<p class="hero-sub">Подготовлено: <b>${escapeHtml(
-            (window as Window & { __MF_PARTNER_COMPANY__?: string }).__MF_PARTNER_COMPANY__ || '',
-          )}</b></p>`
+      partnerCompany
+        ? `<p class="hero-sub">Подготовлено: <b>${escapeHtml(partnerCompany)}</b></p>`
         : ''
     }
 
@@ -844,12 +919,24 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
   <!-- LAST PAGE -->
   <section class="page" data-page="${TOTAL}">
     ${pageChrome(TOTAL, TOTAL, roomLine, logos)}
-    <div class="card">
+    ${
+      estimateHtml
+        ? estimateHtml
+        : `<div class="card">
       <h2><span class="sec-idx">${SHOW_FREQUENCY_CHARTS ? '04' : '03'}</span>Уникальность MultiFrame</h2>
       <ul class="pillars">${pillars}</ul>
-    </div>
+    </div>`
+    }
+    ${
+      estimateHtml
+        ? `<div class="card" style="margin-top:10px;padding:12px 14px">
+      <h2 style="margin:0 0 6px;font-size:13px"><span class="sec-idx">${SHOW_FREQUENCY_CHARTS ? '04' : '03'}</span>Уникальность MultiFrame</h2>
+      <ul class="pillars" style="gap:6px">${pillars}</ul>
+    </div>`
+        : ''
+    }
 
-    <h2 style="margin:14px 0 4px;font-size:15px;font-weight:800">Продолжите с MultiFrame</h2>
+    <h2 style="margin:12px 0 4px;font-size:15px;font-weight:800">Продолжите с MultiFrame</h2>
     <p class="hero-sub" style="margin-bottom:0">Отсканируйте QR — сайт бренда или калькулятор комплектации.</p>
 
     <div class="qr-row">

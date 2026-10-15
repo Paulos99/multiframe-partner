@@ -7,145 +7,229 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { PartnerProfile, PatchProfileRequest } from '../../../../packages/shared/partner';
-
-const TOKEN_KEY = 'mf_partner_token';
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+import type {
+  ActivityEvent,
+  ExecutorLink,
+  OrgSettings,
+  PartnerProfile,
+  SessionUser,
+} from '../../../../packages/shared/partner';
+import { FIXED_PANEL_PRICE_RUB, FIXED_PRICE_PER_M2, toPartnerProfile } from '../../../../packages/shared/partner';
+import {
+  createExecutorLink,
+  createPartnerAccount,
+  enterByExecToken,
+  listActivity,
+  listLinksForOrg,
+  listPartners,
+  loadSession,
+  localLogin,
+  localLogout,
+  resetPartnerPassword,
+  trackToolOpen,
+  updateOrgSettings,
+  type StoredOrg,
+  type StoredUser,
+} from './localStore';
 
 type PartnerApi = {
+  user: SessionUser | null;
+  /** Convenience for tools that expect PartnerProfile. */
   partner: PartnerProfile | null;
-  token: string | null;
   loading: boolean;
   error: string | null;
   login: (login: string, password: string) => Promise<void>;
   logout: () => void;
-  refresh: () => Promise<void>;
-  saveProfile: (patch: PatchProfileRequest) => Promise<void>;
+  enterExecLink: (token: string) => Promise<void>;
+  saveOrg: (patch: Partial<OrgSettings>) => Promise<void>;
+  adminCreatePartner: (input: {
+    login: string;
+    password: string;
+    companyName: string;
+  }) => Promise<{ login: string; password: string }>;
+  adminResetPassword: (partnerUserId: string, password: string) => Promise<string>;
+  adminListPartners: () => Array<{
+    user: StoredUser;
+    org: StoredOrg | undefined;
+    lastLogin: string | null;
+    linkCount: number;
+  }>;
+  adminActivity: () => ActivityEvent[];
+  partnerCreateLink: (label: string) => { link: ExecutorLink; url: string };
+  partnerListLinks: () => ExecutorLink[];
+  noteTool: (tool: 'problemomer' | 'calculator') => void;
+  refresh: () => void;
   apiBase: string;
 };
 
 const Ctx = createContext<PartnerApi | null>(null);
 
-async function api<T>(
-  path: string,
-  opts: RequestInit & { token?: string | null } = {},
-): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(opts.headers as Record<string, string>),
-  };
-  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
-  const res = await fetch(`${API_URL}${path}`, { ...opts, headers });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { message?: string }).message || `HTTP ${res.status}`);
-  }
-  return res.json() as Promise<T>;
+function buildExecUrl(pathQuery: string): string {
+  const base = import.meta.env.BASE_URL || '/';
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}${base.replace(/\/?$/, '/')}${pathQuery.replace(/^\?/, '?')}`.replace(
+    /\?+/,
+    '?',
+  );
 }
 
 export function PartnerProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(TOKEN_KEY);
-    } catch {
-      return null;
-    }
-  });
-  const [partner, setPartner] = useState<PartnerProfile | null>(null);
-  const [loading, setLoading] = useState(Boolean(token));
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
-  const persistToken = useCallback((t: string | null) => {
-    setToken(t);
-    try {
-      if (t) localStorage.setItem(TOKEN_KEY, t);
-      else localStorage.removeItem(TOKEN_KEY);
-    } catch {
-      /* ignore */
-    }
+  const refresh = useCallback(() => {
+    setUser(loadSession());
+    setTick((n) => n + 1);
+    setLoading(false);
   }, []);
 
-  const refresh = useCallback(async () => {
-    if (!token) {
-      setPartner(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
+    // Corporate executor link from URL
     try {
-      const me = await api<{ partner: PartnerProfile }>('/auth/me', { token });
-      setPartner(me.partner);
-    } catch (e) {
-      setPartner(null);
-      persistToken(null);
-      setError(e instanceof Error ? e.message : 'Сессия истекла');
+      const params = new URLSearchParams(window.location.search);
+      const exec = params.get('exec');
+      if (exec) {
+        try {
+          const session = enterByExecToken(exec);
+          setUser(session);
+          // Clean URL but keep hash/path
+          const url = new URL(window.location.href);
+          url.searchParams.delete('exec');
+          history.replaceState(null, '', url.pathname + url.search + url.hash);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Ссылка недействительна');
+          setUser(loadSession());
+        }
+      } else {
+        setUser(loadSession());
+      }
+    } catch {
+      setUser(loadSession());
     } finally {
       setLoading(false);
     }
-  }, [token, persistToken]);
+  }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    const company = user?.org?.companyName || '';
+    (window as Window & { __MF_PARTNER_COMPANY__?: string }).__MF_PARTNER_COMPANY__ = company;
+    (window as Window & { __MF_PARTNER_ORG__?: OrgSettings | null }).__MF_PARTNER_ORG__ =
+      user?.org || null;
+  }, [user]);
 
-  useEffect(() => {
-    (window as Window & { __MF_PARTNER_COMPANY__?: string }).__MF_PARTNER_COMPANY__ =
-      partner?.companyName || '';
-  }, [partner]);
-
-  const login = useCallback(
-    async (loginName: string, password: string) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await api<{ token: string; partner: PartnerProfile }>('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ login: loginName, password }),
-        });
-        persistToken(res.token);
-        setPartner(res.partner);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Ошибка входа');
-        throw e;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [persistToken],
-  );
+  const login = useCallback(async (loginName: string, password: string) => {
+    setError(null);
+    setLoading(true);
+    try {
+      const session = localLogin(loginName, password);
+      setUser(session);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ошибка входа');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const logout = useCallback(() => {
-    persistToken(null);
-    setPartner(null);
-  }, [persistToken]);
+    localLogout(user);
+    setUser(null);
+  }, [user]);
 
-  const saveProfile = useCallback(
-    async (patch: PatchProfileRequest) => {
-      if (!token) throw new Error('Нет сессии');
-      const res = await api<{ partner: PartnerProfile }>('/partner/profile', {
-        method: 'PATCH',
-        token,
-        body: JSON.stringify(patch),
-      });
-      setPartner(res.partner);
+  const enterExecLink = useCallback(async (token: string) => {
+    const session = enterByExecToken(token.trim());
+    setUser(session);
+  }, []);
+
+  const saveOrg = useCallback(
+    async (patch: Partial<OrgSettings>) => {
+      if (!user?.orgId) throw new Error('Нет организации');
+      const settings = updateOrgSettings(user.orgId, patch, user);
+      setUser({ ...user, org: settings, displayName: settings.companyName || user.displayName });
     },
-    [token],
+    [user],
   );
+
+  const adminCreatePartner = useCallback(
+    async (input: { login: string; password: string; companyName: string }) => {
+      if (!user) throw new Error('Нет сессии');
+      const res = createPartnerAccount({ ...input, admin: user });
+      setTick((n) => n + 1);
+      return { login: res.user.login, password: res.password };
+    },
+    [user],
+  );
+
+  const adminResetPassword = useCallback(
+    async (partnerUserId: string, password: string) => {
+      if (!user) throw new Error('Нет сессии');
+      const pw = resetPartnerPassword(partnerUserId, password, user);
+      setTick((n) => n + 1);
+      return pw;
+    },
+    [user],
+  );
+
+  const partnerCreateLink = useCallback(
+    (label: string) => {
+      if (!user) throw new Error('Нет сессии');
+      const { link, urlPath } = createExecutorLink(label, user);
+      setTick((n) => n + 1);
+      return { link, url: buildExecUrl(urlPath) };
+    },
+    [user],
+  );
+
+  const noteTool = useCallback(
+    (tool: 'problemomer' | 'calculator') => {
+      if (user) trackToolOpen(user, tool);
+      setTick((n) => n + 1);
+    },
+    [user],
+  );
+
+  const partner = useMemo(() => (user ? toPartnerProfile(user) : null), [user]);
 
   const value = useMemo<PartnerApi>(
     () => ({
+      user,
       partner,
-      token,
       loading,
       error,
       login,
       logout,
+      enterExecLink,
+      saveOrg,
+      adminCreatePartner,
+      adminResetPassword,
+      adminListPartners: () => listPartners(),
+      adminActivity: () => listActivity(),
+      partnerCreateLink,
+      partnerListLinks: () => (user?.orgId ? listLinksForOrg(user.orgId) : []),
+      noteTool,
       refresh,
-      saveProfile,
-      apiBase: API_URL,
+      apiBase: '',
     }),
-    [partner, token, loading, error, login, logout, refresh, saveProfile],
+    // tick forces list refresh
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      user,
+      partner,
+      loading,
+      error,
+      login,
+      logout,
+      enterExecLink,
+      saveOrg,
+      adminCreatePartner,
+      adminResetPassword,
+      partnerCreateLink,
+      noteTool,
+      refresh,
+      tick,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -155,4 +239,18 @@ export function usePartner(): PartnerApi {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error('usePartner outside Provider');
   return ctx;
+}
+
+export function calcUrlFromOrg(org: OrgSettings | null | undefined, companyName?: string): string {
+  const q = new URLSearchParams();
+  q.set('panelPrice', String(FIXED_PANEL_PRICE_RUB));
+  q.set('pricePerM2', String(FIXED_PRICE_PER_M2));
+  if (org?.installPricePerM2 != null) q.set('installPerM2', String(org.installPricePerM2));
+  q.set('dowelsPerPanel', String(org?.dowelsPerPanel || 2));
+  if (org?.dowelPriceRub != null) q.set('dowelPrice', String(org.dowelPriceRub));
+  const company = companyName || org?.companyName || '';
+  if (company) q.set('company', company);
+  q.set('partner', '1');
+  const base = `${import.meta.env.BASE_URL || '/'}calculator/index.html`;
+  return `${base}?${q.toString()}`;
 }
