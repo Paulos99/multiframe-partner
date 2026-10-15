@@ -283,6 +283,24 @@ function PartnerCabinet({
     }
   }
 
+  async function onDeleteStaff(id: string, loginName: string, displayName: string) {
+    const ok = confirm(
+      `Удалить сотрудника «${displayName}» (${loginName})?\nВход под этим логином станет невозможным.`,
+    );
+    if (!ok) return;
+    try {
+      await api.partnerDeleteExecutor(id);
+      setRevealedPasswords((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setExecCreated(`Сотрудник ${loginName} удалён`);
+    } catch (ex) {
+      alert(ex instanceof Error ? ex.message : 'Ошибка');
+    }
+  }
+
   return (
     <div className={styles.shellWide}>
       <header className={styles.top}>
@@ -454,6 +472,13 @@ function PartnerCabinet({
                         onClick={() => void onGenerateStaffPassword(ex.id)}
                       >
                         Новый пароль
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.danger}
+                        onClick={() => void onDeleteStaff(ex.id, ex.login, ex.displayName)}
+                      >
+                        Удалить
                       </button>
                     </div>
                   </div>

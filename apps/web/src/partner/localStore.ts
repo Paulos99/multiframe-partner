@@ -457,6 +457,31 @@ export function resetExecutorPassword(
   return password;
 }
 
+export function deleteExecutorAccount(executorUserId: string, partner: SessionUser): void {
+  if (partner.role !== 'partner' || !partner.orgId) {
+    throw new Error('Только партнёр');
+  }
+  const db = loadDb();
+  const staff = db.users.find(
+    (u) => u.id === executorUserId && u.role === 'executor' && u.orgId === partner.orgId,
+  );
+  if (!staff) throw new Error('Сотрудник не найден');
+  const users = db.users.filter((u) => u.id !== executorUserId);
+  let next: PartnerDb = { ...db, users };
+  next = pushActivity(next, {
+    orgId: partner.orgId,
+    userId: partner.id,
+    login: partner.login,
+    action: 'delete_executor',
+    detail: `${staff.login} · ${staff.displayName}`,
+  });
+  saveDb(next);
+  const session = loadSession();
+  if (session?.id === executorUserId) {
+    saveSession(null);
+  }
+}
+
 export function listPartners() {
   const db = loadDb();
   return db.users

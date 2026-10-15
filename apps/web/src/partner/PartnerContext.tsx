@@ -22,6 +22,7 @@ import { flushAnalyticsQueue, trackPartnerAnalytics } from './analytics';
 import {
   createExecutorAccount,
   createPartnerAccount,
+  deleteExecutorAccount,
   deletePartnerAccount,
   listActivity,
   listExecutorsForOrg,
@@ -66,6 +67,7 @@ type PartnerApi = {
     displayName: string;
   }) => Promise<{ id: string; login: string; password: string }>;
   partnerResetExecutorPassword: (executorUserId: string, password: string) => Promise<string>;
+  partnerDeleteExecutor: (executorUserId: string) => Promise<void>;
   partnerListExecutors: () => StoredUser[];
   noteTool: (tool: 'problemomer' | 'calculator') => void;
   refresh: () => void;
@@ -183,6 +185,15 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const partnerDeleteExecutor = useCallback(
+    async (executorUserId: string) => {
+      if (!user) throw new Error('Нет сессии');
+      deleteExecutorAccount(executorUserId, user);
+      setTick((n) => n + 1);
+    },
+    [user],
+  );
+
   const noteTool = useCallback(
     (tool: 'problemomer' | 'calculator') => {
       if (user) {
@@ -212,6 +223,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminActivity: () => listActivity(),
       partnerCreateExecutor,
       partnerResetExecutorPassword,
+      partnerDeleteExecutor,
       partnerListExecutors: () => (user?.orgId ? listExecutorsForOrg(user.orgId) : []),
       noteTool,
       refresh,
@@ -232,6 +244,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminDeletePartner,
       partnerCreateExecutor,
       partnerResetExecutorPassword,
+      partnerDeleteExecutor,
       noteTool,
       refresh,
       tick,
