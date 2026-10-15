@@ -6792,10 +6792,7 @@ body.theme-dark .entry-block.is-open .entry-card {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   color: #fff;
   justify-content: center;
-  gap: 6px;
-  min-height: 0;
-  padding-top: 12px;
-  padding-bottom: 12px;
+  gap: 2px;
 }
 
 .workspace-stats .stat-card--partner-total::before {
@@ -6804,44 +6801,13 @@ body.theme-dark .entry-block.is-open .entry-card {
 
 .workspace-stats .stat-card--partner-total .stat-label {
   color: rgba(255, 255, 255, 0.88) !important;
-  margin-bottom: 0;
+  margin-bottom: 2px;
   cursor: default;
 }
 
-.workspace-stats .stat-card--partner-total .partner-total-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-}
-
-.workspace-stats .stat-card--partner-total .partner-total-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.88);
-}
-
-.workspace-stats .stat-card--partner-total .partner-total-line strong {
-  font-weight: 800;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-}
-
-.workspace-stats .stat-card--partner-total .partner-total-line--sum {
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.28);
-  font-size: 0.9rem;
-}
-
-.workspace-stats .stat-card--partner-total .partner-total-line--sum .stat-value,
 .workspace-stats .stat-card--partner-total .stat-value {
   color: #fff !important;
-  font-size: 1.2rem;
+  font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
