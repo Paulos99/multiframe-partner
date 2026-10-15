@@ -90,12 +90,14 @@
   font-size: 0.85rem;
   font-weight: 650;
   color: #152018;
+  min-width: 0;
 }
 
 .field input,
 .field select {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   font: inherit;
   font-weight: 500;
@@ -103,6 +105,10 @@
   border-radius: 12px;
   border: 1px solid rgba(1, 100, 79, 0.22);
   background: #f8fbfa;
+}
+
+.field input[type='number'] {
+  appearance: textfield;
 }
 
 .hint {
