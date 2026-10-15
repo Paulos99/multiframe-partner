@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect } from 'react';
 import { preloadDemoAudio, useDemoPlayer } from '../audio/useDemoPlayer';
 import { ECHO_CLAP_PAIR } from '../audio/demoAudio';
 import { buildRoomAudioShapeForPair } from '../audio/roomAudioShape';
@@ -15,57 +15,30 @@ type Props = {
   hideHead?: boolean;
 };
 
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
 export function EchoComfortRings({
   before,
   after,
   compact,
-  hoverPlay,
 }: {
   /** Echo % before (higher = worse). Rings show comfort = 100 − echo. */
   before: number;
   after: number;
   compact?: boolean;
-  /** Parent bumps this (e.g. KPI card hover) to replay both rings. */
+  /** @deprecated No-op — rings render at final value without animation. */
   hoverPlay?: number;
 }) {
   const comfortBefore = Math.max(0, Math.min(100, 100 - before));
   const comfortAfter = Math.max(0, Math.min(100, 100 - after));
   const echoDrop = before - after;
-  const [localHover, setLocalHover] = useState(0);
-  const ownedByParent = hoverPlay != null;
-  const play = ownedByParent ? hoverPlay : localHover;
 
   return (
     <div
       className={`${styles.rings} ${compact ? styles.ringsCompact : ''}`}
       role="img"
       aria-label={`Акустический комфорт: сейчас ${comfortBefore}%, с MultiFrame ${comfortAfter}%. Больше — лучше. Эхо снизилось на ${Math.max(0, echoDrop)}%.`}
-      onMouseEnter={() => {
-        if (!ownedByParent) setLocalHover((n) => n + 1);
-      }}
     >
-      <EchoRing
-        pct={comfortBefore}
-        label="Сейчас"
-        compact={compact}
-        delayMs={0}
-        hoverPlay={play}
-      />
-      <EchoRing
-        pct={comfortAfter}
-        label="После"
-        accent
-        compact={compact}
-        delayMs={120}
-        hoverPlay={play}
-      />
+      <EchoRing pct={comfortBefore} label="Сейчас" compact={compact} />
+      <EchoRing pct={comfortAfter} label="После" accent compact={compact} />
       {echoDrop > 0 ? (
         <p className={`${styles.scaleDelta} ${styles.scaleDeltaPill}`}>
           ≈ на {echoDrop}% меньше эха
@@ -92,120 +65,39 @@ function EchoRing({
   label,
   accent,
   compact,
-  delayMs = 0,
-  hoverPlay = 0,
 }: {
   pct: number;
   label: string;
   accent?: boolean;
   compact?: boolean;
-  delayMs?: number;
-  /** Parent bumps this to replay both rings together. */
-  hoverPlay?: number;
 }) {
   const r = compact ? 26 : 34;
   const vb = compact ? 64 : 80;
   const mid = vb / 2;
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, pct));
-  const targetOffset = c * (1 - clamped / 100);
-
-  const rootRef = useRef<HTMLDivElement>(null);
-  const cancelRef = useRef<() => void>(() => {});
-  const [playId, setPlayId] = useState(0);
-  const [displayPct, setDisplayPct] = useState(0);
-  const [fillMs, setFillMs] = useState(900);
-  const [animDelay, setAnimDelay] = useState(delayMs);
-
-  const runFill = (fromHover: boolean) => {
-    cancelRef.current();
-    if (prefersReducedMotion()) {
-      setDisplayPct(clamped);
-      setAnimDelay(0);
-      setPlayId((n) => n + 1);
-      return;
-    }
-    const dur = fromHover ? 700 : 900;
-    const startDelay = fromHover ? 0 : delayMs;
-    setFillMs(dur);
-    setAnimDelay(startDelay);
-    setDisplayPct(0);
-    setPlayId((n) => n + 1);
-
-    const start = performance.now();
-    let raf = 0;
-    const tick = (now: number) => {
-      const t = Math.min(1, Math.max(0, (now - start - startDelay) / dur));
-      const eased = 1 - (1 - t) ** 3;
-      setDisplayPct(Math.round(clamped * eased));
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    cancelRef.current = () => cancelAnimationFrame(raf);
-  };
-
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const parentReveal = el.closest('[data-reveal]');
-    const start = () => runFill(false);
-
-    if (!parentReveal || parentReveal.classList.contains('is-revealed')) {
-      const t = window.setTimeout(start, 40);
-      return () => {
-        window.clearTimeout(t);
-        cancelRef.current();
-      };
-    }
-
-    const mo = new MutationObserver(() => {
-      if (parentReveal.classList.contains('is-revealed')) {
-        start();
-        mo.disconnect();
-      }
-    });
-    mo.observe(parentReveal, { attributes: true, attributeFilter: ['class'] });
-    return () => {
-      mo.disconnect();
-      cancelRef.current();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- replay only on pct / mount
-  }, [clamped, delayMs]);
-
-  useEffect(() => {
-    if (hoverPlay > 0) runFill(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional hover replay
-  }, [hoverPlay]);
+  const offset = c * (1 - clamped / 100);
 
   return (
     <div
-      ref={rootRef}
       className={`${styles.ring} ${accent ? styles.ringAccent : ''} ${compact ? styles.ringCompact : ''}`}
     >
       <svg viewBox={`0 0 ${vb} ${vb}`} className={styles.ringSvg} aria-hidden>
         <circle className={styles.ringTrack} cx={mid} cy={mid} r={r} />
         <circle
-          key={playId}
           className={styles.ringValue}
           cx={mid}
           cy={mid}
           r={r}
-          style={
-            {
-              strokeDasharray: c,
-              strokeDashoffset: c,
-              ['--ring-target']: String(targetOffset),
-              animationDuration: `${fillMs}ms`,
-              animationDelay: `${animDelay}ms`,
-            } as CSSProperties
-          }
+          style={{
+            strokeDasharray: c,
+            strokeDashoffset: offset,
+          }}
           transform={`rotate(-90 ${mid} ${mid})`}
         />
       </svg>
       <div className={styles.ringCenter}>
-        <b key={playId} className={styles.ringPct}>
-          {displayPct}%
-        </b>
+        <b className={styles.ringPct}>{clamped}%</b>
         <span>{label}</span>
       </div>
     </div>
