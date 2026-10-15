@@ -132,8 +132,12 @@ export async function fetchAnalyticsDashboard(opts: {
 
     const res = await fetch(`${API_BASE}/analytics/dashboard?${q.toString()}`, { headers });
     if (!res.ok) throw new Error(String(res.status));
-    const data = (await res.json()) as AnalyticsDashboard;
-    return { ...data, source: 'api' };
+    const data = (await res.json()) as Partial<AnalyticsDashboard>;
+    // Old API without funnel/series/volume — keep local aggregate shape
+    if (!data.funnel || !data.breakdowns || !data.volume || !Array.isArray(data.series)) {
+      return local;
+    }
+    return { ...local, ...data, source: 'api' } as AnalyticsDashboard;
   } catch {
     return local;
   }

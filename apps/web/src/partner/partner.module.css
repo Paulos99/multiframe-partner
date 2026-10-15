@@ -47,8 +47,20 @@
   }
 }
 
-/* Admin: analytics stays visible; partners scroll instead of pushing it down */
-.adminGrid {
+/* Admin: full-width analytics on top, partner management below */
+.adminStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.adminDash {
+  min-width: 0;
+  width: 100%;
+}
+
+.adminManage {
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
@@ -56,21 +68,16 @@
   align-items: start;
 }
 
-.adminDash {
-  order: 1;
+.adminCreate {
   min-width: 0;
 }
 
-.adminCreate {
-  order: 2;
-}
-
 .adminPartners {
-  order: 3;
+  min-width: 0;
 }
 
 .adminHint {
-  order: 4;
+  width: 100%;
 }
 
 .scrollList {
@@ -91,43 +98,12 @@
 }
 
 @media (min-width: 960px) {
-  .adminGrid {
-    grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.25fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
-  }
-
-  .adminCreate {
-    grid-column: 1;
-    grid-row: 1;
-    order: unset;
-  }
-
-  .adminPartners {
-    grid-column: 1;
-    grid-row: 2;
-    order: unset;
-    min-height: 0;
-  }
-
-  .adminDash {
-    grid-column: 2;
-    grid-row: 1 / 3;
-    order: unset;
-    position: sticky;
-    top: 16px;
-    align-self: start;
-    max-height: calc(100dvh - 32px);
-    overflow: auto;
-  }
-
-  .adminHint {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    order: unset;
+  .adminManage {
+    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.2fr);
   }
 
   .adminPartners .scrollList {
-    max-height: min(520px, calc(100dvh - 280px));
+    max-height: min(520px, 55vh);
   }
 }
 
@@ -330,6 +306,11 @@
 }
 
 
+.dashCard {
+  width: 100% !important;
+  max-width: none;
+}
+
 .dashHead {
   display: flex;
   flex-wrap: wrap;
@@ -353,7 +334,7 @@
 
 .kpiRow {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 10px;
 }
 
@@ -380,6 +361,298 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #5a6b62;
+}
+
+.kpiDelta {
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.kpiUp {
+  color: #0a7a4b;
+}
+
+.kpiDown {
+  color: #b42318;
+}
+
+.kpiFlat {
+  color: #5a6b62;
+}
+
+.funnelGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .funnelGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.funnelBlock {
+  padding: 14px;
+  border-radius: 14px;
+  background: #f7faf8;
+  border: 1px solid rgba(1, 100, 79, 0.1);
+}
+
+.funnelTitle {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #152018;
+}
+
+.funnelSteps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.funnelSteps li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 0.9rem;
+}
+
+.funnelLabel {
+  color: #3d4f46;
+}
+
+.funnelPct {
+  min-width: 3.2rem;
+  text-align: right;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #5a6b62;
+}
+
+.seriesWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.seriesLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #5a6b62;
+}
+
+.seriesLegend span::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.legPm::before {
+  background: #01644f;
+}
+
+.legCalc::before {
+  background: #2a9d8f;
+}
+
+.legPdf::before {
+  background: #e9c46a;
+}
+
+.legLogin::before {
+  background: #94a3b8;
+}
+
+.seriesChart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 140px;
+  padding: 8px 4px 0;
+  overflow-x: auto;
+}
+
+.seriesDay {
+  flex: 1 1 18px;
+  min-width: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.seriesBars {
+  height: 110px;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+}
+
+.seriesBar {
+  flex: 1 1 0;
+  min-width: 3px;
+  max-width: 10px;
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+}
+
+.barPm {
+  background: #01644f;
+}
+
+.barCalc {
+  background: #2a9d8f;
+}
+
+.barPdf {
+  background: #e9c46a;
+}
+
+.barLogin {
+  background: #94a3b8;
+}
+
+.seriesTick {
+  font-size: 0.62rem;
+  color: #5a6b62;
+  line-height: 1;
+  min-height: 0.75rem;
+}
+
+.volumeRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.volumeItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(1, 100, 79, 0.14);
+}
+
+.volumeItem strong {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0c332c;
+}
+
+.breakdownGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .breakdownGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1100px) {
+  .breakdownGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.breakdownBlock {
+  padding: 14px;
+  border-radius: 14px;
+  background: #f7faf8;
+  border: 1px solid rgba(1, 100, 79, 0.1);
+}
+
+.breakdownList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.breakdownMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+  color: #152018;
+}
+
+.breakdownTrack {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(1, 100, 79, 0.1);
+  overflow: hidden;
+}
+
+.breakdownFill {
+  height: 100%;
+  border-radius: 999px;
+  background: #01644f;
+}
+
+.dashTableScroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dashTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  min-width: 640px;
+}
+
+.dashTable th,
+.dashTable td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(21, 32, 24, 0.08);
+  white-space: nowrap;
+}
+
+.dashTable th {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5a6b62;
+}
+
+.dashTable td {
+  color: #152018;
+}
+
+.inactiveList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
 }
 
 .rowActions {

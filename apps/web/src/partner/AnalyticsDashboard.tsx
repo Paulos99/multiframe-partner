@@ -1,10 +1,38 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { AnalyticsDashboard as DashData } from '../../../../packages/shared/partner';
+import type {
+  AnalyticsBreakdownItem,
+  AnalyticsDashboard as DashData,
+  AnalyticsFunnel,
+  AnalyticsKpi,
+  AnalyticsSeriesPoint,
+} from '../../../../packages/shared/partner';
+import {
+  HOUSE_TYPE_OPTIONS,
+  OBJECT_STAGE_OPTIONS,
+  ROOM_TYPE_LABELS,
+  type HouseTypeOption,
+  type ObjectStageOption,
+  type RoomType,
+} from '../state/types';
 import { fetchAnalyticsDashboard, periodFromDays } from './analytics';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
 type Period = 7 | 30 | null;
+
+const HOUSE_LABELS = Object.fromEntries(
+  HOUSE_TYPE_OPTIONS.map((o) => [o.id, o.label]),
+) as Record<HouseTypeOption, string>;
+
+const STAGE_LABELS = Object.fromEntries(
+  OBJECT_STAGE_OPTIONS.map((o) => [o.id, o.label]),
+) as Record<ObjectStageOption, string>;
+
+const MODE_LABELS: Record<string, string> = {
+  area: 'Только площадь',
+  dims: 'Размеры',
+  polygon: 'Полигон',
+};
 
 function formatWhen(iso: string | null): string {
   if (!iso) return '—';
@@ -15,17 +43,225 @@ function formatWhen(iso: string | null): string {
   }
 }
 
-function objectLabel(ev: DashData['recentObjects'][number]): string {
-  const o = ev.object;
-  if (!o) return ev.action;
-  const parts: string[] = [];
-  if (o.label) parts.push(String(o.label));
-  else if (o.roomType) parts.push(String(o.roomType));
-  if (o.areaM2 != null) parts.push(`${o.areaM2} м²`);
-  if (o.classBefore && o.classAfter) parts.push(`${o.classBefore}→${o.classAfter}`);
-  if (o.panels != null) parts.push(`${o.panels} пан.`);
-  if (o.mode) parts.push(String(o.mode));
-  return parts.join(' · ') || ev.action;
+function formatDay(day: string): string {
+  const [, m, d] = day.split('-');
+  return m && d ? `${d}.${m}` : day;
+}
+
+function formatNum(n: number): string {
+  if (!Number.isFinite(n)) return '0';
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
+}
+
+function deltaText(current: number, prev: number | null | undefined): string | null {
+  if (prev == null) return null;
+  const d = current - prev;
+  if (d === 0) return '0';
+  return d > 0 ? `+${formatNum(d)}` : formatNum(d);
+}
+
+function deltaClass(current: number, prev: number | null | undefined): string {
+  if (prev == null) return '';
+  const d = current - prev;
+  if (d > 0) return styles.kpiUp;
+  if (d < 0) return styles.kpiDown;
+  return styles.kpiFlat;
+}
+
+function pct(part: number, whole: number): string {
+  if (!whole) return '—';
+  return `${Math.round((part / whole) * 100)}%`;
+}
+
+function labelKey(
+  key: string,
+  kind: 'room' | 'house' | 'stage' | 'mode' | 'raw',
+): string {
+  if (kind === 'room') {
+    return ROOM_TYPE_LABELS[key as RoomType] || key;
+  }
+  if (kind === 'house') {
+    return HOUSE_LABELS[key as HouseTypeOption] || key;
+  }
+  if (kind === 'stage') {
+    return STAGE_LABELS[key as ObjectStageOption] || key;
+  }
+  if (kind === 'mode') {
+    return MODE_LABELS[key] || key;
+  }
+  return key === 'unknown' ? 'Не указано' : key;
+}
+
+function toolLabel(tool: string): string {
+  if (tool === 'problemomer') return 'Проблемомер';
+  if (tool === 'calculator') return 'Калькулятор';
+  return tool;
+}
+
+function actionLabel(action: string): string {
+  if (action === 'result') return 'расчёт';
+  if (action === 'calc_done') return 'расчёт';
+  if (action === 'pdf') return 'PDF';
+  if (action === 'share') return 'шаринг';
+  return action;
+}
+
+function KpiCard({
+  label,
+  value,
+  prev,
+  showDelta,
+}: {
+  label: string;
+  value: number;
+  prev?: number | null;
+  showDelta: boolean;
+}) {
+  const delta = showDelta ? deltaText(value, prev) : null;
+  return (
+    <div className={styles.kpi}>
+      <span className={styles.kpiLabel}>{label}</span>
+      <strong>{formatNum(value)}</strong>
+      {delta != null ? (
+        <span className={`${styles.kpiDelta} ${deltaClass(value, prev)}`}>
+          {delta} к пред.
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function FunnelBlock({
+  title,
+  steps,
+}: {
+  title: string;
+  steps: Array<{ label: string; value: number }>;
+}) {
+  const base = steps[0]?.value || 0;
+  return (
+    <div className={styles.funnelBlock}>
+      <h4 className={styles.funnelTitle}>{title}</h4>
+      <ol className={styles.funnelSteps}>
+        {steps.map((s, i) => (
+          <li key={s.label}>
+            <span className={styles.funnelLabel}>{s.label}</span>
+            <strong>{s.value}</strong>
+            <span className={styles.funnelPct}>
+              {i === 0 ? '100%' : pct(s.value, base)}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
+  const max = Math.max(
+    1,
+    ...series.map((p) => Math.max(p.problemomer, p.calculator, p.pdf, p.logins)),
+  );
+  const showEvery = series.length > 14 ? Math.ceil(series.length / 10) : 1;
+
+  return (
+    <div className={styles.seriesWrap}>
+      <div className={styles.seriesLegend}>
+        <span className={styles.legPm}>PM</span>
+        <span className={styles.legCalc}>Кальк.</span>
+        <span className={styles.legPdf}>PDF</span>
+        <span className={styles.legLogin}>Входы</span>
+      </div>
+      <div className={styles.seriesChart} role="img" aria-label="Динамика по дням">
+        {series.map((p, i) => (
+          <div key={p.day} className={styles.seriesDay}>
+            <div className={styles.seriesBars}>
+              <div
+                className={`${styles.seriesBar} ${styles.barPm}`}
+                style={{ height: `${(p.problemomer / max) * 100}%` }}
+                title={`PM: ${p.problemomer}`}
+              />
+              <div
+                className={`${styles.seriesBar} ${styles.barCalc}`}
+                style={{ height: `${(p.calculator / max) * 100}%` }}
+                title={`Кальк.: ${p.calculator}`}
+              />
+              <div
+                className={`${styles.seriesBar} ${styles.barPdf}`}
+                style={{ height: `${(p.pdf / max) * 100}%` }}
+                title={`PDF: ${p.pdf}`}
+              />
+              <div
+                className={`${styles.seriesBar} ${styles.barLogin}`}
+                style={{ height: `${(p.logins / max) * 100}%` }}
+                title={`Входы: ${p.logins}`}
+              />
+            </div>
+            {i % showEvery === 0 || i === series.length - 1 ? (
+              <span className={styles.seriesTick}>{formatDay(p.day)}</span>
+            ) : (
+              <span className={styles.seriesTick} />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BreakdownList({
+  title,
+  items,
+  kind,
+}: {
+  title: string;
+  items: AnalyticsBreakdownItem[];
+  kind: 'room' | 'house' | 'stage' | 'mode' | 'raw';
+}) {
+  return (
+    <div className={styles.breakdownBlock}>
+      <h4 className={styles.funnelTitle}>{title}</h4>
+      {!items.length ? (
+        <p className={styles.lead}>Нет данных</p>
+      ) : (
+        <ul className={styles.breakdownList}>
+          {items.slice(0, 8).map((item) => (
+            <li key={item.key}>
+              <div className={styles.breakdownMeta}>
+                <span>{labelKey(item.key, kind)}</span>
+                <span>
+                  {item.count} · {item.share}%
+                </span>
+              </div>
+              <div className={styles.breakdownTrack}>
+                <div
+                  className={styles.breakdownFill}
+                  style={{ width: `${Math.min(100, item.share)}%` }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function funnelStepsPm(f: AnalyticsFunnel) {
+  return [
+    { label: 'Открыл', value: f.problemomer.open },
+    { label: 'Расчёт', value: f.problemomer.result },
+    { label: 'PDF', value: f.problemomer.pdf },
+    { label: 'Поделился', value: f.problemomer.share },
+  ];
+}
+
+function funnelStepsCalc(f: AnalyticsFunnel) {
+  return [
+    { label: 'Открыл', value: f.calculator.open },
+    { label: 'Расчёт', value: f.calculator.calcDone },
+    { label: 'PDF', value: f.calculator.pdf },
+  ];
 }
 
 export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
@@ -46,10 +282,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     let cancelled = false;
     setLoading(true);
     const { from, to } = periodFromDays(period);
-    const orgId =
-      mode === 'partner'
-        ? user.orgId
-        : orgFilter || null;
+    const orgId = mode === 'partner' ? user.orgId : orgFilter || null;
     void fetchAnalyticsDashboard({
       mode,
       from,
@@ -67,19 +300,36 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     };
   }, [mode, period, orgFilter, user.orgId, user.login]);
 
+  const inactivePartners = useMemo(() => {
+    if (mode !== 'admin' || !data) return [];
+    const activeIds = new Set(
+      data.partners.map((p) => p.orgId).filter((id): id is string => Boolean(id)),
+    );
+    const activeNames = new Set(data.partners.map((p) => p.companyName));
+    return partnersList.filter((p) => {
+      const orgId = p.user.orgId || '';
+      const name = p.org?.settings.companyName || p.user.displayName;
+      if (orgId && activeIds.has(orgId)) return false;
+      if (activeNames.has(name)) return false;
+      return true;
+    });
+  }, [mode, data, partnersList]);
+
   if (loading && !data) {
     return (
-      <div className={styles.card} style={{ width: '100%' }}>
-        <h2>{mode === 'admin' ? 'Дашборд' : 'Аналитика сотрудников'}</h2>
+      <div className={`${styles.card} ${styles.dashCard}`}>
+        <h2>{mode === 'admin' ? 'Дашборд аналитики' : 'Аналитика сотрудников'}</h2>
         <p className={styles.lead}>Загрузка…</p>
       </div>
     );
   }
 
   const dash = data!;
+  const showDelta = Boolean(dash.kpiPrev);
+  const prev: AnalyticsKpi | null = dash.kpiPrev;
 
   return (
-    <div className={styles.card} style={{ width: '100%' }}>
+    <div className={`${styles.card} ${styles.dashCard}`}>
       <div className={styles.dashHead}>
         <div>
           <h2>{mode === 'admin' ? 'Дашборд аналитики' : 'Аналитика сотрудников'}</h2>
@@ -107,10 +357,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
       {mode === 'admin' ? (
         <label className={styles.field}>
           Партнёр
-          <select
-            value={orgFilter}
-            onChange={(e) => setOrgFilter(e.target.value)}
-          >
+          <select value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)}>
             <option value="">Все</option>
             {partnersList.map((p) => (
               <option key={p.user.id} value={p.user.orgId || ''}>
@@ -123,87 +370,225 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
 
       <div className={styles.kpiRow}>
         {mode === 'admin' ? (
-          <div className={styles.kpi}>
-            <span className={styles.kpiLabel}>Партнёры</span>
-            <strong>{dash.kpi.partners}</strong>
-          </div>
+          <KpiCard
+            label="Активные компании"
+            value={dash.kpi.activePartners}
+            prev={prev?.activePartners}
+            showDelta={showDelta}
+          />
         ) : null}
-        <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Сотрудники</span>
-          <strong>{dash.kpi.executors}</strong>
+        <KpiCard
+          label="Сотрудники"
+          value={dash.kpi.executors}
+          prev={prev?.executors}
+          showDelta={showDelta}
+        />
+        <KpiCard
+          label="Расчёты PM"
+          value={dash.kpi.problemomerResults}
+          prev={prev?.problemomerResults}
+          showDelta={showDelta}
+        />
+        <KpiCard
+          label="Расчёты кальк."
+          value={dash.kpi.calculatorDone}
+          prev={prev?.calculatorDone}
+          showDelta={showDelta}
+        />
+        <KpiCard label="PDF" value={dash.kpi.pdf} prev={prev?.pdf} showDelta={showDelta} />
+        <KpiCard
+          label="Шаринг"
+          value={dash.kpi.shares}
+          prev={prev?.shares}
+          showDelta={showDelta}
+        />
+        <KpiCard
+          label="Входы"
+          value={dash.kpi.logins}
+          prev={prev?.logins}
+          showDelta={showDelta}
+        />
+        <KpiCard
+          label="Площадь, м²"
+          value={dash.kpi.areaM2}
+          prev={prev?.areaM2}
+          showDelta={showDelta}
+        />
+        <KpiCard
+          label="Панели"
+          value={dash.kpi.panels}
+          prev={prev?.panels}
+          showDelta={showDelta}
+        />
+      </div>
+
+      <h3 className={styles.dashSub}>Воронка</h3>
+      <div className={styles.funnelGrid}>
+        <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
+        <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
+      </div>
+
+      <h3 className={styles.dashSub}>Динамика</h3>
+      {dash.series.length ? (
+        <SeriesChart series={dash.series} />
+      ) : (
+        <p className={styles.lead}>Пока нет точек для графика</p>
+      )}
+
+      <h3 className={styles.dashSub}>Объём</h3>
+      <div className={styles.volumeRow}>
+        <div className={styles.volumeItem}>
+          <span className={styles.kpiLabel}>Сумма м²</span>
+          <strong>{formatNum(dash.volume.areaM2Sum)}</strong>
         </div>
-        <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Расчёты PM</span>
-          <strong>{dash.kpi.problemomerResults}</strong>
+        <div className={styles.volumeItem}>
+          <span className={styles.kpiLabel}>Средняя м²</span>
+          <strong>{formatNum(dash.volume.areaM2Avg)}</strong>
         </div>
-        <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Расчёты кальк.</span>
-          <strong>{dash.kpi.calculatorDone}</strong>
+        <div className={styles.volumeItem}>
+          <span className={styles.kpiLabel}>Панели</span>
+          <strong>{formatNum(dash.volume.panelsSum)}</strong>
         </div>
-        <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>PDF</span>
-          <strong>{dash.kpi.pdf}</strong>
+        <div className={styles.volumeItem}>
+          <span className={styles.kpiLabel}>Готовых расчётов</span>
+          <strong>{formatNum(dash.volume.completedCount)}</strong>
         </div>
-        <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Входы</span>
-          <strong>{dash.kpi.logins}</strong>
-        </div>
+      </div>
+
+      <h3 className={styles.dashSub}>Портрет объектов</h3>
+      <div className={styles.breakdownGrid}>
+        <BreakdownList title="Тип комнаты" items={dash.breakdowns.roomType} kind="room" />
+        <BreakdownList title="Тип дома" items={dash.breakdowns.houseType} kind="house" />
+        <BreakdownList title="Стадия объекта" items={dash.breakdowns.objectStage} kind="stage" />
+        <BreakdownList
+          title="Класс звукоизоляции"
+          items={dash.breakdowns.classTransition}
+          kind="raw"
+        />
+        <BreakdownList title="Режим калькулятора" items={dash.breakdowns.calcMode} kind="mode" />
       </div>
 
       {mode === 'admin' ? (
         <>
-          <h3 className={styles.dashSub}>Партнёры</h3>
-          <div className={styles.table}>
-            {dash.partners.map((p) => (
-              <div key={p.orgId || p.companyName} className={styles.tableRow}>
-                <div>
-                  <strong>{p.companyName}</strong>
-                  <div className={styles.hint}>
-                    входы {p.logins} · расчёты PM {p.problemomer} · расчёты кальк.{' '}
-                    {p.calculator} · PDF {p.pdf}
-                  </div>
-                </div>
-                <span className={styles.hint}>{formatWhen(p.lastActiveAt)}</span>
-              </div>
-            ))}
-            {!dash.partners.length ? <p className={styles.lead}>Пока нет данных</p> : null}
+          <h3 className={styles.dashSub}>Компании</h3>
+          <div className={styles.dashTableScroll}>
+            <table className={styles.dashTable}>
+              <thead>
+                <tr>
+                  <th>Компания</th>
+                  <th>Входы</th>
+                  <th>PM</th>
+                  <th>Кальк.</th>
+                  <th>PDF</th>
+                  <th>Шаринг</th>
+                  <th>м²</th>
+                  <th>Пан.</th>
+                  <th>Активность</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dash.partners.map((p) => (
+                  <tr key={p.orgId || p.companyName}>
+                    <td>{p.companyName}</td>
+                    <td>{p.logins}</td>
+                    <td>{p.problemomer}</td>
+                    <td>{p.calculator}</td>
+                    <td>{p.pdf}</td>
+                    <td>{p.shares}</td>
+                    <td>{formatNum(p.areaM2)}</td>
+                    <td>{formatNum(p.panels)}</td>
+                    <td>{formatWhen(p.lastActiveAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+          {!dash.partners.length ? <p className={styles.lead}>Пока нет данных</p> : null}
+
+          {inactivePartners.length ? (
+            <>
+              <h3 className={styles.dashSub}>Без активности за период</h3>
+              <ul className={styles.inactiveList}>
+                {inactivePartners.map((p) => (
+                  <li key={p.user.id}>
+                    {p.org?.settings.companyName || p.user.displayName}
+                    <span className={styles.hint}> · {p.user.login}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </>
-      ) : (
-        <>
-          <h3 className={styles.dashSub}>Сотрудники</h3>
-          <div className={styles.table}>
-            {dash.executors.map((ex) => (
-              <div key={ex.userId || ex.login} className={styles.tableRow}>
-                <div>
-                  <strong>{ex.displayName}</strong>
-                  <div className={styles.hint}>
-                    {ex.login} · входы {ex.logins} · расчёты PM {ex.problemomer} · расчёты
-                    кальк. {ex.calculator} · PDF {ex.pdf} · объекты {ex.results}
-                  </div>
-                </div>
-                <span className={styles.hint}>{formatWhen(ex.lastActiveAt)}</span>
+      ) : null}
+
+      <h3 className={styles.dashSub}>
+        {mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники'}
+      </h3>
+      <div className={styles.table}>
+        {dash.executors.map((ex) => (
+          <div key={ex.userId || ex.login} className={styles.tableRow}>
+            <div>
+              <strong>{ex.displayName}</strong>
+              <div className={styles.hint}>
+                {ex.login} · входы {ex.logins} · расчёты PM {ex.problemomer} · расчёты кальк.{' '}
+                {ex.calculator} · PDF {ex.pdf} · объекты {ex.results}
               </div>
-            ))}
-            {!dash.executors.length ? (
-              <p className={styles.lead}>Пока нет активности сотрудников</p>
-            ) : null}
+            </div>
+            <span className={styles.hint}>{formatWhen(ex.lastActiveAt)}</span>
           </div>
-        </>
-      )}
+        ))}
+        {!dash.executors.length ? (
+          <p className={styles.lead}>Пока нет активности сотрудников</p>
+        ) : null}
+      </div>
 
       <h3 className={styles.dashSub}>
         {mode === 'admin' ? 'Последние объекты' : 'Объекты команды'}
       </h3>
-      <ul className={styles.activity}>
-        {dash.recentObjects.map((ev) => (
-          <li key={ev.id}>
-            <span>{formatWhen(ev.at)}</span> · {ev.companyName || '—'} · {ev.login} ·{' '}
-            {ev.tool}/{ev.action}
-            {ev.object ? ` — ${objectLabel(ev)}` : ''}
-          </li>
-        ))}
-      </ul>
+      <div className={styles.dashTableScroll}>
+        <table className={styles.dashTable}>
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Компания</th>
+              <th>Логин</th>
+              <th>Инструмент</th>
+              <th>Комната</th>
+              <th>м²</th>
+              <th>Класс</th>
+              <th>Пан.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dash.recentObjects.map((ev) => {
+              const o = ev.object;
+              const room =
+                o?.label ||
+                (o?.roomType
+                  ? ROOM_TYPE_LABELS[o.roomType as RoomType] || o.roomType
+                  : '—');
+              const cls =
+                o?.classBefore && o?.classAfter
+                  ? `${o.classBefore}→${o.classAfter}`
+                  : '—';
+              return (
+                <tr key={ev.id}>
+                  <td>{formatWhen(ev.at)}</td>
+                  <td>{ev.companyName || '—'}</td>
+                  <td>{ev.login}</td>
+                  <td>
+                    {toolLabel(ev.tool)} · {actionLabel(ev.action)}
+                  </td>
+                  <td>{room}</td>
+                  <td>{o?.areaM2 != null ? formatNum(Number(o.areaM2)) : '—'}</td>
+                  <td>{cls}</td>
+                  <td>{o?.panels != null ? formatNum(Number(o.panels)) : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {!dash.recentObjects.length ? <p className={styles.lead}>Объектов пока нет</p> : null}
     </div>
   );

@@ -107,84 +107,90 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         onOpenCalc={() => onNavigate('calculator')}
       />
 
-      <div className={styles.adminGrid}>
+      <div className={styles.adminStack}>
         <div className={styles.adminDash}>
           <AnalyticsDashboard mode="admin" />
         </div>
 
-        <form className={`${styles.card} ${styles.adminCreate}`} onSubmit={(e) => void onCreate(e)}>
-          <h2>Новый партнёр</h2>
-          <div className={styles.grid2}>
-            <label className={styles.field}>
-              Логин
-              <input value={login} onChange={(e) => setLogin(e.target.value)} required />
-            </label>
-            <label className={styles.field}>
-              Пароль
-              <input
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
-            </label>
-            <label className={styles.field}>
-              Компания
-              <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} required />
-            </label>
-          </div>
-          {created ? <p className={styles.ok}>{created}</p> : null}
-          {err ? (
-            <p className={styles.error} role="alert">
-              {err}
-            </p>
-          ) : null}
-          <button type="submit" className={styles.primary}>
-            Создать аккаунт
-          </button>
-        </form>
+        <div className={styles.adminManage}>
+          <form className={`${styles.card} ${styles.adminCreate}`} onSubmit={(e) => void onCreate(e)}>
+            <h2>Новый партнёр</h2>
+            <div className={styles.grid2}>
+              <label className={styles.field}>
+                Логин
+                <input value={login} onChange={(e) => setLogin(e.target.value)} required />
+              </label>
+              <label className={styles.field}>
+                Пароль
+                <input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+              </label>
+              <label className={styles.field}>
+                Компания
+                <input
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  required
+                />
+              </label>
+            </div>
+            {created ? <p className={styles.ok}>{created}</p> : null}
+            {err ? (
+              <p className={styles.error} role="alert">
+                {err}
+              </p>
+            ) : null}
+            <button type="submit" className={styles.primary}>
+              Создать аккаунт
+            </button>
+          </form>
 
-        <div className={`${styles.card} ${styles.adminPartners}`}>
-          <h2>Партнёры · {partners.length}</h2>
-          <div className={styles.scrollList}>
-            <div className={styles.table}>
-              {partners.map((p) => (
-                <div key={p.user.id} className={styles.tableRow}>
-                  <div>
-                    <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
-                    <div className={styles.hint}>
-                      {p.user.login} · сотрудников: {p.executorCount}
-                      {p.lastLogin
-                        ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}`
-                        : ''}
+          <div className={`${styles.card} ${styles.adminPartners}`}>
+            <h2>Партнёры · {partners.length}</h2>
+            <div className={styles.scrollList}>
+              <div className={styles.table}>
+                {partners.map((p) => (
+                  <div key={p.user.id} className={styles.tableRow}>
+                    <div>
+                      <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
+                      <div className={styles.hint}>
+                        {p.user.login} · сотрудников: {p.executorCount}
+                        {p.lastLogin
+                          ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}`
+                          : ''}
+                      </div>
+                    </div>
+                    <div className={styles.rowActions}>
+                      <button
+                        type="button"
+                        className={styles.ghost}
+                        onClick={() => void onReset(p.user.id, p.user.login)}
+                      >
+                        Сменить пароль
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.danger}
+                        onClick={() =>
+                          void onDelete(
+                            p.user.id,
+                            p.user.login,
+                            p.org?.settings.companyName || p.user.displayName,
+                            p.executorCount,
+                          )
+                        }
+                      >
+                        Удалить
+                      </button>
                     </div>
                   </div>
-                  <div className={styles.rowActions}>
-                    <button
-                      type="button"
-                      className={styles.ghost}
-                      onClick={() => void onReset(p.user.id, p.user.login)}
-                    >
-                      Сменить пароль
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.danger}
-                      onClick={() =>
-                        void onDelete(
-                          p.user.id,
-                          p.user.login,
-                          p.org?.settings.companyName || p.user.displayName,
-                          p.executorCount,
-                        )
-                      }
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
+                ))}
+                {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
+              </div>
             </div>
           </div>
         </div>

@@ -116,9 +116,14 @@ export type AnalyticsPartnerRow = {
   orgId: string | null;
   companyName: string;
   logins: number;
+  /** Completed Problemomer results only (not opens). */
   problemomer: number;
+  /** Completed calculator runs only (not opens). */
   calculator: number;
   pdf: number;
+  shares: number;
+  areaM2: number;
+  panels: number;
   lastActiveAt: string | null;
 };
 
@@ -134,23 +139,293 @@ export type AnalyticsExecutorRow = {
   lastActiveAt: string | null;
 };
 
+export type AnalyticsKpi = {
+  /** Registered partners when known; otherwise active orgs in period. */
+  partners: number;
+  activePartners: number;
+  executors: number;
+  problemomerResults: number;
+  calculatorDone: number;
+  pdf: number;
+  shares: number;
+  logins: number;
+  areaM2: number;
+  panels: number;
+};
+
+export type AnalyticsFunnel = {
+  problemomer: { open: number; result: number; pdf: number; share: number };
+  calculator: { open: number; calcDone: number; pdf: number };
+};
+
+export type AnalyticsSeriesPoint = {
+  day: string;
+  problemomer: number;
+  calculator: number;
+  pdf: number;
+  logins: number;
+};
+
+export type AnalyticsBreakdownItem = {
+  key: string;
+  count: number;
+  share: number;
+};
+
+export type AnalyticsVolume = {
+  areaM2Sum: number;
+  areaM2Avg: number;
+  panelsSum: number;
+  completedCount: number;
+};
+
 export type AnalyticsDashboard = {
   source: 'api' | 'local';
   from: string | null;
   to: string | null;
-  kpi: {
-    partners: number;
-    executors: number;
-    problemomerResults: number;
-    calculatorDone: number;
-    pdf: number;
-    logins: number;
+  kpi: AnalyticsKpi;
+  /** Same-length previous window; null when period is «all time». */
+  kpiPrev: AnalyticsKpi | null;
+  funnel: AnalyticsFunnel;
+  series: AnalyticsSeriesPoint[];
+  breakdowns: {
+    roomType: AnalyticsBreakdownItem[];
+    houseType: AnalyticsBreakdownItem[];
+    objectStage: AnalyticsBreakdownItem[];
+    classTransition: AnalyticsBreakdownItem[];
+    calcMode: AnalyticsBreakdownItem[];
   };
+  volume: AnalyticsVolume;
   partners: AnalyticsPartnerRow[];
   executors: AnalyticsExecutorRow[];
   recentObjects: AnalyticsEvent[];
   events: AnalyticsEvent[];
 };
+
+function dayKey(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function filterAnalyticsEvents(
+  allEvents: AnalyticsEvent[],
+  opts: { from?: string | null; to?: string | null; orgId?: string | null },
+): AnalyticsEvent[] {
+  const fromMs = opts.from ? Date.parse(opts.from) : null;
+  const toMs = opts.to ? Date.parse(opts.to) : null;
+  return allEvents
+    .filter((e) => {
+      const t = Date.parse(e.at);
+      if (Number.isNaN(t)) return false;
+      if (fromMs != null && t < fromMs) return false;
+      if (toMs != null && t > toMs) return false;
+      if (opts.orgId && e.orgId !== opts.orgId) return false;
+      return true;
+    })
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+}
+
+function isCompletedWork(e: AnalyticsEvent): boolean {
+  return e.action === 'result' || e.action === 'calc_done';
+}
+
+function numOr0(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function emptyPartnerRow(orgId: string | null, companyName: string): AnalyticsPartnerRow {
+  return {
+    orgId,
+    companyName,
+    logins: 0,
+    problemomer: 0,
+    calculator: 0,
+    pdf: 0,
+    shares: 0,
+    areaM2: 0,
+    panels: 0,
+    lastActiveAt: null,
+  };
+}
+
+function computeVolume(events: AnalyticsEvent[]): AnalyticsVolume {
+  let areaM2Sum = 0;
+  let panelsSum = 0;
+  let withArea = 0;
+  let completedCount = 0;
+  for (const e of events) {
+    if (!isCompletedWork(e)) continue;
+    completedCount += 1;
+    const area = numOr0(e.object?.areaM2);
+    const panels = numOr0(e.object?.panels);
+    if (area > 0) {
+      areaM2Sum += area;
+      withArea += 1;
+    }
+    if (panels > 0) panelsSum += panels;
+  }
+  return {
+    areaM2Sum: Math.round(areaM2Sum * 10) / 10,
+    areaM2Avg: withArea ? Math.round((areaM2Sum / withArea) * 10) / 10 : 0,
+    panelsSum: Math.round(panelsSum),
+    completedCount,
+  };
+}
+
+function computeKpi(
+  events: AnalyticsEvent[],
+  opts: { partnerCount?: number; executorCount?: number; activeExecutors: number },
+): AnalyticsKpi {
+  const orgs = new Set<string>();
+  let areaM2 = 0;
+  let panels = 0;
+  for (const e of events) {
+    orgs.add(e.orgId || e.companyName || e.login);
+    if (isCompletedWork(e)) {
+      areaM2 += numOr0(e.object?.areaM2);
+      panels += numOr0(e.object?.panels);
+    }
+  }
+  return {
+    partners: opts.partnerCount ?? orgs.size,
+    activePartners: orgs.size,
+    executors: opts.executorCount ?? opts.activeExecutors,
+    problemomerResults: events.filter((e) => e.tool === 'problemomer' && e.action === 'result')
+      .length,
+    calculatorDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done')
+      .length,
+    pdf: events.filter((e) => e.action === 'pdf').length,
+    shares: events.filter((e) => e.action === 'share').length,
+    logins: events.filter((e) => e.action === 'login').length,
+    areaM2: Math.round(areaM2 * 10) / 10,
+    panels: Math.round(panels),
+  };
+}
+
+function computeFunnel(events: AnalyticsEvent[]): AnalyticsFunnel {
+  return {
+    problemomer: {
+      open: events.filter((e) => e.tool === 'problemomer' && e.action === 'open').length,
+      result: events.filter((e) => e.tool === 'problemomer' && e.action === 'result').length,
+      pdf: events.filter((e) => e.tool === 'problemomer' && e.action === 'pdf').length,
+      share: events.filter((e) => e.tool === 'problemomer' && e.action === 'share').length,
+    },
+    calculator: {
+      open: events.filter((e) => e.tool === 'calculator' && e.action === 'open').length,
+      calcDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done').length,
+      pdf: events.filter((e) => e.tool === 'calculator' && e.action === 'pdf').length,
+    },
+  };
+}
+
+function toBreakdown(counts: Map<string, number>): AnalyticsBreakdownItem[] {
+  const total = [...counts.values()].reduce((s, n) => s + n, 0) || 1;
+  return [...counts.entries()]
+    .map(([key, count]) => ({
+      key,
+      count,
+      share: Math.round((count / total) * 1000) / 10,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function computeBreakdowns(events: AnalyticsEvent[]): AnalyticsDashboard['breakdowns'] {
+  const roomType = new Map<string, number>();
+  const houseType = new Map<string, number>();
+  const objectStage = new Map<string, number>();
+  const classTransition = new Map<string, number>();
+  const calcMode = new Map<string, number>();
+
+  const bump = (map: Map<string, number>, key: string | null | undefined) => {
+    const k = (key && String(key).trim()) || 'unknown';
+    map.set(k, (map.get(k) || 0) + 1);
+  };
+
+  for (const e of events) {
+    if (!isCompletedWork(e)) continue;
+    const o = e.object;
+    if (e.tool === 'problemomer' && e.action === 'result') {
+      bump(roomType, o?.roomType ?? o?.label);
+      bump(houseType, o?.houseType);
+      bump(objectStage, o?.objectStage);
+      if (o?.classBefore || o?.classAfter) {
+        bump(classTransition, `${o?.classBefore || '?'}→${o?.classAfter || '?'}`);
+      }
+    }
+    if (e.tool === 'calculator' && e.action === 'calc_done') {
+      bump(calcMode, o?.mode);
+      if (o?.roomType) bump(roomType, o.roomType);
+    }
+  }
+
+  return {
+    roomType: toBreakdown(roomType),
+    houseType: toBreakdown(houseType),
+    objectStage: toBreakdown(objectStage),
+    classTransition: toBreakdown(classTransition),
+    calcMode: toBreakdown(calcMode),
+  };
+}
+
+function computeSeries(
+  events: AnalyticsEvent[],
+  from: string | null,
+  to: string | null,
+): AnalyticsSeriesPoint[] {
+  const toDate = to ? new Date(to) : new Date();
+  let fromDate = from ? new Date(from) : new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  if (Number.isNaN(fromDate.getTime())) {
+    fromDate = new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+  if (Number.isNaN(toDate.getTime())) return [];
+
+  const start = new Date(fromDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(toDate);
+  end.setHours(0, 0, 0, 0);
+
+  const map = new Map<string, AnalyticsSeriesPoint>();
+  for (let t = start.getTime(); t <= end.getTime(); t += 24 * 60 * 60 * 1000) {
+    const key = dayKey(new Date(t).toISOString());
+    if (!key) continue;
+    map.set(key, { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 });
+  }
+
+  for (const e of events) {
+    const key = dayKey(e.at);
+    if (!key) continue;
+    if (!map.has(key)) {
+      map.set(key, { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 });
+    }
+    const row = map.get(key)!;
+    if (e.tool === 'problemomer' && e.action === 'result') row.problemomer += 1;
+    if (e.tool === 'calculator' && e.action === 'calc_done') row.calculator += 1;
+    if (e.action === 'pdf') row.pdf += 1;
+    if (e.action === 'login') row.logins += 1;
+  }
+
+  return [...map.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
+}
+
+function previousWindow(
+  from: string | null | undefined,
+  to: string | null | undefined,
+): { from: string; to: string } | null {
+  if (!from || !to) return null;
+  const fromMs = Date.parse(from);
+  const toMs = Date.parse(to);
+  if (Number.isNaN(fromMs) || Number.isNaN(toMs) || toMs <= fromMs) return null;
+  const len = toMs - fromMs;
+  return {
+    from: new Date(fromMs - len).toISOString(),
+    to: new Date(fromMs).toISOString(),
+  };
+}
 
 /** Pure aggregator — used by client localStore and API. */
 export function aggregateAnalyticsDashboard(
@@ -170,17 +445,7 @@ export function aggregateAnalyticsDashboard(
     }>;
   },
 ): AnalyticsDashboard {
-  const fromMs = opts.from ? Date.parse(opts.from) : null;
-  const toMs = opts.to ? Date.parse(opts.to) : null;
-  let events = allEvents.filter((e) => {
-    const t = Date.parse(e.at);
-    if (Number.isNaN(t)) return false;
-    if (fromMs != null && t < fromMs) return false;
-    if (toMs != null && t > toMs) return false;
-    if (opts.orgId && e.orgId !== opts.orgId) return false;
-    return true;
-  });
-  events = [...events].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const events = filterAnalyticsEvents(allEvents, opts);
 
   const partnerMap = new Map<string, AnalyticsPartnerRow>();
   const executorMap = new Map<string, AnalyticsExecutorRow>();
@@ -203,27 +468,23 @@ export function aggregateAnalyticsDashboard(
   for (const e of events) {
     const orgKey = e.orgId || e.companyName || e.login;
     if (!partnerMap.has(orgKey)) {
-      partnerMap.set(orgKey, {
-        orgId: e.orgId,
-        companyName: e.companyName || e.login,
-        logins: 0,
-        problemomer: 0,
-        calculator: 0,
-        pdf: 0,
-        lastActiveAt: null,
-      });
+      partnerMap.set(orgKey, emptyPartnerRow(e.orgId, e.companyName || e.login));
     }
     const prow = partnerMap.get(orgKey)!;
     if (!prow.lastActiveAt || e.at > prow.lastActiveAt) prow.lastActiveAt = e.at;
     if (e.action === 'login') prow.logins += 1;
-    // KPI: only completed work — opens must not inflate rankings
     if (e.tool === 'problemomer' && e.action === 'result') {
       prow.problemomer += 1;
+      prow.areaM2 += numOr0(e.object?.areaM2);
+      prow.panels += numOr0(e.object?.panels);
     }
     if (e.tool === 'calculator' && e.action === 'calc_done') {
       prow.calculator += 1;
+      prow.areaM2 += numOr0(e.object?.areaM2);
+      prow.panels += numOr0(e.object?.panels);
     }
     if (e.action === 'pdf') prow.pdf += 1;
+    if (e.action === 'share') prow.shares += 1;
 
     if (e.role === 'executor' || (opts.orgId && e.orgId === opts.orgId)) {
       const exKey = e.userId || e.login;
@@ -241,47 +502,62 @@ export function aggregateAnalyticsDashboard(
         });
       }
       const ex = executorMap.get(exKey);
-      if (ex && (e.role === 'executor' || executorMap.has(exKey))) {
-        if (e.role === 'executor') {
-          if (!ex.lastActiveAt || e.at > ex.lastActiveAt) ex.lastActiveAt = e.at;
-          if (e.action === 'login') ex.logins += 1;
-          if (e.tool === 'problemomer' && e.action === 'result') {
-            ex.problemomer += 1;
-          }
-          if (e.tool === 'calculator' && e.action === 'calc_done') {
-            ex.calculator += 1;
-          }
-          if (e.action === 'pdf') ex.pdf += 1;
-          if (e.action === 'result' || e.action === 'calc_done') ex.results += 1;
-        }
+      if (ex && e.role === 'executor') {
+        if (!ex.lastActiveAt || e.at > ex.lastActiveAt) ex.lastActiveAt = e.at;
+        if (e.action === 'login') ex.logins += 1;
+        if (e.tool === 'problemomer' && e.action === 'result') ex.problemomer += 1;
+        if (e.tool === 'calculator' && e.action === 'calc_done') ex.calculator += 1;
+        if (e.action === 'pdf') ex.pdf += 1;
+        if (e.action === 'result' || e.action === 'calc_done') ex.results += 1;
       }
     }
   }
 
-  // Count only executor rows that are executors
+  for (const p of partnerMap.values()) {
+    p.areaM2 = Math.round(p.areaM2 * 10) / 10;
+    p.panels = Math.round(p.panels);
+  }
+
   const executors = [...executorMap.values()].sort(
-    (a, b) => (b.problemomer + b.calculator) - (a.problemomer + a.calculator),
+    (a, b) => b.problemomer + b.calculator - (a.problemomer + a.calculator),
   );
+  const activeExecutors =
+    executors.filter((e) => e.logins + e.problemomer + e.calculator + e.pdf > 0).length ||
+    executors.length;
+
+  const kpi = computeKpi(events, {
+    partnerCount: opts.partnerCount,
+    executorCount: opts.executorCount,
+    activeExecutors,
+  });
+
+  let kpiPrev: AnalyticsKpi | null = null;
+  const prev = previousWindow(opts.from, opts.to);
+  if (prev) {
+    const prevEvents = filterAnalyticsEvents(allEvents, {
+      from: prev.from,
+      to: prev.to,
+      orgId: opts.orgId,
+    });
+    kpiPrev = computeKpi(prevEvents, {
+      partnerCount: opts.partnerCount,
+      executorCount: opts.executorCount,
+      activeExecutors: 0,
+    });
+  }
 
   return {
     source: opts.source,
     from: opts.from || null,
     to: opts.to || null,
-    kpi: {
-      partners: opts.partnerCount ?? partnerMap.size,
-      executors:
-        opts.executorCount ??
-        (executors.filter((e) => e.logins + e.problemomer + e.calculator > 0).length ||
-          executors.length),
-      problemomerResults: events.filter((e) => e.tool === 'problemomer' && e.action === 'result')
-        .length,
-      calculatorDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done')
-        .length,
-      pdf: events.filter((e) => e.action === 'pdf').length,
-      logins: events.filter((e) => e.action === 'login').length,
-    },
+    kpi,
+    kpiPrev,
+    funnel: computeFunnel(events),
+    series: computeSeries(events, opts.from || null, opts.to || null),
+    breakdowns: computeBreakdowns(events),
+    volume: computeVolume(events),
     partners: [...partnerMap.values()].sort(
-      (a, b) => (b.problemomer + b.calculator) - (a.problemomer + a.calculator),
+      (a, b) => b.problemomer + b.calculator - (a.problemomer + a.calculator),
     ),
     executors,
     recentObjects: events
