@@ -8095,3 +8095,27 @@ body.theme-dark .results-drawer-backdrop {
   }
 }
 
+
+/* Partner portal banner */
+.partner-calc-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+  padding: 8px 14px;
+  background: #0c332c;
+  color: #e8f2ef;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.partner-calc-banner strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+.partner-calc-banner__hint {
+  margin-left: auto;
+  opacity: 0.75;
+  font-weight: 600;
+}

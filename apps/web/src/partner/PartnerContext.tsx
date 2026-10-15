@@ -14,7 +14,11 @@ import type {
   PartnerProfile,
   SessionUser,
 } from '../../../../packages/shared/partner';
-import { FIXED_PANEL_PRICE_RUB, FIXED_PRICE_PER_M2, toPartnerProfile } from '../../../../packages/shared/partner';
+import {
+  OFFICIAL_PANEL_PRICE_RUB,
+  OFFICIAL_PRICE_PER_M2,
+  toPartnerProfile,
+} from '../../../../packages/shared/partner';
 import {
   createExecutorLink,
   createPartnerAccount,
@@ -147,7 +151,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     async (patch: Partial<OrgSettings>) => {
       if (!user?.orgId) throw new Error('Нет организации');
       const settings = updateOrgSettings(user.orgId, patch, user);
-      setUser({ ...user, org: settings, displayName: settings.companyName || user.displayName });
+      const next = { ...user, org: settings, displayName: settings.companyName || user.displayName };
+      persistPartnerCalcParams(partnerCalcParamsFromOrg(settings));
+      setUser(next);
     },
     [user],
   );
@@ -241,16 +247,56 @@ export function usePartner(): PartnerApi {
   return ctx;
 }
 
+const PARTNER_CALC_STORE = 'mf_partner_calc_params_v1';
+
+export type PartnerCalcParams = {
+  panelPrice: number;
+  pricePerM2: number;
+  installPerM2: number | null;
+  dowelsPerPanel: number;
+  dowelPrice: number | null;
+  company: string;
+};
+
+export function partnerCalcParamsFromOrg(
+  org: OrgSettings | null | undefined,
+  companyName?: string,
+): PartnerCalcParams {
+  return {
+    panelPrice:
+      org?.panelPriceRub != null && org.panelPriceRub > 0
+        ? org.panelPriceRub
+        : OFFICIAL_PANEL_PRICE_RUB,
+    pricePerM2:
+      org?.pricePerM2 != null && org.pricePerM2 > 0 ? org.pricePerM2 : OFFICIAL_PRICE_PER_M2,
+    installPerM2: org?.installPricePerM2 ?? null,
+    dowelsPerPanel: org?.dowelsPerPanel || 2,
+    dowelPrice: org?.dowelPriceRub ?? null,
+    company: companyName || org?.companyName || '',
+  };
+}
+
+/** Persist pricing so calculator works offline / without query string. */
+export function persistPartnerCalcParams(params: PartnerCalcParams): void {
+  try {
+    localStorage.setItem(PARTNER_CALC_STORE, JSON.stringify(params));
+  } catch {
+    /* ignore quota */
+  }
+}
+
 export function calcUrlFromOrg(org: OrgSettings | null | undefined, companyName?: string): string {
+  const params = partnerCalcParamsFromOrg(org, companyName);
+  persistPartnerCalcParams(params);
   const q = new URLSearchParams();
-  q.set('panelPrice', String(FIXED_PANEL_PRICE_RUB));
-  q.set('pricePerM2', String(FIXED_PRICE_PER_M2));
-  if (org?.installPricePerM2 != null) q.set('installPerM2', String(org.installPricePerM2));
-  q.set('dowelsPerPanel', String(org?.dowelsPerPanel || 2));
-  if (org?.dowelPriceRub != null) q.set('dowelPrice', String(org.dowelPriceRub));
-  const company = companyName || org?.companyName || '';
-  if (company) q.set('company', company);
+  q.set('panelPrice', String(params.panelPrice));
+  q.set('pricePerM2', String(params.pricePerM2));
+  if (params.installPerM2 != null) q.set('installPerM2', String(params.installPerM2));
+  q.set('dowelsPerPanel', String(params.dowelsPerPanel));
+  if (params.dowelPrice != null) q.set('dowelPrice', String(params.dowelPrice));
+  if (params.company) q.set('company', params.company);
   q.set('partner', '1');
-  const base = `${import.meta.env.BASE_URL || '/'}calculator/index.html`;
-  return `${base}?${q.toString()}`;
+  const path = `${import.meta.env.BASE_URL || '/'}calculator/index.html`.replace(/\/{2,}/g, '/');
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}${path}?${q.toString()}`;
 }

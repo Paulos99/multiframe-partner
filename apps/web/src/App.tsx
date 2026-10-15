@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { SessionProvider } from './state/SessionContext';
 import { AppShell } from './app-shell/AppShell';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
-import { PartnerProvider, usePartner } from './partner/PartnerContext';
+import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
 import styles from './partner/partner.module.css';
@@ -11,8 +11,13 @@ import styles from './partner/partner.module.css';
 type Route = 'cabinet' | 'problemomer' | 'calculator';
 
 function PartnerShell() {
-  const { user, loading } = usePartner();
+  const { user, loading, noteTool } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
+
+  const calcSrc = useMemo(() => {
+    if (!user) return '';
+    return calcUrlFromOrg(user.org, user.org?.companyName);
+  }, [user]);
 
   if (loading && !user) {
     return (
@@ -25,17 +30,64 @@ function PartnerShell() {
   if (!user) return <LoginScreen />;
 
   if (route === 'cabinet') {
-    return <CabinetScreen onNavigate={setRoute} />;
+    return (
+      <CabinetScreen
+        onNavigate={(r) => {
+          if (r === 'calculator') noteTool('calculator');
+          if (r === 'problemomer') noteTool('problemomer');
+          setRoute(r);
+        }}
+      />
+    );
   }
 
-  // Calculator opens via full navigation from cabinet (calcUrlFromOrg).
-  // Keep problemomer embed here.
+  if (route === 'calculator') {
+    return (
+      <div className={styles.toolHost}>
+        <div className={styles.toolBar}>
+          <button type="button" onClick={() => setRoute('cabinet')}>
+            ← Кабинет
+          </button>
+          <button type="button" onClick={() => setRoute('problemomer')}>
+            Проблемомер
+          </button>
+          <span className={styles.toolBarMeta}>
+            {user.org?.companyName || user.displayName}
+            {user.org?.panelPriceRub != null ? ` · РРЦ ${user.org.panelPriceRub} ₽` : ''}
+          </span>
+        </div>
+        {calcSrc ? (
+          <iframe
+            title="Калькулятор MultiFrame · партнёр"
+            className={styles.calcFrame}
+            src={calcSrc}
+            allow="clipboard-write"
+          />
+        ) : (
+          <div className={styles.shell}>
+            <p className={styles.lead}>Нет параметров для калькулятора</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div>
+    <div className={styles.toolHost}>
       <div className={styles.toolBar}>
         <button type="button" onClick={() => setRoute('cabinet')}>
           ← Кабинет
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            noteTool('calculator');
+            setRoute('calculator');
+          }}
+        >
+          Калькулятор
+        </button>
+        <span className={styles.toolBarMeta}>{user.org?.companyName || user.displayName}</span>
       </div>
       <SmoothScroll>
         <SessionProvider>

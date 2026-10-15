@@ -2,7 +2,7 @@ import { Room } from '../core/room-model.js';
 import { PolygonPanelCalculator, ceilingLayoutCacheKey } from '../calculators/polygon-ceiling-calculator.js';
 import { WallCalculator } from '../calculators/wall-calculator.js';
 import { buildBOM, renderResultsHtml } from '../calculators/materials-bom.js';
-import { PANEL, PANEL_COVERAGE_AREA, RESERVES } from '../core/constants.js';
+import { PANEL, PANEL_COVERAGE_AREA, PARTNER_PRICING, RESERVES } from '../core/constants.js';
 import { createRectangleVertices } from '../core/polygon-geometry.js';
 import { buildEdgeDimensionsFromVertices } from '../editor/sketch-constraints.js';
 import { CeilingVisualizer } from '../visualizers/ceiling-visualizer.js';
@@ -2100,7 +2100,23 @@ function initTheme() {
   }
 }
 
+function mountPartnerBanner() {
+  if (!PARTNER_PRICING.enabled) return;
+  if (document.getElementById('partnerCalcBanner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'partnerCalcBanner';
+  banner.className = 'partner-calc-banner';
+  const company = PARTNER_PRICING.company ? PARTNER_PRICING.company : 'Партнёрский режим';
+  const install =
+    PARTNER_PRICING.installPerM2 != null ? ` · монтаж ${PARTNER_PRICING.installPerM2} ₽/м²` : '';
+  banner.innerHTML = `<strong>${company}</strong><span>РРЦ ${PANEL.priceRub} ₽/панель · ${PANEL.pricePerM2} ₽/м²${install}</span><span class="partner-calc-banner__hint">Офиц. ${PARTNER_PRICING.officialPanelPrice} ₽</span>`;
+  const shell = document.querySelector('.app-shell');
+  if (shell) shell.prepend(banner);
+  else document.body.prepend(banner);
+}
+
 function init() {
+  mountPartnerBanner();
   cacheElements();
   setupSketchEditor();
 

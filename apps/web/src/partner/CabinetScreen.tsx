@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import {
-  FIXED_PANEL_PRICE_RUB,
-  FIXED_PRICE_PER_M2,
+  OFFICIAL_PANEL_PRICE_RUB,
+  OFFICIAL_PRICE_PER_M2,
 } from '../../../../packages/shared/partner';
 import { calcUrlFromOrg, usePartner } from './PartnerContext';
 import styles from './partner.module.css';
@@ -158,12 +158,10 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       </div>
 
       <InstallHint />
-      <p className={styles.hint}>
-        Админ может открыть инструменты без корпоративных цен:{' '}
-        <button type="button" className={styles.linkish} onClick={() => onNavigate('problemomer')}>
-          проблемомер
-        </button>
-      </p>
+      <ToolButtons
+        onNavigate={onNavigate}
+        onOpenCalc={() => onNavigate('calculator')}
+      />
     </div>
   );
 }
@@ -178,6 +176,12 @@ function PartnerCabinet({
   const api = usePartner();
   const user = api.user!;
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
+  const [panelPriceRub, setPanelPriceRub] = useState(
+    String(user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB),
+  );
+  const [pricePerM2, setPricePerM2] = useState(
+    String(user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2),
+  );
   const [installPricePerM2, setInstallPricePerM2] = useState(
     user.org?.installPricePerM2 != null ? String(user.org.installPricePerM2) : '',
   );
@@ -198,6 +202,8 @@ function PartnerCabinet({
     try {
       await api.saveOrg({
         companyName: companyName.trim(),
+        panelPriceRub: Math.max(0, Number(panelPriceRub) || OFFICIAL_PANEL_PRICE_RUB),
+        pricePerM2: Math.max(0, Number(pricePerM2) || OFFICIAL_PRICE_PER_M2),
         installPricePerM2: installPricePerM2 === '' ? null : Number(installPricePerM2),
         dowelsPerPanel: Math.max(1, Number(dowelsPerPanel) || 2),
         dowelPriceRub: dowelPriceRub === '' ? null : Number(dowelPriceRub),
@@ -226,7 +232,8 @@ function PartnerCabinet({
         <div>
           <h1>Партнёр · {user.org?.companyName || user.displayName}</h1>
           <p className={styles.lead}>
-            Корпоративные параметры для проблемомера и калькулятора. РРЦ фиксирован StP.
+            Корпоративные параметры для проблемомера и калькулятора. Официальная РРЦ StP указана под
+            полями.
           </p>
         </div>
         <button type="button" className={styles.ghost} onClick={api.logout}>
@@ -245,13 +252,25 @@ function PartnerCabinet({
         <div className={styles.grid2}>
           <label className={styles.field}>
             РРЦ панели, ₽
-            <input value={FIXED_PANEL_PRICE_RUB} readOnly disabled />
-            <span className={styles.hint}>Задаёт StP, изменить нельзя</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={panelPriceRub}
+              onChange={(e) => setPanelPriceRub(e.target.value)}
+            />
+            <span className={styles.hint}>Официальная РРЦ {OFFICIAL_PANEL_PRICE_RUB} ₽</span>
           </label>
           <label className={styles.field}>
             РРЦ за м², ₽
-            <input value={FIXED_PRICE_PER_M2} readOnly disabled />
-            <span className={styles.hint}>Задаёт StP, изменить нельзя</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={pricePerM2}
+              onChange={(e) => setPricePerM2(e.target.value)}
+            />
+            <span className={styles.hint}>Официальная РРЦ {OFFICIAL_PRICE_PER_M2} ₽/м²</span>
           </label>
           <label className={styles.field}>
             Монтаж, ₽/м²
@@ -383,7 +402,8 @@ function ExecutorCabinet({
       <div className={styles.card} style={{ width: '100%' }}>
         <h2>Корпоративные параметры</h2>
         <p className={styles.lead}>
-          РРЦ {FIXED_PRICE_PER_M2} ₽/м² · монтаж{' '}
+          РРЦ панели {user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB} ₽ ·{' '}
+          {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
           {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'} ·
           дюбели {user.org?.dowelsPerPanel ?? 2}/панель
           {user.org?.dowelPriceRub != null ? ` × ${user.org.dowelPriceRub} ₽` : ''}
@@ -399,25 +419,11 @@ export function CabinetScreen({ onNavigate }: { onNavigate: (r: Route) => void }
   const user = api.user;
   if (!user) return null;
 
-  const openCalc = () => {
-    api.noteTool('calculator');
-    const url = calcUrlFromOrg(user.org, user.org?.companyName);
-    // Full navigation — iframe was blank under Pages/SW; top-level load is reliable offline too.
-    window.location.assign(url);
-  };
+  const openCalc = () => onNavigate('calculator');
 
-  const goTool = (r: Route) => {
-    if (r === 'problemomer') api.noteTool('problemomer');
-    if (r === 'calculator') {
-      openCalc();
-      return;
-    }
-    onNavigate(r);
-  };
-
-  if (user.role === 'admin') return <AdminCabinet onNavigate={goTool} />;
+  if (user.role === 'admin') return <AdminCabinet onNavigate={onNavigate} />;
   if (user.role === 'executor') {
-    return <ExecutorCabinet onNavigate={goTool} onOpenCalc={openCalc} />;
+    return <ExecutorCabinet onNavigate={onNavigate} onOpenCalc={openCalc} />;
   }
-  return <PartnerCabinet onNavigate={goTool} onOpenCalc={openCalc} />;
+  return <PartnerCabinet onNavigate={onNavigate} onOpenCalc={openCalc} />;
 }

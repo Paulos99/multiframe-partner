@@ -12,6 +12,20 @@ export const PANEL_LAYOUT = PANEL_NOMINAL;
 
 export const PANEL_COVERAGE_AREA = +(PANEL_NOMINAL.length * PANEL_NOMINAL.width).toFixed(6);
 
+const PARTNER_CALC_STORE = 'mf_partner_calc_params_v1';
+const OFFICIAL_PANEL = 2396;
+const OFFICIAL_M2 = 5990;
+
+function readStoredPartner() {
+  try {
+    const raw = localStorage.getItem(PARTNER_CALC_STORE);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 function partnerParam(name) {
   try {
     const v = new URLSearchParams(window.location.search).get(name);
@@ -23,17 +37,34 @@ function partnerParam(name) {
   }
 }
 
-const partnerPanel = partnerParam('panelPrice');
-const partnerM2 = partnerParam('pricePerM2');
-const partnerDowels = partnerParam('dowelsPerPanel');
+function partnerString(name) {
+  try {
+    return new URLSearchParams(window.location.search).get(name) || '';
+  } catch {
+    return '';
+  }
+}
+
+const stored = readStoredPartner();
+const partnerPanel = partnerParam('panelPrice') ?? stored?.panelPrice ?? null;
+const partnerM2 = partnerParam('pricePerM2') ?? stored?.pricePerM2 ?? null;
+const partnerDowels = partnerParam('dowelsPerPanel') ?? stored?.dowelsPerPanel ?? null;
+const partnerInstall =
+  partnerParam('installPerM2') ??
+  (stored?.installPerM2 != null ? Number(stored.installPerM2) : null);
+const partnerDowelPrice =
+  partnerParam('dowelPrice') ?? (stored?.dowelPrice != null ? Number(stored.dowelPrice) : null);
+const partnerCompany = partnerString('company') || stored?.company || '';
+const isPartnerMode =
+  partnerString('partner') === '1' || Boolean(stored?.company) || partnerPanel != null;
 
 export const PANEL = {
   nominal: PANEL_NOMINAL,
   effective: PANEL_EFFECTIVE,
   layout: PANEL_LAYOUT,
   coverageArea: PANEL_COVERAGE_AREA,
-  priceRub: partnerPanel ?? 2396,
-  pricePerM2: partnerM2 ?? 5990,
+  priceRub: partnerPanel != null && partnerPanel > 0 ? partnerPanel : OFFICIAL_PANEL,
+  pricePerM2: partnerM2 != null && partnerM2 > 0 ? partnerM2 : OFFICIAL_M2,
 };
 
 export const PANEL_SIZE_DISPLAY = '0,75×0,55 м';
@@ -48,15 +79,14 @@ export const RESERVES = {
 
 /** Partner portal extras (install / dowel unit price). */
 export const PARTNER_PRICING = {
-  installPerM2: partnerParam('installPerM2'),
-  dowelPrice: partnerParam('dowelPrice'),
-  company: (() => {
-    try {
-      return new URLSearchParams(window.location.search).get('company') || '';
-    } catch {
-      return '';
-    }
-  })(),
+  installPerM2:
+    partnerInstall != null && Number.isFinite(partnerInstall) ? partnerInstall : null,
+  dowelPrice:
+    partnerDowelPrice != null && Number.isFinite(partnerDowelPrice) ? partnerDowelPrice : null,
+  company: partnerCompany,
+  enabled: isPartnerMode,
+  officialPanelPrice: OFFICIAL_PANEL,
+  officialPricePerM2: OFFICIAL_M2,
 };
 
 export const VALIDATION = {

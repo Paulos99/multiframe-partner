@@ -202,8 +202,17 @@
   word-break: break-all;
 }
 
+.toolHost {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #f4f7f6;
+}
+
 .toolBar {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   padding: 10px 14px;
   background: #0c332c;
@@ -211,6 +220,7 @@
   position: sticky;
   top: 0;
   z-index: 40;
+  flex: 0 0 auto;
 }
 
 .toolBar button {
@@ -226,9 +236,22 @@
   cursor: pointer;
 }
 
+.toolBarMeta {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(232, 242, 239, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(420px, 55vw);
+}
+
 .calcFrame {
   width: 100%;
+  flex: 1 1 auto;
   min-height: calc(100dvh - 48px);
   border: 0;
   display: block;
+  background: #fff;
 }

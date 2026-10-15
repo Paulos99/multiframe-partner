@@ -28,6 +28,8 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: `${base}index.html`.replace(/\/+/g, '/'),
+        // Don't hijack the partner calculator SPA under /calculator/
+        navigateFallbackDenylist: [/^\/.*calculator(?:\/|$)/i],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff2,mp3}'],
       },
     }),

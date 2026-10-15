@@ -1,8 +1,9 @@
 import {
   DEFAULT_DOWELS_PER_PANEL,
-  FIXED_PANEL_PRICE_RUB,
+  OFFICIAL_PANEL_PRICE_RUB,
   DOWEL_RESERVE,
   PANEL_AREA_M2,
+  normalizeOrgSettings,
   type OrgSettings,
   type PartnerProfile,
 } from '../../../../packages/shared/partner';
@@ -37,7 +38,7 @@ export function buildPartnerEstimate(
   const panelPriceRub =
     partner.panelPriceRub != null && partner.panelPriceRub > 0
       ? partner.panelPriceRub
-      : FIXED_PANEL_PRICE_RUB;
+      : OFFICIAL_PANEL_PRICE_RUB;
   const panelsCost = panels * panelPriceRub;
   const installCost =
     partner.installPricePerM2 != null && partner.installPricePerM2 >= 0
@@ -71,11 +72,12 @@ export function buildEstimateFromOrg(
   org: OrgSettings | null | undefined,
 ): PartnerEstimate | null {
   if (!org) return null;
+  const settings = normalizeOrgSettings(org);
   return buildPartnerEstimate(areaM2, {
-    panelPriceRub: FIXED_PANEL_PRICE_RUB,
-    installPricePerM2: org.installPricePerM2,
-    dowelsPerPanel: org.dowelsPerPanel,
-    dowelPriceRub: org.dowelPriceRub,
+    panelPriceRub: settings.panelPriceRub,
+    installPricePerM2: settings.installPricePerM2,
+    dowelsPerPanel: settings.dowelsPerPanel,
+    dowelPriceRub: settings.dowelPriceRub,
   });
 }
 

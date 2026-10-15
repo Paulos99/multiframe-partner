@@ -9,6 +9,11 @@ import type {
   SessionUser,
   UserRole,
 } from '../../../../packages/shared/partner';
+import {
+  normalizeOrgSettings,
+  OFFICIAL_PANEL_PRICE_RUB,
+  OFFICIAL_PRICE_PER_M2,
+} from '../../../../packages/shared/partner';
 
 const DB_KEY = 'mf_partner_db_v2';
 const SESSION_KEY = 'mf_partner_session_v2';
@@ -73,12 +78,14 @@ function defaultDb(): PartnerDb {
         id: orgId,
         createdAt: now,
         createdBy: adminId,
-        settings: {
+        settings: normalizeOrgSettings({
           companyName: 'Демо Партнёр',
+          panelPriceRub: OFFICIAL_PANEL_PRICE_RUB,
+          pricePerM2: OFFICIAL_PRICE_PER_M2,
           installPricePerM2: 1500,
           dowelsPerPanel: 2,
           dowelPriceRub: 25,
-        },
+        }),
       },
     ],
     links: [],
@@ -110,6 +117,11 @@ export function loadDb(): PartnerDb {
       saveDb(db);
       return db;
     }
+    // Backfill RRC fields for older local DBs
+    parsed.orgs = (parsed.orgs || []).map((o) => ({
+      ...o,
+      settings: normalizeOrgSettings(o.settings || { companyName: '' }),
+    }));
     return parsed;
   } catch {
     const db = defaultDb();
@@ -162,7 +174,7 @@ export function userToSession(u: StoredUser, db: PartnerDb, execToken?: string):
     role: u.role,
     displayName: u.displayName,
     orgId: u.orgId,
-    org: org ? { ...org.settings } : null,
+    org: org ? normalizeOrgSettings(org.settings) : null,
     execToken: execToken || null,
   };
 }
@@ -220,12 +232,14 @@ export function createPartnerAccount(input: {
     id: orgId,
     createdAt: now,
     createdBy: input.admin.id,
-    settings: {
+    settings: normalizeOrgSettings({
       companyName: input.companyName.trim() || login,
+      panelPriceRub: OFFICIAL_PANEL_PRICE_RUB,
+      pricePerM2: OFFICIAL_PRICE_PER_M2,
       installPricePerM2: null,
       dowelsPerPanel: 2,
       dowelPriceRub: null,
-    },
+    }),
   };
   const user: StoredUser = {
     id: userId,
@@ -290,27 +304,10 @@ export function updateOrgSettings(
   const db = loadDb();
   const idx = db.orgs.findIndex((o) => o.id === orgId);
   if (idx < 0) throw new Error('Организация не найдена');
-  const settings: OrgSettings = {
+  const settings = normalizeOrgSettings({
     ...db.orgs[idx]!.settings,
     ...patch,
-    // RRC never stored as editable — ignore if passed
-  };
-  if (typeof patch.companyName === 'string') settings.companyName = patch.companyName.trim();
-  if ('installPricePerM2' in patch) {
-    settings.installPricePerM2 =
-      patch.installPricePerM2 == null || Number.isNaN(Number(patch.installPricePerM2))
-        ? null
-        : Number(patch.installPricePerM2);
-  }
-  if ('dowelsPerPanel' in patch) {
-    settings.dowelsPerPanel = Math.max(1, Number(patch.dowelsPerPanel) || 2);
-  }
-  if ('dowelPriceRub' in patch) {
-    settings.dowelPriceRub =
-      patch.dowelPriceRub == null || Number.isNaN(Number(patch.dowelPriceRub))
-        ? null
-        : Number(patch.dowelPriceRub);
-  }
+  });
   const orgs = [...db.orgs];
   orgs[idx] = { ...orgs[idx]!, settings };
   let next: PartnerDb = { ...db, orgs };
@@ -378,7 +375,7 @@ export function enterByExecToken(token: string): SessionUser {
     role: 'executor',
     displayName: link.label,
     orgId: org.id,
-    org: { ...org.settings },
+    org: normalizeOrgSettings(org.settings),
     execToken: token,
   };
   next = pushActivity(next, {

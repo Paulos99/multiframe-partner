@@ -31,10 +31,7 @@ import { buildLeadHandoff, withDerived } from './session';
 import { buildAirSpectrum, buildImpactSpectrum } from './spectrum';
 import { comfortRingSvg, spectrumChartSvg } from './chartSvg';
 import { wishLabelsJoined } from './wish';
-import {
-  FIXED_PANEL_PRICE_RUB,
-  type OrgSettings,
-} from '../../../../packages/shared/partner';
+import { type OrgSettings } from '../../../../packages/shared/partner';
 import { buildEstimateFromOrg, formatRub } from '../partner/estimate';
 
 /** Keep in sync with ResultWideScreen — hide frequency page until clients ask. */
@@ -379,7 +376,7 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
         <tbody>
           <tr>
             <td>Панели MultiFrame</td>
-            <td>${estimate.panels} шт. · РРЦ ${formatRub(FIXED_PANEL_PRICE_RUB)}</td>
+            <td>${estimate.panels} шт. · РРЦ ${formatRub(estimate.panelPriceRub)}</td>
             <td class="num">${formatRub(estimate.panelsCost)}</td>
           </tr>
           <tr>
