@@ -268,7 +268,10 @@ export function aggregateAnalyticsDashboard(
     to: opts.to || null,
     kpi: {
       partners: opts.partnerCount ?? partnerMap.size,
-      executors: opts.executorCount ?? executors.filter((e) => e.logins + e.problemomer + e.calculator > 0).length || executors.length,
+      executors:
+        opts.executorCount ??
+        (executors.filter((e) => e.logins + e.problemomer + e.calculator > 0).length ||
+          executors.length),
       problemomerResults: events.filter((e) => e.tool === 'problemomer' && e.action === 'result')
         .length,
       calculatorDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done')

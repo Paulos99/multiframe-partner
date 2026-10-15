@@ -191,7 +191,7 @@ export function pushActivity(
   return { ...db, activity };
 }
 
-export function userToSession(u: StoredUser, db: PartnerDb, execToken?: string): SessionUser {
+export function userToSession(u: StoredUser, db: PartnerDb): SessionUser {
   const org = u.orgId ? db.orgs.find((o) => o.id === u.orgId) : null;
   return {
     id: u.id,
@@ -200,7 +200,6 @@ export function userToSession(u: StoredUser, db: PartnerDb, execToken?: string):
     displayName: u.displayName,
     orgId: u.orgId,
     org: org ? normalizeOrgSettings(org.settings) : null,
-    execToken: execToken || null,
   };
 }
 
