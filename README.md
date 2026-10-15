@@ -1,34 +1,43 @@
-# MultiFrame · Кабинет партнёра
+﻿# MultiFrame · Кабинет партнёра
 
 Отдельный сервис для коммерческих партнёров: **логин → кабинет (РРЦ, монтаж, крепёж) → проблемомер + калькулятор**.
 
-Публичные [проблемомер](https://github.com/Paulos99/multiframe-problemomer) и [калькулятор MF_StP](https://github.com/Paulos99/MF_StP) не меняются.
+Публичные проблемомер и калькулятор MF_StP не меняются.
+
+## Уже задеплоено (Yandex Cloud)
+
+- API Gateway: `https://d5dff69141o8r1ehqm09.l5v6loqa.apigw.yandexcloud.net`
+- Cloud Function: `multiframe-partner-api` (`d4et50596cl0hu9o3d7k`)
+- Демо-вход: логин `partner1`, пароль `demo1234`
+
+Локальный фронт подхватывает URL из `apps/web/.env` (не в git).
 
 ## Структура
 
-- `apps/web` — React-оболочка + копия проблемомера + встроенный калькулятор
-- `apps/api` — HTTP API (Yandex Cloud Function): `/auth/login`, `/auth/me`, `/partner/profile`
-- `packages/shared` — типы профиля партнёра
-- `infra/deploy_yc.py` — деплой Function + API Gateway
+- `apps/web` — React: логин, кабинет, проблемомер, iframe-калькулятор
+- `apps/api` — HTTP API: `/auth/login`, `/auth/me`, `/partner/profile`
+- `packages/shared` — типы профиля
+- `infra/deploy_yc.py` — деплой Function + Gateway
 
 ## Локально
 
 ```bash
-cd apps/api && npm install
-cd ../web && npm install
-# в apps/web/.env:
-# VITE_API_URL=http://localhost:8080
+cd apps/web
+npm install
 npm run dev
 ```
 
-Демо-логин после деплоя с дефолтным сидом: `partner1` / `demo1234`.
+## Профиль партнёра
 
-## Деплой API (Yandex Cloud)
+Поля кабинета применяются в калькуляторе (query-параметры) и в карточке сметы / PDF проблемомера.
 
-Нужен authorized key SA в `%USERPROFILE%\.yc\agent-project-creator-key.json`.
+Партнёры по умолчанию в памяти функции (сид). Для постоянных правок профиля задайте Object Storage: `PARTNERS_BUCKET` + ключи доступа в env версии функции.
+
+## Передеплой API
 
 ```bash
+cd apps/api && npm install
 py -3 infra/deploy_yc.py
 ```
 
-Скрипт создаёт Cloud Function и API Gateway в каталоге `b1gibd821or94p6f9v1q` и печатает `VITE_API_URL`.
+Ключ SA: `%USERPROFILE%\.yc\agent-project-creator-key.json`
