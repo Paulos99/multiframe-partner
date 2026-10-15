@@ -101,86 +101,93 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         </button>
       </header>
 
-      <form className={styles.card} style={{ width: '100%' }} onSubmit={(e) => void onCreate(e)}>
-        <h2>Новый партнёр</h2>
-        <div className={styles.grid2}>
-          <label className={styles.field}>
-            Логин
-            <input value={login} onChange={(e) => setLogin(e.target.value)} required />
-          </label>
-          <label className={styles.field}>
-            Пароль
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-            />
-          </label>
-          <label className={styles.field}>
-            Компания
-            <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} required />
-          </label>
-        </div>
-        {created ? <p className={styles.ok}>{created}</p> : null}
-        {err ? (
-          <p className={styles.error} role="alert">
-            {err}
-          </p>
-        ) : null}
-        <button type="submit" className={styles.primary}>
-          Создать аккаунт
-        </button>
-      </form>
-
-      <div className={styles.card} style={{ width: '100%' }}>
-        <h2>Партнёры</h2>
-        <div className={styles.table}>
-          {partners.map((p) => (
-            <div key={p.user.id} className={styles.tableRow}>
-              <div>
-                <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
-                <div className={styles.hint}>
-                  {p.user.login} · исполнителей: {p.executorCount}
-                  {p.lastLogin ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}` : ''}
-                </div>
-              </div>
-              <div className={styles.rowActions}>
-                <button
-                  type="button"
-                  className={styles.ghost}
-                  onClick={() => void onReset(p.user.id, p.user.login)}
-                >
-                  Сменить пароль
-                </button>
-                <button
-                  type="button"
-                  className={styles.danger}
-                  onClick={() =>
-                    void onDelete(
-                      p.user.id,
-                      p.user.login,
-                      p.org?.settings.companyName || p.user.displayName,
-                      p.executorCount,
-                    )
-                  }
-                >
-                  Удалить
-                </button>
-              </div>
-            </div>
-          ))}
-          {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
-        </div>
-      </div>
-
-      <AnalyticsDashboard mode="admin" />
-
-      <InstallHint />
       <ToolButtons
         onNavigate={onNavigate}
         onOpenCalc={() => onNavigate('calculator')}
       />
+
+      <div className={styles.cabinetGrid}>
+        <form className={styles.card} onSubmit={(e) => void onCreate(e)}>
+          <h2>Новый партнёр</h2>
+          <div className={styles.grid2}>
+            <label className={styles.field}>
+              Логин
+              <input value={login} onChange={(e) => setLogin(e.target.value)} required />
+            </label>
+            <label className={styles.field}>
+              Пароль
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </label>
+            <label className={styles.field}>
+              Компания
+              <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} required />
+            </label>
+          </div>
+          {created ? <p className={styles.ok}>{created}</p> : null}
+          {err ? (
+            <p className={styles.error} role="alert">
+              {err}
+            </p>
+          ) : null}
+          <button type="submit" className={styles.primary}>
+            Создать аккаунт
+          </button>
+        </form>
+
+        <div className={styles.card}>
+          <h2>Партнёры</h2>
+          <div className={styles.table}>
+            {partners.map((p) => (
+              <div key={p.user.id} className={styles.tableRow}>
+                <div>
+                  <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
+                  <div className={styles.hint}>
+                    {p.user.login} · исполнителей: {p.executorCount}
+                    {p.lastLogin ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}` : ''}
+                  </div>
+                </div>
+                <div className={styles.rowActions}>
+                  <button
+                    type="button"
+                    className={styles.ghost}
+                    onClick={() => void onReset(p.user.id, p.user.login)}
+                  >
+                    Сменить пароль
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.danger}
+                    onClick={() =>
+                      void onDelete(
+                        p.user.id,
+                        p.user.login,
+                        p.org?.settings.companyName || p.user.displayName,
+                        p.executorCount,
+                      )
+                    }
+                  >
+                    Удалить
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
+          </div>
+        </div>
+
+        <div className={styles.cabinetSpan}>
+          <AnalyticsDashboard mode="admin" />
+        </div>
+
+        <div className={styles.cabinetSpan}>
+          <InstallHint />
+        </div>
+      </div>
     </div>
   );
 }
@@ -282,148 +289,151 @@ function PartnerCabinet({
 
       <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
 
-      <form className={styles.card} style={{ width: '100%' }} onSubmit={(e) => void onSave(e)}>
-        <h2>Параметры компании</h2>
-        <label className={styles.field}>
-          Название компании (в PDF и КП)
-          <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-        </label>
-        <div className={styles.grid2}>
-          <label className={styles.field}>
-            РРЦ панели, ₽
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={panelPriceRub}
-              onChange={(e) => setPanelPriceRub(e.target.value)}
-            />
-            <span className={styles.hint}>Официальная РРЦ {OFFICIAL_PANEL_PRICE_RUB} ₽</span>
-          </label>
-          <label className={styles.field}>
-            РРЦ за м², ₽
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={pricePerM2}
-              onChange={(e) => setPricePerM2(e.target.value)}
-            />
-            <span className={styles.hint}>Официальная РРЦ {OFFICIAL_PRICE_PER_M2} ₽/м²</span>
-          </label>
-          <label className={styles.field}>
-            Монтаж, ₽/м²
-            <input
-              type="number"
-              min={0}
-              step={1}
-              placeholder="пусто = не показывать"
-              value={installPricePerM2}
-              onChange={(e) => setInstallPricePerM2(e.target.value)}
-            />
-          </label>
-          <label className={styles.field}>
-            Дюбелей на панель
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={dowelsPerPanel}
-              onChange={(e) => setDowelsPerPanel(e.target.value)}
-            />
-            <span className={styles.hint}>Запас 15% уже заложен</span>
-          </label>
-          <label className={styles.field}>
-            Цена дюбеля, ₽
-            <input
-              type="number"
-              min={0}
-              step={1}
-              placeholder="пусто = только количество"
-              value={dowelPriceRub}
-              onChange={(e) => setDowelPriceRub(e.target.value)}
-            />
-          </label>
-        </div>
-        {msg ? <p className={styles.ok}>{msg}</p> : null}
-        {err ? (
-          <p className={styles.error} role="alert">
-            {err}
-          </p>
-        ) : null}
-        <button type="submit" className={styles.primary}>
-          Сохранить
-        </button>
-      </form>
-
-      <form
-        className={styles.card}
-        style={{ width: '100%' }}
-        onSubmit={(e) => void onCreateExecutor(e)}
-      >
-        <h2>Исполнители</h2>
-        <p className={styles.lead}>
-          Создайте логин и пароль для сотрудников. Они входят в кабинет и работают в проблемомере и
-          калькуляторе с вашими корпоративными параметрами — без доступа к настройкам компании.
-        </p>
-        <div className={styles.grid2}>
-          <label className={styles.field}>
-            Имя / подпись
-            <input
-              value={execName}
-              onChange={(e) => setExecName(e.target.value)}
-              placeholder="Например, Иван · замер"
-            />
-          </label>
-          <label className={styles.field}>
-            Логин
-            <input
-              value={execLogin}
-              onChange={(e) => setExecLogin(e.target.value)}
-              required
-              autoComplete="off"
-            />
-          </label>
-          <label className={styles.field}>
-            Пароль
-            <input
-              type="password"
-              value={execPassword}
-              onChange={(e) => setExecPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-            />
-          </label>
-        </div>
-        {execCreated ? <p className={styles.ok}>{execCreated}</p> : null}
-        <button type="submit" className={styles.primary}>
-          Создать исполнителя
-        </button>
-        <div className={styles.table}>
-          {executors.map((ex) => (
-            <div key={ex.id} className={styles.tableRow}>
-              <div>
-                <strong>{ex.displayName}</strong>
-                <div className={styles.hint}>{ex.login}</div>
-              </div>
-              <button
-                type="button"
-                className={styles.ghost}
-                onClick={() => void onResetExecutor(ex.id, ex.login)}
-              >
-                Сменить пароль
-              </button>
+      <div className={styles.cabinetGrid}>
+        <div className={styles.cabinetStack}>
+          <form className={styles.card} onSubmit={(e) => void onSave(e)}>
+            <h2>Параметры компании</h2>
+            <label className={styles.field}>
+              Название компании (в PDF и КП)
+              <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+            </label>
+            <div className={styles.grid2}>
+              <label className={styles.field}>
+                РРЦ панели, ₽
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={panelPriceRub}
+                  onChange={(e) => setPanelPriceRub(e.target.value)}
+                />
+                <span className={styles.hint}>Официальная РРЦ {OFFICIAL_PANEL_PRICE_RUB} ₽</span>
+              </label>
+              <label className={styles.field}>
+                РРЦ за м², ₽
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={pricePerM2}
+                  onChange={(e) => setPricePerM2(e.target.value)}
+                />
+                <span className={styles.hint}>Официальная РРЦ {OFFICIAL_PRICE_PER_M2} ₽/м²</span>
+              </label>
+              <label className={styles.field}>
+                Монтаж, ₽/м²
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="пусто = не показывать"
+                  value={installPricePerM2}
+                  onChange={(e) => setInstallPricePerM2(e.target.value)}
+                />
+              </label>
+              <label className={styles.field}>
+                Дюбелей на панель
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={dowelsPerPanel}
+                  onChange={(e) => setDowelsPerPanel(e.target.value)}
+                />
+                <span className={styles.hint}>Запас 15% уже заложен</span>
+              </label>
+              <label className={styles.field}>
+                Цена дюбеля, ₽
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="пусто = только количество"
+                  value={dowelPriceRub}
+                  onChange={(e) => setDowelPriceRub(e.target.value)}
+                />
+              </label>
             </div>
-          ))}
-          {!executors.length ? (
-            <p className={styles.lead}>Пока нет исполнителей</p>
-          ) : null}
+            {msg ? <p className={styles.ok}>{msg}</p> : null}
+            {err ? (
+              <p className={styles.error} role="alert">
+                {err}
+              </p>
+            ) : null}
+            <button type="submit" className={styles.primary}>
+              Сохранить
+            </button>
+          </form>
+
+          <form className={styles.card} onSubmit={(e) => void onCreateExecutor(e)}>
+            <h2>Исполнители</h2>
+            <p className={styles.lead}>
+              Создайте логин и пароль для сотрудников. Они входят в кабинет и работают в
+              проблемомере и калькуляторе с вашими корпоративными параметрами — без доступа к
+              настройкам компании.
+            </p>
+            <div className={styles.grid2}>
+              <label className={styles.field}>
+                Имя / подпись
+                <input
+                  value={execName}
+                  onChange={(e) => setExecName(e.target.value)}
+                  placeholder="Например, Иван · замер"
+                />
+              </label>
+              <label className={styles.field}>
+                Логин
+                <input
+                  value={execLogin}
+                  onChange={(e) => setExecLogin(e.target.value)}
+                  required
+                  autoComplete="off"
+                />
+              </label>
+              <label className={styles.field}>
+                Пароль
+                <input
+                  type="password"
+                  value={execPassword}
+                  onChange={(e) => setExecPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+              </label>
+            </div>
+            {execCreated ? <p className={styles.ok}>{execCreated}</p> : null}
+            <button type="submit" className={styles.primary}>
+              Создать исполнителя
+            </button>
+            <div className={styles.table}>
+              {executors.map((ex) => (
+                <div key={ex.id} className={styles.tableRow}>
+                  <div>
+                    <strong>{ex.displayName}</strong>
+                    <div className={styles.hint}>{ex.login}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.ghost}
+                    onClick={() => void onResetExecutor(ex.id, ex.login)}
+                  >
+                    Сменить пароль
+                  </button>
+                </div>
+              ))}
+              {!executors.length ? (
+                <p className={styles.lead}>Пока нет исполнителей</p>
+              ) : null}
+            </div>
+          </form>
         </div>
-      </form>
 
-      <AnalyticsDashboard mode="partner" />
+        <AnalyticsDashboard mode="partner" />
 
-      <InstallHint />
+        <div className={styles.cabinetSpan}>
+          <InstallHint />
+        </div>
+      </div>
     </div>
   );
 }
