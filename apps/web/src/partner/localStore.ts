@@ -145,6 +145,15 @@ export function loadDb(): PartnerDb {
       ...o,
       settings: normalizeOrgSettings(o.settings || { companyName: '' }),
     }));
+    let renamed = false;
+    parsed.users = (parsed.users || []).map((u) => {
+      if (u.displayName === 'Демо Исполнитель') {
+        renamed = true;
+        return { ...u, displayName: 'Демо Сотрудник' };
+      }
+      return u;
+    });
+    if (renamed) saveDb(parsed);
     return parsed;
   } catch {
     const db = defaultDb();
