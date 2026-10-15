@@ -464,21 +464,59 @@ function animateStatValue(el, toValue, formatter, { duration = 520 } = {}) {
   statAnimRafs[key] = requestAnimationFrame(tick);
 }
 
-function partnerGrandTotal(bom, area, panelsCost) {
-  if (!PARTNER_PRICING.enabled) return null;
-  if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
-  const install =
-    PARTNER_PRICING.installPerM2 != null && area > 0
-      ? Math.round(area * PARTNER_PRICING.installPerM2)
-      : 0;
+function partnerInstallCost(area) {
+  if (!PARTNER_PRICING.enabled || PARTNER_PRICING.installPerM2 == null) return null;
+  return Math.round(Math.max(0, Number(area) || 0) * PARTNER_PRICING.installPerM2);
+}
+
+function partnerDowelCost(bom) {
+  if (!PARTNER_PRICING.enabled || PARTNER_PRICING.dowelPrice == null) return null;
   const dowels =
     bom?.total?.dowelsWithReserve ??
     Math.ceil((bom?.total?.panelsWithReserve ?? 0) * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels));
-  const dowelCost =
-    PARTNER_PRICING.dowelPrice != null && dowels > 0
-      ? Math.round(dowels * PARTNER_PRICING.dowelPrice)
-      : 0;
+  if (!(dowels > 0)) return 0;
+  return Math.round(dowels * PARTNER_PRICING.dowelPrice);
+}
+
+function partnerGrandTotal(bom, area, panelsCost) {
+  if (!PARTNER_PRICING.enabled) return null;
+  if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
+  const install = partnerInstallCost(area) ?? 0;
+  const dowelCost = partnerDowelCost(bom) ?? 0;
   return (panelsCost ?? 0) + install + dowelCost;
+}
+
+function syncPartnerTotalBreakdown(bom, area, panelsCost) {
+  if (!PARTNER_PRICING.enabled) return;
+  const installEl = $('partnerInstallCost');
+  const installRow = $('partnerInstallRow');
+  const dowelEl = $('partnerDowelCost');
+  const dowelRow = $('partnerDowelRow');
+  const panelsEl = $('partnerPanelsCost');
+  const install =
+    bom?.total?.installCost != null ? bom.total.installCost : partnerInstallCost(area);
+  const dowels =
+    bom?.total?.dowelsCost != null ? bom.total.dowelsCost : partnerDowelCost(bom);
+  if (panelsEl) {
+    panelsEl.textContent = formatStatCost(panelsCost ?? 0);
+    panelsEl.dataset.raw = String(panelsCost ?? 0);
+  }
+  if (installRow) {
+    const show = install != null;
+    installRow.hidden = !show;
+    if (show && installEl) {
+      installEl.textContent = formatStatCost(install);
+      installEl.dataset.raw = String(install);
+    }
+  }
+  if (dowelRow) {
+    const show = dowels != null;
+    dowelRow.hidden = !show;
+    if (show && dowelEl) {
+      dowelEl.textContent = formatStatCost(dowels);
+      dowelEl.dataset.raw = String(dowels);
+    }
+  }
 }
 
 function updateStatCards() {
@@ -487,6 +525,7 @@ function updateStatCards() {
     animateStatValue($('totalPanels'), 0, formatStatPanels, { duration: 280 });
     animateStatValue($('coverageArea'), 0, formatStatArea, { duration: 280 });
     animateStatValue($('totalCost'), 0, formatStatCost, { duration: 280 });
+    syncPartnerTotalBreakdown({ total: { installCost: 0, dowelsCost: 0 } }, 0, 0);
     animateStatValue($('partnerTotalCost'), 0, formatStatCost, { duration: 280 });
     updateMobileSummary();
     return;
@@ -498,6 +537,7 @@ function updateStatCards() {
   animateStatValue($('totalPanels'), panels, formatStatPanels);
   animateStatValue($('coverageArea'), area, formatStatArea);
   animateStatValue($('totalCost'), cost, formatStatCost);
+  syncPartnerTotalBreakdown(bom, area, cost);
   const grand = partnerGrandTotal(bom, area, cost);
   if (grand != null) animateStatValue($('partnerTotalCost'), grand, formatStatCost);
   updateMobileSummary();
@@ -1303,6 +1343,23 @@ function updatePreviewStatsFromCeiling(ceilingResult) {
         panelsWithReserve: panels,
         totalCost: cost,
         dowelsWithReserve: Math.ceil(panels * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels)),
+      },
+    },
+    area,
+    cost,
+  );
+  syncPartnerTotalBreakdown(
+    {
+      total: {
+        panelsWithReserve: panels,
+        totalCost: cost,
+        installCost: partnerInstallCost(area),
+        dowelsCost: partnerDowelCost({
+          total: {
+            panelsWithReserve: panels,
+            dowelsWithReserve: Math.ceil(panels * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels)),
+          },
+        }),
       },
     },
     area,
@@ -2205,10 +2262,28 @@ function mountPartnerTotalCard() {
   card.id = 'partnerTotalCard';
   card.className = 'stat-card stat-card--partner-total';
   card.dataset.stat = 'partner-total';
+  const showInstall = PARTNER_PRICING.installPerM2 != null;
+  const showDowel = PARTNER_PRICING.dowelPrice != null;
   card.innerHTML = `
-    <div class="stat-label">Итого</div>
-    <div class="stat-value" id="partnerTotalCost" data-raw="0">0 ₽</div>
-    <div class="stat-label__hint">панели · монтаж · крепёж</div>
+    <div class="stat-label">Смета</div>
+    <div class="partner-total-lines">
+      <div class="partner-total-line">
+        <span>Панели</span>
+        <strong id="partnerPanelsCost" data-raw="0">0 ₽</strong>
+      </div>
+      <div class="partner-total-line" id="partnerInstallRow"${showInstall ? '' : ' hidden'}>
+        <span>Монтаж</span>
+        <strong id="partnerInstallCost" data-raw="0">0 ₽</strong>
+      </div>
+      <div class="partner-total-line" id="partnerDowelRow"${showDowel ? '' : ' hidden'}>
+        <span>Крепёж</span>
+        <strong id="partnerDowelCost" data-raw="0">0 ₽</strong>
+      </div>
+      <div class="partner-total-line partner-total-line--sum">
+        <span>Итого</span>
+        <strong class="stat-value" id="partnerTotalCost" data-raw="0">0 ₽</strong>
+      </div>
+    </div>
   `;
   buy.replaceWith(card);
   document.body.classList.add('partner-calc-mode');

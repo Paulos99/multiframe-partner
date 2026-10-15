@@ -12,12 +12,12 @@ export function applyPricing(stats) {
 
 function partnerExtras(areaM2, dowels) {
   const install =
-    PARTNER_PRICING.installPerM2 != null && areaM2 > 0
-      ? Math.round(areaM2 * PARTNER_PRICING.installPerM2)
+    PARTNER_PRICING.installPerM2 != null
+      ? Math.round(Math.max(0, areaM2) * PARTNER_PRICING.installPerM2)
       : null;
   const dowelCost =
-    PARTNER_PRICING.dowelPrice != null && dowels > 0
-      ? Math.round(dowels * PARTNER_PRICING.dowelPrice)
+    PARTNER_PRICING.dowelPrice != null
+      ? Math.round(Math.max(0, dowels) * PARTNER_PRICING.dowelPrice)
       : null;
   return { install, dowelCost };
 }
@@ -299,19 +299,25 @@ export function renderResultsHtml(bom, { mode = null } = {}) {
       </section>`);
   }
 
-  if (bom.total && (bom.total.installCost != null || bom.total.dowelsCost != null || bom.total.partnerCompany)) {
+  if (PARTNER_PRICING.enabled && bom.total) {
     const rows = [];
     if (bom.total.partnerCompany) {
       rows.push(`<div class="rb-kv"><span>Компания</span><strong>${esc(bom.total.partnerCompany)}</strong></div>`);
     }
+    if (bom.total.totalCost != null) {
+      rows.push(`<div class="rb-kv"><span>Панели (РРЦ)</span><strong>${fmtNum(bom.total.totalCost)} ₽</strong></div>`);
+    }
     if (bom.total.installCost != null) {
-      rows.push(`<div class="rb-kv"><span>Монтаж</span><strong>${fmtNum(bom.total.installCost)} ₽</strong></div>`);
+      const rate =
+        PARTNER_PRICING.installPerM2 != null
+          ? ` · ${fmtNum(PARTNER_PRICING.installPerM2)} ₽/м²`
+          : '';
+      rows.push(
+        `<div class="rb-kv rb-kv--install"><span>Монтаж${rate}</span><strong>${fmtNum(bom.total.installCost)} ₽</strong></div>`,
+      );
     }
     if (bom.total.dowelsCost != null) {
       rows.push(`<div class="rb-kv"><span>Крепёж</span><strong>${fmtNum(bom.total.dowelsCost)} ₽</strong></div>`);
-    }
-    if (bom.total.totalCost != null) {
-      rows.push(`<div class="rb-kv"><span>Панели (РРЦ)</span><strong>${fmtNum(bom.total.totalCost)} ₽</strong></div>`);
     }
     if (bom.total.grandTotal != null) {
       rows.push(
