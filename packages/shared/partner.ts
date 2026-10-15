@@ -18,6 +18,10 @@ export const DEFAULT_PRICE_PER_M2 = OFFICIAL_PRICE_PER_M2;
 export const DEFAULT_DOWELS_PER_PANEL = 2;
 export const DOWEL_RESERVE = 0.15;
 export const PANEL_AREA_M2 = 0.75 * 0.55;
+/** Default install labour ₽/m² for partner estimate when not set. */
+export const DEFAULT_INSTALL_PRICE_PER_M2 = 1500;
+/** Default dowel unit price ₽ for partner estimate when not set. */
+export const DEFAULT_DOWEL_PRICE_RUB = 25;
 
 export type OrgSettings = {
   companyName: string;

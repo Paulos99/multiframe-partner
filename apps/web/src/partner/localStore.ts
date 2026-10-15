@@ -13,6 +13,8 @@ import type {
 } from '../../../../packages/shared/partner';
 import {
   aggregateAnalyticsDashboard,
+  DEFAULT_DOWEL_PRICE_RUB,
+  DEFAULT_INSTALL_PRICE_PER_M2,
   normalizeOrgSettings,
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
@@ -155,11 +157,29 @@ export function loadDb(): PartnerDb {
       saveDb(db);
       return db;
     }
-    // Backfill RRC fields for older local DBs
-    parsed.orgs = (parsed.orgs || []).map((o) => ({
-      ...o,
-      settings: normalizeOrgSettings(o.settings || { companyName: '' }),
-    }));
+    // Backfill RRC + default install/dowel for older local DBs
+    let orgsPatched = false;
+    parsed.orgs = (parsed.orgs || []).map((o) => {
+      const prev = o.settings || { companyName: '' };
+      const nextSettings = normalizeOrgSettings({
+        ...prev,
+        installPricePerM2:
+          prev.installPricePerM2 != null
+            ? prev.installPricePerM2
+            : DEFAULT_INSTALL_PRICE_PER_M2,
+        dowelPriceRub:
+          prev.dowelPriceRub != null ? prev.dowelPriceRub : DEFAULT_DOWEL_PRICE_RUB,
+      });
+      if (
+        prev.installPricePerM2 == null ||
+        prev.dowelPriceRub == null ||
+        prev.panelPriceRub == null
+      ) {
+        orgsPatched = true;
+      }
+      return { ...o, settings: nextSettings };
+    });
+    if (orgsPatched) saveDb({ ...parsed, orgs: parsed.orgs });
     let renamed = false;
     parsed.users = (parsed.users || []).map((u) => {
       if (u.displayName === 'Демо Исполнитель') {
@@ -292,9 +312,9 @@ export function createPartnerAccount(input: {
       companyName: input.companyName.trim() || login,
       panelPriceRub: OFFICIAL_PANEL_PRICE_RUB,
       pricePerM2: OFFICIAL_PRICE_PER_M2,
-      installPricePerM2: null,
+      installPricePerM2: DEFAULT_INSTALL_PRICE_PER_M2,
       dowelsPerPanel: 2,
-      dowelPriceRub: null,
+      dowelPriceRub: DEFAULT_DOWEL_PRICE_RUB,
     }),
   };
   const user: StoredUser = {

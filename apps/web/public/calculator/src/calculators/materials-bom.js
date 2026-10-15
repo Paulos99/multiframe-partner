@@ -1,25 +1,45 @@
-import { PANEL, PARTNER_PRICING, RESERVES } from '../core/constants.js';
+import {
+  PANEL,
+  PANEL_COVERAGE_AREA,
+  PARTNER_PRICING,
+  RESERVES,
+  getPartnerPricing,
+} from '../core/constants.js';
 import { calculateFrameMaterials, formatFrameMaterials, mergeFrameTotals, MOUNTING_RULES } from './mounting-rules.js';
 import { getBounds } from '../core/polygon-geometry.js';
 
 export function applyPricing(stats) {
   if (!stats) return stats;
-  stats.totalCostWithoutReserve = stats.panelsToPurchase * PANEL.priceRub;
-  stats.totalCostWithReserve = stats.withReserve * PANEL.priceRub;
+  const price = getPartnerPricing().panelPriceRub;
+  stats.totalCostWithoutReserve = stats.panelsToPurchase * price;
+  stats.totalCostWithReserve = stats.withReserve * price;
   stats.totalCost = stats.totalCostWithReserve;
   return stats;
 }
 
 function partnerExtras(areaM2, dowels) {
+  const pricing = getPartnerPricing();
   const install =
-    PARTNER_PRICING.installPerM2 != null
-      ? Math.round(Math.max(0, areaM2) * PARTNER_PRICING.installPerM2)
+    pricing.installPerM2 != null
+      ? Math.round(Math.max(0, areaM2) * pricing.installPerM2)
       : null;
   const dowelCost =
-    PARTNER_PRICING.dowelPrice != null
-      ? Math.round(Math.max(0, dowels) * PARTNER_PRICING.dowelPrice)
+    pricing.dowelPrice != null
+      ? Math.round(Math.max(0, dowels) * pricing.dowelPrice)
       : null;
   return { install, dowelCost };
+}
+
+function resolveCoveredAreaM2(bom) {
+  let area = (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
+  if (area > 0) return area;
+  area =
+    (bom.ceiling?.stats?.netArea ?? bom.ceiling?.stats?.coverageArea ?? 0) +
+    (bom.walls?.stats?.netArea ?? bom.walls?.stats?.coverageArea ?? bom.walls?.area ?? 0);
+  if (area > 0) return area;
+  const panels =
+    (bom.ceiling?.stats?.withReserve ?? 0) + (bom.walls?.stats?.withReserve ?? 0);
+  return panels > 0 ? panels * PANEL_COVERAGE_AREA : 0;
 }
 
 export function buildBOM({ room, ceilingResult, wallResult, options }) {
@@ -94,19 +114,26 @@ export function buildBOM({ room, ceilingResult, wallResult, options }) {
   const dowelsTotal =
     (bom.ceiling?.stats.dowels?.withReserve ?? 0) + (bom.walls?.stats.dowels?.withReserve ?? 0);
 
-  const areaTotal = (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
-  const extras = partnerExtras(areaTotal, dowelsTotal);
+  let dowelsForCost = dowelsTotal;
+  if (!(dowelsForCost > 0) && panelsTotal > 0) {
+    dowelsForCost = Math.ceil(
+      panelsTotal * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels),
+    );
+  }
+  const areaTotal = resolveCoveredAreaM2(bom);
+  const extras = partnerExtras(areaTotal, dowelsForCost);
+  const pricing = getPartnerPricing();
 
   const grandTotal = costTotal + (extras.install ?? 0) + (extras.dowelCost ?? 0);
 
   bom.total = {
     panelsWithReserve: panelsTotal,
     totalCost: costTotal,
-    dowelsWithReserve: dowelsTotal,
+    dowelsWithReserve: dowelsForCost || dowelsTotal,
     installCost: extras.install,
     dowelsCost: extras.dowelCost,
     grandTotal,
-    partnerCompany: PARTNER_PRICING.company || '',
+    partnerCompany: pricing.company || PARTNER_PRICING.company || '',
     frame: mergeFrameTotals([bom.ceiling?.frame, bom.walls?.frame].filter(Boolean)),
     profileLengthM:
       (bom.ceiling?.frame?.totalProfileLengthM ?? 0) +
@@ -299,7 +326,8 @@ export function renderResultsHtml(bom, { mode = null } = {}) {
       </section>`);
   }
 
-  if (PARTNER_PRICING.enabled && bom.total) {
+  if (getPartnerPricing().enabled && bom.total) {
+    const pricing = getPartnerPricing();
     const panelsRub = Math.round(bom.total.totalCost ?? 0);
     const installRub = Math.round(bom.total.installCost ?? 0);
     const fastenersRub = Math.round(bom.total.dowelsCost ?? 0);
@@ -307,12 +335,12 @@ export function renderResultsHtml(bom, { mode = null } = {}) {
       bom.total.grandTotal ?? panelsRub + installRub + fastenersRub,
     );
     const installHint =
-      PARTNER_PRICING.installPerM2 != null
-        ? `<span class="rb-kv__hint">${fmtNum(PARTNER_PRICING.installPerM2)} ₽/м²</span>`
+      pricing.installPerM2 != null
+        ? `<span class="rb-kv__hint">${fmtNum(pricing.installPerM2)} ₽/м²</span>`
         : '';
     const fastenerHint =
-      PARTNER_PRICING.dowelPrice != null
-        ? `<span class="rb-kv__hint">${fmtNum(PARTNER_PRICING.dowelPrice)} ₽/шт. · ${fmtNum(bom.total.dowelsWithReserve ?? 0)} шт.</span>`
+      pricing.dowelPrice != null
+        ? `<span class="rb-kv__hint">${fmtNum(pricing.dowelPrice)} ₽/шт. · ${fmtNum(bom.total.dowelsWithReserve ?? 0)} шт.</span>`
         : bom.total.dowelsWithReserve
           ? `<span class="rb-kv__hint">${fmtNum(bom.total.dowelsWithReserve)} шт.</span>`
           : '';

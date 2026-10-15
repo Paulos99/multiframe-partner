@@ -13,14 +13,28 @@ export const PANEL_LAYOUT = PANEL_NOMINAL;
 export const PANEL_COVERAGE_AREA = +(PANEL_NOMINAL.length * PANEL_NOMINAL.width).toFixed(6);
 
 const PARTNER_CALC_STORE = 'mf_partner_calc_params_v1';
+const PARTNER_SESSION_KEY = 'mf_partner_session_v2';
 const OFFICIAL_PANEL = 2396;
 const OFFICIAL_M2 = 5990;
+const DEFAULT_INSTALL_PER_M2 = 1500;
+const DEFAULT_DOWEL_PRICE = 25;
 
 function readStoredPartner() {
   try {
     const raw = localStorage.getItem(PARTNER_CALC_STORE);
     if (!raw) return null;
     return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function readSessionOrg() {
+  try {
+    const raw = localStorage.getItem(PARTNER_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    return session?.org || null;
   } catch {
     return null;
   }
@@ -45,26 +59,71 @@ function partnerString(name) {
   }
 }
 
-const stored = readStoredPartner();
-const partnerPanel = partnerParam('panelPrice') ?? stored?.panelPrice ?? null;
-const partnerM2 = partnerParam('pricePerM2') ?? stored?.pricePerM2 ?? null;
-const partnerDowels = partnerParam('dowelsPerPanel') ?? stored?.dowelsPerPanel ?? null;
-const partnerInstall =
-  partnerParam('installPerM2') ??
-  (stored?.installPerM2 != null ? Number(stored.installPerM2) : null);
-const partnerDowelPrice =
-  partnerParam('dowelPrice') ?? (stored?.dowelPrice != null ? Number(stored.dowelPrice) : null);
-const partnerCompany = partnerString('company') || stored?.company || '';
-const isPartnerMode =
-  partnerString('partner') === '1' || Boolean(stored?.company) || partnerPanel != null;
+function numOrNull(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Resolve partner pricing at call time (URL → calc store → session org → defaults).
+ * Module-load constants alone miss session updates and iframe reloads with stale store.
+ */
+export function getPartnerPricing() {
+  const stored = readStoredPartner();
+  const org = readSessionOrg();
+  const partnerPanel = partnerParam('panelPrice') ?? numOrNull(stored?.panelPrice) ?? null;
+  const partnerM2 = partnerParam('pricePerM2') ?? numOrNull(stored?.pricePerM2) ?? null;
+  const partnerDowels =
+    partnerParam('dowelsPerPanel') ?? numOrNull(stored?.dowelsPerPanel) ?? null;
+  let partnerInstall =
+    partnerParam('installPerM2') ??
+    numOrNull(stored?.installPerM2) ??
+    numOrNull(org?.installPricePerM2);
+  let partnerDowelPrice =
+    partnerParam('dowelPrice') ??
+    numOrNull(stored?.dowelPrice) ??
+    numOrNull(org?.dowelPriceRub);
+  const partnerCompany =
+    partnerString('company') || stored?.company || org?.companyName || '';
+  const isPartnerMode =
+    partnerString('partner') === '1' ||
+    Boolean(stored?.company) ||
+    Boolean(org?.companyName) ||
+    partnerPanel != null;
+
+  if (isPartnerMode) {
+    if (partnerInstall == null) partnerInstall = DEFAULT_INSTALL_PER_M2;
+    if (partnerDowelPrice == null) partnerDowelPrice = DEFAULT_DOWEL_PRICE;
+  }
+
+  return {
+    panelPriceRub:
+      partnerPanel != null && partnerPanel > 0 ? partnerPanel : OFFICIAL_PANEL,
+    pricePerM2: partnerM2 != null && partnerM2 > 0 ? partnerM2 : OFFICIAL_M2,
+    installPerM2: isPartnerMode ? partnerInstall : null,
+    dowelPrice: isPartnerMode ? partnerDowelPrice : null,
+    dowelsPerPanel: partnerDowels && partnerDowels > 0 ? partnerDowels : 2,
+    company: partnerCompany,
+    enabled: isPartnerMode,
+    officialPanelPrice: OFFICIAL_PANEL,
+    officialPricePerM2: OFFICIAL_M2,
+  };
+}
+
+const boot = getPartnerPricing();
 
 export const PANEL = {
   nominal: PANEL_NOMINAL,
   effective: PANEL_EFFECTIVE,
   layout: PANEL_LAYOUT,
   coverageArea: PANEL_COVERAGE_AREA,
-  priceRub: partnerPanel != null && partnerPanel > 0 ? partnerPanel : OFFICIAL_PANEL,
-  pricePerM2: partnerM2 != null && partnerM2 > 0 ? partnerM2 : OFFICIAL_M2,
+  get priceRub() {
+    return getPartnerPricing().panelPriceRub;
+  },
+  get pricePerM2() {
+    return getPartnerPricing().pricePerM2;
+  },
 };
 
 export const PANEL_SIZE_DISPLAY = '0,75×0,55 м';
@@ -74,17 +133,25 @@ export const RESERVES = {
   /** Запас панелей отключён: на схеме уже учтены подрезки, лишний % раздувает закупку */
   panels: 0,
   dowels: 0.15,
-  dowelsPerPanel: partnerDowels && partnerDowels > 0 ? partnerDowels : 2,
+  get dowelsPerPanel() {
+    return getPartnerPricing().dowelsPerPanel;
+  },
 };
 
-/** Partner portal extras (install / dowel unit price). */
+/** Partner portal extras — live getters so BOM always sees current rates. */
 export const PARTNER_PRICING = {
-  installPerM2:
-    partnerInstall != null && Number.isFinite(partnerInstall) ? partnerInstall : null,
-  dowelPrice:
-    partnerDowelPrice != null && Number.isFinite(partnerDowelPrice) ? partnerDowelPrice : null,
-  company: partnerCompany,
-  enabled: isPartnerMode,
+  get installPerM2() {
+    return getPartnerPricing().installPerM2;
+  },
+  get dowelPrice() {
+    return getPartnerPricing().dowelPrice;
+  },
+  get company() {
+    return getPartnerPricing().company;
+  },
+  get enabled() {
+    return getPartnerPricing().enabled;
+  },
   officialPanelPrice: OFFICIAL_PANEL,
   officialPricePerM2: OFFICIAL_M2,
 };
@@ -99,25 +166,4 @@ export const VALIDATION = {
   MIN_OPENING_SIZE: 0.3,
 };
 
-/** Мин. ширина/высота видимого клипа — ≤ этого не укладываем (зазор закрывают обрезками) */
-export const MIN_PANEL_FRAGMENT = 0.05;
-
-/** @deprecated используйте MIN_PANEL_FRAGMENT */
-export const MIN_WALL_PANEL_FRAGMENT = MIN_PANEL_FRAGMENT;
-
-/**
- * @deprecated порог у проёмов совпадает с MIN_PANEL_FRAGMENT (5 см везде)
- */
-export const MIN_WALL_OPENING_STRIP = MIN_PANEL_FRAGMENT;
-
-export const MOUNTING_TYPES = {
-  CEILING_FRAMELESS: 'ceiling_frameless',
-  CEILING_FRAMED: 'ceiling_framed',
-  WALL_FRAMELESS: 'wall_frameless',
-  WALL_FRAMED: 'wall_framed',
-};
-
-export const OPENING_TYPES = {
-  DOOR: 'door',
-  WINDOW: 'window',
-};
+export { boot as _bootPartnerPricing };

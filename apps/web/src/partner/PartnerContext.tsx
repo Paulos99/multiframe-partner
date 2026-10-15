@@ -14,6 +14,8 @@ import type {
   SessionUser,
 } from '../../../../packages/shared/partner';
 import {
+  DEFAULT_DOWEL_PRICE_RUB,
+  DEFAULT_INSTALL_PRICE_PER_M2,
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
   toPartnerProfile,
@@ -291,9 +293,15 @@ export function partnerCalcParamsFromOrg(
         : OFFICIAL_PANEL_PRICE_RUB,
     pricePerM2:
       org?.pricePerM2 != null && org.pricePerM2 > 0 ? org.pricePerM2 : OFFICIAL_PRICE_PER_M2,
-    installPerM2: org?.installPricePerM2 ?? null,
+    installPerM2:
+      org?.installPricePerM2 != null && org.installPricePerM2 >= 0
+        ? org.installPricePerM2
+        : DEFAULT_INSTALL_PRICE_PER_M2,
     dowelsPerPanel: org?.dowelsPerPanel || 2,
-    dowelPrice: org?.dowelPriceRub ?? null,
+    dowelPrice:
+      org?.dowelPriceRub != null && org.dowelPriceRub >= 0
+        ? org.dowelPriceRub
+        : DEFAULT_DOWEL_PRICE_RUB,
     company: companyName || org?.companyName || '',
   };
 }
@@ -313,9 +321,9 @@ export function calcUrlFromOrg(org: OrgSettings | null | undefined, companyName?
   const q = new URLSearchParams();
   q.set('panelPrice', String(params.panelPrice));
   q.set('pricePerM2', String(params.pricePerM2));
-  if (params.installPerM2 != null) q.set('installPerM2', String(params.installPerM2));
+  q.set('installPerM2', String(params.installPerM2 ?? DEFAULT_INSTALL_PRICE_PER_M2));
   q.set('dowelsPerPanel', String(params.dowelsPerPanel));
-  if (params.dowelPrice != null) q.set('dowelPrice', String(params.dowelPrice));
+  q.set('dowelPrice', String(params.dowelPrice ?? DEFAULT_DOWEL_PRICE_RUB));
   if (params.company) q.set('company', params.company);
   q.set('partner', '1');
   const path = `${import.meta.env.BASE_URL || '/'}calculator/index.html`.replace(/\/{2,}/g, '/');

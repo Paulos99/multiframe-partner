@@ -17,7 +17,15 @@ function PartnerShell() {
   const calcSrc = useMemo(() => {
     if (!user) return '';
     return calcUrlFromOrg(user.org, user.org?.companyName);
-  }, [user]);
+  }, [
+    user,
+    user?.org?.panelPriceRub,
+    user?.org?.pricePerM2,
+    user?.org?.installPricePerM2,
+    user?.org?.dowelPriceRub,
+    user?.org?.dowelsPerPanel,
+    user?.org?.companyName,
+  ]);
 
   if (loading && !user) {
     return (
