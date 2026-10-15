@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
@@ -31,7 +31,7 @@ function ToolButtons({
 
 function InstallHint() {
   return (
-    <div className={styles.card} style={{ width: '100%' }}>
+    <div className={styles.hintCard}>
       <h2>Офлайн на планшете / телефоне</h2>
       <p className={styles.lead}>
         Установите кабинет на устройство: в Chrome — «Установить приложение», на iPhone —
@@ -42,9 +42,43 @@ function InstallHint() {
   );
 }
 
+function CabinetTabs<T extends string>({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: Array<{ id: T; label: string }>;
+  active: T;
+  onChange: (id: T) => void;
+}) {
+  return (
+    <div className={styles.tabs} role="tablist">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={active === t.id}
+          className={active === t.id ? styles.tabActive : styles.tab}
+          onClick={() => onChange(t.id)}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TabPanel({ children }: { children: ReactNode }) {
+  return <div className={styles.tabPanel}>{children}</div>;
+}
+
+type AdminTab = 'add' | 'partners' | 'analytics';
+
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const partners = useMemo(() => api.adminListPartners(), [api]);
+  const [tab, setTab] = useState<AdminTab>('analytics');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -61,6 +95,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       setLogin('');
       setPassword('');
       setCompanyName('');
+      setTab('partners');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
     }
@@ -95,26 +130,30 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       <header className={styles.top}>
         <div>
           <h1>Администратор</h1>
-          <p className={styles.lead}>Создание партнёров и активность по кабинету.</p>
+          <p className={styles.lead}>Партнёры, сотрудники сети и аналитика кабинета.</p>
         </div>
         <button type="button" className={styles.ghost} onClick={api.logout}>
           Выйти
         </button>
       </header>
 
-      <ToolButtons
-        onNavigate={onNavigate}
-        onOpenCalc={() => onNavigate('calculator')}
+      <ToolButtons onNavigate={onNavigate} onOpenCalc={() => onNavigate('calculator')} />
+
+      <CabinetTabs
+        tabs={[
+          { id: 'add', label: 'Добавить партнёра' },
+          { id: 'partners', label: `Партнёры · ${partners.length}` },
+          { id: 'analytics', label: 'Аналитика' },
+        ]}
+        active={tab}
+        onChange={setTab}
       />
 
-      <div className={styles.adminStack}>
-        <div className={styles.adminDash}>
-          <AnalyticsDashboard mode="admin" />
-        </div>
-
-        <div className={styles.adminManage}>
-          <form className={`${styles.card} ${styles.adminCreate}`} onSubmit={(e) => void onCreate(e)}>
+      {tab === 'add' ? (
+        <TabPanel>
+          <form className={`${styles.card} ${styles.panelCard}`} onSubmit={(e) => void onCreate(e)}>
             <h2>Новый партнёр</h2>
+            <p className={styles.lead}>Логин и пароль для входа в партнёрский кабинет.</p>
             <div className={styles.grid2}>
               <label className={styles.field}>
                 Логин
@@ -148,60 +187,67 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
               Создать аккаунт
             </button>
           </form>
+          <InstallHint />
+        </TabPanel>
+      ) : null}
 
-          <div className={`${styles.card} ${styles.adminPartners}`}>
-            <h2>Партнёры · {partners.length}</h2>
-            <div className={styles.scrollList}>
-              <div className={styles.table}>
-                {partners.map((p) => (
-                  <div key={p.user.id} className={styles.tableRow}>
-                    <div>
-                      <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
-                      <div className={styles.hint}>
-                        {p.user.login} · сотрудников: {p.executorCount}
-                        {p.lastLogin
-                          ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}`
-                          : ''}
-                      </div>
-                    </div>
-                    <div className={styles.rowActions}>
-                      <button
-                        type="button"
-                        className={styles.ghost}
-                        onClick={() => void onReset(p.user.id, p.user.login)}
-                      >
-                        Сменить пароль
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.danger}
-                        onClick={() =>
-                          void onDelete(
-                            p.user.id,
-                            p.user.login,
-                            p.org?.settings.companyName || p.user.displayName,
-                            p.executorCount,
-                          )
-                        }
-                      >
-                        Удалить
-                      </button>
+      {tab === 'partners' ? (
+        <TabPanel>
+          <div className={`${styles.card} ${styles.panelCard}`}>
+            <h2>Список партнёров · {partners.length}</h2>
+            <div className={styles.table}>
+              {partners.map((p) => (
+                <div key={p.user.id} className={styles.tableRow}>
+                  <div>
+                    <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
+                    <div className={styles.hint}>
+                      {p.user.login} · сотрудников: {p.executorCount}
+                      {p.lastLogin
+                        ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}`
+                        : ''}
                     </div>
                   </div>
-                ))}
-                {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
-              </div>
+                  <div className={styles.rowActions}>
+                    <button
+                      type="button"
+                      className={styles.ghost}
+                      onClick={() => void onReset(p.user.id, p.user.login)}
+                    >
+                      Сменить пароль
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.danger}
+                      onClick={() =>
+                        void onDelete(
+                          p.user.id,
+                          p.user.login,
+                          p.org?.settings.companyName || p.user.displayName,
+                          p.executorCount,
+                        )
+                      }
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
             </div>
           </div>
-        </div>
+        </TabPanel>
+      ) : null}
 
-        <div className={styles.adminHint}>
-          <InstallHint />
-        </div>
-      </div>
+      {tab === 'analytics' ? (
+        <TabPanel>
+          <AnalyticsDashboard mode="admin" />
+        </TabPanel>
+      ) : null}
     </div>
   );
 }
+
+type PartnerTab = 'company' | 'staff' | 'analytics';
 
 function PartnerCabinet({
   onNavigate,
@@ -212,6 +258,7 @@ function PartnerCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
+  const [tab, setTab] = useState<PartnerTab>('company');
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
   const [panelPriceRub, setPanelPriceRub] = useState(
     String(user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB),
@@ -313,8 +360,7 @@ function PartnerCabinet({
         <div>
           <h1>Партнёр · {user.org?.companyName || user.displayName}</h1>
           <p className={styles.lead}>
-            Корпоративные параметры для проблемомера и калькулятора. Официальная РРЦ StP указана под
-            полями.
+            Параметры компании, сотрудники и аналитика команды.
           </p>
         </div>
         <button type="button" className={styles.ghost} onClick={api.logout}>
@@ -324,9 +370,19 @@ function PartnerCabinet({
 
       <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
 
-      <div className={styles.cabinetGrid}>
-        <div className={styles.cabinetStack}>
-          <form className={styles.card} onSubmit={(e) => void onSave(e)}>
+      <CabinetTabs
+        tabs={[
+          { id: 'company', label: 'Компания' },
+          { id: 'staff', label: `Сотрудники · ${staff.length}` },
+          { id: 'analytics', label: 'Аналитика' },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+
+      {tab === 'company' ? (
+        <TabPanel>
+          <form className={`${styles.card} ${styles.panelCard}`} onSubmit={(e) => void onSave(e)}>
             <h2>Параметры компании</h2>
             <label className={styles.field}>
               Название компании (в PDF и КП)
@@ -399,13 +455,20 @@ function PartnerCabinet({
               Сохранить
             </button>
           </form>
+          <InstallHint />
+        </TabPanel>
+      ) : null}
 
-          <form className={styles.card} onSubmit={(e) => void onCreateStaff(e)}>
+      {tab === 'staff' ? (
+        <TabPanel>
+          <form
+            className={`${styles.card} ${styles.panelCard}`}
+            onSubmit={(e) => void onCreateStaff(e)}
+          >
             <h2>Сотрудники</h2>
             <p className={styles.lead}>
-              Создайте логин и пароль для сотрудников. Они входят в кабинет и работают в
-              проблемомере и калькуляторе с вашими корпоративными параметрами — без доступа к
-              настройкам компании. Пароль можно сгенерировать и позже посмотреть в списке.
+              Логин и пароль для сотрудников. Они входят в кабинет и работают в проблемомере и
+              калькуляторе с вашими параметрами — без доступа к настройкам компании.
             </p>
             <div className={styles.grid2}>
               <label className={styles.field}>
@@ -447,6 +510,11 @@ function PartnerCabinet({
               </label>
             </div>
             {execCreated ? <p className={styles.ok}>{execCreated}</p> : null}
+            {err ? (
+              <p className={styles.error} role="alert">
+                {err}
+              </p>
+            ) : null}
             <button type="submit" className={styles.primary}>
               Создать сотрудника
             </button>
@@ -493,14 +561,14 @@ function PartnerCabinet({
               {!staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
             </div>
           </form>
-        </div>
+        </TabPanel>
+      ) : null}
 
-        <AnalyticsDashboard mode="partner" />
-
-        <div className={styles.cabinetSpan}>
-          <InstallHint />
-        </div>
-      </div>
+      {tab === 'analytics' ? (
+        <TabPanel>
+          <AnalyticsDashboard mode="partner" />
+        </TabPanel>
+      ) : null}
     </div>
   );
 }
@@ -528,7 +596,7 @@ function ExecutorCabinet({
         </button>
       </header>
       <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
-      <div className={styles.card} style={{ width: '100%' }}>
+      <div className={`${styles.card} ${styles.panelCard}`}>
         <h2>Корпоративные параметры</h2>
         <p className={styles.lead}>
           РРЦ панели {user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB} ₽ ·{' '}

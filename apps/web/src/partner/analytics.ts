@@ -9,7 +9,9 @@ import {
   appendAnalyticsEvent,
   buildLocalDashboard,
   clearAnalyticsQueue,
+  clearAllActionHistory,
   enqueueAnalyticsEvents,
+  ensureActionHistoryCleared,
   loadSession,
   peekAnalyticsQueue,
 } from './localStore';
@@ -99,6 +101,44 @@ async function postEvents(events: AnalyticsEvent[]): Promise<void> {
 
 export async function flushAnalyticsQueue(): Promise<void> {
   await postEvents([]);
+}
+
+/** Clear local activity + analytics events/queue. */
+export function resetLocalActionHistory(): void {
+  clearAllActionHistory();
+}
+
+/** Admin-only: wipe server analytics store once. */
+export async function resetServerAnalyticsOnce(): Promise<void> {
+  const flag = 'mf_partner_server_history_reset_v2';
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem(flag) === '1') return;
+    localStorage.setItem(flag, '1');
+  } catch {
+    /* continue and try wipe */
+  }
+  if (!API_BASE) return;
+  try {
+    await fetch(`${API_BASE}/analytics/events`, {
+      method: 'DELETE',
+      headers: { 'X-Analytics-Key': 'admin1234' },
+    });
+  } catch {
+    /* offline / old API */
+  }
+}
+
+/** One-shot local wipe when app opens after redesign. */
+export function bootstrapHistoryReset(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem('mf_partner_history_reset_v2') === '1') return;
+    clearAllActionHistory();
+    localStorage.setItem('mf_partner_history_reset_v2', '1');
+  } catch {
+    ensureActionHistoryCleared();
+  }
 }
 
 export async function fetchAnalyticsDashboard(opts: {

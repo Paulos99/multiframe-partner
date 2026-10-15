@@ -306,9 +306,82 @@
 }
 
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(1, 100, 79, 0.06);
+  border: 1px solid rgba(1, 100, 79, 0.1);
+}
+
+.tab,
+.tabActive {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: #3d4f46;
+  background: transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: #0c332c;
+}
+
+.tabActive {
+  background: #fff;
+  color: #01644f;
+  box-shadow: 0 1px 3px rgba(12, 51, 44, 0.08);
+}
+
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.panelCard {
+  width: 100% !important;
+  max-width: none;
+}
+
+.hintCard {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 22px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px dashed rgba(1, 100, 79, 0.22);
+}
+
+.hintCard h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
 .dashCard {
   width: 100% !important;
   max-width: none;
+}
+
+.dashSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
 }
 
 .dashHead {

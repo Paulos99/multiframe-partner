@@ -655,6 +655,15 @@ export async function handler(event = {}) {
       return json(200, { ok: true, accepted: normalized.length });
     }
 
+    if (method === 'DELETE' && path.endsWith('/analytics/events')) {
+      const key = header(event, 'X-Analytics-Key');
+      if (key !== ANALYTICS_ADMIN_KEY()) {
+        return json(403, { message: 'Admin key required' });
+      }
+      await saveEvents([]);
+      return json(200, { ok: true, cleared: true });
+    }
+
     if (method === 'GET' && path.endsWith('/analytics/dashboard')) {
       const role = String(header(event, 'X-Analytics-Role') || 'partner');
       const query = getQuery(event);

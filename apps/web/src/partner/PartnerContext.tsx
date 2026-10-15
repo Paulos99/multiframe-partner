@@ -18,7 +18,12 @@ import {
   OFFICIAL_PRICE_PER_M2,
   toPartnerProfile,
 } from '../../../../packages/shared/partner';
-import { flushAnalyticsQueue, trackPartnerAnalytics } from './analytics';
+import {
+  bootstrapHistoryReset,
+  flushAnalyticsQueue,
+  resetServerAnalyticsOnce,
+  trackPartnerAnalytics,
+} from './analytics';
 import {
   createExecutorAccount,
   createPartnerAccount,
@@ -89,9 +94,12 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setUser(loadSession());
+    bootstrapHistoryReset();
+    const session = loadSession();
+    setUser(session);
     setLoading(false);
     void flushAnalyticsQueue();
+    if (session?.role === 'admin') void resetServerAnalyticsOnce();
   }, []);
 
   useEffect(() => {
@@ -110,6 +118,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     try {
       const session = localLogin(loginName, password);
       setUser(session);
+      if (session.role === 'admin') void resetServerAnalyticsOnce();
       trackPartnerAnalytics({ tool: 'cabinet', action: 'login' });
       void flushAnalyticsQueue();
     } catch (e) {

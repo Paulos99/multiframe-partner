@@ -264,11 +264,14 @@ function funnelStepsCalc(f: AnalyticsFunnel) {
   ];
 }
 
+type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'objects';
+
 export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   const api = usePartner();
   const user = api.user!;
   const [period, setPeriod] = useState<Period>(7);
   const [orgFilter, setOrgFilter] = useState<string>('');
+  const [section, setSection] = useState<AnalyticsTab>('overview');
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -277,6 +280,10 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [mode, api, data],
   );
+
+  useEffect(() => {
+    if (mode !== 'admin' && section === 'companies') setSection('overview');
+  }, [mode, section]);
 
   useEffect(() => {
     let cancelled = false;
@@ -328,11 +335,19 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   const showDelta = Boolean(dash.kpiPrev);
   const prev: AnalyticsKpi | null = dash.kpiPrev;
 
+  const sectionTabs: Array<{ id: AnalyticsTab; label: string }> = [
+    { id: 'overview', label: 'Сводка' },
+    { id: 'portrait', label: 'Объекты' },
+    ...(mode === 'admin' ? [{ id: 'companies' as const, label: 'Компании' }] : []),
+    { id: 'team', label: mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники' },
+    { id: 'objects', label: 'Журнал' },
+  ];
+
   return (
     <div className={`${styles.card} ${styles.dashCard}`}>
       <div className={styles.dashHead}>
         <div>
-          <h2>{mode === 'admin' ? 'Дашборд аналитики' : 'Аналитика сотрудников'}</h2>
+          <h2>{mode === 'admin' ? 'Аналитика' : 'Аналитика команды'}</h2>
           <p className={styles.lead}>
             {dash.source === 'api'
               ? 'Данные с сервера'
@@ -368,109 +383,138 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
         </label>
       ) : null}
 
-      <div className={styles.kpiRow}>
-        {mode === 'admin' ? (
-          <KpiCard
-            label="Активные компании"
-            value={dash.kpi.activePartners}
-            prev={prev?.activePartners}
-            showDelta={showDelta}
-          />
-        ) : null}
-        <KpiCard
-          label="Сотрудники"
-          value={dash.kpi.executors}
-          prev={prev?.executors}
-          showDelta={showDelta}
-        />
-        <KpiCard
-          label="Расчёты PM"
-          value={dash.kpi.problemomerResults}
-          prev={prev?.problemomerResults}
-          showDelta={showDelta}
-        />
-        <KpiCard
-          label="Расчёты кальк."
-          value={dash.kpi.calculatorDone}
-          prev={prev?.calculatorDone}
-          showDelta={showDelta}
-        />
-        <KpiCard label="PDF" value={dash.kpi.pdf} prev={prev?.pdf} showDelta={showDelta} />
-        <KpiCard
-          label="Шаринг"
-          value={dash.kpi.shares}
-          prev={prev?.shares}
-          showDelta={showDelta}
-        />
-        <KpiCard
-          label="Входы"
-          value={dash.kpi.logins}
-          prev={prev?.logins}
-          showDelta={showDelta}
-        />
-        <KpiCard
-          label="Площадь, м²"
-          value={dash.kpi.areaM2}
-          prev={prev?.areaM2}
-          showDelta={showDelta}
-        />
-        <KpiCard
-          label="Панели"
-          value={dash.kpi.panels}
-          prev={prev?.panels}
-          showDelta={showDelta}
-        />
+      <div className={styles.tabs} role="tablist" aria-label="Разделы аналитики">
+        {sectionTabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={section === t.id}
+            className={section === t.id ? styles.tabActive : styles.tab}
+            onClick={() => setSection(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <h3 className={styles.dashSub}>Воронка</h3>
-      <div className={styles.funnelGrid}>
-        <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
-        <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
-      </div>
+      {section === 'overview' ? (
+        <div className={styles.dashSection}>
+          <div className={styles.kpiRow}>
+            {mode === 'admin' ? (
+              <KpiCard
+                label="Активные компании"
+                value={dash.kpi.activePartners}
+                prev={prev?.activePartners}
+                showDelta={showDelta}
+              />
+            ) : null}
+            <KpiCard
+              label="Сотрудники"
+              value={dash.kpi.executors}
+              prev={prev?.executors}
+              showDelta={showDelta}
+            />
+            <KpiCard
+              label="Расчёты PM"
+              value={dash.kpi.problemomerResults}
+              prev={prev?.problemomerResults}
+              showDelta={showDelta}
+            />
+            <KpiCard
+              label="Расчёты кальк."
+              value={dash.kpi.calculatorDone}
+              prev={prev?.calculatorDone}
+              showDelta={showDelta}
+            />
+            <KpiCard label="PDF" value={dash.kpi.pdf} prev={prev?.pdf} showDelta={showDelta} />
+            <KpiCard
+              label="Шаринг"
+              value={dash.kpi.shares}
+              prev={prev?.shares}
+              showDelta={showDelta}
+            />
+            <KpiCard
+              label="Входы"
+              value={dash.kpi.logins}
+              prev={prev?.logins}
+              showDelta={showDelta}
+            />
+            <KpiCard
+              label="Площадь, м²"
+              value={dash.kpi.areaM2}
+              prev={prev?.areaM2}
+              showDelta={showDelta}
+            />
+            <KpiCard
+              label="Панели"
+              value={dash.kpi.panels}
+              prev={prev?.panels}
+              showDelta={showDelta}
+            />
+          </div>
 
-      <h3 className={styles.dashSub}>Динамика</h3>
-      {dash.series.length ? (
-        <SeriesChart series={dash.series} />
-      ) : (
-        <p className={styles.lead}>Пока нет точек для графика</p>
-      )}
+          <h3 className={styles.dashSub}>Воронка</h3>
+          <div className={styles.funnelGrid}>
+            <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
+            <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
+          </div>
 
-      <h3 className={styles.dashSub}>Объём</h3>
-      <div className={styles.volumeRow}>
-        <div className={styles.volumeItem}>
-          <span className={styles.kpiLabel}>Сумма м²</span>
-          <strong>{formatNum(dash.volume.areaM2Sum)}</strong>
-        </div>
-        <div className={styles.volumeItem}>
-          <span className={styles.kpiLabel}>Средняя м²</span>
-          <strong>{formatNum(dash.volume.areaM2Avg)}</strong>
-        </div>
-        <div className={styles.volumeItem}>
-          <span className={styles.kpiLabel}>Панели</span>
-          <strong>{formatNum(dash.volume.panelsSum)}</strong>
-        </div>
-        <div className={styles.volumeItem}>
-          <span className={styles.kpiLabel}>Готовых расчётов</span>
-          <strong>{formatNum(dash.volume.completedCount)}</strong>
-        </div>
-      </div>
+          <h3 className={styles.dashSub}>Динамика</h3>
+          {dash.series.length ? (
+            <SeriesChart series={dash.series} />
+          ) : (
+            <p className={styles.lead}>Пока нет точек для графика</p>
+          )}
 
-      <h3 className={styles.dashSub}>Портрет объектов</h3>
-      <div className={styles.breakdownGrid}>
-        <BreakdownList title="Тип комнаты" items={dash.breakdowns.roomType} kind="room" />
-        <BreakdownList title="Тип дома" items={dash.breakdowns.houseType} kind="house" />
-        <BreakdownList title="Стадия объекта" items={dash.breakdowns.objectStage} kind="stage" />
-        <BreakdownList
-          title="Класс звукоизоляции"
-          items={dash.breakdowns.classTransition}
-          kind="raw"
-        />
-        <BreakdownList title="Режим калькулятора" items={dash.breakdowns.calcMode} kind="mode" />
-      </div>
+          <h3 className={styles.dashSub}>Объём</h3>
+          <div className={styles.volumeRow}>
+            <div className={styles.volumeItem}>
+              <span className={styles.kpiLabel}>Сумма м²</span>
+              <strong>{formatNum(dash.volume.areaM2Sum)}</strong>
+            </div>
+            <div className={styles.volumeItem}>
+              <span className={styles.kpiLabel}>Средняя м²</span>
+              <strong>{formatNum(dash.volume.areaM2Avg)}</strong>
+            </div>
+            <div className={styles.volumeItem}>
+              <span className={styles.kpiLabel}>Панели</span>
+              <strong>{formatNum(dash.volume.panelsSum)}</strong>
+            </div>
+            <div className={styles.volumeItem}>
+              <span className={styles.kpiLabel}>Готовых расчётов</span>
+              <strong>{formatNum(dash.volume.completedCount)}</strong>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-      {mode === 'admin' ? (
-        <>
-          <h3 className={styles.dashSub}>Компании</h3>
+      {section === 'portrait' ? (
+        <div className={styles.dashSection}>
+          <div className={styles.breakdownGrid}>
+            <BreakdownList title="Тип комнаты" items={dash.breakdowns.roomType} kind="room" />
+            <BreakdownList title="Тип дома" items={dash.breakdowns.houseType} kind="house" />
+            <BreakdownList
+              title="Стадия объекта"
+              items={dash.breakdowns.objectStage}
+              kind="stage"
+            />
+            <BreakdownList
+              title="Класс звукоизоляции"
+              items={dash.breakdowns.classTransition}
+              kind="raw"
+            />
+            <BreakdownList
+              title="Режим калькулятора"
+              items={dash.breakdowns.calcMode}
+              kind="mode"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {section === 'companies' && mode === 'admin' ? (
+        <div className={styles.dashSection}>
           <div className={styles.dashTableScroll}>
             <table className={styles.dashTable}>
               <thead>
@@ -518,78 +562,80 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
               </ul>
             </>
           ) : null}
-        </>
+        </div>
       ) : null}
 
-      <h3 className={styles.dashSub}>
-        {mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники'}
-      </h3>
-      <div className={styles.table}>
-        {dash.executors.map((ex) => (
-          <div key={ex.userId || ex.login} className={styles.tableRow}>
-            <div>
-              <strong>{ex.displayName}</strong>
-              <div className={styles.hint}>
-                {ex.login} · входы {ex.logins} · расчёты PM {ex.problemomer} · расчёты кальк.{' '}
-                {ex.calculator} · PDF {ex.pdf} · объекты {ex.results}
+      {section === 'team' ? (
+        <div className={styles.dashSection}>
+          <div className={styles.table}>
+            {dash.executors.map((ex) => (
+              <div key={ex.userId || ex.login} className={styles.tableRow}>
+                <div>
+                  <strong>{ex.displayName}</strong>
+                  <div className={styles.hint}>
+                    {ex.login} · входы {ex.logins} · расчёты PM {ex.problemomer} · расчёты кальк.{' '}
+                    {ex.calculator} · PDF {ex.pdf} · объекты {ex.results}
+                  </div>
+                </div>
+                <span className={styles.hint}>{formatWhen(ex.lastActiveAt)}</span>
               </div>
-            </div>
-            <span className={styles.hint}>{formatWhen(ex.lastActiveAt)}</span>
+            ))}
+            {!dash.executors.length ? (
+              <p className={styles.lead}>Пока нет активности сотрудников</p>
+            ) : null}
           </div>
-        ))}
-        {!dash.executors.length ? (
-          <p className={styles.lead}>Пока нет активности сотрудников</p>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <h3 className={styles.dashSub}>
-        {mode === 'admin' ? 'Последние объекты' : 'Объекты команды'}
-      </h3>
-      <div className={styles.dashTableScroll}>
-        <table className={styles.dashTable}>
-          <thead>
-            <tr>
-              <th>Дата</th>
-              <th>Компания</th>
-              <th>Логин</th>
-              <th>Инструмент</th>
-              <th>Комната</th>
-              <th>м²</th>
-              <th>Класс</th>
-              <th>Пан.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dash.recentObjects.map((ev) => {
-              const o = ev.object;
-              const room =
-                o?.label ||
-                (o?.roomType
-                  ? ROOM_TYPE_LABELS[o.roomType as RoomType] || o.roomType
-                  : '—');
-              const cls =
-                o?.classBefore && o?.classAfter
-                  ? `${o.classBefore}→${o.classAfter}`
-                  : '—';
-              return (
-                <tr key={ev.id}>
-                  <td>{formatWhen(ev.at)}</td>
-                  <td>{ev.companyName || '—'}</td>
-                  <td>{ev.login}</td>
-                  <td>
-                    {toolLabel(ev.tool)} · {actionLabel(ev.action)}
-                  </td>
-                  <td>{room}</td>
-                  <td>{o?.areaM2 != null ? formatNum(Number(o.areaM2)) : '—'}</td>
-                  <td>{cls}</td>
-                  <td>{o?.panels != null ? formatNum(Number(o.panels)) : '—'}</td>
+      {section === 'objects' ? (
+        <div className={styles.dashSection}>
+          <div className={styles.dashTableScroll}>
+            <table className={styles.dashTable}>
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Компания</th>
+                  <th>Логин</th>
+                  <th>Инструмент</th>
+                  <th>Комната</th>
+                  <th>м²</th>
+                  <th>Класс</th>
+                  <th>Пан.</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {!dash.recentObjects.length ? <p className={styles.lead}>Объектов пока нет</p> : null}
+              </thead>
+              <tbody>
+                {dash.recentObjects.map((ev) => {
+                  const o = ev.object;
+                  const room =
+                    o?.label ||
+                    (o?.roomType
+                      ? ROOM_TYPE_LABELS[o.roomType as RoomType] || o.roomType
+                      : '—');
+                  const cls =
+                    o?.classBefore && o?.classAfter
+                      ? `${o.classBefore}→${o.classAfter}`
+                      : '—';
+                  return (
+                    <tr key={ev.id}>
+                      <td>{formatWhen(ev.at)}</td>
+                      <td>{ev.companyName || '—'}</td>
+                      <td>{ev.login}</td>
+                      <td>
+                        {toolLabel(ev.tool)} · {actionLabel(ev.action)}
+                      </td>
+                      <td>{room}</td>
+                      <td>{o?.areaM2 != null ? formatNum(Number(o.areaM2)) : '—'}</td>
+                      <td>{cls}</td>
+                      <td>{o?.panels != null ? formatNum(Number(o.panels)) : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {!dash.recentObjects.length ? <p className={styles.lead}>Объектов пока нет</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

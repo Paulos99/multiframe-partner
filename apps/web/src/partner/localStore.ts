@@ -22,6 +22,7 @@ const DB_KEY = 'mf_partner_db_v2';
 const SESSION_KEY = 'mf_partner_session_v2';
 const ANALYTICS_KEY = 'mf_partner_analytics_v1';
 const ANALYTICS_QUEUE_KEY = 'mf_partner_analytics_queue_v1';
+const HISTORY_RESET_KEY = 'mf_partner_history_reset_v2';
 const ANALYTICS_CAP = 2000;
 
 export type StoredUser = {
@@ -112,18 +113,32 @@ function defaultDb(): PartnerDb {
       },
     ],
     links: [],
-    activity: [
-      {
-        id: uid('act'),
-        at: now,
-        orgId,
-        userId: adminId,
-        login: 'admin',
-        action: 'seed',
-        detail: 'База инициализирована',
-      },
-    ],
+    activity: [],
   };
+}
+
+/** Wipe local activity log and analytics events/queue. */
+export function clearAllActionHistory(): void {
+  try {
+    const db = loadDb();
+    saveDb({ ...db, activity: [] });
+  } catch {
+    /* ignore */
+  }
+  localStorage.removeItem(ANALYTICS_KEY);
+  localStorage.removeItem(ANALYTICS_QUEUE_KEY);
+}
+
+/** One-shot wipe after UI redesign — returns true if this call cleared data. */
+export function ensureActionHistoryCleared(): boolean {
+  try {
+    if (localStorage.getItem(HISTORY_RESET_KEY) === '1') return false;
+    clearAllActionHistory();
+    localStorage.setItem(HISTORY_RESET_KEY, '1');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function loadDb(): PartnerDb {
