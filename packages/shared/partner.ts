@@ -216,10 +216,11 @@ export function aggregateAnalyticsDashboard(
     const prow = partnerMap.get(orgKey)!;
     if (!prow.lastActiveAt || e.at > prow.lastActiveAt) prow.lastActiveAt = e.at;
     if (e.action === 'login') prow.logins += 1;
-    if (e.tool === 'problemomer' && (e.action === 'open' || e.action === 'result')) {
+    // KPI: only completed work — opens must not inflate rankings
+    if (e.tool === 'problemomer' && e.action === 'result') {
       prow.problemomer += 1;
     }
-    if (e.tool === 'calculator' && (e.action === 'open' || e.action === 'calc_done')) {
+    if (e.tool === 'calculator' && e.action === 'calc_done') {
       prow.calculator += 1;
     }
     if (e.action === 'pdf') prow.pdf += 1;
@@ -244,10 +245,10 @@ export function aggregateAnalyticsDashboard(
         if (e.role === 'executor') {
           if (!ex.lastActiveAt || e.at > ex.lastActiveAt) ex.lastActiveAt = e.at;
           if (e.action === 'login') ex.logins += 1;
-          if (e.tool === 'problemomer' && (e.action === 'open' || e.action === 'result')) {
+          if (e.tool === 'problemomer' && e.action === 'result') {
             ex.problemomer += 1;
           }
-          if (e.tool === 'calculator' && (e.action === 'open' || e.action === 'calc_done')) {
+          if (e.tool === 'calculator' && e.action === 'calc_done') {
             ex.calculator += 1;
           }
           if (e.action === 'pdf') ex.pdf += 1;

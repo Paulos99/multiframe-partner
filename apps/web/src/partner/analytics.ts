@@ -15,9 +15,38 @@ import {
 } from './localStore';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
+const OPEN_THROTTLE_KEY = 'mf_partner_open_throttle_v1';
+const OPEN_THROTTLE_MS = 30 * 60 * 1000;
 
 function uid(): string {
   return `ae_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
+}
+
+function openThrottleKey(userKey: string, tool: AnalyticsTool): string {
+  return `${userKey}::${tool}`;
+}
+
+/** Returns true if this open should be recorded (first in the throttle window). */
+function allowOpenEvent(userKey: string, tool: AnalyticsTool): boolean {
+  try {
+    const raw = localStorage.getItem(OPEN_THROTTLE_KEY);
+    const map = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    const key = openThrottleKey(userKey, tool);
+    const now = Date.now();
+    const last = map[key];
+    if (typeof last === 'number' && now - last < OPEN_THROTTLE_MS) {
+      return false;
+    }
+    const next: Record<string, number> = {};
+    for (const [k, ts] of Object.entries(map)) {
+      if (typeof ts === 'number' && now - ts < OPEN_THROTTLE_MS) next[k] = ts;
+    }
+    next[key] = now;
+    localStorage.setItem(OPEN_THROTTLE_KEY, JSON.stringify(next));
+    return true;
+  } catch {
+    return true;
+  }
 }
 
 export function trackPartnerAnalytics(input: {
@@ -27,6 +56,10 @@ export function trackPartnerAnalytics(input: {
 }): void {
   const session = loadSession();
   if (!session) return;
+  if (input.action === 'open') {
+    const userKey = session.id || session.login;
+    if (!allowOpenEvent(userKey, input.tool)) return;
+  }
   const event: AnalyticsEvent = {
     id: uid(),
     at: new Date().toISOString(),

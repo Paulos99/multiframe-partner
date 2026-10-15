@@ -137,7 +137,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
           <strong>{dash.kpi.problemomerResults}</strong>
         </div>
         <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Калькулятор</span>
+          <span className={styles.kpiLabel}>Расчёты кальк.</span>
           <strong>{dash.kpi.calculatorDone}</strong>
         </div>
         <div className={styles.kpi}>
@@ -159,7 +159,8 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
                 <div>
                   <strong>{p.companyName}</strong>
                   <div className={styles.hint}>
-                    входы {p.logins} · PM {p.problemomer} · кальк. {p.calculator} · PDF {p.pdf}
+                    входы {p.logins} · расчёты PM {p.problemomer} · расчёты кальк.{' '}
+                    {p.calculator} · PDF {p.pdf}
                   </div>
                 </div>
                 <span className={styles.hint}>{formatWhen(p.lastActiveAt)}</span>
@@ -177,8 +178,8 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
                 <div>
                   <strong>{ex.displayName}</strong>
                   <div className={styles.hint}>
-                    {ex.login} · входы {ex.logins} · PM {ex.problemomer} · кальк. {ex.calculator} ·
-                    PDF {ex.pdf} · объекты {ex.results}
+                    {ex.login} · входы {ex.logins} · расчёты PM {ex.problemomer} · расчёты
+                    кальк. {ex.calculator} · PDF {ex.pdf} · объекты {ex.results}
                   </div>
                 </div>
                 <span className={styles.hint}>{formatWhen(ex.lastActiveAt)}</span>
