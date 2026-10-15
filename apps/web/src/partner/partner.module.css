@@ -333,9 +333,10 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
-  background: #0c332c;
-  color: #e8f2ef;
+  padding: 8px 16px;
+  background: #fff;
+  color: #152018;
+  border-bottom: 1px solid rgba(1, 100, 79, 0.14);
   position: sticky;
   top: 0;
   z-index: 40;
@@ -344,9 +345,9 @@
 
 .toolBar button {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-  color: #e8f2ef;
+  border: 1px solid rgba(1, 100, 79, 0.22);
+  background: #f4faf7;
+  color: #01644f;
   font: inherit;
   font-size: 13px;
   font-weight: 650;
@@ -355,11 +356,15 @@
   cursor: pointer;
 }
 
+.toolBar button:hover {
+  background: #e7f3ef;
+}
+
 .toolBarMeta {
   margin-left: auto;
   font-size: 12px;
   font-weight: 650;
-  color: rgba(232, 242, 239, 0.85);
+  color: #5a6b62;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

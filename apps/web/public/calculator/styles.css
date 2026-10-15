@@ -8102,20 +8102,21 @@ body.theme-dark .results-drawer-backdrop {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px 14px;
-  padding: 8px 14px;
-  background: #0c332c;
-  color: #e8f2ef;
+  padding: 7px 16px;
+  background: #f4faf7;
+  color: #152018;
   font-size: 12px;
   font-weight: 650;
   line-height: 1.35;
-  border-bottom: 1px solid rgba(255,255,255,0.12);
+  border-bottom: 1px solid rgba(1, 100, 79, 0.14);
 }
 .partner-calc-banner strong {
   font-size: 13px;
   font-weight: 800;
+  color: #01644f;
 }
 .partner-calc-banner__hint {
   margin-left: auto;
-  opacity: 0.75;
+  color: #5a6b62;
   font-weight: 600;
 }
