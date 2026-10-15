@@ -300,34 +300,44 @@ export function renderResultsHtml(bom, { mode = null } = {}) {
   }
 
   if (PARTNER_PRICING.enabled && bom.total) {
+    const panelsRub = Math.round(bom.total.totalCost ?? 0);
+    const installRub = Math.round(bom.total.installCost ?? 0);
+    const fastenersRub = Math.round(bom.total.dowelsCost ?? 0);
+    const grandRub = Math.round(
+      bom.total.grandTotal ?? panelsRub + installRub + fastenersRub,
+    );
+    const installHint =
+      PARTNER_PRICING.installPerM2 != null
+        ? `<span class="rb-kv__hint">${fmtNum(PARTNER_PRICING.installPerM2)} ₽/м²</span>`
+        : '';
+    const fastenerHint =
+      PARTNER_PRICING.dowelPrice != null
+        ? `<span class="rb-kv__hint">${fmtNum(PARTNER_PRICING.dowelPrice)} ₽/шт. · ${fmtNum(bom.total.dowelsWithReserve ?? 0)} шт.</span>`
+        : bom.total.dowelsWithReserve
+          ? `<span class="rb-kv__hint">${fmtNum(bom.total.dowelsWithReserve)} шт.</span>`
+          : '';
     const rows = [];
     if (bom.total.partnerCompany) {
-      rows.push(`<div class="rb-kv"><span>Компания</span><strong>${esc(bom.total.partnerCompany)}</strong></div>`);
-    }
-    if (bom.total.totalCost != null) {
-      rows.push(`<div class="rb-kv"><span>Панели (РРЦ)</span><strong>${fmtNum(bom.total.totalCost)} ₽</strong></div>`);
-    }
-    if (bom.total.installCost != null) {
-      const rate =
-        PARTNER_PRICING.installPerM2 != null
-          ? ` · ${fmtNum(PARTNER_PRICING.installPerM2)} ₽/м²`
-          : '';
       rows.push(
-        `<div class="rb-kv rb-kv--install"><span>Монтаж${rate}</span><strong>${fmtNum(bom.total.installCost)} ₽</strong></div>`,
+        `<div class="rb-kv"><span>Компания</span><strong>${esc(bom.total.partnerCompany)}</strong></div>`,
       );
     }
-    if (bom.total.dowelsCost != null) {
-      rows.push(`<div class="rb-kv"><span>Крепёж</span><strong>${fmtNum(bom.total.dowelsCost)} ₽</strong></div>`);
-    }
-    if (bom.total.grandTotal != null) {
-      rows.push(
-        `<div class="rb-kv rb-kv--total"><span>Итого</span><strong>${fmtNum(bom.total.grandTotal)} ₽</strong></div>`,
-      );
-    }
+    rows.push(
+      `<div class="rb-kv"><span>Панели</span><strong>${fmtNum(panelsRub)} ₽</strong></div>`,
+    );
+    rows.push(
+      `<div class="rb-kv rb-kv--install"><span>Монтаж${installHint}</span><strong>${fmtNum(installRub)} ₽</strong></div>`,
+    );
+    rows.push(
+      `<div class="rb-kv"><span>Крепёж${fastenerHint}</span><strong>${fmtNum(fastenersRub)} ₽</strong></div>`,
+    );
+    rows.push(
+      `<div class="rb-kv rb-kv--total"><span>Итого</span><strong>${fmtNum(grandRub)} ₽</strong></div>`,
+    );
     parts.push(`
       <section class="rb-block">
         <header class="rb-block__head">
-          <h3 class="rb-block__title">Смета партнёра</h3>
+          <h3 class="rb-block__title">Смета</h3>
         </header>
         ${rows.join('')}
       </section>`);
