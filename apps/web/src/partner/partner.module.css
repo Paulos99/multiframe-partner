@@ -57,10 +57,13 @@
   border: 1px solid rgba(1, 100, 79, 0.2);
   background: #fff;
   box-shadow: 0 12px 40px rgba(12, 51, 44, 0.08);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .shellWide .card {
   width: 100%;
+  max-width: 100%;
 }
 
 .card h1,
@@ -89,7 +92,11 @@
   color: #152018;
 }
 
-.field input {
+.field input,
+.field select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   font: inherit;
   font-weight: 500;
   padding: 10px 12px;
@@ -108,12 +115,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-}
-
-@media (min-width: 1100px) {
-  .grid2 {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  min-width: 0;
 }
 
 @media (max-width: 640px) {
@@ -237,14 +239,6 @@
   word-break: break-all;
 }
 
-.field select {
-  font: inherit;
-  font-weight: 500;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(1, 100, 79, 0.22);
-  background: #f8fbfa;
-}
 
 .dashHead {
   display: flex;
