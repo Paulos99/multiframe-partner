@@ -106,8 +106,12 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         onOpenCalc={() => onNavigate('calculator')}
       />
 
-      <div className={styles.cabinetGrid}>
-        <form className={styles.card} onSubmit={(e) => void onCreate(e)}>
+      <div className={styles.adminGrid}>
+        <div className={styles.adminDash}>
+          <AnalyticsDashboard mode="admin" />
+        </div>
+
+        <form className={`${styles.card} ${styles.adminCreate}`} onSubmit={(e) => void onCreate(e)}>
           <h2>Новый партнёр</h2>
           <div className={styles.grid2}>
             <label className={styles.field}>
@@ -139,52 +143,52 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
           </button>
         </form>
 
-        <div className={styles.card}>
-          <h2>Партнёры</h2>
-          <div className={styles.table}>
-            {partners.map((p) => (
-              <div key={p.user.id} className={styles.tableRow}>
-                <div>
-                  <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
-                  <div className={styles.hint}>
-                    {p.user.login} · исполнителей: {p.executorCount}
-                    {p.lastLogin ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}` : ''}
+        <div className={`${styles.card} ${styles.adminPartners}`}>
+          <h2>Партнёры · {partners.length}</h2>
+          <div className={styles.scrollList}>
+            <div className={styles.table}>
+              {partners.map((p) => (
+                <div key={p.user.id} className={styles.tableRow}>
+                  <div>
+                    <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
+                    <div className={styles.hint}>
+                      {p.user.login} · исполнителей: {p.executorCount}
+                      {p.lastLogin
+                        ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}`
+                        : ''}
+                    </div>
+                  </div>
+                  <div className={styles.rowActions}>
+                    <button
+                      type="button"
+                      className={styles.ghost}
+                      onClick={() => void onReset(p.user.id, p.user.login)}
+                    >
+                      Сменить пароль
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.danger}
+                      onClick={() =>
+                        void onDelete(
+                          p.user.id,
+                          p.user.login,
+                          p.org?.settings.companyName || p.user.displayName,
+                          p.executorCount,
+                        )
+                      }
+                    >
+                      Удалить
+                    </button>
                   </div>
                 </div>
-                <div className={styles.rowActions}>
-                  <button
-                    type="button"
-                    className={styles.ghost}
-                    onClick={() => void onReset(p.user.id, p.user.login)}
-                  >
-                    Сменить пароль
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.danger}
-                    onClick={() =>
-                      void onDelete(
-                        p.user.id,
-                        p.user.login,
-                        p.org?.settings.companyName || p.user.displayName,
-                        p.executorCount,
-                      )
-                    }
-                  >
-                    Удалить
-                  </button>
-                </div>
-              </div>
-            ))}
-            {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
+              ))}
+              {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
+            </div>
           </div>
         </div>
 
-        <div className={styles.cabinetSpan}>
-          <AnalyticsDashboard mode="admin" />
-        </div>
-
-        <div className={styles.cabinetSpan}>
+        <div className={styles.adminHint}>
           <InstallHint />
         </div>
       </div>
