@@ -9,7 +9,6 @@ import {
 } from 'react';
 import type {
   ActivityEvent,
-  ExecutorLink,
   OrgSettings,
   PartnerProfile,
   SessionUser,
@@ -20,15 +19,15 @@ import {
   toPartnerProfile,
 } from '../../../../packages/shared/partner';
 import {
-  createExecutorLink,
+  createExecutorAccount,
   createPartnerAccount,
-  enterByExecToken,
   listActivity,
-  listLinksForOrg,
+  listExecutorsForOrg,
   listPartners,
   loadSession,
   localLogin,
   localLogout,
+  resetExecutorPassword,
   resetPartnerPassword,
   trackToolOpen,
   updateOrgSettings,
@@ -44,7 +43,6 @@ type PartnerApi = {
   error: string | null;
   login: (login: string, password: string) => Promise<void>;
   logout: () => void;
-  enterExecLink: (token: string) => Promise<void>;
   saveOrg: (patch: Partial<OrgSettings>) => Promise<void>;
   adminCreatePartner: (input: {
     login: string;
@@ -56,26 +54,22 @@ type PartnerApi = {
     user: StoredUser;
     org: StoredOrg | undefined;
     lastLogin: string | null;
-    linkCount: number;
+    executorCount: number;
   }>;
   adminActivity: () => ActivityEvent[];
-  partnerCreateLink: (label: string) => { link: ExecutorLink; url: string };
-  partnerListLinks: () => ExecutorLink[];
+  partnerCreateExecutor: (input: {
+    login: string;
+    password: string;
+    displayName: string;
+  }) => Promise<{ login: string; password: string }>;
+  partnerResetExecutorPassword: (executorUserId: string, password: string) => Promise<string>;
+  partnerListExecutors: () => StoredUser[];
   noteTool: (tool: 'problemomer' | 'calculator') => void;
   refresh: () => void;
   apiBase: string;
 };
 
 const Ctx = createContext<PartnerApi | null>(null);
-
-function buildExecUrl(pathQuery: string): string {
-  const base = import.meta.env.BASE_URL || '/';
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${origin}${base.replace(/\/?$/, '/')}${pathQuery.replace(/^\?/, '?')}`.replace(
-    /\?+/,
-    '?',
-  );
-}
 
 export function PartnerProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -90,30 +84,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Corporate executor link from URL
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const exec = params.get('exec');
-      if (exec) {
-        try {
-          const session = enterByExecToken(exec);
-          setUser(session);
-          // Clean URL but keep hash/path
-          const url = new URL(window.location.href);
-          url.searchParams.delete('exec');
-          history.replaceState(null, '', url.pathname + url.search + url.hash);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : 'Ссылка недействительна');
-          setUser(loadSession());
-        }
-      } else {
-        setUser(loadSession());
-      }
-    } catch {
-      setUser(loadSession());
-    } finally {
-      setLoading(false);
-    }
+    setUser(loadSession());
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -121,6 +93,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     (window as Window & { __MF_PARTNER_COMPANY__?: string }).__MF_PARTNER_COMPANY__ = company;
     (window as Window & { __MF_PARTNER_ORG__?: OrgSettings | null }).__MF_PARTNER_ORG__ =
       user?.org || null;
+    if (user?.org) {
+      persistPartnerCalcParams(partnerCalcParamsFromOrg(user.org));
+    }
   }, [user]);
 
   const login = useCallback(async (loginName: string, password: string) => {
@@ -141,11 +116,6 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     localLogout(user);
     setUser(null);
   }, [user]);
-
-  const enterExecLink = useCallback(async (token: string) => {
-    const session = enterByExecToken(token.trim());
-    setUser(session);
-  }, []);
 
   const saveOrg = useCallback(
     async (patch: Partial<OrgSettings>) => {
@@ -178,12 +148,22 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
-  const partnerCreateLink = useCallback(
-    (label: string) => {
+  const partnerCreateExecutor = useCallback(
+    async (input: { login: string; password: string; displayName: string }) => {
       if (!user) throw new Error('Нет сессии');
-      const { link, urlPath } = createExecutorLink(label, user);
+      const res = createExecutorAccount({ ...input, partner: user });
       setTick((n) => n + 1);
-      return { link, url: buildExecUrl(urlPath) };
+      return { login: res.user.login, password: res.password };
+    },
+    [user],
+  );
+
+  const partnerResetExecutorPassword = useCallback(
+    async (executorUserId: string, password: string) => {
+      if (!user) throw new Error('Нет сессии');
+      const pw = resetExecutorPassword(executorUserId, password, user);
+      setTick((n) => n + 1);
+      return pw;
     },
     [user],
   );
@@ -206,14 +186,14 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       error,
       login,
       logout,
-      enterExecLink,
       saveOrg,
       adminCreatePartner,
       adminResetPassword,
       adminListPartners: () => listPartners(),
       adminActivity: () => listActivity(),
-      partnerCreateLink,
-      partnerListLinks: () => (user?.orgId ? listLinksForOrg(user.orgId) : []),
+      partnerCreateExecutor,
+      partnerResetExecutorPassword,
+      partnerListExecutors: () => (user?.orgId ? listExecutorsForOrg(user.orgId) : []),
       noteTool,
       refresh,
       apiBase: '',
@@ -227,11 +207,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       error,
       login,
       logout,
-      enterExecLink,
       saveOrg,
       adminCreatePartner,
       adminResetPassword,
-      partnerCreateLink,
+      partnerCreateExecutor,
+      partnerResetExecutorPassword,
       noteTool,
       refresh,
       tick,

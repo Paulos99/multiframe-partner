@@ -41,8 +41,18 @@ export type SessionUser = {
   /** Set for partner and executor. */
   orgId: string | null;
   org: OrgSettings | null;
-  /** Executor invite token if entered via link. */
-  execToken?: string | null;
+};
+
+/** @deprecated links replaced by executor login/password accounts */
+export type ExecutorLink = {
+  id: string;
+  token: string;
+  orgId: string;
+  label: string;
+  createdAt: string;
+  createdBy: string;
+  lastUsedAt: string | null;
+  uses: number;
 };
 
 /** Legacy shape kept for estimate helpers. */
@@ -66,17 +76,6 @@ export type ActivityEvent = {
   login: string;
   action: string;
   detail?: string;
-};
-
-export type ExecutorLink = {
-  id: string;
-  token: string;
-  orgId: string;
-  label: string;
-  createdAt: string;
-  createdBy: string;
-  lastUsedAt: string | null;
-  uses: number;
 };
 
 export function normalizeOrgSettings(

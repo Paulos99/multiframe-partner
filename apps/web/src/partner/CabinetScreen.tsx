@@ -3,7 +3,7 @@ import {
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
 } from '../../../../packages/shared/partner';
-import { calcUrlFromOrg, usePartner } from './PartnerContext';
+import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
 type Route = 'cabinet' | 'problemomer' | 'calculator';
@@ -128,7 +128,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
               <div>
                 <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
                 <div className={styles.hint}>
-                  {p.user.login} · ссылок: {p.linkCount}
+                  {p.user.login} · исполнителей: {p.executorCount}
                   {p.lastLogin ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}` : ''}
                 </div>
               </div>
@@ -189,11 +189,13 @@ function PartnerCabinet({
   const [dowelPriceRub, setDowelPriceRub] = useState(
     user.org?.dowelPriceRub != null ? String(user.org.dowelPriceRub) : '',
   );
-  const [linkLabel, setLinkLabel] = useState('');
-  const [lastLink, setLastLink] = useState<string | null>(null);
+  const [execLogin, setExecLogin] = useState('');
+  const [execPassword, setExecPassword] = useState('');
+  const [execName, setExecName] = useState('');
+  const [execCreated, setExecCreated] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const links = api.partnerListLinks();
+  const executors = api.partnerListExecutors();
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -214,15 +216,33 @@ function PartnerCabinet({
     }
   }
 
-  function onCreateLink(e: FormEvent) {
+  async function onCreateExecutor(e: FormEvent) {
     e.preventDefault();
+    setExecCreated(null);
+    setErr(null);
     try {
-      const { url } = api.partnerCreateLink(linkLabel || 'Исполнитель');
-      setLastLink(url);
-      setLinkLabel('');
-      void navigator.clipboard?.writeText(url);
+      const res = await api.partnerCreateExecutor({
+        login: execLogin.trim(),
+        password: execPassword,
+        displayName: execName.trim() || execLogin.trim(),
+      });
+      setExecCreated(`Исполнитель ${res.login} · пароль: ${res.password}`);
+      setExecLogin('');
+      setExecPassword('');
+      setExecName('');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
+    }
+  }
+
+  async function onResetExecutor(id: string, loginName: string) {
+    const pw = prompt(`Новый пароль для ${loginName}`);
+    if (!pw) return;
+    try {
+      const next = await api.partnerResetExecutorPassword(id, pw);
+      alert(`Пароль для ${loginName}: ${next}`);
+    } catch (ex) {
+      alert(ex instanceof Error ? ex.message : 'Ошибка');
     }
   }
 
@@ -317,57 +337,68 @@ function PartnerCabinet({
         </button>
       </form>
 
-      <form className={styles.card} style={{ width: '100%' }} onSubmit={onCreateLink}>
-        <h2>Ссылки для исполнителей</h2>
+      <form
+        className={styles.card}
+        style={{ width: '100%' }}
+        onSubmit={(e) => void onCreateExecutor(e)}
+      >
+        <h2>Исполнители</h2>
         <p className={styles.lead}>
-          Исполнитель открывает ссылку и сразу работает в проблемомере/калькуляторе с вашими
-          параметрами — без доступа к кабинету.
+          Создайте логин и пароль для сотрудников. Они входят в кабинет и работают в проблемомере и
+          калькуляторе с вашими корпоративными параметрами — без доступа к настройкам компании.
         </p>
-        <label className={styles.field}>
-          Подпись (менеджер / объект)
-          <input
-            value={linkLabel}
-            onChange={(e) => setLinkLabel(e.target.value)}
-            placeholder="Например, Иван · замер"
-          />
-        </label>
+        <div className={styles.grid2}>
+          <label className={styles.field}>
+            Имя / подпись
+            <input
+              value={execName}
+              onChange={(e) => setExecName(e.target.value)}
+              placeholder="Например, Иван · замер"
+            />
+          </label>
+          <label className={styles.field}>
+            Логин
+            <input
+              value={execLogin}
+              onChange={(e) => setExecLogin(e.target.value)}
+              required
+              autoComplete="off"
+            />
+          </label>
+          <label className={styles.field}>
+            Пароль
+            <input
+              type="password"
+              value={execPassword}
+              onChange={(e) => setExecPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+            />
+          </label>
+        </div>
+        {execCreated ? <p className={styles.ok}>{execCreated}</p> : null}
         <button type="submit" className={styles.primary}>
-          Создать ссылку
+          Создать исполнителя
         </button>
-        {lastLink ? (
-          <p className={styles.ok}>
-            Скопировано: <code className={styles.code}>{lastLink}</code>
-          </p>
-        ) : null}
         <div className={styles.table}>
-          {links.map((l) => (
-            <div key={l.id} className={styles.tableRow}>
+          {executors.map((ex) => (
+            <div key={ex.id} className={styles.tableRow}>
               <div>
-                <strong>{l.label}</strong>
-                <div className={styles.hint}>
-                  использований: {l.uses}
-                  {l.lastUsedAt
-                    ? ` · ${new Date(l.lastUsedAt).toLocaleString('ru-RU')}`
-                    : ' · ещё не открывали'}
-                </div>
+                <strong>{ex.displayName}</strong>
+                <div className={styles.hint}>{ex.login}</div>
               </div>
               <button
                 type="button"
                 className={styles.ghost}
-                onClick={() => {
-                  const url = calcUrlFromOrg(user.org)
-                    ? `${window.location.origin}${import.meta.env.BASE_URL}?exec=${l.token}`
-                    : '';
-                  const share = `${window.location.origin}${import.meta.env.BASE_URL}?exec=${encodeURIComponent(l.token)}`;
-                  void navigator.clipboard?.writeText(share);
-                  setLastLink(share);
-                  void url;
-                }}
+                onClick={() => void onResetExecutor(ex.id, ex.login)}
               >
-                Копировать
+                Сменить пароль
               </button>
             </div>
           ))}
+          {!executors.length ? (
+            <p className={styles.lead}>Пока нет исполнителей</p>
+          ) : null}
         </div>
       </form>
 

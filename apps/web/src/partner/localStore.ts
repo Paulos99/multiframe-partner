@@ -72,6 +72,15 @@ function defaultDb(): PartnerDb {
         orgId,
         createdAt: now,
       },
+      {
+        id: 'u_exec1',
+        login: 'exec1',
+        password: 'exec1234',
+        role: 'executor',
+        displayName: 'Демо Исполнитель',
+        orgId,
+        createdAt: now,
+      },
     ],
     orgs: [
       {
@@ -138,7 +147,17 @@ export function loadSession(): SessionUser | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as SessionUser;
+    const session = JSON.parse(raw) as SessionUser;
+    // Always refresh org settings from DB (partner may have changed prices)
+    if (session.orgId) {
+      const db = loadDb();
+      const org = db.orgs.find((o) => o.id === session.orgId);
+      if (org) {
+        session.org = normalizeOrgSettings(org.settings);
+        saveSession(session);
+      }
+    }
+    return session;
   } catch {
     return null;
   }
@@ -326,68 +345,67 @@ export function updateOrgSettings(
   return settings;
 }
 
-export function createExecutorLink(
-  label: string,
-  partner: SessionUser,
-): { link: ExecutorLink; urlPath: string } {
-  if (partner.role !== 'partner' || !partner.orgId) {
-    throw new Error('Только партнёр может создавать ссылки');
+export function createExecutorAccount(input: {
+  login: string;
+  password: string;
+  displayName: string;
+  partner: SessionUser;
+}): { user: StoredUser; password: string } {
+  if (input.partner.role !== 'partner' || !input.partner.orgId) {
+    throw new Error('Только партнёр может создавать исполнителей');
   }
   const db = loadDb();
-  const token = uid('ex').replace('ex_', '');
-  const link: ExecutorLink = {
-    id: uid('link'),
-    token,
-    orgId: partner.orgId,
-    label: label.trim() || 'Исполнитель',
-    createdAt: new Date().toISOString(),
-    createdBy: partner.id,
-    lastUsedAt: null,
-    uses: 0,
+  const login = input.login.trim();
+  if (!login || !input.password) throw new Error('Укажите логин и пароль');
+  if (db.users.some((u) => u.login === login)) throw new Error('Такой логин уже есть');
+  const now = new Date().toISOString();
+  const user: StoredUser = {
+    id: uid('u'),
+    login,
+    password: input.password,
+    role: 'executor',
+    displayName: input.displayName.trim() || login,
+    orgId: input.partner.orgId,
+    createdAt: now,
   };
-  let next: PartnerDb = { ...db, links: [link, ...db.links] };
+  let next: PartnerDb = { ...db, users: [...db.users, user] };
+  next = pushActivity(next, {
+    orgId: input.partner.orgId,
+    userId: input.partner.id,
+    login: input.partner.login,
+    action: 'create_executor',
+    detail: `${login} · ${user.displayName}`,
+  });
+  saveDb(next);
+  return { user, password: input.password };
+}
+
+export function resetExecutorPassword(
+  executorUserId: string,
+  newPassword: string,
+  partner: SessionUser,
+): string {
+  if (partner.role !== 'partner' || !partner.orgId) {
+    throw new Error('Только партнёр');
+  }
+  if (!newPassword) throw new Error('Пустой пароль');
+  const db = loadDb();
+  const idx = db.users.findIndex(
+    (u) => u.id === executorUserId && u.role === 'executor' && u.orgId === partner.orgId,
+  );
+  if (idx < 0) throw new Error('Исполнитель не найден');
+  const users = [...db.users];
+  users[idx] = { ...users[idx]!, password: newPassword };
+  let next: PartnerDb = { ...db, users };
   next = pushActivity(next, {
     orgId: partner.orgId,
     userId: partner.id,
     login: partner.login,
-    action: 'create_link',
-    detail: link.label,
+    action: 'reset_executor_password',
+    detail: users[idx]!.login,
   });
   saveDb(next);
-  return { link, urlPath: `?exec=${encodeURIComponent(token)}` };
-}
-
-export function enterByExecToken(token: string): SessionUser {
-  const db = loadDb();
-  const link = db.links.find((l) => l.token === token);
-  if (!link) throw new Error('Ссылка недействительна');
-  const org = db.orgs.find((o) => o.id === link.orgId);
-  if (!org) throw new Error('Организация не найдена');
-  const links = db.links.map((l) =>
-    l.id === link.id
-      ? { ...l, uses: l.uses + 1, lastUsedAt: new Date().toISOString() }
-      : l,
-  );
-  let next: PartnerDb = { ...db, links };
-  const session: SessionUser = {
-    id: `exec_${link.id}`,
-    login: `exec:${link.label}`,
-    role: 'executor',
-    displayName: link.label,
-    orgId: org.id,
-    org: normalizeOrgSettings(org.settings),
-    execToken: token,
-  };
-  next = pushActivity(next, {
-    orgId: org.id,
-    userId: session.id,
-    login: session.login,
-    action: 'exec_enter',
-    detail: link.label,
-  });
-  saveDb(next);
-  saveSession(session);
-  return session;
+  return newPassword;
 }
 
 export function listPartners() {
@@ -401,13 +419,14 @@ export function listPartners() {
         user: u,
         org,
         lastLogin: last?.at || null,
-        linkCount: db.links.filter((l) => l.orgId === u.orgId).length,
+        executorCount: db.users.filter((x) => x.role === 'executor' && x.orgId === u.orgId)
+          .length,
       };
     });
 }
 
-export function listLinksForOrg(orgId: string): ExecutorLink[] {
-  return loadDb().links.filter((l) => l.orgId === orgId);
+export function listExecutorsForOrg(orgId: string): StoredUser[] {
+  return loadDb().users.filter((u) => u.role === 'executor' && u.orgId === orgId);
 }
 
 export function listActivity(limit = 80): ActivityEvent[] {
