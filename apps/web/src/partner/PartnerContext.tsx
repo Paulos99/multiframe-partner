@@ -64,7 +64,7 @@ type PartnerApi = {
     login: string;
     password: string;
     displayName: string;
-  }) => Promise<{ login: string; password: string }>;
+  }) => Promise<{ id: string; login: string; password: string }>;
   partnerResetExecutorPassword: (executorUserId: string, password: string) => Promise<string>;
   partnerListExecutors: () => StoredUser[];
   noteTool: (tool: 'problemomer' | 'calculator') => void;
@@ -168,7 +168,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       if (!user) throw new Error('Нет сессии');
       const res = createExecutorAccount({ ...input, partner: user });
       setTick((n) => n + 1);
-      return { login: res.user.login, password: res.password };
+      return { id: res.user.id, login: res.user.login, password: res.password };
     },
     [user],
   );

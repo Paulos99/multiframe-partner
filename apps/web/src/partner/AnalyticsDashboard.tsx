@@ -70,7 +70,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   if (loading && !data) {
     return (
       <div className={styles.card} style={{ width: '100%' }}>
-        <h2>{mode === 'admin' ? 'Дашборд' : 'Аналитика исполнителей'}</h2>
+        <h2>{mode === 'admin' ? 'Дашборд' : 'Аналитика сотрудников'}</h2>
         <p className={styles.lead}>Загрузка…</p>
       </div>
     );
@@ -82,7 +82,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     <div className={styles.card} style={{ width: '100%' }}>
       <div className={styles.dashHead}>
         <div>
-          <h2>{mode === 'admin' ? 'Дашборд аналитики' : 'Аналитика исполнителей'}</h2>
+          <h2>{mode === 'admin' ? 'Дашборд аналитики' : 'Аналитика сотрудников'}</h2>
           <p className={styles.lead}>
             {dash.source === 'api'
               ? 'Данные с сервера'
@@ -129,7 +129,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
           </div>
         ) : null}
         <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Исполнители</span>
+          <span className={styles.kpiLabel}>Сотрудники</span>
           <strong>{dash.kpi.executors}</strong>
         </div>
         <div className={styles.kpi}>
@@ -170,7 +170,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
         </>
       ) : (
         <>
-          <h3 className={styles.dashSub}>Исполнители</h3>
+          <h3 className={styles.dashSub}>Сотрудники</h3>
           <div className={styles.table}>
             {dash.executors.map((ex) => (
               <div key={ex.userId || ex.login} className={styles.tableRow}>
@@ -185,7 +185,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
               </div>
             ))}
             {!dash.executors.length ? (
-              <p className={styles.lead}>Пока нет активности исполнителей</p>
+              <p className={styles.lead}>Пока нет активности сотрудников</p>
             ) : null}
           </div>
         </>

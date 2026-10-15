@@ -4,6 +4,7 @@ import {
   OFFICIAL_PRICE_PER_M2,
 } from '../../../../packages/shared/partner';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { generatePassword } from './localStore';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
@@ -79,7 +80,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   async function onDelete(id: string, loginName: string, company: string, executorCount: number) {
     const ok = confirm(
       `Удалить партнёра «${company || loginName}» (${loginName})?\n` +
-        `Будут удалены организация и ${executorCount} исполнител(ей). Это необратимо.`,
+        `Будут удалены организация и ${executorCount} сотрудник(ов). Это необратимо.`,
     );
     if (!ok) return;
     try {
@@ -152,7 +153,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                   <div>
                     <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
                     <div className={styles.hint}>
-                      {p.user.login} · исполнителей: {p.executorCount}
+                      {p.user.login} · сотрудников: {p.executorCount}
                       {p.lastLogin
                         ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}`
                         : ''}
@@ -220,12 +221,13 @@ function PartnerCabinet({
     user.org?.dowelPriceRub != null ? String(user.org.dowelPriceRub) : '',
   );
   const [execLogin, setExecLogin] = useState('');
-  const [execPassword, setExecPassword] = useState('');
+  const [execPassword, setExecPassword] = useState(() => generatePassword());
   const [execName, setExecName] = useState('');
   const [execCreated, setExecCreated] = useState<string | null>(null);
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const executors = api.partnerListExecutors();
+  const staff = api.partnerListExecutors();
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -246,31 +248,36 @@ function PartnerCabinet({
     }
   }
 
-  async function onCreateExecutor(e: FormEvent) {
+  async function onCreateStaff(e: FormEvent) {
     e.preventDefault();
     setExecCreated(null);
     setErr(null);
     try {
+      const password = execPassword.trim() || generatePassword();
       const res = await api.partnerCreateExecutor({
         login: execLogin.trim(),
-        password: execPassword,
+        password,
         displayName: execName.trim() || execLogin.trim(),
       });
-      setExecCreated(`Исполнитель ${res.login} · пароль: ${res.password}`);
+      setExecCreated(`Сотрудник ${res.login} · пароль: ${res.password}`);
+      setRevealedPasswords((prev) => ({ ...prev, [res.id]: true }));
       setExecLogin('');
-      setExecPassword('');
+      setExecPassword(generatePassword());
       setExecName('');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
     }
   }
 
-  async function onResetExecutor(id: string, loginName: string) {
-    const pw = prompt(`Новый пароль для ${loginName}`);
-    if (!pw) return;
+  function togglePassword(id: string) {
+    setRevealedPasswords((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  async function onGenerateStaffPassword(id: string) {
     try {
-      const next = await api.partnerResetExecutorPassword(id, pw);
-      alert(`Пароль для ${loginName}: ${next}`);
+      const next = await api.partnerResetExecutorPassword(id, generatePassword());
+      setRevealedPasswords((prev) => ({ ...prev, [id]: true }));
+      setExecCreated(`Новый пароль сохранён: ${next}`);
     } catch (ex) {
       alert(ex instanceof Error ? ex.message : 'Ошибка');
     }
@@ -369,12 +376,12 @@ function PartnerCabinet({
             </button>
           </form>
 
-          <form className={styles.card} onSubmit={(e) => void onCreateExecutor(e)}>
-            <h2>Исполнители</h2>
+          <form className={styles.card} onSubmit={(e) => void onCreateStaff(e)}>
+            <h2>Сотрудники</h2>
             <p className={styles.lead}>
               Создайте логин и пароль для сотрудников. Они входят в кабинет и работают в
               проблемомере и калькуляторе с вашими корпоративными параметрами — без доступа к
-              настройкам компании.
+              настройкам компании. Пароль можно сгенерировать и позже посмотреть в списке.
             </p>
             <div className={styles.grid2}>
               <label className={styles.field}>
@@ -394,40 +401,65 @@ function PartnerCabinet({
                   autoComplete="off"
                 />
               </label>
-              <label className={styles.field}>
+              <label className={`${styles.field} ${styles.passwordField}`}>
                 Пароль
-                <input
-                  type="password"
-                  value={execPassword}
-                  onChange={(e) => setExecPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                />
+                <div className={styles.passwordRow}>
+                  <input
+                    type="text"
+                    value={execPassword}
+                    onChange={(e) => setExecPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className={styles.ghost}
+                    onClick={() => setExecPassword(generatePassword())}
+                  >
+                    Сгенерировать
+                  </button>
+                </div>
               </label>
             </div>
             {execCreated ? <p className={styles.ok}>{execCreated}</p> : null}
             <button type="submit" className={styles.primary}>
-              Создать исполнителя
+              Создать сотрудника
             </button>
             <div className={styles.table}>
-              {executors.map((ex) => (
-                <div key={ex.id} className={styles.tableRow}>
-                  <div>
-                    <strong>{ex.displayName}</strong>
-                    <div className={styles.hint}>{ex.login}</div>
+              {staff.map((ex) => {
+                const shown = !!revealedPasswords[ex.id];
+                return (
+                  <div key={ex.id} className={styles.tableRow}>
+                    <div>
+                      <strong>{ex.displayName}</strong>
+                      <div className={styles.hint}>
+                        {ex.login} · пароль:{' '}
+                        <span className={styles.passwordReveal}>
+                          {shown ? ex.password : '••••••••'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={styles.rowActions}>
+                      <button
+                        type="button"
+                        className={styles.ghost}
+                        onClick={() => togglePassword(ex.id)}
+                      >
+                        {shown ? 'Скрыть' : 'Показать'}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.ghost}
+                        onClick={() => void onGenerateStaffPassword(ex.id)}
+                      >
+                        Новый пароль
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.ghost}
-                    onClick={() => void onResetExecutor(ex.id, ex.login)}
-                  >
-                    Сменить пароль
-                  </button>
-                </div>
-              ))}
-              {!executors.length ? (
-                <p className={styles.lead}>Пока нет исполнителей</p>
-              ) : null}
+                );
+              })}
+              {!staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
             </div>
           </form>
         </div>

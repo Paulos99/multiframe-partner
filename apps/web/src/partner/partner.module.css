@@ -389,6 +389,37 @@
   flex-shrink: 0;
 }
 
+.passwordField {
+  grid-column: 1 / -1;
+}
+
+.passwordRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.passwordRow input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.passwordRow .ghost {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  white-space: nowrap;
+}
+
+.passwordReveal {
+  font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #01644f;
+  user-select: all;
+}
+
 .danger {
   appearance: none;
   border: 1px solid rgba(180, 35, 24, 0.35);

@@ -54,7 +54,7 @@ export function LoginScreen() {
         </button>
         <p className={styles.hint}>
           Демо: <code>admin</code> / <code>admin1234</code> · <code>partner1</code> /{' '}
-          <code>demo1234</code> · исполнитель создаётся партнёром
+          <code>demo1234</code> · сотрудник создаётся партнёром
         </p>
       </form>
     </div>

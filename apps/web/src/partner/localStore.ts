@@ -53,6 +53,14 @@ function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
 }
 
+/** Human-friendly password without ambiguous chars (0/O, 1/l/I). */
+export function generatePassword(length = 10): string {
+  const alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]!).join('');
+}
+
 function defaultDb(): PartnerDb {
   const adminId = 'u_admin';
   const orgId = 'org_demo';
@@ -83,7 +91,7 @@ function defaultDb(): PartnerDb {
         login: 'exec1',
         password: 'exec1234',
         role: 'executor',
-        displayName: 'Демо Исполнитель',
+        displayName: 'Демо Сотрудник',
         orgId,
         createdAt: now,
       },
@@ -383,17 +391,18 @@ export function createExecutorAccount(input: {
   partner: SessionUser;
 }): { user: StoredUser; password: string } {
   if (input.partner.role !== 'partner' || !input.partner.orgId) {
-    throw new Error('Только партнёр может создавать исполнителей');
+    throw new Error('Только партнёр может создавать сотрудников');
   }
   const db = loadDb();
   const login = input.login.trim();
-  if (!login || !input.password) throw new Error('Укажите логин и пароль');
+  const password = input.password.trim() || generatePassword();
+  if (!login) throw new Error('Укажите логин');
   if (db.users.some((u) => u.login === login)) throw new Error('Такой логин уже есть');
   const now = new Date().toISOString();
   const user: StoredUser = {
     id: uid('u'),
     login,
-    password: input.password,
+    password,
     role: 'executor',
     displayName: input.displayName.trim() || login,
     orgId: input.partner.orgId,
@@ -408,7 +417,7 @@ export function createExecutorAccount(input: {
     detail: `${login} · ${user.displayName}`,
   });
   saveDb(next);
-  return { user, password: input.password };
+  return { user, password };
 }
 
 export function resetExecutorPassword(
@@ -419,14 +428,14 @@ export function resetExecutorPassword(
   if (partner.role !== 'partner' || !partner.orgId) {
     throw new Error('Только партнёр');
   }
-  if (!newPassword) throw new Error('Пустой пароль');
+  const password = newPassword.trim() || generatePassword();
   const db = loadDb();
   const idx = db.users.findIndex(
     (u) => u.id === executorUserId && u.role === 'executor' && u.orgId === partner.orgId,
   );
-  if (idx < 0) throw new Error('Исполнитель не найден');
+  if (idx < 0) throw new Error('Сотрудник не найден');
   const users = [...db.users];
-  users[idx] = { ...users[idx]!, password: newPassword };
+  users[idx] = { ...users[idx]!, password };
   let next: PartnerDb = { ...db, users };
   next = pushActivity(next, {
     orgId: partner.orgId,
@@ -436,7 +445,7 @@ export function resetExecutorPassword(
     detail: users[idx]!.login,
   });
   saveDb(next);
-  return newPassword;
+  return password;
 }
 
 export function listPartners() {
