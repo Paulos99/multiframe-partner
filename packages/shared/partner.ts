@@ -78,6 +78,215 @@ export type ActivityEvent = {
   detail?: string;
 };
 
+export type AnalyticsTool = 'problemomer' | 'calculator' | 'cabinet';
+export type AnalyticsAction =
+  | 'login'
+  | 'open'
+  | 'result'
+  | 'pdf'
+  | 'share'
+  | 'calc_done';
+
+export type AnalyticsObject = {
+  roomType?: string | null;
+  areaM2?: number | null;
+  houseType?: string | null;
+  objectStage?: string | null;
+  classBefore?: string | null;
+  classAfter?: string | null;
+  panels?: number | null;
+  mode?: string | null;
+  label?: string | null;
+};
+
+export type AnalyticsEvent = {
+  id: string;
+  at: string;
+  orgId: string | null;
+  userId: string | null;
+  login: string;
+  role: UserRole | string;
+  companyName: string;
+  tool: AnalyticsTool;
+  action: AnalyticsAction;
+  object?: AnalyticsObject | null;
+};
+
+export type AnalyticsPartnerRow = {
+  orgId: string | null;
+  companyName: string;
+  logins: number;
+  problemomer: number;
+  calculator: number;
+  pdf: number;
+  lastActiveAt: string | null;
+};
+
+export type AnalyticsExecutorRow = {
+  userId: string | null;
+  login: string;
+  displayName: string;
+  logins: number;
+  problemomer: number;
+  calculator: number;
+  pdf: number;
+  results: number;
+  lastActiveAt: string | null;
+};
+
+export type AnalyticsDashboard = {
+  source: 'api' | 'local';
+  from: string | null;
+  to: string | null;
+  kpi: {
+    partners: number;
+    executors: number;
+    problemomerResults: number;
+    calculatorDone: number;
+    pdf: number;
+    logins: number;
+  };
+  partners: AnalyticsPartnerRow[];
+  executors: AnalyticsExecutorRow[];
+  recentObjects: AnalyticsEvent[];
+  events: AnalyticsEvent[];
+};
+
+/** Pure aggregator — used by client localStore and API. */
+export function aggregateAnalyticsDashboard(
+  allEvents: AnalyticsEvent[],
+  opts: {
+    source: 'api' | 'local';
+    from?: string | null;
+    to?: string | null;
+    orgId?: string | null;
+    partnerCount?: number;
+    executorCount?: number;
+    executorDirectory?: Array<{
+      userId: string;
+      login: string;
+      displayName: string;
+      orgId: string | null;
+    }>;
+  },
+): AnalyticsDashboard {
+  const fromMs = opts.from ? Date.parse(opts.from) : null;
+  const toMs = opts.to ? Date.parse(opts.to) : null;
+  let events = allEvents.filter((e) => {
+    const t = Date.parse(e.at);
+    if (Number.isNaN(t)) return false;
+    if (fromMs != null && t < fromMs) return false;
+    if (toMs != null && t > toMs) return false;
+    if (opts.orgId && e.orgId !== opts.orgId) return false;
+    return true;
+  });
+  events = [...events].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+
+  const partnerMap = new Map<string, AnalyticsPartnerRow>();
+  const executorMap = new Map<string, AnalyticsExecutorRow>();
+
+  for (const dir of opts.executorDirectory || []) {
+    if (opts.orgId && dir.orgId !== opts.orgId) continue;
+    executorMap.set(dir.userId || dir.login, {
+      userId: dir.userId,
+      login: dir.login,
+      displayName: dir.displayName || dir.login,
+      logins: 0,
+      problemomer: 0,
+      calculator: 0,
+      pdf: 0,
+      results: 0,
+      lastActiveAt: null,
+    });
+  }
+
+  for (const e of events) {
+    const orgKey = e.orgId || e.companyName || e.login;
+    if (!partnerMap.has(orgKey)) {
+      partnerMap.set(orgKey, {
+        orgId: e.orgId,
+        companyName: e.companyName || e.login,
+        logins: 0,
+        problemomer: 0,
+        calculator: 0,
+        pdf: 0,
+        lastActiveAt: null,
+      });
+    }
+    const prow = partnerMap.get(orgKey)!;
+    if (!prow.lastActiveAt || e.at > prow.lastActiveAt) prow.lastActiveAt = e.at;
+    if (e.action === 'login') prow.logins += 1;
+    if (e.tool === 'problemomer' && (e.action === 'open' || e.action === 'result')) {
+      prow.problemomer += 1;
+    }
+    if (e.tool === 'calculator' && (e.action === 'open' || e.action === 'calc_done')) {
+      prow.calculator += 1;
+    }
+    if (e.action === 'pdf') prow.pdf += 1;
+
+    if (e.role === 'executor' || (opts.orgId && e.orgId === opts.orgId)) {
+      const exKey = e.userId || e.login;
+      if (!executorMap.has(exKey) && e.role === 'executor') {
+        executorMap.set(exKey, {
+          userId: e.userId,
+          login: e.login,
+          displayName: e.login,
+          logins: 0,
+          problemomer: 0,
+          calculator: 0,
+          pdf: 0,
+          results: 0,
+          lastActiveAt: null,
+        });
+      }
+      const ex = executorMap.get(exKey);
+      if (ex && (e.role === 'executor' || executorMap.has(exKey))) {
+        if (e.role === 'executor') {
+          if (!ex.lastActiveAt || e.at > ex.lastActiveAt) ex.lastActiveAt = e.at;
+          if (e.action === 'login') ex.logins += 1;
+          if (e.tool === 'problemomer' && (e.action === 'open' || e.action === 'result')) {
+            ex.problemomer += 1;
+          }
+          if (e.tool === 'calculator' && (e.action === 'open' || e.action === 'calc_done')) {
+            ex.calculator += 1;
+          }
+          if (e.action === 'pdf') ex.pdf += 1;
+          if (e.action === 'result' || e.action === 'calc_done') ex.results += 1;
+        }
+      }
+    }
+  }
+
+  // Count only executor rows that are executors
+  const executors = [...executorMap.values()].sort(
+    (a, b) => (b.problemomer + b.calculator) - (a.problemomer + a.calculator),
+  );
+
+  return {
+    source: opts.source,
+    from: opts.from || null,
+    to: opts.to || null,
+    kpi: {
+      partners: opts.partnerCount ?? partnerMap.size,
+      executors: opts.executorCount ?? executors.filter((e) => e.logins + e.problemomer + e.calculator > 0).length || executors.length,
+      problemomerResults: events.filter((e) => e.tool === 'problemomer' && e.action === 'result')
+        .length,
+      calculatorDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done')
+        .length,
+      pdf: events.filter((e) => e.action === 'pdf').length,
+      logins: events.filter((e) => e.action === 'login').length,
+    },
+    partners: [...partnerMap.values()].sort(
+      (a, b) => (b.problemomer + b.calculator) - (a.problemomer + a.calculator),
+    ),
+    executors,
+    recentObjects: events
+      .filter((e) => e.action === 'result' || e.action === 'calc_done' || e.action === 'pdf')
+      .slice(0, 40),
+    events: events.slice(0, 200),
+  };
+}
+
 export function normalizeOrgSettings(
   partial: Partial<OrgSettings> & { companyName?: string },
 ): OrgSettings {

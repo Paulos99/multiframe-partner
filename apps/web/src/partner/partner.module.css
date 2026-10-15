@@ -202,6 +202,67 @@
   word-break: break-all;
 }
 
+.field select {
+  font: inherit;
+  font-weight: 500;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(1, 100, 79, 0.22);
+  background: #f8fbfa;
+}
+
+.dashHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dashFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dashSub {
+  margin: 8px 0 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #152018;
+}
+
+.kpiRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f0f7f4;
+  border: 1px solid rgba(1, 100, 79, 0.12);
+}
+
+.kpi strong {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0c332c;
+}
+
+.kpiLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5a6b62;
+}
+
 .toolHost {
   min-height: 100dvh;
   display: flex;

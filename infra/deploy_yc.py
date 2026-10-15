@@ -185,6 +185,8 @@ def create_version(token: str, function_id: str, zip_path: Path) -> str:
             "environment": {
                 "JWT_SECRET": jwt_secret,
                 "CORS_ORIGIN": "*",
+                "ANALYTICS_KEY": "analytics-events.json",
+                "ANALYTICS_ADMIN_KEY": "admin1234",
             },
         },
     )
@@ -195,16 +197,6 @@ def create_version(token: str, function_id: str, zip_path: Path) -> str:
 
 
 def ensure_gateway(token: str, function_id: str) -> str:
-    _, listing = api(
-        "GET",
-        f"https://serverless-apigateway.api.cloud.yandex.net/apigateways/v1/apigateways?folderId={FOLDER_ID}",
-        token,
-    )
-    for g in listing.get("apiGateways", []):
-        if g.get("name") == GW_NAME:
-            print("gateway exists", g["id"], g.get("domain"))
-            return g.get("domain") or g["id"]
-
     def cf_integration():
         return {
             "x-yc-apigateway-integration": {
@@ -216,7 +208,16 @@ def ensure_gateway(token: str, function_id: str) -> str:
         }
 
     paths = {}
-    for p in ("/", "/health", "/auth/login", "/auth/me", "/auth/logout", "/partner/profile"):
+    for p in (
+        "/",
+        "/health",
+        "/auth/login",
+        "/auth/me",
+        "/auth/logout",
+        "/partner/profile",
+        "/analytics/events",
+        "/analytics/dashboard",
+    ):
         paths[p] = {
             "x-yc-apigateway-any-method": {
                 **cf_integration(),
@@ -225,9 +226,28 @@ def ensure_gateway(token: str, function_id: str) -> str:
         }
     openapi = {
         "openapi": "3.0.0",
-        "info": {"title": "MF Partner API", "version": "1.0.0"},
+        "info": {"title": "MF Partner API", "version": "1.1.0"},
         "paths": paths,
     }
+
+    _, listing = api(
+        "GET",
+        f"https://serverless-apigateway.api.cloud.yandex.net/apigateways/v1/apigateways?folderId={FOLDER_ID}",
+        token,
+    )
+    for g in listing.get("apiGateways", []):
+        if g.get("name") == GW_NAME:
+            print("updating API gateway openapi…", g["id"])
+            _, op_upd = api(
+                "PATCH",
+                f"https://serverless-apigateway.api.cloud.yandex.net/apigateways/v1/apigateways/{g['id']}",
+                token,
+                {"openapiSpec": json.dumps(openapi)},
+            )
+            wait_op(token, op_upd, timeout=420)
+            print("gateway updated", g.get("domain"))
+            return g.get("domain") or g["id"]
+
     print("creating API gateway…")
     _, op = api(
         "POST",

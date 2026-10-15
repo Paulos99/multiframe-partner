@@ -1720,6 +1720,7 @@ async function runCalculation(options = {}) {
   state.resultsStale = false;
   applyResultsToUi();
   $('resultsTabs').style.display = 'flex';
+  trackPartnerCalcEvent('calc_done');
 
   populateWallSelect();
   if (state.ceilingResult && state.ceilingCalc && !useAreaPath) {
@@ -1891,6 +1892,47 @@ function isAreaEstimateMode() {
   return state.inputMode === 'area' || (state.inputMode === 'dims' && state.forceAreaBySize);
 }
 
+function trackPartnerCalcEvent(action) {
+  try {
+    const raw = localStorage.getItem('mf_partner_session_v2');
+    if (!raw) return;
+    const session = JSON.parse(raw);
+    if (!session?.login) return;
+    const panels = state.bom?.total?.panels ?? state.ceilingResult?.stats?.panelCount ?? null;
+    const area =
+      state.bom?.total?.areaM2 ??
+      state.ceilingResult?.stats?.netArea ??
+      state.areaValue ??
+      null;
+    const mode = state.inputMode || null;
+    const event = {
+      id: `ae_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`,
+      at: new Date().toISOString(),
+      orgId: session.orgId || null,
+      userId: session.id || null,
+      login: session.login,
+      role: session.role || 'partner',
+      companyName: session.org?.companyName || session.displayName || '',
+      tool: 'calculator',
+      action,
+      object: { areaM2: area, panels, mode },
+    };
+    const key = 'mf_partner_analytics_v1';
+    const prev = JSON.parse(localStorage.getItem(key) || '[]');
+    localStorage.setItem(key, JSON.stringify([event, ...(Array.isArray(prev) ? prev : [])].slice(0, 2000)));
+    const api = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '';
+    if (api) {
+      fetch(`${String(api).replace(/\/$/, '')}/analytics/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events: [event] }),
+      }).catch(() => {});
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 async function handlePDF() {
   if (!state.bom) {
     alert('Сначала выполните расчёт');
@@ -1898,6 +1940,7 @@ async function handlePDF() {
   }
   const { exportCalculationPDF } = await import('../export/pdf-export.js');
   const areaEstimate = isAreaEstimateMode();
+  trackPartnerCalcEvent('pdf');
 
   if (areaEstimate) {
     const wallSurfaces = (state.wallResult?.wallResults ?? []).map((wr) => ({

@@ -3,6 +3,7 @@ import {
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
 } from '../../../../packages/shared/partner';
+import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
@@ -43,7 +44,6 @@ function InstallHint() {
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const partners = useMemo(() => api.adminListPartners(), [api]);
-  const activity = useMemo(() => api.adminActivity(), [api]);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -145,17 +145,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         </div>
       </div>
 
-      <div className={styles.card} style={{ width: '100%' }}>
-        <h2>Активность</h2>
-        <ul className={styles.activity}>
-          {activity.slice(0, 40).map((a) => (
-            <li key={a.id}>
-              <span>{new Date(a.at).toLocaleString('ru-RU')}</span> · {a.login} · {a.action}
-              {a.detail ? ` — ${a.detail}` : ''}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <AnalyticsDashboard mode="admin" />
 
       <InstallHint />
       <ToolButtons
@@ -401,6 +391,8 @@ function PartnerCabinet({
           ) : null}
         </div>
       </form>
+
+      <AnalyticsDashboard mode="partner" />
 
       <InstallHint />
     </div>

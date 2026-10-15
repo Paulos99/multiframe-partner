@@ -4,12 +4,15 @@
  */
 import type {
   ActivityEvent,
+  AnalyticsDashboard,
+  AnalyticsEvent,
   ExecutorLink,
   OrgSettings,
   SessionUser,
   UserRole,
 } from '../../../../packages/shared/partner';
 import {
+  aggregateAnalyticsDashboard,
   normalizeOrgSettings,
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
@@ -17,6 +20,9 @@ import {
 
 const DB_KEY = 'mf_partner_db_v2';
 const SESSION_KEY = 'mf_partner_session_v2';
+const ANALYTICS_KEY = 'mf_partner_analytics_v1';
+const ANALYTICS_QUEUE_KEY = 'mf_partner_analytics_queue_v1';
+const ANALYTICS_CAP = 2000;
 
 export type StoredUser = {
   id: string;
@@ -443,4 +449,64 @@ export function trackToolOpen(session: SessionUser, tool: 'problemomer' | 'calcu
       action: `open_${tool}`,
     }),
   );
+}
+
+function readJsonArray<T>(key: string): T[] {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function loadAnalyticsEvents(): AnalyticsEvent[] {
+  return readJsonArray<AnalyticsEvent>(ANALYTICS_KEY);
+}
+
+export function appendAnalyticsEvent(event: AnalyticsEvent): void {
+  const list = [event, ...loadAnalyticsEvents()].slice(0, ANALYTICS_CAP);
+  localStorage.setItem(ANALYTICS_KEY, JSON.stringify(list));
+}
+
+export function enqueueAnalyticsEvents(events: AnalyticsEvent[]): void {
+  const q = [...events, ...readJsonArray<AnalyticsEvent>(ANALYTICS_QUEUE_KEY)].slice(0, 500);
+  localStorage.setItem(ANALYTICS_QUEUE_KEY, JSON.stringify(q));
+}
+
+export function peekAnalyticsQueue(): AnalyticsEvent[] {
+  return readJsonArray<AnalyticsEvent>(ANALYTICS_QUEUE_KEY);
+}
+
+export function clearAnalyticsQueue(): void {
+  localStorage.removeItem(ANALYTICS_QUEUE_KEY);
+}
+
+export function buildLocalDashboard(opts: {
+  from?: string | null;
+  to?: string | null;
+  orgId?: string | null;
+}): AnalyticsDashboard {
+  const db = loadDb();
+  const executorDirectory = db.users
+    .filter((u) => u.role === 'executor')
+    .map((u) => ({
+      userId: u.id,
+      login: u.login,
+      displayName: u.displayName,
+      orgId: u.orgId,
+    }));
+  return aggregateAnalyticsDashboard(loadAnalyticsEvents(), {
+    source: 'local',
+    from: opts.from,
+    to: opts.to,
+    orgId: opts.orgId,
+    partnerCount: db.users.filter((u) => u.role === 'partner').length,
+    executorCount: opts.orgId
+      ? executorDirectory.filter((e) => e.orgId === opts.orgId).length
+      : executorDirectory.length,
+    executorDirectory,
+  });
 }

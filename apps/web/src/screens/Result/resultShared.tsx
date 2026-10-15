@@ -37,6 +37,7 @@ import {
 } from '../../state/recommendations';
 import { primaryWish, wishLabelsJoined } from '../../state/wish';
 import { eventParamsFromSession, track } from '../../analytics';
+import { trackPartnerAnalytics } from '../../partner/analytics';
 import styles from './resultShared.module.css';
 
 /** Official SP thresholds А/Б/В + explicit «ниже допустимого» band. */
@@ -243,8 +244,28 @@ export function useResultProfile() {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState(false);
 
+  const partnerObject = {
+    roomType: room.roomType || null,
+    areaM2: room.ceilingAreaM2 ?? null,
+    houseType: room.houseType || null,
+    objectStage: room.objectStage || null,
+    classBefore: hybridBefore,
+    classAfter: hybridAfter,
+    label: roomLabel,
+  };
+
   useEffect(() => {
     prefetchAcousticProfilePdf();
+  }, []);
+
+  useEffect(() => {
+    trackPartnerAnalytics({
+      tool: 'problemomer',
+      action: 'result',
+      object: partnerObject,
+    });
+    // once per result mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function openCalc() {
@@ -260,6 +281,7 @@ export function useResultProfile() {
   async function onDownloadProfile() {
     if (pdfBusy) return;
     track('pm_pdf', eventParamsFromSession(session));
+    trackPartnerAnalytics({ tool: 'problemomer', action: 'pdf', object: partnerObject });
     setPdfBusy(true);
     setPdfError(false);
     try {
@@ -274,6 +296,7 @@ export function useResultProfile() {
 
   async function onShare() {
     track('pm_share', eventParamsFromSession(session));
+    trackPartnerAnalytics({ tool: 'problemomer', action: 'share', object: partnerObject });
     const result = await shareAcousticProfile(session);
     setShareState(result === 'failed' ? 'failed' : result);
     window.setTimeout(() => setShareState('idle'), 2500);

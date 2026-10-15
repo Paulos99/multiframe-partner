@@ -18,6 +18,7 @@ import {
   OFFICIAL_PRICE_PER_M2,
   toPartnerProfile,
 } from '../../../../packages/shared/partner';
+import { flushAnalyticsQueue, trackPartnerAnalytics } from './analytics';
 import {
   createExecutorAccount,
   createPartnerAccount,
@@ -86,6 +87,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setUser(loadSession());
     setLoading(false);
+    void flushAnalyticsQueue();
   }, []);
 
   useEffect(() => {
@@ -104,6 +106,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     try {
       const session = localLogin(loginName, password);
       setUser(session);
+      trackPartnerAnalytics({ tool: 'cabinet', action: 'login' });
+      void flushAnalyticsQueue();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка входа');
       throw e;
@@ -170,7 +174,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   const noteTool = useCallback(
     (tool: 'problemomer' | 'calculator') => {
-      if (user) trackToolOpen(user, tool);
+      if (user) {
+        trackToolOpen(user, tool);
+        trackPartnerAnalytics({ tool, action: 'open' });
+      }
       setTick((n) => n + 1);
     },
     [user],
