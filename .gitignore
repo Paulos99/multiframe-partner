@@ -13,3 +13,5 @@ apps/web/dist/
 infra/.cache/
 apps/web/public/calculator/node_modules/
 apps/web/public/calculator/dist/
+
+infra/__pycache__/
