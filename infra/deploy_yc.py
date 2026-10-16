@@ -56,6 +56,10 @@ def b64url(data: bytes) -> str:
 
 
 def load_key() -> dict:
+    raw = os.environ.get("YC_SA_KEY_JSON", "").strip()
+    if raw:
+        print("using key from YC_SA_KEY_JSON env")
+        return json.loads(raw)
     for p in KEY_PATHS:
         if p and p.is_file():
             print("using key", p)
