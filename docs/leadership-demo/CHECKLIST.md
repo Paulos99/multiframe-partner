@@ -4,9 +4,10 @@
 
 1. Открыть https://paulos99.github.io/multiframe-partner/ (при необходимости добавить `?demo=1`).
 2. Если данные «грязные» — войти как `admin` / `admin1234` и убедиться, что в сети две компании: **Потолки Столицы** и **Северный Потолок**.
-3. При пустой/старой БД на сервере: после деплоя API выполнить  
+3. При пустой/старой БД на сервере (нужны S3-ключи в Cloud Function):  
    `node apps/api/scripts/reset-and-seed-demo.mjs`  
-   (альтернатива без API: `node apps/api/scripts/seed-s3-direct.mjs`, затем снова reset или redeploy функции — иначе тёплые инстансы держат старую память).
+   или напрямую в Object Storage: `node apps/api/scripts/seed-s3-direct.mjs`  
+   затем cold start: `python infra/mf_doh_patch_deploy.py` (тёплые инстансы иначе держат старую память; если IAM/TLS ломает обычный `deploy_yc.py`).
 4. В браузере при странном кэше: очистить данные сайта / ключи `mf_partner_*`.
 5. Убедиться, что на входе видна сетка демо-ролей (Pages с `VITE_DEMO_MODE=true` или URL с `?demo=1`).
 
