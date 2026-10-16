@@ -125,7 +125,11 @@ function KpiCard({
         <span className={`${styles.kpiDelta} ${deltaClass(value, prev)}`}>
           {delta} к пред.
         </span>
-      ) : null}
+      ) : (
+        <span className={styles.kpiDelta} aria-hidden>
+          {'\u00a0'}
+        </span>
+      )}
     </div>
   );
 }

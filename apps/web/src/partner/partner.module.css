@@ -624,20 +624,23 @@
 }
 
 .kpi {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: 2.4em auto 1.1em;
   gap: 4px;
   padding: 12px;
   border-radius: 14px;
   background: #f0f7f4;
   border: 1px solid rgba(1, 100, 79, 0.12);
+  min-height: 100%;
 }
 
 .kpi strong {
   font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: -0.02em;
+  line-height: 1.15;
   color: #0c332c;
+  align-self: start;
 }
 
 .kpiLabel {
@@ -645,12 +648,19 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  line-height: 1.2;
   color: #5a6b62;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .kpiDelta {
   font-size: 0.72rem;
   font-weight: 700;
+  line-height: 1.1;
+  align-self: end;
 }
 
 .kpiUp {
@@ -826,19 +836,22 @@
 }
 
 .volumeItem {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: 2.4em auto;
   gap: 4px;
   padding: 12px;
   border-radius: 14px;
   background: #fff;
   border: 1px solid rgba(1, 100, 79, 0.14);
+  min-height: 100%;
 }
 
 .volumeItem strong {
   font-size: 1.2rem;
   font-weight: 800;
+  line-height: 1.15;
   color: #0c332c;
+  align-self: start;
 }
 
 .breakdownGrid {
