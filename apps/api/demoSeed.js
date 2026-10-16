@@ -226,12 +226,17 @@ const OBJECT_SPECS_B = [
 ];
 
 function buildObjects() {
-  const mapSpec = (spec, orgId, city, creator, measurer, crew) =>
-    makeObject({
+  const mapSpec = (spec, orgId, city, creator, measurer, sales, crew) => {
+    let assignedTo = null;
+    if (['install', 'closed'].includes(spec.status)) assignedTo = crew;
+    else if (spec.status === 'measured') assignedTo = measurer;
+    else if (spec.status === 'quote_sent') assignedTo = sales;
+    // draft: unassigned — видит менеджер (старое objectVisibleTo: !assignedTo)
+    return makeObject({
       id: spec.id,
       orgId,
-      createdBy: creator,
-      assignedTo: ['install', 'closed'].includes(spec.status) ? crew : measurer,
+      createdBy: spec.status === 'measured' ? measurer : creator,
+      assignedTo,
       status: spec.status,
       clientName: spec.clientName,
       clientPhone: spec.phone,
@@ -243,13 +248,14 @@ function buildObjects() {
       houseType: pick(HOUSE_TYPES, spec.ht),
       objectStage: pick(STAGES, spec.st),
     });
+  };
 
   return [
     ...OBJECT_SPECS_A.map((s) =>
-      mapSpec(s, 'org_demo', 'Москва', 'u_partner1', 'u_measurer1', 'u_crew1'),
+      mapSpec(s, 'org_demo', 'Москва', 'u_partner1', 'u_measurer1', 'u_sales1', 'u_crew1'),
     ),
     ...OBJECT_SPECS_B.map((s) =>
-      mapSpec(s, 'org_demo_spb', 'Санкт-Петербург', 'u_partner2', 'u_measurer2', 'u_crew2'),
+      mapSpec(s, 'org_demo_spb', 'Санкт-Петербург', 'u_partner2', 'u_measurer2', 'u_sales2', 'u_crew2'),
     ),
   ];
 }
