@@ -1,53 +1,52 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
 import styles from './partner.module.css';
 
-type HelpSectionId = 'common' | UserRole;
-
 type HelpSection = {
-  id: HelpSectionId;
+  id: string;
   title: string;
   lead: string;
   steps: string[];
   cannot: string[];
 };
 
-const SECTIONS: HelpSection[] = [
-  {
-    id: 'common',
-    title: 'Общее для всех',
-    lead: 'Кабинет, инструменты и смена сотрудника на общем планшете.',
-    steps: [
-      'Войдите под своим логином. После входа откроется кабинет вашей роли.',
-      'Кнопки «Проблемомер» и «Калькулятор» всегда вверху — ими пользуются все роли.',
-      'Проблемомер — аргумент для клиента (комфорт комнаты). Калькулятор — количество панелей и крепежа.',
-      'На общем планшете после работы нажмите «Выйти» — следующий сотрудник не увидит вашу сессию.',
-      'Без сети можно сохранить замер: значок ↻ показывает очередь. При появлении интернета нажмите «Синхронизировать» или дождитесь автоотправки.',
-      'Установите кабинет на телефон: Chrome — «Установить приложение», iPhone — «Поделиться → На экран Домой».',
-    ],
-    cannot: [
-      'Не оставляйте чужой логин открытым на планшете в шоуруме или на объекте.',
-      'Не ждите, что чужой телефон сам «подтянет» ваши локальные черновики — нужен общий облачный вход.',
-    ],
-  },
-  {
+const COMMON: HelpSection = {
+  id: 'common',
+  title: 'С чего начать',
+  lead: 'Кабинет, инструменты и смена сотрудника на общем планшете.',
+  steps: [
+    'Войдите под своим логином. После входа откроется кабинет вашей роли.',
+    'Кнопки «Проблемомер» и «Калькулятор» всегда вверху.',
+    'Проблемомер — аргумент для клиента (комфорт комнаты). Калькулятор — количество панелей и крепежа.',
+    'На общем планшете после работы нажмите «Выйти» — следующий сотрудник не увидит вашу сессию.',
+    'Без сети можно сохранить замер: значок ↻ показывает очередь. При появлении интернета нажмите «Синхронизировать» или дождитесь автоотправки.',
+    'Установите кабинет на телефон: Chrome — «Установить приложение», iPhone — «Поделиться → На экран Домой».',
+  ],
+  cannot: [
+    'Не оставляйте чужой логин открытым на планшете в шоуруме или на объекте.',
+    'Не ждите, что чужой телефон сам «подтянет» ваши локальные черновики — нужен общий облачный вход.',
+  ],
+};
+
+const BY_ROLE: Record<UserRole, HelpSection> = {
+  admin: {
     id: 'admin',
-    title: ROLE_LABELS.admin,
+    title: 'Ваша работа · Админ StP',
     lead: 'Сеть партнёров по России: заведение компаний и обзор регионов.',
     steps: [
       'Вкладка «Добавить» — логин владельца, пароль, название компании и город/регион.',
       'Во вкладке «Партнёры» смотрите список, сбрасывайте пароль или удаляйте организацию целиком.',
-      '«Аналитика» — воронка сети, города и активность партнёров (не правьте чужой прайс без явного действия).',
-      'Инструменты Проблемомер/Калькулятор доступны и админу для проверки сценария.',
+      '«Аналитика» — воронка сети, города и активность партнёров.',
+      'Проблемомер и калькулятор доступны для проверки сценария.',
     ],
     cannot: [
       'Не меняйте корпоративный прайс партнёра из админ-кабинета — это делает владелец компании.',
       'Не раздавайте пароль admin сотрудникам партнёров.',
     ],
   },
-  {
+  owner: {
     id: 'owner',
-    title: ROLE_LABELS.owner,
+    title: 'Ваша работа · Владелец',
     lead: 'Прайс компании, команда, все объекты и воронка.',
     steps: [
       'Вкладка «Компания» — название, город, РРЦ панели и м², монтаж, дюбели. Сохраните перед замерами команды.',
@@ -61,149 +60,101 @@ const SECTIONS: HelpSection[] = [
       'Не держите один пароль на всю фирму: при увольнении смените доступ точечно.',
     ],
   },
-  {
+  sales: {
     id: 'sales',
-    title: ROLE_LABELS.sales,
+    title: 'Ваша работа · Менеджер',
     lead: 'Сделки, КП с ценами и отправка клиенту.',
     steps: [
       'Вкладка «Сделки» — ваши и переданные объекты.',
-      'Откройте «Проблемомер», пройдите комнату с клиентом, на итоге заполните клиента/адрес.',
-      '«Сохранить объект» — замер в кабинете. «Отправить клиенту» — сводка в мессенджер или буфер + статус «КП отправлено».',
-      'В карточке объекта меняйте статус (черновик → замер → КП → монтаж → закрыто) и назначайте исполнителя.',
-      'Калькулятор считает материалы по РРЦ компании — удобно уточнить комплектацию перед КП.',
+      'Откройте «Проблемомер», пройдите комнату с клиентом, на итоге заполните клиента и адрес.',
+      '«Сохранить объект» — замер в кабинете. «Отправить клиенту» — сводка в мессенджер или буфер и статус «КП отправлено».',
+      'В карточке объекта меняйте статус и назначайте исполнителя.',
+      'Калькулятор считает материалы по РРЦ компании — уточните комплектацию перед КП.',
     ],
     cannot: [
       'Прайс компании (РРЦ, монтаж) меняет только владелец.',
       'Не оставляйте черновик без адреса и телефона — бригада и владелец не найдут объект на месте.',
     ],
   },
-  {
+  measurer: {
     id: 'measurer',
-    title: ROLE_LABELS.measurer,
+    title: 'Ваша работа · Замерщик',
     lead: 'Быстрый замер на объекте за 5–10 минут.',
     steps: [
       'Нажмите «Проблемомер» → заполните комнату (тип и площадь обязательны) → дождитесь итога.',
       'На экране результата: «Сохранить объект» — имя, телефон, адрес, город.',
       'При слабой сети объект останется на телефоне (↻) и уйдёт менеджеру, когда появится интернет.',
-      '«Калькулятор» — количество панелей и крепежа по ценам компании; при необходимости уточните раскладку.',
+      '«Калькулятор» — количество панелей и крепежа по ценам компании.',
       'Свои черновики смотрите в списке объектов в кабинете.',
     ],
     cannot: [
-      'Аналитику чужих сделок и настройки прайса замерщик не открывает.',
+      'Аналитику чужих сделок и настройки прайса вы не открываете — это нормально.',
       'Не обещайте клиенту «лабораторный» замер — проблемомер даёт ориентир комфорта, не сертификат.',
     ],
   },
-  {
+  crew: {
     id: 'crew',
-    title: ROLE_LABELS.crew,
+    title: 'Ваша работа · Бригада',
     lead: 'Монтаж по заданию: количества без цен.',
     steps: [
-      'В кабинете откройте «Задания на монтаж» — объекты, назначенные вам или в статусе монтажа.',
+      'В кабинете откройте задания на монтаж — объекты, назначенные вам или в статусе монтажа.',
       'Смотрите панели и дюбели (шт.). Суммы КП и РРЦ скрыты специально.',
       'Отметьте статус «Монтаж» или «Закрыто», когда работа на объекте завершена.',
-      '«Калькулятор» в режиме бригады показывает только количество, без денежных итогов.',
+      '«Калькулятор» показывает только количество, без денежных итогов.',
       'После смены нажмите «Выйти», если планшет общий.',
     ],
     cannot: [
-      'Цены, маржу и аналитику бригада не видит — даже если открыть ссылку на калькулятор.',
-      'Не создавайте новые объекты из бригады — замер и КП делают менеджер или замерщик.',
+      'Цены, маржу и аналитику вы не видите — даже если открыть калькулятор.',
+      'Не создавайте новые объекты — замер и КП делают менеджер или замерщик.',
     ],
   },
-];
+};
 
-function sectionOrderFor(role: UserRole): HelpSectionId[] {
-  const rest = SECTIONS.map((s) => s.id).filter((id) => id !== 'common' && id !== role);
-  return ['common', role, ...rest];
+function SectionBlock({ section, highlight }: { section: HelpSection; highlight?: boolean }) {
+  return (
+    <section
+      className={`${styles.helpSection} ${highlight ? styles.helpSectionMine : ''}`}
+      aria-labelledby={`help-title-${section.id}`}
+    >
+      <div className={styles.helpSectionHeadStatic}>
+        <h3 id={`help-title-${section.id}`}>{section.title}</h3>
+      </div>
+      <div className={styles.helpSectionBody}>
+        <p className={styles.lead}>{section.lead}</p>
+        <ol className={styles.helpSteps}>
+          {section.steps.map((step) => (
+            <li key={step} className={styles.helpStep}>
+              {step}
+            </li>
+          ))}
+        </ol>
+        {section.cannot.length ? (
+          <div className={styles.helpCannot}>
+            <strong>Нельзя / важно</strong>
+            <ul>
+              {section.cannot.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
+/** Personal training: common basics + only the current user's role. */
 export function HelpTrainingPanel({ role }: { role: UserRole }) {
-  const order = useMemo(() => sectionOrderFor(role), [role]);
-  const [open, setOpen] = useState<Record<string, boolean>>(() => {
-    const init: Record<string, boolean> = {};
-    for (const id of order) init[id] = id === 'common' || id === role;
-    return init;
-  });
-
-  function toggle(id: string) {
-    setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
+  const personal = useMemo(() => BY_ROLE[role], [role]);
 
   return (
     <div className={`${styles.card} ${styles.panelCard} ${styles.helpPanel}`}>
-      <h2>Обучение · кабинет MultiFrame</h2>
+      <h2>Обучение · {ROLE_LABELS[role]}</h2>
       <p className={styles.lead}>
-        Краткие сценарии по ролям. Сейчас вы — <strong>{ROLE_LABELS[role]}</strong>. Раскройте
-        другие разделы, чтобы обучить команду.
+        Личная инструкция для вашей роли. Другие уровни полномочий здесь не показываются.
       </p>
-
-      <div className={styles.helpToc} aria-label="Оглавление">
-        {order.map((id) => {
-          const s = SECTIONS.find((x) => x.id === id)!;
-          return (
-            <button
-              key={id}
-              type="button"
-              className={styles.helpTocBtn}
-              onClick={() => {
-                setOpen((prev) => ({ ...prev, [id]: true }));
-                document.getElementById(`help-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-            >
-              {s.title}
-            </button>
-          );
-        })}
-      </div>
-
-      {order.map((id) => {
-        const s = SECTIONS.find((x) => x.id === id)!;
-        const isOpen = !!open[id];
-        const isMine = id === role;
-        return (
-          <section
-            key={id}
-            id={`help-${id}`}
-            className={`${styles.helpSection} ${isMine ? styles.helpSectionMine : ''}`}
-          >
-            <button
-              type="button"
-              className={styles.helpSectionHead}
-              aria-expanded={isOpen}
-              onClick={() => toggle(id)}
-            >
-              <span>
-                {s.title}
-                {isMine ? <span className={styles.helpBadge}>ваша роль</span> : null}
-              </span>
-              <span className={styles.helpChevron} aria-hidden>
-                {isOpen ? '▾' : '▸'}
-              </span>
-            </button>
-            {isOpen ? (
-              <div className={styles.helpSectionBody}>
-                <p className={styles.lead}>{s.lead}</p>
-                <ol className={styles.helpSteps}>
-                  {s.steps.map((step) => (
-                    <li key={step} className={styles.helpStep}>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
-                {s.cannot.length ? (
-                  <div className={styles.helpCannot}>
-                    <strong>Нельзя / важно</strong>
-                    <ul>
-                      {s.cannot.map((c) => (
-                        <li key={c}>{c}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
-        );
-      })}
+      <SectionBlock section={COMMON} />
+      <SectionBlock section={personal} highlight />
     </div>
   );
 }

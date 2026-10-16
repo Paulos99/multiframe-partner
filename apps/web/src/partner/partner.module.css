@@ -479,7 +479,8 @@
   box-shadow: 0 0 0 1px rgba(42, 179, 139, 0.12);
 }
 
-.helpSectionHead {
+.helpSectionHead,
+.helpSectionHeadStatic {
   appearance: none;
   width: 100%;
   min-height: 48px;
@@ -495,7 +496,17 @@
   font-size: 0.98rem;
   color: #152018;
   text-align: left;
+}
+
+.helpSectionHead {
   cursor: pointer;
+}
+
+.helpSectionHeadStatic h3 {
+  margin: 0;
+  font: inherit;
+  font-weight: 750;
+  font-size: 0.98rem;
 }
 
 .helpSectionHead span {
