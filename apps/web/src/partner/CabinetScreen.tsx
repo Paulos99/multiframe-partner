@@ -7,6 +7,7 @@ import {
   type UserRole,
 } from '../../../../packages/shared/partner';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { ObjectsPanel } from './ObjectsPanel';
 import { generatePassword, usePartner } from './PartnerContext';
 import styles from './partner.module.css';
@@ -100,7 +101,7 @@ function TabPanel({ children }: { children: ReactNode }) {
   return <div className={styles.tabPanel}>{children}</div>;
 }
 
-type AdminTab = 'add' | 'partners' | 'analytics';
+type AdminTab = 'add' | 'partners' | 'analytics' | 'help';
 
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
@@ -166,6 +167,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
           { id: 'analytics', label: 'Аналитика' },
           { id: 'partners', label: `Партнёры · ${partners.length}` },
           { id: 'add', label: 'Добавить' },
+          { id: 'help', label: 'Обучение' },
         ]}
         active={tab}
         onChange={setTab}
@@ -279,11 +281,17 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
           <AnalyticsDashboard mode="admin" />
         </TabPanel>
       ) : null}
+
+      {tab === 'help' ? (
+        <TabPanel>
+          <HelpTrainingPanel role="admin" />
+        </TabPanel>
+      ) : null}
     </div>
   );
 }
 
-type OwnerTab = 'objects' | 'company' | 'staff' | 'analytics';
+type OwnerTab = 'objects' | 'company' | 'staff' | 'analytics' | 'help';
 
 function OwnerCabinet({
   onNavigate,
@@ -386,6 +394,7 @@ function OwnerCabinet({
           { id: 'company', label: 'Компания' },
           { id: 'staff', label: `Сотрудники · ${staff.length}` },
           { id: 'analytics', label: 'Аналитика' },
+          { id: 'help', label: 'Обучение' },
         ]}
         active={tab}
         onChange={setTab}
@@ -606,6 +615,12 @@ function OwnerCabinet({
           <AnalyticsDashboard mode="partner" />
         </TabPanel>
       ) : null}
+
+      {tab === 'help' ? (
+        <TabPanel>
+          <HelpTrainingPanel role="owner" />
+        </TabPanel>
+      ) : null}
     </div>
   );
 }
@@ -619,7 +634,7 @@ function SalesCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [tab, setTab] = useState<'deals' | 'analytics'>('deals');
+  const [tab, setTab] = useState<'deals' | 'analytics' | 'help'>('deals');
 
   return (
     <div className={styles.shellWide}>
@@ -640,6 +655,7 @@ function SalesCabinet({
         tabs={[
           { id: 'deals', label: `Сделки · ${api.objects.length}` },
           { id: 'analytics', label: 'Аналитика' },
+          { id: 'help', label: 'Обучение' },
         ]}
         active={tab}
         onChange={setTab}
@@ -648,11 +664,17 @@ function SalesCabinet({
         <TabPanel>
           <ObjectsPanel />
         </TabPanel>
-      ) : (
+      ) : null}
+      {tab === 'analytics' ? (
         <TabPanel>
           <AnalyticsDashboard mode="partner" />
         </TabPanel>
-      )}
+      ) : null}
+      {tab === 'help' ? (
+        <TabPanel>
+          <HelpTrainingPanel role="sales" />
+        </TabPanel>
+      ) : null}
     </div>
   );
 }
@@ -666,6 +688,7 @@ function MeasurerCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
+  const [showHelp, setShowHelp] = useState(false);
 
   return (
     <div className={styles.shellWide}>
@@ -677,21 +700,37 @@ function MeasurerCabinet({
           </p>
         </div>
         <div className={styles.topActions}>
+          <button
+            type="button"
+            className={styles.ghost}
+            onClick={() => setShowHelp((v) => !v)}
+            aria-pressed={showHelp}
+          >
+            {showHelp ? 'К объектам' : 'Обучение'}
+          </button>
           <SyncBadge />
           <QuickLogout />
         </div>
       </header>
       <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
-      <div className={`${styles.card} ${styles.panelCard}`}>
-        <h2>Параметры компании</h2>
-        <p className={styles.lead}>
-          РРЦ панели {user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB} ₽ ·{' '}
-          {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
-          {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'}
-        </p>
-      </div>
-      <ObjectsPanel compact />
-      <InstallHint />
+      {showHelp ? (
+        <HelpTrainingPanel role="measurer" />
+      ) : (
+        <>
+          <div className={`${styles.card} ${styles.panelCard}`}>
+            <h2>Параметры компании</h2>
+            <p className={styles.lead}>
+              РРЦ панели {user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB} ₽ ·{' '}
+              {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
+              {user.org?.installPricePerM2 != null
+                ? `${user.org.installPricePerM2} ₽/м²`
+                : 'не задан'}
+            </p>
+          </div>
+          <ObjectsPanel compact />
+          <InstallHint />
+        </>
+      )}
     </div>
   );
 }
@@ -705,6 +744,7 @@ function CrewCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
+  const [showHelp, setShowHelp] = useState(false);
 
   return (
     <div className={styles.shellWide}>
@@ -716,13 +756,27 @@ function CrewCabinet({
           </p>
         </div>
         <div className={styles.topActions}>
+          <button
+            type="button"
+            className={styles.ghost}
+            onClick={() => setShowHelp((v) => !v)}
+            aria-pressed={showHelp}
+          >
+            {showHelp ? 'К заданиям' : 'Обучение'}
+          </button>
           <SyncBadge />
           <QuickLogout />
         </div>
       </header>
       <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
-      <ObjectsPanel />
-      <InstallHint />
+      {showHelp ? (
+        <HelpTrainingPanel role="crew" />
+      ) : (
+        <>
+          <ObjectsPanel />
+          <InstallHint />
+        </>
+      )}
     </div>
   );
 }

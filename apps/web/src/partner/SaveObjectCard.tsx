@@ -89,7 +89,8 @@ export function SaveObjectCard() {
       ]
         .filter(Boolean)
         .join('');
-      if (navigator.share) {
+      const canShare = typeof navigator.share === 'function';
+      if (canShare) {
         await navigator.share({ title: 'MultiFrame · сводка', text });
       } else {
         await navigator.clipboard.writeText(text);
@@ -104,7 +105,7 @@ export function SaveObjectCard() {
         room: roomPayload(),
         estimate: estimatePayload(),
       });
-      setMsg(navigator.share ? 'Отправлено клиенту' : 'Сводка скопирована · статус «КП отправлено»');
+      setMsg(canShare ? 'Отправлено клиенту' : 'Сводка скопирована · статус «КП отправлено»');
     } catch (ex) {
       if ((ex as Error)?.name === 'AbortError') return;
       setErr(ex instanceof Error ? ex.message : 'Не удалось отправить');
