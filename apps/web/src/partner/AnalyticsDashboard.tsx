@@ -14,7 +14,13 @@ import {
   type ObjectStageOption,
   type RoomType,
 } from '../state/types';
-import { fetchAnalyticsDashboard, periodFromDays } from './analytics';
+import {
+  fetchAnalyticsDashboard,
+  monthLabel,
+  periodFromDays,
+  rangeForMonthDay,
+  recentMonths,
+} from './analytics';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
@@ -157,6 +163,68 @@ function FunnelBlock({
   );
 }
 
+type SliceRow = { label: string; total: number };
+
+function slicesFromSeries(series: AnalyticsSeriesPoint[]): {
+  months: SliceRow[];
+  days: Array<{ day: number; total: number }>;
+} {
+  const months = new Map<string, number>();
+  const days = Array.from({ length: 31 }, () => 0);
+  for (const p of series) {
+    const [y, m, d] = p.day.split('-');
+    if (!y || !m || !d) continue;
+    const total = p.problemomer + p.calculator + p.pdf + p.logins;
+    const key = `${y}-${m}`;
+    months.set(key, (months.get(key) || 0) + total);
+    const day = Number(d);
+    if (day >= 1 && day <= 31) days[day - 1] += total;
+  }
+  return {
+    months: [...months.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([key, total]) => ({ label: monthLabel(key), total })),
+    days: days.map((total, i) => ({ day: i + 1, total })),
+  };
+}
+
+function MonthSlice({ rows }: { rows: SliceRow[] }) {
+  const max = Math.max(1, ...rows.map((r) => r.total));
+  if (!rows.length) return <p className={styles.lead}>Пока нет данных по месяцам</p>;
+  return (
+    <ul className={styles.sliceList}>
+      {rows.map((r) => (
+        <li key={r.label} className={styles.sliceRow}>
+          <span>{r.label}</span>
+          <span className={styles.sliceTrack}>
+            <span className={styles.sliceFill} style={{ width: `${(r.total / max) * 100}%` }} />
+          </span>
+          <strong>{r.total}</strong>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DaySlice({ days }: { days: Array<{ day: number; total: number }> }) {
+  const max = Math.max(1, ...days.map((d) => d.total));
+  return (
+    <div className={styles.seriesChart} role="img" aria-label="Срез по дням месяца">
+      {days.map((d) => (
+        <div key={d.day} className={styles.seriesDay} title={`${d.day}: ${d.total}`}>
+          <div className={styles.seriesBars}>
+            <div
+              className={`${styles.seriesBar} ${styles.barPm}`}
+              style={{ height: `${(d.total / max) * 100}%` }}
+            />
+          </div>
+          <span className={styles.seriesTick}>{d.day % 2 === 1 ? d.day : ''}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
   const max = Math.max(
     1,
@@ -270,7 +338,10 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   const api = usePartner();
   const user = api.user!;
   const [period, setPeriod] = useState<Period>(7);
+  const [month, setMonth] = useState('');
+  const [day, setDay] = useState('');
   const [orgFilter, setOrgFilter] = useState<string>('');
+  const months = useMemo(() => recentMonths(), []);
   const [section, setSection] = useState<AnalyticsTab>('overview');
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -288,7 +359,9 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const { from, to } = periodFromDays(period);
+    const { from, to } = month
+      ? rangeForMonthDay(month, day ? Number(day) : null)
+      : periodFromDays(period);
     const orgId = mode === 'partner' ? user.orgId : orgFilter || null;
     void fetchAnalyticsDashboard({
       mode,
@@ -305,7 +378,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, period, orgFilter, user.orgId, user.login]);
+  }, [mode, period, month, day, orgFilter, user.orgId, user.login]);
 
   const inactivePartners = useMemo(() => {
     if (mode !== 'admin' || !data) return [];
@@ -352,7 +425,11 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             {dash.source === 'api'
               ? 'Данные с сервера'
               : 'Только этот браузер (API недоступен)'}
-            {period != null ? ` · ${period} дн.` : ' · всё время'}
+            {month
+              ? ` · ${monthLabel(month)}${day ? `, ${day}` : ''}`
+              : period != null
+                ? ` · ${period} дн.`
+                : ' · всё время'}
           </p>
         </div>
         <div className={styles.dashFilters}>
@@ -360,12 +437,46 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             <button
               key={String(p)}
               type="button"
-              className={period === p ? styles.primary : styles.ghost}
-              onClick={() => setPeriod(p)}
+              className={!month && period === p ? styles.primary : styles.ghost}
+              onClick={() => {
+                setMonth('');
+                setDay('');
+                setPeriod(p);
+              }}
             >
               {p == null ? 'Всё' : `${p} дн.`}
             </button>
           ))}
+          <select
+            className={styles.dashSelect}
+            aria-label="Месяц"
+            value={month}
+            onChange={(e) => {
+              setMonth(e.target.value);
+              if (!e.target.value) setDay('');
+            }}
+          >
+            <option value="">Все месяцы</option>
+            {months.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className={styles.dashSelect}
+            aria-label="День месяца"
+            value={day}
+            disabled={!month}
+            onChange={(e) => setDay(e.target.value)}
+          >
+            <option value="">Все дни</option>
+            {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -466,6 +577,11 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
           ) : (
             <p className={styles.lead}>Пока нет точек для графика</p>
           )}
+
+          <h3 className={styles.dashSub}>По месяцам</h3>
+          <MonthSlice rows={slicesFromSeries(dash.series).months} />
+          <h3 className={styles.dashSub}>По дням месяца</h3>
+          <DaySlice days={slicesFromSeries(dash.series).days} />
 
           <h3 className={styles.dashSub}>Объём</h3>
           <div className={styles.volumeRow}>

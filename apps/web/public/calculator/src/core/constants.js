@@ -166,4 +166,12 @@ export const VALIDATION = {
   MIN_OPENING_SIZE: 0.3,
 };
 
+/** Мин. ширина/высота видимого клипа — тоньше этого не укладываем (5 см). */
+export const MIN_PANEL_FRAGMENT = 0.05;
+
+export const OPENING_TYPES = {
+  DOOR: 'door',
+  WINDOW: 'window',
+};
+
 export { boot as _bootPartnerPricing };

@@ -189,3 +189,52 @@ export function periodFromDays(days: number | null): { from: string | null; to: 
   const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
   return { from: from.toISOString(), to: to.toISOString() };
 }
+
+const MONTHS_RU = [
+  'январь',
+  'февраль',
+  'март',
+  'апрель',
+  'май',
+  'июнь',
+  'июль',
+  'август',
+  'сентябрь',
+  'октябрь',
+  'ноябрь',
+  'декабрь',
+];
+
+/** Recent calendar months, newest first. Value is YYYY-MM. */
+export function recentMonths(count = 18): Array<{ value: string; label: string }> {
+  const now = new Date();
+  const out: Array<{ value: string; label: string }> = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    out.push({ value, label: `${MONTHS_RU[d.getMonth()]} ${d.getFullYear()}` });
+  }
+  return out;
+}
+
+export function monthLabel(value: string): string {
+  const [y, m] = value.split('-').map(Number);
+  if (!y || !m) return value;
+  return `${MONTHS_RU[m - 1] || value} ${y}`;
+}
+
+/** Inclusive local range for a calendar month, or one day inside it. */
+export function rangeForMonthDay(
+  month: string,
+  day: number | null,
+): { from: string; to: string } {
+  const [y, m] = month.split('-').map(Number);
+  if (day && day >= 1 && day <= 31) {
+    const start = new Date(y, m - 1, day, 0, 0, 0, 0);
+    const end = new Date(y, m - 1, day, 23, 59, 59, 999);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+  const start = new Date(y, m - 1, 1, 0, 0, 0, 0);
+  const end = new Date(y, m, 0, 23, 59, 59, 999);
+  return { from: start.toISOString(), to: end.toISOString() };
+}

@@ -840,3 +840,94 @@
   display: block;
   background: #fff;
 }
+
+.dashSelect {
+  appearance: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(1, 100, 79, 0.25);
+  background: #fff;
+  color: #152018;
+}
+
+.sliceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sliceRow {
+  display: grid;
+  grid-template-columns: 92px 1fr 36px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.sliceTrack {
+  height: 8px;
+  border-radius: 99px;
+  background: #e7eeeb;
+  overflow: hidden;
+}
+
+.sliceFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #01644f;
+}
+
+:global(body.theme-dark) .shell,
+:global(body.theme-dark) .shellWide,
+:global(body.theme-dark) .toolHost {
+  background: #101318;
+  color: #e8eaee;
+}
+
+:global(body.theme-dark) .card,
+:global(body.theme-dark) .toolBar,
+:global(body.theme-dark) .dashSelect,
+:global(body.theme-dark) .field input,
+:global(body.theme-dark) .field select {
+  background: #171b22;
+  color: #e8eaee;
+  border-color: #2a3140;
+}
+
+:global(body.theme-dark) .top h1,
+:global(body.theme-dark) .card h1,
+:global(body.theme-dark) .card h2,
+:global(body.theme-dark) .dashSub,
+:global(body.theme-dark) .field,
+:global(body.theme-dark) .kpi strong {
+  color: #e8eaee;
+}
+
+:global(body.theme-dark) .lead,
+:global(body.theme-dark) .hint,
+:global(body.theme-dark) .toolBarMeta {
+  color: #b4bcc6;
+}
+
+:global(body.theme-dark) .kpi,
+:global(body.theme-dark) .sliceTrack {
+  background: #12161c;
+  border-color: #2a3140;
+}
+
+:global(body.theme-dark) .toolBar button {
+  background: #12161c;
+  color: #7dceb8;
+  border-color: #2a3140;
+}
+
+:global(body.theme-dark) .calcFrame {
+  background: #101318;
+}

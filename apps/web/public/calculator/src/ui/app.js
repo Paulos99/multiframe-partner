@@ -2165,6 +2165,11 @@ function initTheme() {
     const savedTheme = localStorage.getItem('mf_theme');
     const isDark = savedTheme === 'dark';
     document.body.classList.toggle('theme-dark', isDark);
+    sketchEditor?.render?.();
+    if (state.hasResults) {
+      renderCeiling();
+      renderSelectedWall();
+    }
     const switchEl = $('themeSwitch');
     if (switchEl) {
       switchEl.checked = isDark;
@@ -2340,4 +2345,8 @@ function resetUiAfterOnboarding() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

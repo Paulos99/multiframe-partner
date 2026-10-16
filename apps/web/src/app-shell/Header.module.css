@@ -136,14 +136,14 @@
 }
 
 .themeSwitch input:checked + .switchTrack {
-  background: #26272c;
-  border-color: #2f3036;
+  background: #12161c;
+  border-color: #171b22;
 }
 
 .themeSwitch input:checked + .switchTrack .switchThumb {
   transform: translateX(-32px);
-  background: #2f3036;
-  border-color: #3a3b42;
+  background: #171b22;
+  border-color: #2a3140;
 }
 
 .themeSwitch input:checked + .switchTrack .iconSun {

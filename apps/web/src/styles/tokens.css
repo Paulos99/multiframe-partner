@@ -60,12 +60,12 @@
 }
 
 body.theme-dark {
-  --text-primary: #e6e7ea;
-  --text-secondary: #a4acb4;
-  --bg-page: #2d2e33;
-  --bg-card: #2f3036;
-  --bg-subtle: #26272c;
-  --border-color: #3a3b42;
+  --text-primary: #e8eaee;
+  --text-secondary: #b4bcc6;
+  --bg-page: #101318;
+  --bg-card: #171b22;
+  --bg-subtle: #12161c;
+  --border-color: #2a3140;
   --success-color: #2ab38b;
   --accent-soft: rgba(42, 179, 139, 0.16);
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);

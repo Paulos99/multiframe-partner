@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SessionProvider } from './state/SessionContext';
 import { AppShell } from './app-shell/AppShell';
 import { SmoothScroll } from './ui/SmoothScroll';
@@ -13,6 +13,14 @@ type Route = 'cabinet' | 'problemomer' | 'calculator';
 function PartnerShell() {
   const { user, loading, noteTool } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
+
+  useEffect(() => {
+    try {
+      document.body.classList.toggle('theme-dark', localStorage.getItem('mf_theme') === 'dark');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const calcSrc = useMemo(() => {
     if (!user) return '';

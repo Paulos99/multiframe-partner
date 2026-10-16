@@ -3150,8 +3150,9 @@ export class SketchEditor {
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const dark = document.body.classList.contains('theme-dark');
     this.ctx.clearRect(0, 0, w, h);
-    this.ctx.fillStyle = '#f8faf9';
+    this.ctx.fillStyle = dark ? '#12161c' : '#f8faf9';
     this.ctx.fillRect(0, 0, w, h);
 
     this._drawGrid(w, h);
@@ -3312,7 +3313,7 @@ export class SketchEditor {
         this.ctx.stroke();
       }
       this.ctx.font = 'bold 11px system-ui';
-      this.ctx.fillStyle = '#334';
+      this.ctx.fillStyle = document.body.classList.contains('theme-dark') ? '#d5dbe3' : '#334';
       this.ctx.textAlign = 'left';
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText(v.label, p.x + r + 4, p.y);
@@ -3702,7 +3703,10 @@ export class SketchEditor {
       const p = this.worldToCanvas(xm, 0);
       const x = Math.round(p.x) + 0.5;
       const isMajor = stepM === 1 && Math.abs(Math.round(xm) % 5) === 0;
-      this.ctx.strokeStyle = isMajor ? GRID_MAJOR_COLOR : GRID_COLOR;
+      const dark = document.body.classList.contains('theme-dark');
+      this.ctx.strokeStyle = isMajor
+        ? (dark ? 'rgba(255, 255, 255, 0.22)' : GRID_MAJOR_COLOR)
+        : (dark ? 'rgba(255, 255, 255, 0.1)' : GRID_COLOR);
       this.ctx.beginPath();
       this.ctx.moveTo(x, 0);
       this.ctx.lineTo(x, h);
@@ -3713,7 +3717,10 @@ export class SketchEditor {
       const p = this.worldToCanvas(0, ym);
       const y = Math.round(p.y) + 0.5;
       const isMajor = stepM === 1 && Math.abs(Math.round(ym) % 5) === 0;
-      this.ctx.strokeStyle = isMajor ? GRID_MAJOR_COLOR : GRID_COLOR;
+      const dark = document.body.classList.contains('theme-dark');
+      this.ctx.strokeStyle = isMajor
+        ? (dark ? 'rgba(255, 255, 255, 0.22)' : GRID_MAJOR_COLOR)
+        : (dark ? 'rgba(255, 255, 255, 0.1)' : GRID_COLOR);
       this.ctx.beginPath();
       this.ctx.moveTo(0, y);
       this.ctx.lineTo(w, y);
