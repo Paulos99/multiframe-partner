@@ -30,7 +30,6 @@ import {
 import { buildLeadHandoff, withDerived } from './session';
 import { buildAirSpectrum, buildImpactSpectrum } from './spectrum';
 import { comfortRingSvg, spectrumChartSvg } from './chartSvg';
-import { wishLabelsJoined } from './wish';
 import { type OrgSettings } from '../../../../packages/shared/partner';
 import { buildEstimateFromOrg, formatRub } from '../partner/estimate';
 
@@ -792,7 +791,6 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
         <div><dt>Тип дома</dt><dd>${escapeHtml(optLabel(HOUSE_TYPE_OPTIONS, room.houseType))}</dd></div>
         <div><dt>Комната</dt><dd>${escapeHtml(roomName)} · ${escapeHtml(area)}</dd></div>
         <div><dt>Потолок</dt><dd>${escapeHtml(optLabel(PLANNED_CEILING_OPTIONS, room.plannedCeiling))}</dd></div>
-        <div><dt>Цель</dt><dd>${escapeHtml(wishLabelsJoined(room.roomWishes))}</dd></div>
         ${neighborsCell}
         ${noiseKindCell}
       </dl>

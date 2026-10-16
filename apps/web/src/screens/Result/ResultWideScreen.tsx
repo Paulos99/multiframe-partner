@@ -188,7 +188,6 @@ export function ResultWideScreen() {
     objectCells.push({ label: 'Площадь', value: `${p.room.ceilingAreaM2} м²` });
   }
   objectCells.push({ label: 'Потолок', value: p.ceilingLabel });
-  objectCells.push({ label: 'Цель', value: p.wishLabel });
   if (p.room.noisyNeighbors !== 'unknown') {
     objectCells.push({ label: 'Шум сверху', value: p.neighborsLabel });
   }

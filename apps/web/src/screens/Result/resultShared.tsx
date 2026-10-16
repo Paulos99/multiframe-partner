@@ -35,7 +35,7 @@ import {
   MULTIFRAME_PANEL_IMG,
   productAbout,
 } from '../../state/recommendations';
-import { primaryWish, wishLabelsJoined } from '../../state/wish';
+import { primaryWish } from '../../state/wish';
 import { eventParamsFromSession, track } from '../../analytics';
 import { trackPartnerAnalytics } from '../../partner/analytics';
 import styles from './resultShared.module.css';
@@ -219,7 +219,7 @@ export function useResultProfile() {
   const slabTypeLabel = optionLabel(SLAB_TYPE_OPTIONS, room.slabType);
   const slabThickLabel = optionLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness);
   const houseLabel = optionLabel(HOUSE_TYPE_OPTIONS, room.houseType);
-  const wishLabel = wishLabelsJoined(room.roomWishes);
+  const wishLabel = 'Все эффекты материала';
   const ceilingLabel = optionLabel(PLANNED_CEILING_OPTIONS, room.plannedCeiling);
   const neighborsLabel = optionLabel(NOISY_NEIGHBORS_OPTIONS, room.noisyNeighbors);
   const noiseKindLabel =

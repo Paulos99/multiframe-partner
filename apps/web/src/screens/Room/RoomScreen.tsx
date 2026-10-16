@@ -11,7 +11,6 @@ import {
   ROOM_FACTOR_GROUP,
   ROOM_FACTOR_GROUP_LABEL,
   ROOM_TYPE_LABELS,
-  ROOM_WISH_OPTIONS,
   SLAB_THICKNESS_OPTIONS,
   SLAB_TYPE_OPTIONS,
   allowedSlabTypes,
@@ -32,13 +31,11 @@ const SUBSTEP_TITLE: Record<RoomSubstep, string> = {
   objectStage: 'На какой стадии объект?',
   noisyNeighbors: 'Насколько шумно сверху?',
   noiseKind: 'Что именно слышно сверху?',
-  roomWish: 'Что для вас важнее всего?',
 };
 
 const SUBSTEP_LEAD: Partial<Record<RoomSubstep, string>> = {
   slabType: 'Покажем только варианты, которые обычно бывают в таком доме.',
   noiseKind: 'Простыми примерами — так точнее подсветим, что важно именно вам.',
-  roomWish: 'Можно выбрать несколько вариантов.',
 };
 
 export function RoomScreen() {
@@ -54,7 +51,6 @@ export function RoomScreen() {
     setPlannedCeiling,
     setNoisyNeighbors,
     setNoiseKind,
-    toggleRoomWish,
     canGoNext,
   } = useSession();
   const room = session.answers.room;
@@ -248,27 +244,6 @@ export function RoomScreen() {
             />
           ))}
         </div>
-      ) : null}
-
-      {sub === 'roomWish' ? (
-        <>
-          <div className={styles.grid}>
-            {ROOM_WISH_OPTIONS.map((opt) => (
-              <CardSelect
-                key={opt.id}
-                dense
-                title={opt.label}
-                selected={room.roomWishes.includes(opt.id)}
-                onClick={() => toggleRoomWish(opt.id)}
-              />
-            ))}
-          </div>
-          {!canGoNext && hint ? (
-            <p className={styles.validation} role="status">
-              {hint}
-            </p>
-          ) : null}
-        </>
       ) : null}
     </Screen>
   );

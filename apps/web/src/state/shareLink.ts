@@ -7,6 +7,7 @@ import type {
   RoomAnswers,
   SessionState,
 } from './types';
+import { DEFAULT_ROOM_WISHES } from './types';
 import { createInitialSession, withDerived } from './session';
 import { normalizeRoomWishes } from './wish';
 
@@ -76,7 +77,7 @@ export function decodeRoomAnswers(token: string): RoomAnswers | null {
     return {
       ...(rest as RoomAnswers),
       roomTypeCustom,
-      roomWishes: roomWishes.length > 0 ? roomWishes : ['other'],
+      roomWishes: roomWishes.length > 0 ? roomWishes : [...DEFAULT_ROOM_WISHES],
       plannedCeiling: migratePlannedCeiling(data.plannedCeiling),
       noiseKind: migrateNoiseKind(data.noiseKind),
     };

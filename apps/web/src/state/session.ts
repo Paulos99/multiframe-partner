@@ -8,6 +8,7 @@ import type {
   RoomSubstep,
 } from './types';
 import {
+  DEFAULT_ROOM_WISHES,
   ROOM_SUBSTEPS,
   WIZARD_STEPS,
   CALCULATOR_URL,
@@ -54,7 +55,7 @@ function defaultRoom() {
     plannedCeiling: 'unknown' as const,
     noisyNeighbors: 'unknown' as const,
     noiseKind: 'unknown' as const,
-    roomWishes: [] as RoomWishOption[],
+    roomWishes: [...DEFAULT_ROOM_WISHES] as RoomWishOption[],
   };
 }
 
@@ -116,9 +117,9 @@ export function nextRoomSubstep(
     room &&
     !shouldAskNoiseKind(room.noisyNeighbors)
   ) {
-    next = ROOM_SUBSTEPS[i + 2]!;
+    return null;
   }
-  return next ?? null;
+  return next;
 }
 
 /** Previous question, skipping noiseKind when it was not asked. */
@@ -197,9 +198,6 @@ export function canProceed(session: SessionState): boolean {
       if (session.roomSubstep === 'basics') {
         return roomBasicsComplete(session);
       }
-      if (session.roomSubstep === 'roomWish' || isLastRoomSubstep(session.roomSubstep)) {
-        return session.answers.room.roomWishes.length > 0;
-      }
       return true;
     case 'processing':
       return true;
@@ -212,10 +210,6 @@ export function canProceed(session: SessionState): boolean {
 
 export function roomNextHint(session: SessionState): string | null {
   if (session.step !== 'room') return null;
-  if (session.roomSubstep === 'roomWish') {
-    if (session.answers.room.roomWishes.length === 0) return 'выберите хотя бы один вариант';
-    return null;
-  }
   if (session.roomSubstep !== 'basics') return null;
   if (session.answers.room.roomType == null) return 'выберите тип';
   if (
