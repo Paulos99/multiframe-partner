@@ -1,6 +1,75 @@
-/** Shared types — partner portal roles and org settings. */
+/** Shared types — partner portal roles, org settings, job objects. */
 
-export type UserRole = 'admin' | 'partner' | 'executor';
+export type UserRole = 'admin' | 'owner' | 'sales' | 'measurer' | 'crew';
+
+/** @deprecated migrated to owner / staff roles */
+export type LegacyUserRole = 'partner' | 'executor';
+
+/** Roles that belong to a partner company (not StP admin). */
+export const ORG_ROLES: UserRole[] = ['owner', 'sales', 'measurer', 'crew'];
+
+/** Staff under an owner (analytics “executors” table). */
+export const STAFF_ROLES: UserRole[] = ['sales', 'measurer', 'crew'];
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Админ StP',
+  owner: 'Владелец',
+  sales: 'Менеджер',
+  measurer: 'Замерщик',
+  crew: 'Бригада',
+};
+
+export function isOrgRole(role: string): role is UserRole {
+  return (ORG_ROLES as string[]).includes(role);
+}
+
+export function isStaffRole(role: string): boolean {
+  return (STAFF_ROLES as string[]).includes(role);
+}
+
+/** Migrate legacy local/API role strings. */
+export function normalizeRole(role: string | null | undefined): UserRole {
+  if (role === 'partner') return 'owner';
+  if (role === 'executor') return 'measurer';
+  if (
+    role === 'admin' ||
+    role === 'owner' ||
+    role === 'sales' ||
+    role === 'measurer' ||
+    role === 'crew'
+  ) {
+    return role;
+  }
+  return 'measurer';
+}
+
+export function canSeePrices(role: UserRole): boolean {
+  return role === 'admin' || role === 'owner' || role === 'sales' || role === 'measurer';
+}
+
+export function canEditOrg(role: UserRole): boolean {
+  return role === 'admin' || role === 'owner';
+}
+
+export function canManageStaff(role: UserRole): boolean {
+  return role === 'owner';
+}
+
+export function canSeeOrgAnalytics(role: UserRole): boolean {
+  return role === 'admin' || role === 'owner' || role === 'sales';
+}
+
+export function canManagePartners(role: UserRole): boolean {
+  return role === 'admin';
+}
+
+export function canCreateObjects(role: UserRole): boolean {
+  return role === 'owner' || role === 'sales' || role === 'measurer';
+}
+
+export function canAssignObjects(role: UserRole): boolean {
+  return role === 'owner' || role === 'sales';
+}
 
 /** Official StP RRC (reference in cabinet). */
 export const OFFICIAL_PANEL_PRICE_RUB = 2396;
@@ -25,6 +94,8 @@ export const DEFAULT_DOWEL_PRICE_RUB = 25;
 
 export type OrgSettings = {
   companyName: string;
+  /** City / region for network analytics. */
+  city: string;
   /** Partner RRC per panel ₽ (defaults to official). */
   panelPriceRub: number;
   /** Partner RRC per m² ₽ (defaults to official). */
@@ -37,17 +108,29 @@ export type OrgSettings = {
   dowelPriceRub: number | null;
 };
 
+/** Strip money fields for crew / clients who must not see RRC. */
+export function redactOrgPrices(org: OrgSettings | null): OrgSettings | null {
+  if (!org) return null;
+  return {
+    ...org,
+    panelPriceRub: 0,
+    pricePerM2: 0,
+    installPricePerM2: null,
+    dowelPriceRub: null,
+  };
+}
+
 export type SessionUser = {
   id: string;
   login: string;
   role: UserRole;
   displayName: string;
-  /** Set for partner and executor. */
+  /** Set for org roles. */
   orgId: string | null;
   org: OrgSettings | null;
 };
 
-/** @deprecated links replaced by executor login/password accounts */
+/** @deprecated links replaced by staff login/password accounts */
 export type ExecutorLink = {
   id: string;
   token: string;
@@ -71,6 +154,69 @@ export type PartnerProfile = SessionUser &
   };
 
 export type PatchOrgRequest = Partial<OrgSettings>;
+
+export type JobObjectStatus =
+  | 'draft'
+  | 'measured'
+  | 'quote_sent'
+  | 'install'
+  | 'closed';
+
+export const JOB_OBJECT_STATUS_LABELS: Record<JobObjectStatus, string> = {
+  draft: 'Черновик',
+  measured: 'Замер',
+  quote_sent: 'КП отправлено',
+  install: 'Монтаж',
+  closed: 'Закрыто',
+};
+
+export type JobObjectRoom = {
+  roomType?: string | null;
+  areaM2?: number | null;
+  houseType?: string | null;
+  objectStage?: string | null;
+  classBefore?: string | null;
+  classAfter?: string | null;
+  /** Opaque problemomer answers snapshot. */
+  answers?: Record<string, unknown> | null;
+};
+
+export type JobObjectEstimate = {
+  panels: number;
+  dowels: number;
+  panelsCost?: number | null;
+  installCost?: number | null;
+  dowelsCost?: number | null;
+  totalCost?: number | null;
+};
+
+export type JobObjectHistoryEntry = {
+  at: string;
+  userId: string | null;
+  login: string;
+  action: string;
+  detail?: string;
+};
+
+export type JobObject = {
+  id: string;
+  orgId: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  assignedTo: string | null;
+  status: JobObjectStatus;
+  clientName: string;
+  clientPhone: string;
+  address: string;
+  city: string;
+  room: JobObjectRoom;
+  estimate: JobObjectEstimate | null;
+  clientSummary: string;
+  history: JobObjectHistoryEntry[];
+  /** Local-only pending sync flag. */
+  pendingSync?: boolean;
+};
 
 export type ActivityEvent = {
   id: string;
@@ -101,6 +247,7 @@ export type AnalyticsObject = {
   panels?: number | null;
   mode?: string | null;
   label?: string | null;
+  city?: string | null;
 };
 
 export type AnalyticsEvent = {
@@ -111,6 +258,7 @@ export type AnalyticsEvent = {
   login: string;
   role: UserRole | string;
   companyName: string;
+  city?: string;
   tool: AnalyticsTool;
   action: AnalyticsAction;
   object?: AnalyticsObject | null;
@@ -119,6 +267,7 @@ export type AnalyticsEvent = {
 export type AnalyticsPartnerRow = {
   orgId: string | null;
   companyName: string;
+  city: string;
   logins: number;
   /** Completed Problemomer results only (not opens). */
   problemomer: number;
@@ -135,6 +284,7 @@ export type AnalyticsExecutorRow = {
   userId: string | null;
   login: string;
   displayName: string;
+  role?: string;
   logins: number;
   problemomer: number;
   calculator: number;
@@ -198,6 +348,7 @@ export type AnalyticsDashboard = {
     objectStage: AnalyticsBreakdownItem[];
     classTransition: AnalyticsBreakdownItem[];
     calcMode: AnalyticsBreakdownItem[];
+    city: AnalyticsBreakdownItem[];
   };
   volume: AnalyticsVolume;
   partners: AnalyticsPartnerRow[];
@@ -242,10 +393,15 @@ function numOr0(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function emptyPartnerRow(orgId: string | null, companyName: string): AnalyticsPartnerRow {
+function emptyPartnerRow(
+  orgId: string | null,
+  companyName: string,
+  city = '',
+): AnalyticsPartnerRow {
   return {
     orgId,
     companyName,
+    city,
     logins: 0,
     problemomer: 0,
     calculator: 0,
@@ -344,6 +500,7 @@ function computeBreakdowns(events: AnalyticsEvent[]): AnalyticsDashboard['breakd
   const objectStage = new Map<string, number>();
   const classTransition = new Map<string, number>();
   const calcMode = new Map<string, number>();
+  const city = new Map<string, number>();
 
   const bump = (map: Map<string, number>, key: string | null | undefined) => {
     const k = (key && String(key).trim()) || 'unknown';
@@ -351,6 +508,7 @@ function computeBreakdowns(events: AnalyticsEvent[]): AnalyticsDashboard['breakd
   };
 
   for (const e of events) {
+    if (e.city || e.object?.city) bump(city, e.city || e.object?.city);
     if (!isCompletedWork(e)) continue;
     const o = e.object;
     if (e.tool === 'problemomer' && e.action === 'result') {
@@ -373,6 +531,7 @@ function computeBreakdowns(events: AnalyticsEvent[]): AnalyticsDashboard['breakd
     objectStage: toBreakdown(objectStage),
     classTransition: toBreakdown(classTransition),
     calcMode: toBreakdown(calcMode),
+    city: toBreakdown(city),
   };
 }
 
@@ -446,6 +605,7 @@ export function aggregateAnalyticsDashboard(
       login: string;
       displayName: string;
       orgId: string | null;
+      role?: string;
     }>;
   },
 ): AnalyticsDashboard {
@@ -460,6 +620,7 @@ export function aggregateAnalyticsDashboard(
       userId: dir.userId,
       login: dir.login,
       displayName: dir.displayName || dir.login,
+      role: dir.role,
       logins: 0,
       problemomer: 0,
       calculator: 0,
@@ -472,9 +633,15 @@ export function aggregateAnalyticsDashboard(
   for (const e of events) {
     const orgKey = e.orgId || e.companyName || e.login;
     if (!partnerMap.has(orgKey)) {
-      partnerMap.set(orgKey, emptyPartnerRow(e.orgId, e.companyName || e.login));
+      partnerMap.set(
+        orgKey,
+        emptyPartnerRow(e.orgId, e.companyName || e.login, e.city || e.object?.city || ''),
+      );
     }
     const prow = partnerMap.get(orgKey)!;
+    if (!prow.city && (e.city || e.object?.city)) {
+      prow.city = e.city || e.object?.city || '';
+    }
     if (!prow.lastActiveAt || e.at > prow.lastActiveAt) prow.lastActiveAt = e.at;
     if (e.action === 'login') prow.logins += 1;
     if (e.tool === 'problemomer' && e.action === 'result') {
@@ -490,13 +657,15 @@ export function aggregateAnalyticsDashboard(
     if (e.action === 'pdf') prow.pdf += 1;
     if (e.action === 'share') prow.shares += 1;
 
-    if (e.role === 'executor' || (opts.orgId && e.orgId === opts.orgId)) {
+    const staffLike = isStaffRole(normalizeRole(String(e.role))) || e.role === 'executor';
+    if (staffLike || (opts.orgId && e.orgId === opts.orgId && e.role !== 'owner' && e.role !== 'partner')) {
       const exKey = e.userId || e.login;
-      if (!executorMap.has(exKey) && e.role === 'executor') {
+      if (!executorMap.has(exKey) && staffLike) {
         executorMap.set(exKey, {
           userId: e.userId,
           login: e.login,
           displayName: e.login,
+          role: String(e.role),
           logins: 0,
           problemomer: 0,
           calculator: 0,
@@ -506,7 +675,7 @@ export function aggregateAnalyticsDashboard(
         });
       }
       const ex = executorMap.get(exKey);
-      if (ex && e.role === 'executor') {
+      if (ex && staffLike) {
         if (!ex.lastActiveAt || e.at > ex.lastActiveAt) ex.lastActiveAt = e.at;
         if (e.action === 'login') ex.logins += 1;
         if (e.tool === 'problemomer' && e.action === 'result') ex.problemomer += 1;
@@ -572,7 +741,7 @@ export function aggregateAnalyticsDashboard(
 }
 
 export function normalizeOrgSettings(
-  partial: Partial<OrgSettings> & { companyName?: string },
+  partial: Partial<OrgSettings> & { companyName?: string; city?: string },
 ): OrgSettings {
   const panel =
     partial.panelPriceRub != null && Number(partial.panelPriceRub) > 0
@@ -584,6 +753,7 @@ export function normalizeOrgSettings(
       : OFFICIAL_PRICE_PER_M2;
   return {
     companyName: (partial.companyName || '').trim(),
+    city: (partial.city || '').trim(),
     panelPriceRub: panel,
     pricePerM2: perM2,
     installPricePerM2:
@@ -600,6 +770,14 @@ export function normalizeOrgSettings(
 
 export function toPartnerProfile(user: SessionUser): PartnerProfile | null {
   if (!user.org) return null;
+  if (!canSeePrices(user.role) && user.role !== 'admin') {
+    const org = normalizeOrgSettings(redactOrgPrices(user.org) || user.org);
+    return {
+      ...user,
+      ...org,
+      companyName: org.companyName,
+    };
+  }
   const org = normalizeOrgSettings(user.org);
   return {
     ...user,

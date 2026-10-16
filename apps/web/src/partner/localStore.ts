@@ -1,29 +1,41 @@
 /**
- * Local-first store for internal partner portal tests.
- * Survives reloads and works offline (PWA).
+ * Local-first store for partner portal (offline / no API).
+ * Survives reloads and works as PWA cache.
  */
 import type {
   ActivityEvent,
   AnalyticsDashboard,
   AnalyticsEvent,
   ExecutorLink,
+  JobObject,
+  JobObjectStatus,
   OrgSettings,
   SessionUser,
   UserRole,
 } from '../../../../packages/shared/partner';
 import {
   aggregateAnalyticsDashboard,
+  canEditOrg,
+  canManageStaff,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
+  isStaffRole,
   normalizeOrgSettings,
+  normalizeRole,
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
+  redactOrgPrices,
+  STAFF_ROLES,
 } from '../../../../packages/shared/partner';
 
-const DB_KEY = 'mf_partner_db_v2';
+const DB_KEY = 'mf_partner_db_v3';
+const DB_KEY_LEGACY = 'mf_partner_db_v2';
 const SESSION_KEY = 'mf_partner_session_v2';
+const TOKEN_KEY = 'mf_partner_token_v1';
 const ANALYTICS_KEY = 'mf_partner_analytics_v1';
 const ANALYTICS_QUEUE_KEY = 'mf_partner_analytics_queue_v1';
+const OBJECTS_CACHE_KEY = 'mf_partner_objects_v1';
+const OBJECTS_QUEUE_KEY = 'mf_partner_objects_queue_v1';
 const HISTORY_RESET_KEY = 'mf_partner_history_reset_v2';
 const ANALYTICS_CAP = 2000;
 
@@ -50,6 +62,7 @@ export type PartnerDb = {
   orgs: StoredOrg[];
   links: ExecutorLink[];
   activity: ActivityEvent[];
+  objects: JobObject[];
 };
 
 function uid(prefix: string): string {
@@ -84,8 +97,17 @@ function defaultDb(): PartnerDb {
         id: partnerId,
         login: 'partner1',
         password: 'demo1234',
-        role: 'partner',
+        role: 'owner',
         displayName: 'Демо Партнёр',
+        orgId,
+        createdAt: now,
+      },
+      {
+        id: 'u_sales1',
+        login: 'sales1',
+        password: 'exec1234',
+        role: 'sales',
+        displayName: 'Демо Менеджер',
         orgId,
         createdAt: now,
       },
@@ -93,8 +115,17 @@ function defaultDb(): PartnerDb {
         id: 'u_exec1',
         login: 'exec1',
         password: 'exec1234',
-        role: 'executor',
-        displayName: 'Демо Сотрудник',
+        role: 'measurer',
+        displayName: 'Демо Замерщик',
+        orgId,
+        createdAt: now,
+      },
+      {
+        id: 'u_crew1',
+        login: 'crew1',
+        password: 'exec1234',
+        role: 'crew',
+        displayName: 'Демо Бригада',
         orgId,
         createdAt: now,
       },
@@ -106,6 +137,7 @@ function defaultDb(): PartnerDb {
         createdBy: adminId,
         settings: normalizeOrgSettings({
           companyName: 'Демо Партнёр',
+          city: 'Москва',
           panelPriceRub: OFFICIAL_PANEL_PRICE_RUB,
           pricePerM2: OFFICIAL_PRICE_PER_M2,
           installPricePerM2: 1500,
@@ -116,6 +148,34 @@ function defaultDb(): PartnerDb {
     ],
     links: [],
     activity: [],
+    objects: [],
+  };
+}
+
+function migrateDb(raw: PartnerDb): PartnerDb {
+  const users = (raw.users || []).map((u) => ({
+    ...u,
+    role: normalizeRole(u.role as string),
+  }));
+  const orgs = (raw.orgs || []).map((o) => ({
+    ...o,
+    settings: normalizeOrgSettings({
+      ...o.settings,
+      city: (o.settings as OrgSettings)?.city || '',
+      installPricePerM2:
+        o.settings?.installPricePerM2 != null
+          ? o.settings.installPricePerM2
+          : DEFAULT_INSTALL_PRICE_PER_M2,
+      dowelPriceRub:
+        o.settings?.dowelPriceRub != null ? o.settings.dowelPriceRub : DEFAULT_DOWEL_PRICE_RUB,
+    }),
+  }));
+  return {
+    users,
+    orgs,
+    links: raw.links || [],
+    activity: raw.activity || [],
+    objects: raw.objects || [],
   };
 }
 
@@ -147,48 +207,25 @@ export function loadDb(): PartnerDb {
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (!raw) {
+      const legacy = localStorage.getItem(DB_KEY_LEGACY);
+      if (legacy) {
+        const migrated = migrateDb(JSON.parse(legacy) as PartnerDb);
+        saveDb(migrated);
+        return migrated;
+      }
       const db = defaultDb();
       saveDb(db);
       return db;
     }
-    const parsed = JSON.parse(raw) as PartnerDb;
+    const before = raw;
+    const parsed = migrateDb(JSON.parse(raw) as PartnerDb);
     if (!parsed.users?.length) {
       const db = defaultDb();
       saveDb(db);
       return db;
     }
-    // Backfill RRC + default install/dowel for older local DBs
-    let orgsPatched = false;
-    parsed.orgs = (parsed.orgs || []).map((o) => {
-      const prev = o.settings || { companyName: '' };
-      const nextSettings = normalizeOrgSettings({
-        ...prev,
-        installPricePerM2:
-          prev.installPricePerM2 != null
-            ? prev.installPricePerM2
-            : DEFAULT_INSTALL_PRICE_PER_M2,
-        dowelPriceRub:
-          prev.dowelPriceRub != null ? prev.dowelPriceRub : DEFAULT_DOWEL_PRICE_RUB,
-      });
-      if (
-        prev.installPricePerM2 == null ||
-        prev.dowelPriceRub == null ||
-        prev.panelPriceRub == null
-      ) {
-        orgsPatched = true;
-      }
-      return { ...o, settings: nextSettings };
-    });
-    if (orgsPatched) saveDb({ ...parsed, orgs: parsed.orgs });
-    let renamed = false;
-    parsed.users = (parsed.users || []).map((u) => {
-      if (u.displayName === 'Демо Исполнитель') {
-        renamed = true;
-        return { ...u, displayName: 'Демо Сотрудник' };
-      }
-      return u;
-    });
-    if (renamed) saveDb(parsed);
+    const after = JSON.stringify(parsed);
+    if (after !== before) saveDb(parsed);
     return parsed;
   } catch {
     const db = defaultDb();
@@ -201,17 +238,36 @@ export function saveDb(db: PartnerDb): void {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
+export function loadToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function saveToken(token: string | null): void {
+  try {
+    if (!token) localStorage.removeItem(TOKEN_KEY);
+    else localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function loadSession(): SessionUser | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw) as SessionUser;
-    // Always refresh org settings from DB (partner may have changed prices)
+    session.role = normalizeRole(session.role as string);
     if (session.orgId) {
       const db = loadDb();
       const org = db.orgs.find((o) => o.id === session.orgId);
       if (org) {
-        session.org = normalizeOrgSettings(org.settings);
+        let settings = normalizeOrgSettings(org.settings);
+        if (session.role === 'crew') settings = redactOrgPrices(settings)!;
+        session.org = settings;
         saveSession(session);
       }
     }
@@ -245,13 +301,16 @@ export function pushActivity(
 
 export function userToSession(u: StoredUser, db: PartnerDb): SessionUser {
   const org = u.orgId ? db.orgs.find((o) => o.id === u.orgId) : null;
+  const role = normalizeRole(u.role);
+  let settings = org ? normalizeOrgSettings(org.settings) : null;
+  if (settings && role === 'crew') settings = redactOrgPrices(settings);
   return {
     id: u.id,
     login: u.login,
-    role: u.role,
+    role,
     displayName: u.displayName,
     orgId: u.orgId,
-    org: org ? normalizeOrgSettings(org.settings) : null,
+    org: settings,
   };
 }
 
@@ -267,10 +326,11 @@ export function localLogin(login: string, password: string): SessionUser {
     userId: u.id,
     login: u.login,
     action: 'login',
-    detail: `Роль: ${u.role}`,
+    detail: `Роль: ${session.role}`,
   });
   saveDb(next);
   saveSession(session);
+  saveToken(null);
   return session;
 }
 
@@ -287,12 +347,14 @@ export function localLogout(session: SessionUser | null): void {
     );
   }
   saveSession(null);
+  saveToken(null);
 }
 
 export function createPartnerAccount(input: {
   login: string;
   password: string;
   companyName: string;
+  city?: string;
   displayName?: string;
   admin: SessionUser;
 }): { user: StoredUser; org: StoredOrg; password: string } {
@@ -310,6 +372,7 @@ export function createPartnerAccount(input: {
     createdBy: input.admin.id,
     settings: normalizeOrgSettings({
       companyName: input.companyName.trim() || login,
+      city: input.city?.trim() || '',
       panelPriceRub: OFFICIAL_PANEL_PRICE_RUB,
       pricePerM2: OFFICIAL_PRICE_PER_M2,
       installPricePerM2: DEFAULT_INSTALL_PRICE_PER_M2,
@@ -321,7 +384,7 @@ export function createPartnerAccount(input: {
     id: userId,
     login,
     password: input.password,
-    role: 'partner',
+    role: 'owner',
     displayName: input.displayName?.trim() || input.companyName.trim() || login,
     orgId,
     createdAt: now,
@@ -350,7 +413,7 @@ export function resetPartnerPassword(
   if (admin.role !== 'admin') throw new Error('Только администратор');
   if (!newPassword) throw new Error('Пустой пароль');
   const db = loadDb();
-  const idx = db.users.findIndex((u) => u.id === partnerUserId && u.role === 'partner');
+  const idx = db.users.findIndex((u) => u.id === partnerUserId && u.role === 'owner');
   if (idx < 0) throw new Error('Партнёр не найден');
   const users = [...db.users];
   users[idx] = { ...users[idx]!, password: newPassword };
@@ -369,15 +432,16 @@ export function resetPartnerPassword(
 export function deletePartnerAccount(partnerUserId: string, admin: SessionUser): void {
   if (admin.role !== 'admin') throw new Error('Только администратор');
   const db = loadDb();
-  const partner = db.users.find((u) => u.id === partnerUserId && u.role === 'partner');
+  const partner = db.users.find((u) => u.id === partnerUserId && u.role === 'owner');
   if (!partner) throw new Error('Партнёр не найден');
   const orgId = partner.orgId;
   const users = db.users.filter(
-    (u) => u.id !== partnerUserId && !(u.role === 'executor' && orgId && u.orgId === orgId),
+    (u) => u.id !== partnerUserId && !(orgId && u.orgId === orgId),
   );
   const orgs = orgId ? db.orgs.filter((o) => o.id !== orgId) : db.orgs;
+  const objects = orgId ? db.objects.filter((o) => o.orgId !== orgId) : db.objects;
   const links = orgId ? db.links.filter((l) => l.orgId !== orgId) : db.links;
-  let next: PartnerDb = { ...db, users, orgs, links };
+  let next: PartnerDb = { ...db, users, orgs, links, objects };
   next = pushActivity(next, {
     orgId,
     userId: admin.id,
@@ -397,10 +461,10 @@ export function updateOrgSettings(
   patch: Partial<OrgSettings>,
   actor: SessionUser,
 ): OrgSettings {
-  if (actor.role !== 'partner' && actor.role !== 'admin') {
+  if (!canEditOrg(actor.role)) {
     throw new Error('Недостаточно прав');
   }
-  if (actor.role === 'partner' && actor.orgId !== orgId) {
+  if (actor.role === 'owner' && actor.orgId !== orgId) {
     throw new Error('Чужая организация');
   }
   const db = loadDb();
@@ -423,19 +487,26 @@ export function updateOrgSettings(
   saveDb(next);
   const session = loadSession();
   if (session && session.orgId === orgId) {
-    saveSession({ ...session, org: { ...settings } });
+    const orgForSession =
+      session.role === 'crew' ? redactOrgPrices(settings)! : settings;
+    saveSession({ ...session, org: { ...orgForSession } });
   }
   return settings;
 }
 
-export function createExecutorAccount(input: {
+export function createStaffAccount(input: {
   login: string;
   password: string;
   displayName: string;
-  partner: SessionUser;
+  role: UserRole;
+  owner: SessionUser;
 }): { user: StoredUser; password: string } {
-  if (input.partner.role !== 'partner' || !input.partner.orgId) {
-    throw new Error('Только партнёр может создавать сотрудников');
+  if (!canManageStaff(input.owner.role) || !input.owner.orgId) {
+    throw new Error('Только владелец может создавать сотрудников');
+  }
+  const role = normalizeRole(input.role);
+  if (!STAFF_ROLES.includes(role)) {
+    throw new Error('Роль: менеджер, замерщик или бригада');
   }
   const db = loadDb();
   const login = input.login.trim();
@@ -447,95 +518,133 @@ export function createExecutorAccount(input: {
     id: uid('u'),
     login,
     password,
-    role: 'executor',
+    role,
     displayName: input.displayName.trim() || login,
-    orgId: input.partner.orgId,
+    orgId: input.owner.orgId,
     createdAt: now,
   };
   let next: PartnerDb = { ...db, users: [...db.users, user] };
   next = pushActivity(next, {
-    orgId: input.partner.orgId,
-    userId: input.partner.id,
-    login: input.partner.login,
-    action: 'create_executor',
-    detail: `${login} · ${user.displayName}`,
+    orgId: input.owner.orgId,
+    userId: input.owner.id,
+    login: input.owner.login,
+    action: 'create_staff',
+    detail: `${login} · ${role}`,
   });
   saveDb(next);
   return { user, password };
 }
 
-export function resetExecutorPassword(
-  executorUserId: string,
+/** @deprecated use createStaffAccount */
+export function createExecutorAccount(input: {
+  login: string;
+  password: string;
+  displayName: string;
+  partner: SessionUser;
+}): { user: StoredUser; password: string } {
+  return createStaffAccount({
+    ...input,
+    role: 'measurer',
+    owner: { ...input.partner, role: 'owner' },
+  });
+}
+
+export function resetStaffPassword(
+  staffUserId: string,
   newPassword: string,
-  partner: SessionUser,
+  owner: SessionUser,
 ): string {
-  if (partner.role !== 'partner' || !partner.orgId) {
-    throw new Error('Только партнёр');
+  if (!canManageStaff(owner.role) || !owner.orgId) {
+    throw new Error('Только владелец');
   }
   const password = newPassword.trim() || generatePassword();
   const db = loadDb();
   const idx = db.users.findIndex(
-    (u) => u.id === executorUserId && u.role === 'executor' && u.orgId === partner.orgId,
+    (u) => u.id === staffUserId && isStaffRole(u.role) && u.orgId === owner.orgId,
   );
   if (idx < 0) throw new Error('Сотрудник не найден');
   const users = [...db.users];
   users[idx] = { ...users[idx]!, password };
   let next: PartnerDb = { ...db, users };
   next = pushActivity(next, {
-    orgId: partner.orgId,
-    userId: partner.id,
-    login: partner.login,
-    action: 'reset_executor_password',
+    orgId: owner.orgId,
+    userId: owner.id,
+    login: owner.login,
+    action: 'reset_staff_password',
     detail: users[idx]!.login,
   });
   saveDb(next);
   return password;
 }
 
-export function deleteExecutorAccount(executorUserId: string, partner: SessionUser): void {
-  if (partner.role !== 'partner' || !partner.orgId) {
-    throw new Error('Только партнёр');
+/** @deprecated */
+export function resetExecutorPassword(
+  executorUserId: string,
+  newPassword: string,
+  partner: SessionUser,
+): string {
+  return resetStaffPassword(executorUserId, newPassword, {
+    ...partner,
+    role: 'owner',
+  });
+}
+
+export function deleteStaffAccount(staffUserId: string, owner: SessionUser): void {
+  if (!canManageStaff(owner.role) || !owner.orgId) {
+    throw new Error('Только владелец');
   }
   const db = loadDb();
   const staff = db.users.find(
-    (u) => u.id === executorUserId && u.role === 'executor' && u.orgId === partner.orgId,
+    (u) => u.id === staffUserId && isStaffRole(u.role) && u.orgId === owner.orgId,
   );
   if (!staff) throw new Error('Сотрудник не найден');
-  const users = db.users.filter((u) => u.id !== executorUserId);
+  const users = db.users.filter((u) => u.id !== staffUserId);
   let next: PartnerDb = { ...db, users };
   next = pushActivity(next, {
-    orgId: partner.orgId,
-    userId: partner.id,
-    login: partner.login,
-    action: 'delete_executor',
+    orgId: owner.orgId,
+    userId: owner.id,
+    login: owner.login,
+    action: 'delete_staff',
     detail: `${staff.login} · ${staff.displayName}`,
   });
   saveDb(next);
   const session = loadSession();
-  if (session?.id === executorUserId) {
+  if (session?.id === staffUserId) {
     saveSession(null);
   }
+}
+
+/** @deprecated */
+export function deleteExecutorAccount(executorUserId: string, partner: SessionUser): void {
+  deleteStaffAccount(executorUserId, { ...partner, role: 'owner' });
 }
 
 export function listPartners() {
   const db = loadDb();
   return db.users
-    .filter((u) => u.role === 'partner')
+    .filter((u) => u.role === 'owner')
     .map((u) => {
       const org = db.orgs.find((o) => o.id === u.orgId);
       const last = db.activity.find((a) => a.orgId === u.orgId && a.action === 'login');
+      const staffCount = db.users.filter((x) => isStaffRole(x.role) && x.orgId === u.orgId)
+        .length;
       return {
         user: u,
         org,
         lastLogin: last?.at || null,
-        executorCount: db.users.filter((x) => x.role === 'executor' && x.orgId === u.orgId)
-          .length,
+        executorCount: staffCount,
+        staffCount,
       };
     });
 }
 
+export function listStaffForOrg(orgId: string): StoredUser[] {
+  return loadDb().users.filter((u) => isStaffRole(u.role) && u.orgId === orgId);
+}
+
+/** @deprecated */
 export function listExecutorsForOrg(orgId: string): StoredUser[] {
-  return loadDb().users.filter((u) => u.role === 'executor' && u.orgId === orgId);
+  return listStaffForOrg(orgId);
 }
 
 export function listActivity(limit = 80): ActivityEvent[] {
@@ -552,6 +661,170 @@ export function trackToolOpen(session: SessionUser, tool: 'problemomer' | 'calcu
       action: `open_${tool}`,
     }),
   );
+}
+
+function objectVisible(user: SessionUser, obj: JobObject): boolean {
+  if (user.role === 'admin') return true;
+  if (!user.orgId || obj.orgId !== user.orgId) return false;
+  if (user.role === 'owner') return true;
+  if (user.role === 'sales') {
+    return obj.createdBy === user.id || obj.assignedTo === user.id || !obj.assignedTo;
+  }
+  if (user.role === 'measurer') {
+    return obj.createdBy === user.id || obj.assignedTo === user.id;
+  }
+  if (user.role === 'crew') {
+    return obj.assignedTo === user.id || obj.status === 'install';
+  }
+  return false;
+}
+
+function redactObjectForRole(obj: JobObject, role: UserRole): JobObject {
+  if (role !== 'crew') return obj;
+  return {
+    ...obj,
+    estimate: obj.estimate
+      ? {
+          panels: obj.estimate.panels,
+          dowels: obj.estimate.dowels,
+          panelsCost: null,
+          installCost: null,
+          dowelsCost: null,
+          totalCost: null,
+        }
+      : null,
+  };
+}
+
+export function listLocalObjects(user: SessionUser): JobObject[] {
+  const db = loadDb();
+  return db.objects
+    .filter((o) => objectVisible(user, o))
+    .map((o) => redactObjectForRole(o, user.role));
+}
+
+export function upsertLocalObject(
+  input: Partial<JobObject> & { id?: string },
+  actor: SessionUser,
+): JobObject {
+  if (!actor.orgId) throw new Error('Нет организации');
+  if (actor.role === 'crew' && !input.id) throw new Error('Бригада не создаёт объекты');
+  const db = loadDb();
+  const now = new Date().toISOString();
+  const org = db.orgs.find((o) => o.id === actor.orgId);
+  const existing = input.id ? db.objects.find((o) => o.id === input.id) : null;
+  if (existing && !objectVisible(actor, existing)) throw new Error('Недостаточно прав');
+
+  const status = (input.status || existing?.status || 'draft') as JobObjectStatus;
+  const obj: JobObject = {
+    id: existing?.id || input.id || uid('obj'),
+    orgId: existing?.orgId || actor.orgId,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    createdBy: existing?.createdBy || actor.id,
+    assignedTo:
+      input.assignedTo !== undefined ? input.assignedTo : existing?.assignedTo ?? null,
+    status,
+    clientName: (input.clientName ?? existing?.clientName ?? '').trim(),
+    clientPhone: (input.clientPhone ?? existing?.clientPhone ?? '').trim(),
+    address: (input.address ?? existing?.address ?? '').trim(),
+    city: (input.city ?? existing?.city ?? org?.settings.city ?? '').trim(),
+    room: input.room || existing?.room || {},
+    estimate: input.estimate !== undefined ? input.estimate : existing?.estimate ?? null,
+    clientSummary: input.clientSummary ?? existing?.clientSummary ?? '',
+    history: existing?.history || [],
+    pendingSync: true,
+  };
+
+  if (!existing) {
+    obj.history = [
+      {
+        at: now,
+        userId: actor.id,
+        login: actor.login,
+        action: 'create',
+        detail: status,
+      },
+    ];
+  } else if (input.status && input.status !== existing.status) {
+    obj.history = [
+      {
+        at: now,
+        userId: actor.id,
+        login: actor.login,
+        action: 'status',
+        detail: `${existing.status}→${input.status}`,
+      },
+      ...existing.history,
+    ].slice(0, 50);
+  } else {
+    obj.history = [
+      {
+        at: now,
+        userId: actor.id,
+        login: actor.login,
+        action: 'update',
+      },
+      ...(existing.history || []),
+    ].slice(0, 50);
+  }
+
+  const objects = existing
+    ? db.objects.map((o) => (o.id === obj.id ? obj : o))
+    : [obj, ...db.objects];
+  saveDb({ ...db, objects });
+  enqueueObjectSync(obj);
+  cacheObjects(listLocalObjects(actor));
+  return redactObjectForRole(obj, actor.role);
+}
+
+export function cacheObjects(objects: JobObject[]): void {
+  try {
+    localStorage.setItem(OBJECTS_CACHE_KEY, JSON.stringify(objects));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadCachedObjects(): JobObject[] {
+  try {
+    const raw = localStorage.getItem(OBJECTS_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function enqueueObjectSync(obj: JobObject): void {
+  try {
+    const q = peekObjectQueue().filter((o) => o.id !== obj.id);
+    q.unshift({ ...obj, pendingSync: true });
+    localStorage.setItem(OBJECTS_QUEUE_KEY, JSON.stringify(q.slice(0, 100)));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function peekObjectQueue(): JobObject[] {
+  try {
+    const raw = localStorage.getItem(OBJECTS_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function clearObjectQueue(): void {
+  localStorage.removeItem(OBJECTS_QUEUE_KEY);
+}
+
+export function removeFromObjectQueue(id: string): void {
+  const q = peekObjectQueue().filter((o) => o.id !== id);
+  localStorage.setItem(OBJECTS_QUEUE_KEY, JSON.stringify(q));
 }
 
 function readJsonArray<T>(key: string): T[] {
@@ -594,19 +867,20 @@ export function buildLocalDashboard(opts: {
 }): AnalyticsDashboard {
   const db = loadDb();
   const executorDirectory = db.users
-    .filter((u) => u.role === 'executor')
+    .filter((u) => isStaffRole(u.role))
     .map((u) => ({
       userId: u.id,
       login: u.login,
       displayName: u.displayName,
       orgId: u.orgId,
+      role: u.role,
     }));
   return aggregateAnalyticsDashboard(loadAnalyticsEvents(), {
     source: 'local',
     from: opts.from,
     to: opts.to,
     orgId: opts.orgId,
-    partnerCount: db.users.filter((u) => u.role === 'partner').length,
+    partnerCount: db.users.filter((u) => u.role === 'owner').length,
     executorCount: opts.orgId
       ? executorDirectory.filter((e) => e.orgId === opts.orgId).length
       : executorDirectory.length,

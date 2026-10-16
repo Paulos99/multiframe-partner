@@ -574,6 +574,11 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
               items={dash.breakdowns.calcMode}
               kind="mode"
             />
+            <BreakdownList
+              title="Город / регион"
+              items={dash.breakdowns.city || []}
+              kind="raw"
+            />
           </div>
         </div>
       ) : null}
@@ -585,6 +590,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
               <thead>
                 <tr>
                   <th>Компания</th>
+                  <th>Город</th>
                   <th>Входы</th>
                   <th>PM</th>
                   <th>Кальк.</th>
@@ -599,6 +605,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
                 {dash.partners.map((p) => (
                   <tr key={p.orgId || p.companyName}>
                     <td>{p.companyName}</td>
+                    <td>{p.city || '—'}</td>
                     <td>{p.logins}</td>
                     <td>{p.problemomer}</td>
                     <td>{p.calculator}</td>

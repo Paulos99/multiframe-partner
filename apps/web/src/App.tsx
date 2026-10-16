@@ -3,6 +3,7 @@ import { SessionProvider } from './state/SessionContext';
 import { AppShell } from './app-shell/AppShell';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
+import { canSeePrices } from '../../../packages/shared/partner';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
@@ -11,8 +12,9 @@ import styles from './partner/partner.module.css';
 type Route = 'cabinet' | 'problemomer' | 'calculator';
 
 function PartnerShell() {
-  const { user, loading, noteTool } = usePartner();
+  const { user, loading, noteTool, logout, pendingSyncCount, flushObjectQueue } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
+  const hidePrices = user ? !canSeePrices(user.role) : false;
 
   useEffect(() => {
     try {
@@ -24,9 +26,10 @@ function PartnerShell() {
 
   const calcSrc = useMemo(() => {
     if (!user) return '';
-    return calcUrlFromOrg(user.org, user.org?.companyName);
+    return calcUrlFromOrg(user.org, user.org?.companyName, { hidePrices });
   }, [
     user,
+    hidePrices,
     user?.org?.panelPriceRub,
     user?.org?.pricePerM2,
     user?.org?.installPricePerM2,
@@ -67,9 +70,17 @@ function PartnerShell() {
           <button type="button" onClick={() => setRoute('problemomer')}>
             Проблемомер
           </button>
+          <button type="button" className={styles.logoutBtn} onClick={logout} title="Смена сотрудника">
+            Выйти
+          </button>
           <span className={styles.toolBarMeta}>
             {user.org?.companyName || user.displayName}
-            {user.org?.panelPriceRub != null ? ` · РРЦ ${user.org.panelPriceRub} ₽` : ''}
+            {!hidePrices && user.org?.panelPriceRub != null
+              ? ` · РРЦ ${user.org.panelPriceRub} ₽`
+              : hidePrices
+                ? ' · без цен'
+                : ''}
+            {pendingSyncCount > 0 ? ` · ↻ ${pendingSyncCount}` : ''}
           </span>
         </div>
         {calcSrc ? (
@@ -103,6 +114,14 @@ function PartnerShell() {
         >
           Калькулятор
         </button>
+        <button type="button" className={styles.logoutBtn} onClick={logout} title="Смена сотрудника">
+          Выйти
+        </button>
+        {pendingSyncCount > 0 ? (
+          <button type="button" onClick={() => void flushObjectQueue()}>
+            ↻ {pendingSyncCount}
+          </button>
+        ) : null}
         <span className={styles.toolBarMeta}>{user.org?.companyName || user.displayName}</span>
       </div>
       <SmoothScroll>

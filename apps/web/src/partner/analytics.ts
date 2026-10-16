@@ -62,6 +62,7 @@ export function trackPartnerAnalytics(input: {
     const userKey = session.id || session.login;
     if (!allowOpenEvent(userKey, input.tool)) return;
   }
+  const city = session.org?.city || input.object?.city || '';
   const event: AnalyticsEvent = {
     id: uid(),
     at: new Date().toISOString(),
@@ -70,9 +71,13 @@ export function trackPartnerAnalytics(input: {
     login: session.login,
     role: session.role,
     companyName: session.org?.companyName || session.displayName || '',
+    city,
     tool: input.tool,
     action: input.action,
-    object: input.object || null,
+    object: {
+      ...(input.object || {}),
+      city: input.object?.city || city || null,
+    },
   };
   appendAnalyticsEvent(event);
   void postEvents([event]);
@@ -162,8 +167,17 @@ export async function fetchAnalyticsDashboard(opts: {
     if (opts.to) q.set('to', opts.to);
     if (opts.orgId) q.set('orgId', opts.orgId);
     const headers: Record<string, string> = {
-      'X-Analytics-Role': opts.mode,
+      'X-Analytics-Role': opts.mode === 'admin' ? 'admin' : 'owner',
+      'Content-Type': 'application/json',
     };
+    const token = (() => {
+      try {
+        return localStorage.getItem('mf_partner_token_v1');
+      } catch {
+        return null;
+      }
+    })();
+    if (token) headers.Authorization = `Bearer ${token}`;
     if (opts.mode === 'admin') {
       headers['X-Analytics-Key'] = 'admin1234';
     }
@@ -176,6 +190,9 @@ export async function fetchAnalyticsDashboard(opts: {
     // Old API without funnel/series/volume — keep local aggregate shape
     if (!data.funnel || !data.breakdowns || !data.volume || !Array.isArray(data.series)) {
       return local;
+    }
+    if (!data.breakdowns.city) {
+      data.breakdowns = { ...data.breakdowns, city: local.breakdowns.city || [] };
     }
     return { ...local, ...data, source: 'api' } as AnalyticsDashboard;
   } catch {

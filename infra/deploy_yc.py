@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploy partner API as Yandex Cloud Function + API Gateway."""
+"""Deploy partner API as Yandex Cloud Function + API Gateway (v2 roles/objects)."""
 from __future__ import annotations
 
 import base64
@@ -19,6 +19,7 @@ FOLDER_ID = "b1gibd821or94p6f9v1q"
 SA_ID = "aje4r8khao2t9nl9dp8e"
 FUNC_NAME = "multiframe-partner-api"
 GW_NAME = "multiframe-partner-gw"
+BUCKET_NAME = os.environ.get("PARTNERS_BUCKET", "multiframe-partner-data")
 ROOT = Path(__file__).resolve().parents[1]
 API_DIR = ROOT / "apps" / "api"
 KEY_PATHS = [
@@ -26,6 +27,27 @@ KEY_PATHS = [
     Path.home() / ".yc" / "agent-project-creator-key.json",
     Path(r"C:\Users\user\Desktop\agent-project-creator-key.json"),
 ]
+
+# All routes the API handler supports (any-method → Cloud Function).
+GATEWAY_PATHS = (
+    "/",
+    "/health",
+    "/auth/login",
+    "/auth/me",
+    "/auth/logout",
+    "/partner/profile",
+    "/org/settings",
+    "/org/staff",
+    "/org/staff/reset-password",
+    "/org/staff/{staffId}",
+    "/admin/partners",
+    "/admin/partners/reset-password",
+    "/admin/partners/{partnerUserId}",
+    "/objects",
+    "/objects/{objectId}",
+    "/analytics/events",
+    "/analytics/dashboard",
+)
 
 
 def b64url(data: bytes) -> str:
@@ -35,46 +57,58 @@ def b64url(data: bytes) -> str:
 def load_key() -> dict:
     for p in KEY_PATHS:
         if p and p.is_file():
+            print("using key", p)
             return json.loads(p.read_text(encoding="utf-8"))
-    raise SystemExit("Authorized key JSON not found. Put it in %USERPROFILE%\\.yc\\agent-project-creator-key.json")
+    raise SystemExit(
+        "Authorized key JSON not found. Put it in %USERPROFILE%\\.yc\\agent-project-creator-key.json"
+    )
 
 
 def iam_token(keydata: dict) -> str:
     pem = keydata["private_key"]
-    # Strip Yandex banner line if present
     if "BEGIN PRIVATE KEY" in pem and not pem.strip().startswith("-----"):
         pem = pem[pem.index("-----BEGIN") :]
     key = serialization.load_pem_private_key(pem.encode(), password=None)
-    now = int(time.time())
-    header = b64url(
-        json.dumps({"alg": "PS256", "typ": "JWT", "kid": keydata["id"]}, separators=(",", ":")).encode()
-    )
-    payload = b64url(
-        json.dumps(
-            {
-                "iss": keydata["service_account_id"],
-                "aud": "https://iam.api.cloud.yandex.net/iam/v1/tokens",
-                "iat": now,
-                "exp": now + 3600,
-            },
-            separators=(",", ":"),
-        ).encode()
-    )
-    signing = f"{header}.{payload}".encode()
-    sig = key.sign(
-        signing,
-        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.DIGEST_LENGTH),
-        hashes.SHA256(),
-    )
-    jwt = f"{header}.{payload}.{b64url(sig)}"
-    req = urllib.request.Request(
-        "https://iam.api.cloud.yandex.net/iam/v1/tokens",
-        data=json.dumps({"jwt": jwt}).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read().decode())["iamToken"]
+    last_err: Exception | None = None
+    for attempt in range(1, 6):
+        now = int(time.time())
+        header = b64url(
+            json.dumps(
+                {"alg": "PS256", "typ": "JWT", "kid": keydata["id"]}, separators=(",", ":")
+            ).encode()
+        )
+        payload = b64url(
+            json.dumps(
+                {
+                    "iss": keydata["service_account_id"],
+                    "aud": "https://iam.api.cloud.yandex.net/iam/v1/tokens",
+                    "iat": now,
+                    "exp": now + 3600,
+                },
+                separators=(",", ":"),
+            ).encode()
+        )
+        signing = f"{header}.{payload}".encode()
+        sig = key.sign(
+            signing,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.DIGEST_LENGTH),
+            hashes.SHA256(),
+        )
+        jwt = f"{header}.{payload}.{b64url(sig)}"
+        req = urllib.request.Request(
+            "https://iam.api.cloud.yandex.net/iam/v1/tokens",
+            data=json.dumps({"jwt": jwt}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read().decode())["iamToken"]
+        except Exception as e:
+            last_err = e
+            print(f"IAM attempt {attempt}/5 failed: {e}")
+            time.sleep(2 * attempt)
+    raise SystemExit(f"IAM token failed after retries: {last_err}")
 
 
 def api(method: str, url: str, token: str, body: dict | None = None):
@@ -95,6 +129,30 @@ def api(method: str, url: str, token: str, body: dict | None = None):
     except urllib.error.HTTPError as e:
         err = e.read().decode()
         raise SystemExit(f"HTTP {e.code} {url}\n{err}") from e
+
+
+def api_soft(method: str, url: str, token: str, body: dict | None = None):
+    """Like api(), but returns (status, body_dict_or_text) without exiting."""
+    data = None if body is None else json.dumps(body).encode()
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            raw = resp.read().decode()
+            return resp.status, json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as e:
+        err = e.read().decode()
+        try:
+            return e.code, json.loads(err)
+        except Exception:
+            return e.code, {"raw": err}
 
 
 def wait_op(token: str, op: dict, timeout=300):
@@ -130,13 +188,12 @@ def ensure_function(token: str) -> str:
         {
             "folderId": FOLDER_ID,
             "name": FUNC_NAME,
-            "description": "MultiFrame partner auth API",
+            "description": "MultiFrame partner platform API v2",
         },
     )
     resp = wait_op(token, op)
     fid = resp.get("id") or resp.get("metadata", {}).get("functionId")
     if not fid:
-        # list again
         _, listing = api(
             "GET",
             f"https://serverless-functions.api.cloud.yandex.net/functions/v1/functions?folderId={FOLDER_ID}",
@@ -166,10 +223,146 @@ def make_zip() -> Path:
     return zip_path
 
 
-def create_version(token: str, function_id: str, zip_path: Path) -> str:
+def load_storage_env() -> dict[str, str]:
+    """Optional persistent storage from env or local secrets file."""
+    secrets_path = Path.home() / ".yc" / "partner-storage.json"
+    data: dict = {}
+    if secrets_path.is_file():
+        try:
+            data = json.loads(secrets_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print("WARN read partner-storage.json:", e)
+    bucket = os.environ.get("PARTNERS_BUCKET") or data.get("PARTNERS_BUCKET") or ""
+    access = os.environ.get("YC_ACCESS_KEY_ID") or data.get("YC_ACCESS_KEY_ID") or ""
+    secret = os.environ.get("YC_SECRET_ACCESS_KEY") or data.get("YC_SECRET_ACCESS_KEY") or ""
+    out: dict[str, str] = {}
+    if bucket and access and secret:
+        out = {
+            "PARTNERS_BUCKET": bucket,
+            "YC_ACCESS_KEY_ID": access,
+            "YC_SECRET_ACCESS_KEY": secret,
+            "YC_REGION": data.get("YC_REGION") or os.environ.get("YC_REGION") or "ru-central1",
+            "PLATFORM_KEY": "platform-v2.json",
+        }
+        print("storage env: bucket", bucket)
+    else:
+        print("storage env: none (in-memory seed; set ~/.yc/partner-storage.json for Object Storage)")
+    return out
+
+
+def try_ensure_bucket_and_keys(token: str) -> dict[str, str]:
+    """Best-effort: create bucket + static access key for SA. Returns storage env or {}."""
+    existing = load_storage_env()
+    if existing:
+        return existing
+
+    # Create bucket via Object Storage API (S3-compatible needs keys; use Resource Manager / storage API)
+    print("trying to create Object Storage bucket", BUCKET_NAME)
+    status, body = api_soft(
+        "POST",
+        "https://storage.api.cloud.yandex.net/storage/v1/buckets",
+        token,
+        {
+            "name": BUCKET_NAME,
+            "folderId": FOLDER_ID,
+            "defaultStorageClass": "STANDARD",
+            "maxSize": "1073741824",
+            "anonymousAccessFlags": {
+                "read": False,
+                "list": False,
+                "configRead": False,
+            },
+        },
+    )
+    if status in (200, 201):
+        print("bucket created", BUCKET_NAME)
+    elif status == 409 or (isinstance(body, dict) and "already" in json.dumps(body).lower()):
+        print("bucket already exists or conflict", status, body)
+    else:
+        print("WARN bucket create", status, body)
+
+    # Create static access key for SA
+    print("trying to create static access key for SA", SA_ID)
+    status, body = api_soft(
+        "POST",
+        "https://iam.api.cloud.yandex.net/iam/v1/awsKeyPairs",
+        token,
+        {"serviceAccountId": SA_ID, "description": "multiframe-partner-api storage"},
+    )
+    # Older/alternate endpoint
+    if status >= 400:
+        status, body = api_soft(
+            "POST",
+            "https://iam.api.cloud.yandex.net/iam/aws-compatibility/v1/accessKeys",
+            token,
+            {"serviceAccountId": SA_ID, "description": "multiframe-partner-api storage"},
+        )
+
+    access_key = ""
+    secret_key = ""
+    if isinstance(body, dict):
+        access_key = (
+            body.get("accessKey", {}).get("keyId")
+            or body.get("accessKey", {}).get("id")
+            or body.get("keyId")
+            or ""
+        )
+        secret_key = body.get("secret") or body.get("accessKey", {}).get("secret") or ""
+        # Yandex returns: { accessKey: { keyId, serviceAccountId, ... }, secret: "..." }
+        if not access_key and body.get("accessKey"):
+            access_key = body["accessKey"].get("keyId") or body["accessKey"].get("id") or ""
+
+    if access_key and secret_key:
+        secrets = {
+            "PARTNERS_BUCKET": BUCKET_NAME,
+            "YC_ACCESS_KEY_ID": access_key,
+            "YC_SECRET_ACCESS_KEY": secret_key,
+            "YC_REGION": "ru-central1",
+        }
+        secrets_path = Path.home() / ".yc" / "partner-storage.json"
+        secrets_path.parent.mkdir(parents=True, exist_ok=True)
+        secrets_path.write_text(json.dumps(secrets, indent=2), encoding="utf-8")
+        print("wrote", secrets_path)
+        # Grant storage.editor on folder to SA (best effort)
+        api_soft(
+            "POST",
+            f"https://resource-manager.api.cloud.yandex.net/resource-manager/v1/folders/{FOLDER_ID}:updateAccessBindings",
+            token,
+            {
+                "accessBindingDeltas": [
+                    {
+                        "action": "ADD",
+                        "accessBinding": {
+                            "roleId": "storage.editor",
+                            "subject": {"id": SA_ID, "type": "serviceAccount"},
+                        },
+                    }
+                ]
+            },
+        )
+        return {
+            **secrets,
+            "PLATFORM_KEY": "platform-v2.json",
+        }
+
+    print("WARN could not create static access key", status, body)
+    print("Deploy continues with in-memory seed. Add keys to ~/.yc/partner-storage.json later.")
+    return {}
+
+
+def create_version(token: str, function_id: str, zip_path: Path, storage_env: dict[str, str]) -> str:
     content = base64.b64encode(zip_path.read_bytes()).decode()
     jwt_secret = hashlib.sha256(f"mf-partner-{FOLDER_ID}-{SA_ID}".encode()).hexdigest()
-    print("creating version…")
+    environment = {
+        "JWT_SECRET": jwt_secret,
+        "CORS_ORIGIN": "*",
+        "ANALYTICS_KEY": "analytics-events.json",
+        "ANALYTICS_ADMIN_KEY": "admin1234",
+        "PLATFORM_KEY": "platform-v2.json",
+        **storage_env,
+    }
+    # AWS SDK is optional — only needed with PARTNERS_BUCKET. Bundle already has jose/bcryptjs.
+    print("creating version… env keys:", sorted(environment.keys()))
     _, op = api(
         "POST",
         "https://serverless-functions.api.cloud.yandex.net/functions/v1/versions",
@@ -178,19 +371,14 @@ def create_version(token: str, function_id: str, zip_path: Path) -> str:
             "functionId": function_id,
             "runtime": "nodejs22",
             "entrypoint": "index.handler",
-            "resources": {"memory": 134217728},
-            "executionTimeout": "10s",
+            "resources": {"memory": 268435456},
+            "executionTimeout": "15s",
             "serviceAccountId": SA_ID,
             "content": content,
-            "environment": {
-                "JWT_SECRET": jwt_secret,
-                "CORS_ORIGIN": "*",
-                "ANALYTICS_KEY": "analytics-events.json",
-                "ANALYTICS_ADMIN_KEY": "admin1234",
-            },
+            "environment": environment,
         },
     )
-    resp = wait_op(token, op)
+    resp = wait_op(token, op, timeout=420)
     vid = resp.get("id")
     print("version", vid)
     return vid or ""
@@ -208,16 +396,7 @@ def ensure_gateway(token: str, function_id: str) -> str:
         }
 
     paths = {}
-    for p in (
-        "/",
-        "/health",
-        "/auth/login",
-        "/auth/me",
-        "/auth/logout",
-        "/partner/profile",
-        "/analytics/events",
-        "/analytics/dashboard",
-    ):
+    for p in GATEWAY_PATHS:
         paths[p] = {
             "x-yc-apigateway-any-method": {
                 **cf_integration(),
@@ -226,7 +405,7 @@ def ensure_gateway(token: str, function_id: str) -> str:
         }
     openapi = {
         "openapi": "3.0.0",
-        "info": {"title": "MF Partner API", "version": "1.1.0"},
+        "info": {"title": "MF Partner API", "version": "2.0.0"},
         "paths": paths,
     }
 
@@ -237,7 +416,7 @@ def ensure_gateway(token: str, function_id: str) -> str:
     )
     for g in listing.get("apiGateways", []):
         if g.get("name") == GW_NAME:
-            print("updating API gateway openapi…", g["id"])
+            print("updating API gateway openapi…", g["id"], "paths", len(paths))
             _, op_upd = api(
                 "PATCH",
                 f"https://serverless-apigateway.api.cloud.yandex.net/apigateways/v1/apigateways/{g['id']}",
@@ -256,7 +435,7 @@ def ensure_gateway(token: str, function_id: str) -> str:
         {
             "folderId": FOLDER_ID,
             "name": GW_NAME,
-            "description": "Partner portal API",
+            "description": "Partner portal API v2",
             "openapiSpec": json.dumps(openapi),
         },
     )
@@ -275,14 +454,72 @@ def ensure_gateway(token: str, function_id: str) -> str:
     return domain or ""
 
 
+def smoke(domain: str) -> None:
+    base = f"https://{domain}"
+    print("\n=== smoke tests ===", base)
+
+    def http(method: str, path: str, body: dict | None = None, headers: dict | None = None):
+        data = None if body is None else json.dumps(body).encode()
+        req = urllib.request.Request(
+            base + path,
+            data=data,
+            method=method,
+            headers={"Content-Type": "application/json", **(headers or {})},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read().decode()
+                return resp.status, json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode()
+            try:
+                return e.code, json.loads(raw)
+            except Exception:
+                return e.code, {"raw": raw}
+
+    st, health = http("GET", "/health")
+    print("GET /health", st, health)
+    if st != 200 or health.get("version") != 2:
+        print("WARN: expected version 2 — function may still be old or path wrong")
+
+    st, login = http("POST", "/auth/login", {"login": "partner1", "password": "demo1234"})
+    print("POST /auth/login partner1", st, {k: login.get(k) for k in ("token", "user", "message") if k in login or k == "message"})
+    token = login.get("token")
+    if not token:
+        print("FAIL login")
+        return
+    role = (login.get("user") or {}).get("role")
+    print("role", role)
+
+    st, me = http("GET", "/auth/me", headers={"Authorization": f"Bearer {token}"})
+    print("GET /auth/me", st, (me.get("user") or {}).get("role"), (me.get("user") or {}).get("org", {}).get("companyName"))
+
+    st, objs = http("GET", "/objects", headers={"Authorization": f"Bearer {token}"})
+    print("GET /objects", st, "count", len(objs.get("objects") or []), objs.get("message"))
+
+    st, crew = http("POST", "/auth/login", {"login": "crew1", "password": "exec1234"})
+    crew_user = crew.get("user") or {}
+    org = crew_user.get("org") or {}
+    print(
+        "POST /auth/login crew1",
+        st,
+        "role",
+        crew_user.get("role"),
+        "panelPriceRub",
+        org.get("panelPriceRub"),
+        "pricePerM2",
+        org.get("pricePerM2"),
+    )
+
+
 def main():
     key = load_key()
     token = iam_token(key)
     print("IAM ok")
     fid = ensure_function(token)
     zip_path = make_zip()
-    create_version(token, fid, zip_path)
-    # Prefer SA invoke via API Gateway; allUsers binding may require admin.
+    storage_env = try_ensure_bucket_and_keys(token)
+    create_version(token, fid, zip_path, storage_env)
     try:
         api(
             "POST",
@@ -307,6 +544,9 @@ def main():
             f"VITE_API_URL=https://{domain}\n", encoding="utf-8"
         )
         print("wrote apps/web/.env")
+        # Give gateway a moment to pick up new function version
+        time.sleep(3)
+        smoke(domain)
 
 
 if __name__ == "__main__":

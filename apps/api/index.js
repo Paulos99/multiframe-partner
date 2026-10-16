@@ -1,5 +1,5 @@
 /**
- * Yandex Cloud Function HTTP handler — partner auth + profile + analytics.
+ * Yandex Cloud Function HTTP handler — multi-role partner platform.
  * Storage: Object Storage JSON or in-memory seed.
  */
 import bcrypt from 'bcryptjs';
@@ -7,54 +7,226 @@ import { SignJWT, jwtVerify } from 'jose';
 
 const JWT_SECRET = () => new TextEncoder().encode(process.env.JWT_SECRET || 'dev-secret-change-me');
 const ANALYTICS_ADMIN_KEY = () => process.env.ANALYTICS_ADMIN_KEY || 'admin1234';
+const PLATFORM_S3_KEY = () => process.env.PLATFORM_KEY || 'platform-v2.json';
 const ANALYTICS_S3_KEY = () => process.env.ANALYTICS_KEY || 'analytics-events.json';
 const ANALYTICS_CAP = 5000;
+const OBJECTS_CAP = 5000;
+
+const ORG_ROLES = ['owner', 'sales', 'measurer', 'crew'];
+const STAFF_ROLES = ['sales', 'measurer', 'crew'];
+const OFFICIAL_PANEL = 2396;
+const OFFICIAL_M2 = 5990;
+const DEFAULT_INSTALL = 1500;
+const DEFAULT_DOWEL = 25;
 
 const CORS = {
   'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
   'Access-Control-Allow-Headers':
     'Content-Type, Authorization, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
-  'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
 };
 
-/** @typedef {{ id: string, login: string, passwordHash: string, companyName: string, panelPriceRub: number|null, pricePerM2: number|null, installPricePerM2: number|null, dowelsPerPanel: number, dowelPriceRub: number|null }} PartnerRow */
-
-/** @type {PartnerRow[] | null} */
-let memoryPartners = null;
+/** @type {any | null} */
+let memoryPlatform = null;
 /** @type {any[] | null} */
 let memoryEvents = null;
 
-function publicPartner(row) {
-  const { passwordHash: _, ...rest } = row;
-  return rest;
+function uid(prefix) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
 }
 
-function defaultSeed() {
-  const hash = bcrypt.hashSync('demo1234', 10);
-  return [
-    {
-      id: 'p1',
-      login: 'partner1',
-      passwordHash: hash,
-      companyName: 'Демо Партнёр',
-      panelPriceRub: 2396,
-      pricePerM2: 5990,
-      installPricePerM2: 1500,
-      dowelsPerPanel: 2,
-      dowelPriceRub: 25,
-    },
-  ];
+function normalizeRole(role) {
+  if (role === 'partner') return 'owner';
+  if (role === 'executor') return 'measurer';
+  if (['admin', 'owner', 'sales', 'measurer', 'crew'].includes(role)) return role;
+  return 'measurer';
 }
 
-function parseSeed() {
-  const raw = process.env.PARTNERS_SEED;
-  if (!raw) return defaultSeed();
-  try {
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? list : defaultSeed();
-  } catch {
-    return defaultSeed();
+function canSeePrices(role) {
+  return role === 'admin' || role === 'owner' || role === 'sales' || role === 'measurer';
+}
+
+function normalizeOrgSettings(partial = {}) {
+  return {
+    companyName: String(partial.companyName || '').trim(),
+    city: String(partial.city || '').trim(),
+    panelPriceRub:
+      partial.panelPriceRub != null && Number(partial.panelPriceRub) > 0
+        ? Number(partial.panelPriceRub)
+        : OFFICIAL_PANEL,
+    pricePerM2:
+      partial.pricePerM2 != null && Number(partial.pricePerM2) > 0
+        ? Number(partial.pricePerM2)
+        : OFFICIAL_M2,
+    installPricePerM2:
+      partial.installPricePerM2 == null || Number.isNaN(Number(partial.installPricePerM2))
+        ? null
+        : Number(partial.installPricePerM2),
+    dowelsPerPanel: Math.max(1, Number(partial.dowelsPerPanel) || 2),
+    dowelPriceRub:
+      partial.dowelPriceRub == null || Number.isNaN(Number(partial.dowelPriceRub))
+        ? null
+        : Number(partial.dowelPriceRub),
+  };
+}
+
+function redactOrg(org) {
+  if (!org) return null;
+  return {
+    ...org,
+    panelPriceRub: 0,
+    pricePerM2: 0,
+    installPricePerM2: null,
+    dowelPriceRub: null,
+  };
+}
+
+function redactEstimate(est) {
+  if (!est) return null;
+  return {
+    panels: est.panels || 0,
+    dowels: est.dowels || 0,
+    panelsCost: null,
+    installCost: null,
+    dowelsCost: null,
+    totalCost: null,
+  };
+}
+
+function publicUser(user, org) {
+  const role = normalizeRole(user.role);
+  let settings = org ? normalizeOrgSettings(org.settings) : null;
+  if (settings && !canSeePrices(role)) settings = redactOrg(settings);
+  return {
+    id: user.id,
+    login: user.login,
+    role,
+    displayName: user.displayName,
+    orgId: user.orgId || null,
+    org: settings,
+  };
+}
+
+function defaultPlatform() {
+  const now = new Date().toISOString();
+  const orgId = 'org_demo';
+  const adminHash = bcrypt.hashSync('admin1234', 10);
+  const ownerHash = bcrypt.hashSync('demo1234', 10);
+  const staffHash = bcrypt.hashSync('exec1234', 10);
+  return {
+    version: 2,
+    users: [
+      {
+        id: 'u_admin',
+        login: 'admin',
+        passwordHash: adminHash,
+        role: 'admin',
+        displayName: 'Администратор StP',
+        orgId: null,
+        createdAt: now,
+      },
+      {
+        id: 'u_partner1',
+        login: 'partner1',
+        passwordHash: ownerHash,
+        role: 'owner',
+        displayName: 'Демо Партнёр',
+        orgId,
+        createdAt: now,
+      },
+      {
+        id: 'u_sales1',
+        login: 'sales1',
+        passwordHash: staffHash,
+        role: 'sales',
+        displayName: 'Демо Менеджер',
+        orgId,
+        createdAt: now,
+      },
+      {
+        id: 'u_measurer1',
+        login: 'exec1',
+        passwordHash: staffHash,
+        role: 'measurer',
+        displayName: 'Демо Замерщик',
+        orgId,
+        createdAt: now,
+      },
+      {
+        id: 'u_crew1',
+        login: 'crew1',
+        passwordHash: staffHash,
+        role: 'crew',
+        displayName: 'Демо Бригада',
+        orgId,
+        createdAt: now,
+      },
+    ],
+    orgs: [
+      {
+        id: orgId,
+        createdAt: now,
+        createdBy: 'u_admin',
+        settings: normalizeOrgSettings({
+          companyName: 'Демо Партнёр',
+          city: 'Москва',
+          panelPriceRub: OFFICIAL_PANEL,
+          pricePerM2: OFFICIAL_M2,
+          installPricePerM2: DEFAULT_INSTALL,
+          dowelsPerPanel: 2,
+          dowelPriceRub: DEFAULT_DOWEL,
+        }),
+      },
+    ],
+    objects: [],
+    activity: [],
+  };
+}
+
+function migrateLegacyPartners(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  if (list[0]?.passwordHash != null && list[0]?.companyName != null && !list.users) {
+    const now = new Date().toISOString();
+    const platform = { version: 2, users: [], orgs: [], objects: [], activity: [] };
+    const adminHash = bcrypt.hashSync('admin1234', 10);
+    platform.users.push({
+      id: 'u_admin',
+      login: 'admin',
+      passwordHash: adminHash,
+      role: 'admin',
+      displayName: 'Администратор StP',
+      orgId: null,
+      createdAt: now,
+    });
+    for (const row of list) {
+      const orgId = `org_${row.id || uid('org')}`;
+      platform.orgs.push({
+        id: orgId,
+        createdAt: now,
+        createdBy: 'u_admin',
+        settings: normalizeOrgSettings({
+          companyName: row.companyName || row.login,
+          city: row.city || '',
+          panelPriceRub: row.panelPriceRub,
+          pricePerM2: row.pricePerM2,
+          installPricePerM2: row.installPricePerM2,
+          dowelsPerPanel: row.dowelsPerPanel,
+          dowelPriceRub: row.dowelPriceRub,
+        }),
+      });
+      platform.users.push({
+        id: row.id || uid('u'),
+        login: row.login,
+        passwordHash: row.passwordHash,
+        role: 'owner',
+        displayName: row.companyName || row.login,
+        orgId,
+        createdAt: now,
+      });
+    }
+    return platform;
   }
+  return null;
 }
 
 function s3ClientConfig() {
@@ -68,30 +240,17 @@ function s3ClientConfig() {
   };
 }
 
-async function loadPartners() {
-  if (memoryPartners) return memoryPartners;
+async function s3Get(key) {
   const bucket = process.env.PARTNERS_BUCKET;
-  const key = process.env.PARTNERS_KEY || 'partners.json';
-  if (bucket) {
-    try {
-      const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-      const client = new S3Client(s3ClientConfig());
-      const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-      const body = await out.Body.transformToString();
-      memoryPartners = JSON.parse(body);
-      return memoryPartners;
-    } catch (e) {
-      console.warn('S3 partners load failed, using seed', e?.message || e);
-    }
-  }
-  memoryPartners = parseSeed();
-  return memoryPartners;
+  if (!bucket) return null;
+  const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
+  const client = new S3Client(s3ClientConfig());
+  const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  return out.Body.transformToString();
 }
 
-async function savePartners(list) {
-  memoryPartners = list;
+async function s3Put(key, body) {
   const bucket = process.env.PARTNERS_BUCKET;
-  const key = process.env.PARTNERS_KEY || 'partners.json';
   if (!bucket) return;
   const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
   const client = new S3Client(s3ClientConfig());
@@ -99,10 +258,50 @@ async function savePartners(list) {
     new PutObjectCommand({
       Bucket: bucket,
       Key: key,
-      Body: JSON.stringify(list, null, 2),
+      Body: typeof body === 'string' ? body : JSON.stringify(body),
       ContentType: 'application/json',
     }),
   );
+}
+
+async function loadPlatform() {
+  if (memoryPlatform) return memoryPlatform;
+  const bucket = process.env.PARTNERS_BUCKET;
+  if (bucket) {
+    try {
+      const body = await s3Get(PLATFORM_S3_KEY());
+      if (body) {
+        const parsed = JSON.parse(body);
+        if (parsed?.users && parsed?.orgs) {
+          memoryPlatform = parsed;
+          return memoryPlatform;
+        }
+      }
+    } catch (e) {
+      console.warn('platform load failed', e?.message || e);
+    }
+    try {
+      const legacyKey = process.env.PARTNERS_KEY || 'partners.json';
+      const body = await s3Get(legacyKey);
+      if (body) {
+        const migrated = migrateLegacyPartners(JSON.parse(body));
+        if (migrated) {
+          memoryPlatform = migrated;
+          await savePlatform(migrated);
+          return memoryPlatform;
+        }
+      }
+    } catch (e) {
+      console.warn('legacy partners migrate failed', e?.message || e);
+    }
+  }
+  memoryPlatform = defaultPlatform();
+  return memoryPlatform;
+}
+
+async function savePlatform(platform) {
+  memoryPlatform = platform;
+  await s3Put(PLATFORM_S3_KEY(), JSON.stringify(platform, null, 2));
 }
 
 async function loadEvents() {
@@ -110,15 +309,12 @@ async function loadEvents() {
   const bucket = process.env.PARTNERS_BUCKET;
   if (bucket) {
     try {
-      const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-      const client = new S3Client(s3ClientConfig());
-      const out = await client.send(
-        new GetObjectCommand({ Bucket: bucket, Key: ANALYTICS_S3_KEY() }),
-      );
-      const body = await out.Body.transformToString();
-      const parsed = JSON.parse(body);
-      memoryEvents = Array.isArray(parsed) ? parsed : parsed?.events || [];
-      return memoryEvents;
+      const body = await s3Get(ANALYTICS_S3_KEY());
+      if (body) {
+        const parsed = JSON.parse(body);
+        memoryEvents = Array.isArray(parsed) ? parsed : parsed?.events || [];
+        return memoryEvents;
+      }
     } catch (e) {
       console.warn('S3 analytics load failed', e?.message || e);
     }
@@ -129,27 +325,110 @@ async function loadEvents() {
 
 async function saveEvents(list) {
   memoryEvents = list;
-  const bucket = process.env.PARTNERS_BUCKET;
-  if (!bucket) return;
-  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-  const client = new S3Client(s3ClientConfig());
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: ANALYTICS_S3_KEY(),
-      Body: JSON.stringify(list),
-      ContentType: 'application/json',
-    }),
+  await s3Put(ANALYTICS_S3_KEY(), JSON.stringify(list));
+}
+
+function pushActivity(platform, partial) {
+  const ev = {
+    id: uid('act'),
+    at: partial.at || new Date().toISOString(),
+    orgId: partial.orgId ?? null,
+    userId: partial.userId ?? null,
+    login: partial.login || '',
+    action: partial.action,
+    detail: partial.detail,
+  };
+  platform.activity = [ev, ...(platform.activity || [])].slice(0, 500);
+}
+
+function findOrg(platform, orgId) {
+  return (platform.orgs || []).find((o) => o.id === orgId) || null;
+}
+
+function findUser(platform, idOrLogin) {
+  return (
+    (platform.users || []).find((u) => u.id === idOrLogin || u.login === idOrLogin) || null
   );
 }
+
+async function signToken(user) {
+  return new SignJWT({ login: user.login, role: normalizeRole(user.role), orgId: user.orgId })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(user.id)
+    .setIssuedAt()
+    .setExpirationTime('12h')
+    .sign(JWT_SECRET());
+}
+
+async function requireAuth(event) {
+  const token = getAuth(event);
+  if (!token) throw Object.assign(new Error('Unauthorized'), { status: 401 });
+  const { payload } = await jwtVerify(token, JWT_SECRET());
+  const platform = await loadPlatform();
+  const user = findUser(platform, payload.sub) || findUser(platform, payload.login);
+  if (!user) throw Object.assign(new Error('Unauthorized'), { status: 401 });
+  return { platform, user: { ...user, role: normalizeRole(user.role) }, payload };
+}
+
+function assertRole(user, roles) {
+  if (!roles.includes(user.role)) {
+    throw Object.assign(new Error('Недостаточно прав'), { status: 403 });
+  }
+}
+
+function objectVisibleTo(user, obj) {
+  if (user.role === 'admin') return true;
+  if (!user.orgId || obj.orgId !== user.orgId) return false;
+  if (user.role === 'owner') return true;
+  if (user.role === 'sales') {
+    return obj.createdBy === user.id || obj.assignedTo === user.id || !obj.assignedTo;
+  }
+  if (user.role === 'measurer') {
+    return obj.createdBy === user.id || obj.assignedTo === user.id;
+  }
+  if (user.role === 'crew') {
+    return obj.assignedTo === user.id || obj.status === 'install';
+  }
+  return false;
+}
+
+function publicObject(obj, role) {
+  const copy = { ...obj, history: obj.history || [] };
+  if (!canSeePrices(role)) {
+    copy.estimate = redactEstimate(obj.estimate);
+  }
+  return copy;
+}
+
+function normalizeObjectInput(body, existing, actor, org) {
+  const now = new Date().toISOString();
+  const status = body.status || existing?.status || 'draft';
+  const allowed = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
+  return {
+    id: existing?.id || body.id || uid('obj'),
+    orgId: existing?.orgId || actor.orgId,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    createdBy: existing?.createdBy || actor.id,
+    assignedTo: body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null,
+    status: allowed.includes(status) ? status : 'draft',
+    clientName: String(body.clientName ?? existing?.clientName ?? '').trim(),
+    clientPhone: String(body.clientPhone ?? existing?.clientPhone ?? '').trim(),
+    address: String(body.address ?? existing?.address ?? '').trim(),
+    city: String(body.city ?? existing?.city ?? org?.settings?.city ?? '').trim(),
+    room: body.room || existing?.room || {},
+    estimate: body.estimate !== undefined ? body.estimate : existing?.estimate ?? null,
+    clientSummary: String(body.clientSummary ?? existing?.clientSummary ?? ''),
+    history: existing?.history || [],
+  };
+}
+
+/* —— analytics aggregate (subset, city-aware) —— */
 
 function dayKey(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function filterAnalyticsEvents(allEvents, opts) {
@@ -176,188 +455,15 @@ function numOr0(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function emptyPartnerRow(orgId, companyName) {
-  return {
-    orgId,
-    companyName,
-    logins: 0,
-    problemomer: 0,
-    calculator: 0,
-    pdf: 0,
-    shares: 0,
-    areaM2: 0,
-    panels: 0,
-    lastActiveAt: null,
-  };
-}
-
-function computeVolume(events) {
-  let areaM2Sum = 0;
-  let panelsSum = 0;
-  let withArea = 0;
-  let completedCount = 0;
-  for (const e of events) {
-    if (!isCompletedWork(e)) continue;
-    completedCount += 1;
-    const area = numOr0(e.object?.areaM2);
-    const panels = numOr0(e.object?.panels);
-    if (area > 0) {
-      areaM2Sum += area;
-      withArea += 1;
-    }
-    if (panels > 0) panelsSum += panels;
-  }
-  return {
-    areaM2Sum: Math.round(areaM2Sum * 10) / 10,
-    areaM2Avg: withArea ? Math.round((areaM2Sum / withArea) * 10) / 10 : 0,
-    panelsSum: Math.round(panelsSum),
-    completedCount,
-  };
-}
-
-function computeKpi(events, opts) {
-  const orgs = new Set();
-  let areaM2 = 0;
-  let panels = 0;
-  for (const e of events) {
-    orgs.add(e.orgId || e.companyName || e.login);
-    if (isCompletedWork(e)) {
-      areaM2 += numOr0(e.object?.areaM2);
-      panels += numOr0(e.object?.panels);
-    }
-  }
-  return {
-    partners: opts.partnerCount ?? orgs.size,
-    activePartners: orgs.size,
-    executors: opts.executorCount ?? opts.activeExecutors,
-    problemomerResults: events.filter((e) => e.tool === 'problemomer' && e.action === 'result')
-      .length,
-    calculatorDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done')
-      .length,
-    pdf: events.filter((e) => e.action === 'pdf').length,
-    shares: events.filter((e) => e.action === 'share').length,
-    logins: events.filter((e) => e.action === 'login').length,
-    areaM2: Math.round(areaM2 * 10) / 10,
-    panels: Math.round(panels),
-  };
-}
-
-function computeFunnel(events) {
-  return {
-    problemomer: {
-      open: events.filter((e) => e.tool === 'problemomer' && e.action === 'open').length,
-      result: events.filter((e) => e.tool === 'problemomer' && e.action === 'result').length,
-      pdf: events.filter((e) => e.tool === 'problemomer' && e.action === 'pdf').length,
-      share: events.filter((e) => e.tool === 'problemomer' && e.action === 'share').length,
-    },
-    calculator: {
-      open: events.filter((e) => e.tool === 'calculator' && e.action === 'open').length,
-      calcDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done').length,
-      pdf: events.filter((e) => e.tool === 'calculator' && e.action === 'pdf').length,
-    },
-  };
-}
-
 function toBreakdown(counts) {
   const total = [...counts.values()].reduce((s, n) => s + n, 0) || 1;
   return [...counts.entries()]
-    .map(([key, count]) => ({
-      key,
-      count,
-      share: Math.round((count / total) * 1000) / 10,
-    }))
+    .map(([key, count]) => ({ key, count, share: Math.round((count / total) * 1000) / 10 }))
     .sort((a, b) => b.count - a.count);
-}
-
-function computeBreakdowns(events) {
-  const roomType = new Map();
-  const houseType = new Map();
-  const objectStage = new Map();
-  const classTransition = new Map();
-  const calcMode = new Map();
-
-  const bump = (map, key) => {
-    const k = (key && String(key).trim()) || 'unknown';
-    map.set(k, (map.get(k) || 0) + 1);
-  };
-
-  for (const e of events) {
-    if (!isCompletedWork(e)) continue;
-    const o = e.object;
-    if (e.tool === 'problemomer' && e.action === 'result') {
-      bump(roomType, o?.roomType ?? o?.label);
-      bump(houseType, o?.houseType);
-      bump(objectStage, o?.objectStage);
-      if (o?.classBefore || o?.classAfter) {
-        bump(classTransition, `${o?.classBefore || '?'}→${o?.classAfter || '?'}`);
-      }
-    }
-    if (e.tool === 'calculator' && e.action === 'calc_done') {
-      bump(calcMode, o?.mode);
-      if (o?.roomType) bump(roomType, o.roomType);
-    }
-  }
-
-  return {
-    roomType: toBreakdown(roomType),
-    houseType: toBreakdown(houseType),
-    objectStage: toBreakdown(objectStage),
-    classTransition: toBreakdown(classTransition),
-    calcMode: toBreakdown(calcMode),
-  };
-}
-
-function computeSeries(events, from, to) {
-  const toDate = to ? new Date(to) : new Date();
-  let fromDate = from ? new Date(from) : new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-  if (Number.isNaN(fromDate.getTime())) {
-    fromDate = new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-  }
-  if (Number.isNaN(toDate.getTime())) return [];
-
-  const start = new Date(fromDate);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(toDate);
-  end.setHours(0, 0, 0, 0);
-
-  const map = new Map();
-  for (let t = start.getTime(); t <= end.getTime(); t += 24 * 60 * 60 * 1000) {
-    const key = dayKey(new Date(t).toISOString());
-    if (!key) continue;
-    map.set(key, { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 });
-  }
-
-  for (const e of events) {
-    const key = dayKey(e.at);
-    if (!key) continue;
-    if (!map.has(key)) {
-      map.set(key, { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 });
-    }
-    const row = map.get(key);
-    if (e.tool === 'problemomer' && e.action === 'result') row.problemomer += 1;
-    if (e.tool === 'calculator' && e.action === 'calc_done') row.calculator += 1;
-    if (e.action === 'pdf') row.pdf += 1;
-    if (e.action === 'login') row.logins += 1;
-  }
-
-  return [...map.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
-}
-
-function previousWindow(from, to) {
-  if (!from || !to) return null;
-  const fromMs = Date.parse(from);
-  const toMs = Date.parse(to);
-  if (Number.isNaN(fromMs) || Number.isNaN(toMs) || toMs <= fromMs) return null;
-  const len = toMs - fromMs;
-  return {
-    from: new Date(fromMs - len).toISOString(),
-    to: new Date(fromMs).toISOString(),
-  };
 }
 
 function aggregateAnalyticsDashboard(allEvents, opts) {
   const events = filterAnalyticsEvents(allEvents, opts);
-
   const partnerMap = new Map();
   const executorMap = new Map();
 
@@ -367,6 +473,7 @@ function aggregateAnalyticsDashboard(allEvents, opts) {
       userId: dir.userId,
       login: dir.login,
       displayName: dir.displayName || dir.login,
+      role: dir.role,
       logins: 0,
       problemomer: 0,
       calculator: 0,
@@ -379,9 +486,22 @@ function aggregateAnalyticsDashboard(allEvents, opts) {
   for (const e of events) {
     const orgKey = e.orgId || e.companyName || e.login;
     if (!partnerMap.has(orgKey)) {
-      partnerMap.set(orgKey, emptyPartnerRow(e.orgId, e.companyName || e.login));
+      partnerMap.set(orgKey, {
+        orgId: e.orgId,
+        companyName: e.companyName || e.login,
+        city: e.city || e.object?.city || '',
+        logins: 0,
+        problemomer: 0,
+        calculator: 0,
+        pdf: 0,
+        shares: 0,
+        areaM2: 0,
+        panels: 0,
+        lastActiveAt: null,
+      });
     }
     const prow = partnerMap.get(orgKey);
+    if (!prow.city && (e.city || e.object?.city)) prow.city = e.city || e.object?.city || '';
     if (!prow.lastActiveAt || e.at > prow.lastActiveAt) prow.lastActiveAt = e.at;
     if (e.action === 'login') prow.logins += 1;
     if (e.tool === 'problemomer' && e.action === 'result') {
@@ -397,13 +517,15 @@ function aggregateAnalyticsDashboard(allEvents, opts) {
     if (e.action === 'pdf') prow.pdf += 1;
     if (e.action === 'share') prow.shares += 1;
 
-    if (e.role === 'executor') {
+    const role = normalizeRole(String(e.role));
+    if (STAFF_ROLES.includes(role) || e.role === 'executor') {
       const exKey = e.userId || e.login;
       if (!executorMap.has(exKey)) {
         executorMap.set(exKey, {
           userId: e.userId,
           login: e.login,
           displayName: e.login,
+          role,
           logins: 0,
           problemomer: 0,
           calculator: 0,
@@ -434,37 +556,133 @@ function aggregateAnalyticsDashboard(allEvents, opts) {
     executors.filter((e) => e.logins + e.problemomer + e.calculator + e.pdf > 0).length ||
     executors.length;
 
-  const kpi = computeKpi(events, {
-    partnerCount: opts.partnerCount,
-    executorCount: opts.executorCount,
-    activeExecutors,
-  });
+  const orgs = new Set(events.map((e) => e.orgId || e.companyName || e.login));
+  let areaM2 = 0;
+  let panels = 0;
+  for (const e of events) {
+    if (isCompletedWork(e)) {
+      areaM2 += numOr0(e.object?.areaM2);
+      panels += numOr0(e.object?.panels);
+    }
+  }
 
-  let kpiPrev = null;
-  const prev = previousWindow(opts.from, opts.to);
-  if (prev) {
-    const prevEvents = filterAnalyticsEvents(allEvents, {
-      from: prev.from,
-      to: prev.to,
-      orgId: opts.orgId,
-    });
-    kpiPrev = computeKpi(prevEvents, {
-      partnerCount: opts.partnerCount,
-      executorCount: opts.executorCount,
-      activeExecutors: 0,
-    });
+  const roomType = new Map();
+  const houseType = new Map();
+  const objectStage = new Map();
+  const classTransition = new Map();
+  const calcMode = new Map();
+  const city = new Map();
+  const bump = (map, key) => {
+    const k = (key && String(key).trim()) || 'unknown';
+    map.set(k, (map.get(k) || 0) + 1);
+  };
+  for (const e of events) {
+    if (e.city || e.object?.city) bump(city, e.city || e.object?.city);
+    if (!isCompletedWork(e)) continue;
+    const o = e.object;
+    if (e.tool === 'problemomer' && e.action === 'result') {
+      bump(roomType, o?.roomType ?? o?.label);
+      bump(houseType, o?.houseType);
+      bump(objectStage, o?.objectStage);
+      if (o?.classBefore || o?.classAfter) {
+        bump(classTransition, `${o?.classBefore || '?'}→${o?.classAfter || '?'}`);
+      }
+    }
+    if (e.tool === 'calculator' && e.action === 'calc_done') {
+      bump(calcMode, o?.mode);
+      if (o?.roomType) bump(roomType, o.roomType);
+    }
+  }
+
+  const toDate = opts.to ? new Date(opts.to) : new Date();
+  let fromDate = opts.from
+    ? new Date(opts.from)
+    : new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const seriesMap = new Map();
+  const start = new Date(fromDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(toDate);
+  end.setHours(0, 0, 0, 0);
+  for (let t = start.getTime(); t <= end.getTime(); t += 24 * 60 * 60 * 1000) {
+    const key = dayKey(new Date(t).toISOString());
+    if (key) seriesMap.set(key, { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 });
+  }
+  for (const e of events) {
+    const key = dayKey(e.at);
+    if (!key) continue;
+    if (!seriesMap.has(key)) {
+      seriesMap.set(key, { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 });
+    }
+    const row = seriesMap.get(key);
+    if (e.tool === 'problemomer' && e.action === 'result') row.problemomer += 1;
+    if (e.tool === 'calculator' && e.action === 'calc_done') row.calculator += 1;
+    if (e.action === 'pdf') row.pdf += 1;
+    if (e.action === 'login') row.logins += 1;
+  }
+
+  let areaM2Sum = 0;
+  let panelsSum = 0;
+  let withArea = 0;
+  let completedCount = 0;
+  for (const e of events) {
+    if (!isCompletedWork(e)) continue;
+    completedCount += 1;
+    const a = numOr0(e.object?.areaM2);
+    const p = numOr0(e.object?.panels);
+    if (a > 0) {
+      areaM2Sum += a;
+      withArea += 1;
+    }
+    if (p > 0) panelsSum += p;
   }
 
   return {
-    source: opts.source || 'api',
+    source: 'api',
     from: opts.from || null,
     to: opts.to || null,
-    kpi,
-    kpiPrev,
-    funnel: computeFunnel(events),
-    series: computeSeries(events, opts.from || null, opts.to || null),
-    breakdowns: computeBreakdowns(events),
-    volume: computeVolume(events),
+    kpi: {
+      partners: opts.partnerCount ?? orgs.size,
+      activePartners: orgs.size,
+      executors: opts.executorCount ?? activeExecutors,
+      problemomerResults: events.filter((e) => e.tool === 'problemomer' && e.action === 'result')
+        .length,
+      calculatorDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done')
+        .length,
+      pdf: events.filter((e) => e.action === 'pdf').length,
+      shares: events.filter((e) => e.action === 'share').length,
+      logins: events.filter((e) => e.action === 'login').length,
+      areaM2: Math.round(areaM2 * 10) / 10,
+      panels: Math.round(panels),
+    },
+    kpiPrev: null,
+    funnel: {
+      problemomer: {
+        open: events.filter((e) => e.tool === 'problemomer' && e.action === 'open').length,
+        result: events.filter((e) => e.tool === 'problemomer' && e.action === 'result').length,
+        pdf: events.filter((e) => e.tool === 'problemomer' && e.action === 'pdf').length,
+        share: events.filter((e) => e.tool === 'problemomer' && e.action === 'share').length,
+      },
+      calculator: {
+        open: events.filter((e) => e.tool === 'calculator' && e.action === 'open').length,
+        calcDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done').length,
+        pdf: events.filter((e) => e.tool === 'calculator' && e.action === 'pdf').length,
+      },
+    },
+    series: [...seriesMap.values()].sort((a, b) => (a.day < b.day ? -1 : 1)),
+    breakdowns: {
+      roomType: toBreakdown(roomType),
+      houseType: toBreakdown(houseType),
+      objectStage: toBreakdown(objectStage),
+      classTransition: toBreakdown(classTransition),
+      calcMode: toBreakdown(calcMode),
+      city: toBreakdown(city),
+    },
+    volume: {
+      areaM2Sum: Math.round(areaM2Sum * 10) / 10,
+      areaM2Avg: withArea ? Math.round((areaM2Sum / withArea) * 10) / 10 : 0,
+      panelsSum: Math.round(panelsSum),
+      completedCount,
+    },
     partners: [...partnerMap.values()].sort(
       (a, b) => b.problemomer + b.calculator - (a.problemomer + a.calculator),
     ),
@@ -485,11 +703,7 @@ function json(statusCode, body) {
 }
 
 function getPath(event) {
-  const raw =
-    event.url ||
-    event.path ||
-    event.requestContext?.http?.path ||
-    '/';
+  const raw = event.url || event.path || event.requestContext?.http?.path || '/';
   try {
     if (String(raw).startsWith('http')) return new URL(raw).pathname;
   } catch {
@@ -548,29 +762,20 @@ function getQuery(event) {
   return {};
 }
 
-async function requirePartner(event) {
-  const token = getAuth(event);
-  if (!token) throw Object.assign(new Error('Unauthorized'), { status: 401 });
-  const { payload } = await jwtVerify(token, JWT_SECRET());
-  const partners = await loadPartners();
-  const row = partners.find((p) => p.id === payload.sub || p.login === payload.login);
-  if (!row) throw Object.assign(new Error('Unauthorized'), { status: 401 });
-  return row;
-}
-
 function normalizeIncomingEvent(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const action = String(raw.action || '');
   const tool = String(raw.tool || '');
   if (!action || !tool) return null;
   return {
-    id: String(raw.id || `ae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+    id: String(raw.id || uid('ae')),
     at: String(raw.at || new Date().toISOString()),
     orgId: raw.orgId ?? null,
     userId: raw.userId ?? null,
     login: String(raw.login || 'unknown'),
-    role: String(raw.role || 'partner'),
+    role: String(raw.role || 'owner'),
     companyName: String(raw.companyName || ''),
+    city: String(raw.city || raw.object?.city || ''),
     tool,
     action,
     object: raw.object || null,
@@ -586,60 +791,440 @@ export async function handler(event = {}) {
   const method = getMethod(event);
 
   try {
+    /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
       const { login, password } = getBody(event);
-      const partners = await loadPartners();
-      const row = partners.find((p) => p.login === String(login || '').trim());
-      if (!row || !bcrypt.compareSync(String(password || ''), row.passwordHash)) {
+      const platform = await loadPlatform();
+      const user = findUser(platform, String(login || '').trim());
+      if (!user || !bcrypt.compareSync(String(password || ''), user.passwordHash)) {
         return json(401, { message: 'Неверный логин или пароль' });
       }
-      const token = await new SignJWT({ login: row.login })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setSubject(row.id)
-        .setIssuedAt()
-        .setExpirationTime('12h')
-        .sign(JWT_SECRET());
-      return json(200, { token, partner: publicPartner(row) });
+      const org = user.orgId ? findOrg(platform, user.orgId) : null;
+      const token = await signToken(user);
+      pushActivity(platform, {
+        orgId: user.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'login',
+        detail: `Роль: ${normalizeRole(user.role)}`,
+      });
+      await savePlatform(platform);
+      return json(200, { token, user: publicUser(user, org) });
     }
 
     if (method === 'GET' && path.endsWith('/auth/me')) {
-      const row = await requirePartner(event);
-      return json(200, { partner: publicPartner(row) });
+      const { platform, user } = await requireAuth(event);
+      const org = user.orgId ? findOrg(platform, user.orgId) : null;
+      return json(200, { user: publicUser(user, org) });
     }
 
     if (method === 'POST' && path.endsWith('/auth/logout')) {
       return json(200, { ok: true });
     }
 
-    if (method === 'PATCH' && path.endsWith('/partner/profile')) {
-      const row = await requirePartner(event);
+    /* —— Org profile —— */
+    if (method === 'PATCH' && path.endsWith('/org/settings')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin', 'owner']);
       const patch = getBody(event);
-      const partners = await loadPartners();
-      const idx = partners.findIndex((p) => p.id === row.id);
-      if (idx < 0) return json(404, { message: 'Not found' });
-      const next = { ...partners[idx] };
-      if ('companyName' in patch) next.companyName = String(patch.companyName || '');
-      if ('panelPriceRub' in patch) {
-        next.panelPriceRub = patch.panelPriceRub == null ? null : Number(patch.panelPriceRub);
+      const orgId = patch.orgId || user.orgId;
+      if (!orgId) return json(400, { message: 'orgId required' });
+      if (user.role === 'owner' && user.orgId !== orgId) {
+        return json(403, { message: 'Чужая организация' });
       }
-      if ('pricePerM2' in patch) {
-        next.pricePerM2 = patch.pricePerM2 == null ? null : Number(patch.pricePerM2);
-      }
-      if ('installPricePerM2' in patch) {
-        next.installPricePerM2 =
-          patch.installPricePerM2 == null ? null : Number(patch.installPricePerM2);
-      }
-      if ('dowelsPerPanel' in patch) {
-        next.dowelsPerPanel = Math.max(1, Number(patch.dowelsPerPanel) || 2);
-      }
-      if ('dowelPriceRub' in patch) {
-        next.dowelPriceRub = patch.dowelPriceRub == null ? null : Number(patch.dowelPriceRub);
-      }
-      partners[idx] = next;
-      await savePartners(partners);
-      return json(200, { partner: publicPartner(next) });
+      const idx = platform.orgs.findIndex((o) => o.id === orgId);
+      if (idx < 0) return json(404, { message: 'Организация не найдена' });
+      const settings = normalizeOrgSettings({ ...platform.orgs[idx].settings, ...patch });
+      platform.orgs[idx] = { ...platform.orgs[idx], settings };
+      pushActivity(platform, {
+        orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'update_org',
+        detail: settings.companyName,
+      });
+      await savePlatform(platform);
+      return json(200, { org: settings });
     }
 
+    /* Legacy alias */
+    if (method === 'PATCH' && path.endsWith('/partner/profile')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin', 'owner']);
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const patch = getBody(event);
+      const idx = platform.orgs.findIndex((o) => o.id === user.orgId);
+      if (idx < 0) return json(404, { message: 'Not found' });
+      const settings = normalizeOrgSettings({ ...platform.orgs[idx].settings, ...patch });
+      platform.orgs[idx] = { ...platform.orgs[idx], settings };
+      await savePlatform(platform);
+      return json(200, { partner: { ...publicUser(user, platform.orgs[idx]), ...settings } });
+    }
+
+    /* —— Admin partners —— */
+    if (method === 'GET' && path.endsWith('/admin/partners')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const owners = platform.users.filter((u) => normalizeRole(u.role) === 'owner');
+      const list = owners.map((u) => {
+        const org = findOrg(platform, u.orgId);
+        const staffCount = platform.users.filter(
+          (x) => x.orgId === u.orgId && STAFF_ROLES.includes(normalizeRole(x.role)),
+        ).length;
+        const last = (platform.activity || []).find(
+          (a) => a.orgId === u.orgId && a.action === 'login',
+        );
+        return {
+          user: {
+            id: u.id,
+            login: u.login,
+            role: 'owner',
+            displayName: u.displayName,
+            orgId: u.orgId,
+            createdAt: u.createdAt,
+          },
+          org,
+          lastLogin: last?.at || null,
+          executorCount: staffCount,
+          staffCount,
+        };
+      });
+      return json(200, { partners: list });
+    }
+
+    if (method === 'POST' && path.endsWith('/admin/partners')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const body = getBody(event);
+      const login = String(body.login || '').trim();
+      const password = String(body.password || '').trim();
+      const companyName = String(body.companyName || '').trim() || login;
+      const city = String(body.city || '').trim();
+      if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
+      if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
+      const now = new Date().toISOString();
+      const orgId = uid('org');
+      const userId = uid('u');
+      const org = {
+        id: orgId,
+        createdAt: now,
+        createdBy: user.id,
+        settings: normalizeOrgSettings({
+          companyName,
+          city,
+          panelPriceRub: OFFICIAL_PANEL,
+          pricePerM2: OFFICIAL_M2,
+          installPricePerM2: DEFAULT_INSTALL,
+          dowelsPerPanel: 2,
+          dowelPriceRub: DEFAULT_DOWEL,
+        }),
+      };
+      const owner = {
+        id: userId,
+        login,
+        passwordHash: bcrypt.hashSync(password, 10),
+        role: 'owner',
+        displayName: companyName,
+        orgId,
+        createdAt: now,
+      };
+      platform.orgs.push(org);
+      platform.users.push(owner);
+      pushActivity(platform, {
+        orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'create_partner',
+        detail: `${login} · ${companyName}`,
+      });
+      await savePlatform(platform);
+      return json(200, { login, password, user: publicUser(owner, org) });
+    }
+
+    if (method === 'POST' && path.endsWith('/admin/partners/reset-password')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const { partnerUserId, password } = getBody(event);
+      const idx = platform.users.findIndex(
+        (u) => u.id === partnerUserId && normalizeRole(u.role) === 'owner',
+      );
+      if (idx < 0) return json(404, { message: 'Партнёр не найден' });
+      const pw = String(password || '').trim();
+      if (!pw) return json(400, { message: 'Пустой пароль' });
+      platform.users[idx] = {
+        ...platform.users[idx],
+        passwordHash: bcrypt.hashSync(pw, 10),
+      };
+      pushActivity(platform, {
+        orgId: platform.users[idx].orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'reset_password',
+        detail: platform.users[idx].login,
+      });
+      await savePlatform(platform);
+      return json(200, { password: pw });
+    }
+
+    if (method === 'DELETE' && /\/admin\/partners\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const partnerUserId = path.split('/').pop();
+      const partner = platform.users.find(
+        (u) => u.id === partnerUserId && normalizeRole(u.role) === 'owner',
+      );
+      if (!partner) return json(404, { message: 'Партнёр не найден' });
+      const orgId = partner.orgId;
+      platform.users = platform.users.filter(
+        (u) => u.id !== partnerUserId && !(orgId && u.orgId === orgId),
+      );
+      platform.orgs = platform.orgs.filter((o) => o.id !== orgId);
+      platform.objects = (platform.objects || []).filter((o) => o.orgId !== orgId);
+      pushActivity(platform, {
+        orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'delete_partner',
+        detail: partner.login,
+      });
+      await savePlatform(platform);
+      return json(200, { ok: true });
+    }
+
+    /* —— Staff —— */
+    if (method === 'GET' && path.endsWith('/org/staff')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['owner', 'sales']);
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const staff = platform.users
+        .filter((u) => u.orgId === user.orgId && STAFF_ROLES.includes(normalizeRole(u.role)))
+        .map((u) => ({
+          id: u.id,
+          login: u.login,
+          role: normalizeRole(u.role),
+          displayName: u.displayName,
+          orgId: u.orgId,
+          createdAt: u.createdAt,
+        }));
+      return json(200, { staff });
+    }
+
+    if (method === 'POST' && path.endsWith('/org/staff')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['owner']);
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const body = getBody(event);
+      const login = String(body.login || '').trim();
+      const password = String(body.password || '').trim();
+      const displayName = String(body.displayName || login).trim();
+      const role = normalizeRole(body.role || 'measurer');
+      if (!STAFF_ROLES.includes(role)) {
+        return json(400, { message: 'Роль: sales, measurer или crew' });
+      }
+      if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
+      if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
+      const staff = {
+        id: uid('u'),
+        login,
+        passwordHash: bcrypt.hashSync(password, 10),
+        role,
+        displayName,
+        orgId: user.orgId,
+        createdAt: new Date().toISOString(),
+      };
+      platform.users.push(staff);
+      pushActivity(platform, {
+        orgId: user.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'create_staff',
+        detail: `${login} · ${role}`,
+      });
+      await savePlatform(platform);
+      return json(200, {
+        id: staff.id,
+        login,
+        password,
+        role,
+        displayName,
+      });
+    }
+
+    if (method === 'POST' && path.endsWith('/org/staff/reset-password')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['owner']);
+      const { staffUserId, password } = getBody(event);
+      const idx = platform.users.findIndex(
+        (u) =>
+          u.id === staffUserId &&
+          u.orgId === user.orgId &&
+          STAFF_ROLES.includes(normalizeRole(u.role)),
+      );
+      if (idx < 0) return json(404, { message: 'Сотрудник не найден' });
+      const pw = String(password || '').trim();
+      if (!pw) return json(400, { message: 'Пустой пароль' });
+      platform.users[idx] = {
+        ...platform.users[idx],
+        passwordHash: bcrypt.hashSync(pw, 10),
+      };
+      await savePlatform(platform);
+      return json(200, { password: pw });
+    }
+
+    if (method === 'DELETE' && /\/org\/staff\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['owner']);
+      const staffUserId = path.split('/').pop();
+      const staff = platform.users.find(
+        (u) =>
+          u.id === staffUserId &&
+          u.orgId === user.orgId &&
+          STAFF_ROLES.includes(normalizeRole(u.role)),
+      );
+      if (!staff) return json(404, { message: 'Сотрудник не найден' });
+      platform.users = platform.users.filter((u) => u.id !== staffUserId);
+      pushActivity(platform, {
+        orgId: user.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'delete_staff',
+        detail: staff.login,
+      });
+      await savePlatform(platform);
+      return json(200, { ok: true });
+    }
+
+    /* —— Job objects —— */
+    if (method === 'GET' && path.endsWith('/objects')) {
+      const { platform, user } = await requireAuth(event);
+      if (user.role === 'admin') {
+        const all = (platform.objects || []).map((o) => publicObject(o, user.role));
+        return json(200, { objects: all });
+      }
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const list = (platform.objects || [])
+        .filter((o) => objectVisibleTo(user, o))
+        .map((o) => publicObject(o, user.role));
+      return json(200, { objects: list });
+    }
+
+    if (method === 'POST' && path.endsWith('/objects')) {
+      const { platform, user } = await requireAuth(event);
+      if (!['owner', 'sales', 'measurer'].includes(user.role)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const org = findOrg(platform, user.orgId);
+      const body = getBody(event);
+      const obj = normalizeObjectInput(body, null, user, org);
+      obj.history = [
+        {
+          at: obj.createdAt,
+          userId: user.id,
+          login: user.login,
+          action: 'create',
+          detail: obj.status,
+        },
+      ];
+      platform.objects = [obj, ...(platform.objects || [])].slice(0, OBJECTS_CAP);
+      pushActivity(platform, {
+        orgId: user.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'create_object',
+        detail: obj.address || obj.clientName || obj.id,
+      });
+      await savePlatform(platform);
+      return json(200, { object: publicObject(obj, user.role) });
+    }
+
+    if (method === 'PATCH' && /\/objects\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      const objectId = path.split('/').pop();
+      const idx = (platform.objects || []).findIndex((o) => o.id === objectId);
+      if (idx < 0) return json(404, { message: 'Объект не найден' });
+      const existing = platform.objects[idx];
+      if (!objectVisibleTo(user, existing)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      if (user.role === 'crew') {
+        const body = getBody(event);
+        const nextStatus = body.status;
+        if (nextStatus && !['install', 'closed'].includes(nextStatus)) {
+          return json(403, { message: 'Бригада меняет только статус монтажа' });
+        }
+        const next = {
+          ...existing,
+          status: nextStatus || existing.status,
+          updatedAt: new Date().toISOString(),
+          history: [
+            {
+              at: new Date().toISOString(),
+              userId: user.id,
+              login: user.login,
+              action: 'status',
+              detail: nextStatus || existing.status,
+            },
+            ...(existing.history || []),
+          ].slice(0, 50),
+        };
+        platform.objects[idx] = next;
+        await savePlatform(platform);
+        return json(200, { object: publicObject(next, user.role) });
+      }
+      const org = findOrg(platform, existing.orgId);
+      const body = getBody(event);
+      if (body.assignedTo !== undefined && !['owner', 'sales'].includes(user.role)) {
+        return json(403, { message: 'Назначать объекты может владелец или менеджер' });
+      }
+      const next = normalizeObjectInput(body, existing, user, org);
+      if (body.status && body.status !== existing.status) {
+        next.history = [
+          {
+            at: next.updatedAt,
+            userId: user.id,
+            login: user.login,
+            action: 'status',
+            detail: `${existing.status}→${body.status}`,
+          },
+          ...(existing.history || []),
+        ].slice(0, 50);
+      } else if (body.assignedTo !== undefined && body.assignedTo !== existing.assignedTo) {
+        next.history = [
+          {
+            at: next.updatedAt,
+            userId: user.id,
+            login: user.login,
+            action: 'assign',
+            detail: String(body.assignedTo || '—'),
+          },
+          ...(existing.history || []),
+        ].slice(0, 50);
+      } else {
+        next.history = [
+          {
+            at: next.updatedAt,
+            userId: user.id,
+            login: user.login,
+            action: 'update',
+          },
+          ...(existing.history || []),
+        ].slice(0, 50);
+      }
+      platform.objects[idx] = next;
+      await savePlatform(platform);
+      return json(200, { object: publicObject(next, user.role) });
+    }
+
+    if (method === 'GET' && /\/objects\/[^/]+$/.test(path) && !path.endsWith('/objects')) {
+      const { platform, user } = await requireAuth(event);
+      const objectId = path.split('/').pop();
+      const obj = (platform.objects || []).find((o) => o.id === objectId);
+      if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Объект не найден' });
+      return json(200, { object: publicObject(obj, user.role) });
+    }
+
+    /* —— Analytics —— */
     if (method === 'POST' && path.endsWith('/analytics/events')) {
       const body = getBody(event);
       const incoming = Array.isArray(body.events) ? body.events : body.event ? [body.event] : [];
@@ -665,32 +1250,75 @@ export async function handler(event = {}) {
     }
 
     if (method === 'GET' && path.endsWith('/analytics/dashboard')) {
-      const role = String(header(event, 'X-Analytics-Role') || 'partner');
       const query = getQuery(event);
       let orgId = query.orgId || header(event, 'X-Analytics-Org') || null;
+      let role = String(header(event, 'X-Analytics-Role') || 'owner');
 
-      if (role === 'admin') {
-        const key = header(event, 'X-Analytics-Key');
-        if (key !== ANALYTICS_ADMIN_KEY()) {
-          return json(403, { message: 'Admin key required' });
+      try {
+        const auth = await requireAuth(event);
+        role = auth.user.role;
+        if (role !== 'admin') {
+          if (!['owner', 'sales'].includes(role)) {
+            return json(403, { message: 'Аналитика недоступна' });
+          }
+          orgId = auth.user.orgId;
+        } else {
+          const key = header(event, 'X-Analytics-Key');
+          if (key && key !== ANALYTICS_ADMIN_KEY()) {
+            return json(403, { message: 'Admin key required' });
+          }
         }
-      } else {
-        // Partner slice: require orgId (trusted internal portal)
+        const platform = auth.platform;
+        const events = await loadEvents();
+        const staffDir = platform.users
+          .filter((u) => STAFF_ROLES.includes(normalizeRole(u.role)))
+          .map((u) => ({
+            userId: u.id,
+            login: u.login,
+            displayName: u.displayName,
+            orgId: u.orgId,
+            role: normalizeRole(u.role),
+          }));
+        const dash = aggregateAnalyticsDashboard(events, {
+          source: 'api',
+          from: query.from || null,
+          to: query.to || null,
+          orgId: role === 'admin' && !query.orgId ? null : orgId,
+          partnerCount: platform.users.filter((u) => normalizeRole(u.role) === 'owner').length,
+          executorCount: staffDir.filter((e) => !orgId || e.orgId === orgId).length,
+          executorDirectory: staffDir,
+        });
+        return json(200, dash);
+      } catch {
+        /* fallback header-key admin for deploy scripts */
+        if (role === 'admin') {
+          const key = header(event, 'X-Analytics-Key');
+          if (key !== ANALYTICS_ADMIN_KEY()) {
+            return json(403, { message: 'Admin key required' });
+          }
+          const events = await loadEvents();
+          const dash = aggregateAnalyticsDashboard(events, {
+            source: 'api',
+            from: query.from || null,
+            to: query.to || null,
+            orgId: query.orgId || null,
+          });
+          return json(200, dash);
+        }
         if (!orgId) return json(400, { message: 'orgId required' });
+        const events = await loadEvents();
+        const dash = aggregateAnalyticsDashboard(events, {
+          source: 'api',
+          from: query.from || null,
+          to: query.to || null,
+          orgId,
+        });
+        return json(200, dash);
       }
-
-      const events = await loadEvents();
-      const dash = aggregateAnalyticsDashboard(events, {
-        source: 'api',
-        from: query.from || null,
-        to: query.to || null,
-        orgId: role === 'admin' && !query.orgId ? null : orgId,
-      });
-      return json(200, dash);
     }
 
     if (method === 'GET' && (path.endsWith('/health') || path === '/' || path.endsWith('/'))) {
-      return json(200, { ok: true, service: 'multiframe-partner-api' });
+      return json(200, { ok: true, service: 'multiframe-partner-api', version: 2 });
     }
 
     return json(404, { message: `Not found: ${method} ${path}` });

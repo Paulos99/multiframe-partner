@@ -1,0 +1,70 @@
+name: Deploy Partner API (Yandex Cloud)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'apps/api/**'
+      - 'infra/deploy_yc.py'
+      - '.github/workflows/deploy-api.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install API deps
+        working-directory: apps/api
+        run: npm ci || npm install
+
+      - name: Install Python crypto
+        run: pip install cryptography
+
+      - name: Write SA key
+        env:
+          YC_SA_KEY_JSON: ${{ secrets.YC_SA_KEY_JSON }}
+        run: |
+          mkdir -p "$HOME/.yc"
+          if [ -z "$YC_SA_KEY_JSON" ]; then
+            echo "Missing secret YC_SA_KEY_JSON (authorized key JSON for service account)"
+            exit 1
+          fi
+          printf '%s\n' "$YC_SA_KEY_JSON" > "$HOME/.yc/agent-project-creator-key.json"
+
+      - name: Optional Object Storage env
+        env:
+          PARTNERS_BUCKET: ${{ secrets.PARTNERS_BUCKET }}
+          YC_ACCESS_KEY_ID: ${{ secrets.YC_ACCESS_KEY_ID }}
+          YC_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -n "$PARTNERS_BUCKET" ] && [ -n "$YC_ACCESS_KEY_ID" ] && [ -n "$YC_SECRET_ACCESS_KEY" ]; then
+            python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path.home().joinpath(".yc").mkdir(parents=True, exist_ok=True)
+          Path.home().joinpath(".yc/partner-storage.json").write_text(json.dumps({
+            "PARTNERS_BUCKET": os.environ["PARTNERS_BUCKET"],
+            "YC_ACCESS_KEY_ID": os.environ["YC_ACCESS_KEY_ID"],
+            "YC_SECRET_ACCESS_KEY": os.environ["YC_SECRET_ACCESS_KEY"],
+            "YC_REGION": "ru-central1",
+          }, indent=2))
+          print("partner-storage.json written")
+          PY
+          else
+            echo "No Object Storage secrets — deploy will use in-memory seed"
+          fi
+
+      - name: Deploy function + API Gateway
+        run: python infra/deploy_yc.py

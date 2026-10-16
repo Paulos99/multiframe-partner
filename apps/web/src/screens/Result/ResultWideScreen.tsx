@@ -12,6 +12,7 @@ import {
   useResultProfile,
 } from './resultShared';
 import { PartnerEstimateCard } from '../../partner/PartnerEstimateCard';
+import { SaveObjectCard } from '../../partner/SaveObjectCard';
 import styles from './ResultWideScreen.module.css';
 
 /** Flip to true to restore frequency charts if clients ask. */
@@ -428,6 +429,7 @@ export function ResultWideScreen() {
       ) : null}
 
       <PartnerEstimateCard areaM2={p.room.ceilingAreaM2} />
+      <SaveObjectCard />
 
       <div className={styles.closeRow}>
         <section className={styles.panel} data-reveal aria-label="Уникальность системы MultiFrame">

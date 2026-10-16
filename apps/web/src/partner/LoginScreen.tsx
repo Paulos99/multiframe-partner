@@ -23,7 +23,8 @@ export function LoginScreen() {
       <form className={styles.card} onSubmit={(e) => void onSubmit(e)}>
         <h1>Кабинет партнёра MultiFrame</h1>
         <p className={styles.lead}>
-          Проблемомер и калькулятор с корпоративными параметрами. Сессия сохраняется в браузере.
+          Проблемомер, калькулятор и объекты компании. На общем планшете после работы нажмите
+          «Выйти».
         </p>
         <label className={styles.field}>
           Логин
@@ -53,8 +54,9 @@ export function LoginScreen() {
           {loading ? 'Входим…' : 'Войти'}
         </button>
         <p className={styles.hint}>
-          Демо: <code>admin</code> / <code>admin1234</code> · <code>partner1</code> /{' '}
-          <code>demo1234</code> · сотрудник создаётся партнёром
+          Демо: <code>admin</code>/<code>admin1234</code> · владелец <code>partner1</code>/
+          <code>demo1234</code> · менеджер <code>sales1</code> · замерщик <code>exec1</code> ·
+          бригада <code>crew1</code> (пароль сотрудников <code>exec1234</code>)
         </p>
       </form>
     </div>

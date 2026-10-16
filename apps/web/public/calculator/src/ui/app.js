@@ -2,7 +2,13 @@ import { Room } from '../core/room-model.js';
 import { PolygonPanelCalculator, ceilingLayoutCacheKey } from '../calculators/polygon-ceiling-calculator.js';
 import { WallCalculator } from '../calculators/wall-calculator.js';
 import { buildBOM, renderResultsHtml } from '../calculators/materials-bom.js';
-import { PANEL, PANEL_COVERAGE_AREA, PARTNER_PRICING, RESERVES } from '../core/constants.js';
+import {
+  PANEL,
+  PANEL_COVERAGE_AREA,
+  PARTNER_PRICING,
+  RESERVES,
+  getPartnerPricing,
+} from '../core/constants.js';
 import { createRectangleVertices } from '../core/polygon-geometry.js';
 import { buildEdgeDimensionsFromVertices } from '../editor/sketch-constraints.js';
 import { CeilingVisualizer } from '../visualizers/ceiling-visualizer.js';
@@ -480,6 +486,7 @@ function partnerDowelCost(bom) {
 
 function partnerGrandTotal(bom, area, panelsCost) {
   if (!PARTNER_PRICING.enabled) return null;
+  if (getPartnerPricing().hidePrices) return null;
   if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
   const install = partnerInstallCost(area) ?? 0;
   const dowelCost = partnerDowelCost(bom) ?? 0;
@@ -2196,10 +2203,15 @@ function mountPartnerBanner() {
   const banner = document.createElement('div');
   banner.id = 'partnerCalcBanner';
   banner.className = 'partner-calc-banner';
-  const company = PARTNER_PRICING.company ? PARTNER_PRICING.company : 'Партнёрский режим';
-  const install =
-    PARTNER_PRICING.installPerM2 != null ? ` · монтаж ${PARTNER_PRICING.installPerM2} ₽/м²` : '';
-  banner.innerHTML = `<strong>${company}</strong><span>РРЦ ${PANEL.priceRub} ₽/панель · ${PANEL.pricePerM2} ₽/м²${install}</span><span class="partner-calc-banner__hint">Офиц. ${PARTNER_PRICING.officialPanelPrice} ₽</span>`;
+  const pricing = getPartnerPricing();
+  const company = pricing.company ? pricing.company : 'Партнёрский режим';
+  if (pricing.hidePrices) {
+    banner.innerHTML = `<strong>${company}</strong><span>Режим бригады · только количество</span>`;
+  } else {
+    const install =
+      pricing.installPerM2 != null ? ` · монтаж ${pricing.installPerM2} ₽/м²` : '';
+    banner.innerHTML = `<strong>${company}</strong><span>РРЦ ${PANEL.priceRub} ₽/панель · ${PANEL.pricePerM2} ₽/м²${install}</span><span class="partner-calc-banner__hint">Офиц. ${pricing.officialPanelPrice} ₽</span>`;
+  }
   const shell = document.querySelector('.app-shell');
   if (shell) shell.prepend(banner);
   else document.body.prepend(banner);
@@ -2207,7 +2219,7 @@ function mountPartnerBanner() {
 
 /** Replace store CTA with green «Итого» card — one grand total; breakdown lives in results. */
 function mountPartnerTotalCard() {
-  if (!PARTNER_PRICING.enabled) return;
+  if (!PARTNER_PRICING.enabled || getPartnerPricing().hidePrices) return;
   if (document.getElementById('partnerTotalCard')) return;
   const buy = document.getElementById('buyMultiframeBtn');
   if (!buy) return;

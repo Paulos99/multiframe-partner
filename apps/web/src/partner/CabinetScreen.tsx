@@ -2,13 +2,40 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
+  ROLE_LABELS,
+  STAFF_ROLES,
+  type UserRole,
 } from '../../../../packages/shared/partner';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
-import { generatePassword } from './localStore';
-import { usePartner } from './PartnerContext';
+import { ObjectsPanel } from './ObjectsPanel';
+import { generatePassword, usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
 type Route = 'cabinet' | 'problemomer' | 'calculator';
+
+function QuickLogout() {
+  const api = usePartner();
+  return (
+    <button
+      type="button"
+      className={styles.logoutBtn}
+      onClick={api.logout}
+      title="Выйти — смена сотрудника на общем планшете"
+    >
+      Выйти
+    </button>
+  );
+}
+
+function SyncBadge() {
+  const api = usePartner();
+  if (!api.pendingSyncCount) return null;
+  return (
+    <span className={styles.syncBadge} title="Объекты ждут отправки на сервер">
+      ↻ {api.pendingSyncCount}
+    </span>
+  );
+}
 
 function ToolButtons({
   onNavigate,
@@ -35,8 +62,8 @@ function InstallHint() {
       <h2>Офлайн на планшете / телефоне</h2>
       <p className={styles.lead}>
         Установите кабинет на устройство: в Chrome — «Установить приложение», на iPhone —
-        «Поделиться → На экран Домой». Параметры компании и сессия хранятся в браузере и работают без
-        сети после первого открытия.
+        «Поделиться → На экран Домой». После первого открытия прайс и объекты доступны без сети;
+        отправка на сервер встаёт в очередь.
       </p>
     </div>
   );
@@ -82,6 +109,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [city, setCity] = useState('');
   const [created, setCreated] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -90,31 +118,21 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     setErr(null);
     setCreated(null);
     try {
-      const res = await api.adminCreatePartner({ login, password, companyName });
+      const res = await api.adminCreatePartner({ login, password, companyName, city });
       setCreated(`Создан партнёр ${res.login} · пароль: ${res.password}`);
       setLogin('');
       setPassword('');
       setCompanyName('');
+      setCity('');
       setTab('partners');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
     }
   }
 
-  async function onReset(id: string, loginName: string) {
-    const pw = prompt(`Новый пароль для ${loginName}`);
-    if (!pw) return;
-    try {
-      const next = await api.adminResetPassword(id, pw);
-      alert(`Пароль для ${loginName}: ${next}`);
-    } catch (ex) {
-      alert(ex instanceof Error ? ex.message : 'Ошибка');
-    }
-  }
-
   async function onDelete(id: string, loginName: string, company: string, executorCount: number) {
     const ok = confirm(
-      `Удалить партнёра «${company || loginName}» (${loginName})?\n` +
+      `Удалить «${company}» (${loginName})?\n` +
         `Будут удалены организация и ${executorCount} сотрудник(ов). Это необратимо.`,
     );
     if (!ok) return;
@@ -129,21 +147,25 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
-          <h1>Администратор</h1>
-          <p className={styles.lead}>Партнёры, сотрудники сети и аналитика кабинета.</p>
+          <h1>Сеть StP · партнёры</h1>
+          <p className={styles.lead}>
+            Партнёры по регионам, официальные РРЦ и сетевая аналитика.
+            {api.remote ? ' · облако' : ' · локальный режим'}
+          </p>
         </div>
-        <button type="button" className={styles.ghost} onClick={api.logout}>
-          Выйти
-        </button>
+        <div className={styles.topActions}>
+          <SyncBadge />
+          <QuickLogout />
+        </div>
       </header>
 
       <ToolButtons onNavigate={onNavigate} onOpenCalc={() => onNavigate('calculator')} />
 
       <CabinetTabs
         tabs={[
-          { id: 'add', label: 'Добавить партнёра' },
-          { id: 'partners', label: `Партнёры · ${partners.length}` },
           { id: 'analytics', label: 'Аналитика' },
+          { id: 'partners', label: `Партнёры · ${partners.length}` },
+          { id: 'add', label: 'Добавить' },
         ]}
         active={tab}
         onChange={setTab}
@@ -153,10 +175,9 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         <TabPanel>
           <form className={`${styles.card} ${styles.panelCard}`} onSubmit={(e) => void onCreate(e)}>
             <h2>Новый партнёр</h2>
-            <p className={styles.lead}>Логин и пароль для входа в партнёрский кабинет.</p>
             <div className={styles.grid2}>
               <label className={styles.field}>
-                Логин
+                Логин владельца
                 <input value={login} onChange={(e) => setLogin(e.target.value)} required />
               </label>
               <label className={styles.field}>
@@ -176,6 +197,14 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                   required
                 />
               </label>
+              <label className={styles.field}>
+                Город / регион
+                <input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Например, Казань"
+                />
+              </label>
             </div>
             {created ? <p className={styles.ok}>{created}</p> : null}
             {err ? (
@@ -184,26 +213,27 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
               </p>
             ) : null}
             <button type="submit" className={styles.primary}>
-              Создать аккаунт
+              Создать
             </button>
           </form>
-          <InstallHint />
         </TabPanel>
       ) : null}
 
       {tab === 'partners' ? (
         <TabPanel>
           <div className={`${styles.card} ${styles.panelCard}`}>
-            <h2>Список партнёров · {partners.length}</h2>
+            <h2>Партнёры сети</h2>
             <div className={styles.table}>
               {partners.map((p) => (
                 <div key={p.user.id} className={styles.tableRow}>
                   <div>
                     <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
                     <div className={styles.hint}>
-                      {p.user.login} · сотрудников: {p.executorCount}
+                      {p.user.login}
+                      {p.org?.settings.city ? ` · ${p.org.settings.city}` : ''} · сотрудников:{' '}
+                      {p.executorCount}
                       {p.lastLogin
-                        ? ` · вход ${new Date(p.lastLogin).toLocaleString('ru-RU')}`
+                        ? ` · вход ${new Date(p.lastLogin).toLocaleDateString('ru-RU')}`
                         : ''}
                     </div>
                   </div>
@@ -211,9 +241,14 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                     <button
                       type="button"
                       className={styles.ghost}
-                      onClick={() => void onReset(p.user.id, p.user.login)}
+                      onClick={() => {
+                        const pw = generatePassword();
+                        void api.adminResetPassword(p.user.id, pw).then((next) => {
+                          alert(`Новый пароль для ${p.user.login}: ${next}`);
+                        });
+                      }}
                     >
-                      Сменить пароль
+                      Новый пароль
                     </button>
                     <button
                       type="button"
@@ -235,6 +270,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
               {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
             </div>
           </div>
+          <InstallHint />
         </TabPanel>
       ) : null}
 
@@ -247,9 +283,9 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   );
 }
 
-type PartnerTab = 'company' | 'staff' | 'analytics';
+type OwnerTab = 'objects' | 'company' | 'staff' | 'analytics';
 
-function PartnerCabinet({
+function OwnerCabinet({
   onNavigate,
   onOpenCalc,
 }: {
@@ -258,8 +294,9 @@ function PartnerCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [tab, setTab] = useState<PartnerTab>('company');
+  const [tab, setTab] = useState<OwnerTab>('objects');
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
+  const [city, setCity] = useState(user.org?.city || '');
   const [panelPriceRub, setPanelPriceRub] = useState(
     String(user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB),
   );
@@ -276,11 +313,11 @@ function PartnerCabinet({
   const [execLogin, setExecLogin] = useState('');
   const [execPassword, setExecPassword] = useState(() => generatePassword());
   const [execName, setExecName] = useState('');
+  const [execRole, setExecRole] = useState<UserRole>('measurer');
   const [execCreated, setExecCreated] = useState<string | null>(null);
-  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const staff = api.partnerListExecutors();
+  const staff = api.partnerListStaff();
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -289,13 +326,14 @@ function PartnerCabinet({
     try {
       await api.saveOrg({
         companyName: companyName.trim(),
+        city: city.trim(),
         panelPriceRub: Math.max(0, Number(panelPriceRub) || OFFICIAL_PANEL_PRICE_RUB),
         pricePerM2: Math.max(0, Number(pricePerM2) || OFFICIAL_PRICE_PER_M2),
         installPricePerM2: installPricePerM2 === '' ? null : Number(installPricePerM2),
         dowelsPerPanel: Math.max(1, Number(dowelsPerPanel) || 2),
         dowelPriceRub: dowelPriceRub === '' ? null : Number(dowelPriceRub),
       });
-      setMsg('Сохранено в этом браузере');
+      setMsg(api.remote ? 'Сохранено в облаке' : 'Сохранено в этом браузере');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
     }
@@ -307,13 +345,15 @@ function PartnerCabinet({
     setErr(null);
     try {
       const password = execPassword.trim() || generatePassword();
-      const res = await api.partnerCreateExecutor({
+      const res = await api.partnerCreateStaff({
         login: execLogin.trim(),
         password,
         displayName: execName.trim() || execLogin.trim(),
+        role: execRole,
       });
-      setExecCreated(`Сотрудник ${res.login} · пароль: ${res.password}`);
-      setRevealedPasswords((prev) => ({ ...prev, [res.id]: true }));
+      setExecCreated(
+        `${ROLE_LABELS[res.role]} ${res.login} · пароль: ${res.password}`,
+      );
       setExecLogin('');
       setExecPassword(generatePassword());
       setExecName('');
@@ -322,56 +362,27 @@ function PartnerCabinet({
     }
   }
 
-  function togglePassword(id: string) {
-    setRevealedPasswords((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
-
-  async function onGenerateStaffPassword(id: string) {
-    try {
-      const next = await api.partnerResetExecutorPassword(id, generatePassword());
-      setRevealedPasswords((prev) => ({ ...prev, [id]: true }));
-      setExecCreated(`Новый пароль сохранён: ${next}`);
-    } catch (ex) {
-      alert(ex instanceof Error ? ex.message : 'Ошибка');
-    }
-  }
-
-  async function onDeleteStaff(id: string, loginName: string, displayName: string) {
-    const ok = confirm(
-      `Удалить сотрудника «${displayName}» (${loginName})?\nВход под этим логином станет невозможным.`,
-    );
-    if (!ok) return;
-    try {
-      await api.partnerDeleteExecutor(id);
-      setRevealedPasswords((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setExecCreated(`Сотрудник ${loginName} удалён`);
-    } catch (ex) {
-      alert(ex instanceof Error ? ex.message : 'Ошибка');
-    }
-  }
-
   return (
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
-          <h1>Партнёр · {user.org?.companyName || user.displayName}</h1>
+          <h1>Владелец · {user.org?.companyName || user.displayName}</h1>
           <p className={styles.lead}>
-            Параметры компании, сотрудники и аналитика команды.
+            Прайс, команда, объекты и воронка компании
+            {user.org?.city ? ` · ${user.org.city}` : ''}
           </p>
         </div>
-        <button type="button" className={styles.ghost} onClick={api.logout}>
-          Выйти
-        </button>
+        <div className={styles.topActions}>
+          <SyncBadge />
+          <QuickLogout />
+        </div>
       </header>
 
       <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
 
       <CabinetTabs
         tabs={[
+          { id: 'objects', label: `Объекты · ${api.objects.length}` },
           { id: 'company', label: 'Компания' },
           { id: 'staff', label: `Сотрудники · ${staff.length}` },
           { id: 'analytics', label: 'Аналитика' },
@@ -380,6 +391,12 @@ function PartnerCabinet({
         onChange={setTab}
       />
 
+      {tab === 'objects' ? (
+        <TabPanel>
+          <ObjectsPanel />
+        </TabPanel>
+      ) : null}
+
       {tab === 'company' ? (
         <TabPanel>
           <form className={`${styles.card} ${styles.panelCard}`} onSubmit={(e) => void onSave(e)}>
@@ -387,6 +404,14 @@ function PartnerCabinet({
             <label className={styles.field}>
               Название компании (в PDF и КП)
               <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+            </label>
+            <label className={styles.field}>
+              Город / регион
+              <input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="Для аналитики сети StP"
+              />
             </label>
             <div className={styles.grid2}>
               <label className={styles.field}>
@@ -467,8 +492,8 @@ function PartnerCabinet({
           >
             <h2>Сотрудники</h2>
             <p className={styles.lead}>
-              Логин и пароль для сотрудников. Они входят в кабинет и работают в проблемомере и
-              калькуляторе с вашими параметрами — без доступа к настройкам компании.
+              Менеджер ведёт сделки и КП, замерщик сохраняет объекты, бригада видит количества без
+              цен.
             </p>
             <div className={styles.grid2}>
               <label className={styles.field}>
@@ -478,6 +503,19 @@ function PartnerCabinet({
                   onChange={(e) => setExecName(e.target.value)}
                   placeholder="Например, Иван · замер"
                 />
+              </label>
+              <label className={styles.field}>
+                Роль
+                <select
+                  value={execRole}
+                  onChange={(e) => setExecRole(e.target.value as UserRole)}
+                >
+                  {STAFF_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABELS[r]}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className={styles.field}>
                 Логин
@@ -519,45 +557,44 @@ function PartnerCabinet({
               Создать сотрудника
             </button>
             <div className={styles.table}>
-              {staff.map((ex) => {
-                const shown = !!revealedPasswords[ex.id];
-                return (
-                  <div key={ex.id} className={styles.tableRow}>
-                    <div>
-                      <strong>{ex.displayName}</strong>
-                      <div className={styles.hint}>
-                        {ex.login} · пароль:{' '}
-                        <span className={styles.passwordReveal}>
-                          {shown ? ex.password : '••••••••'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className={styles.rowActions}>
-                      <button
-                        type="button"
-                        className={styles.ghost}
-                        onClick={() => togglePassword(ex.id)}
-                      >
-                        {shown ? 'Скрыть' : 'Показать'}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.ghost}
-                        onClick={() => void onGenerateStaffPassword(ex.id)}
-                      >
-                        Новый пароль
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.danger}
-                        onClick={() => void onDeleteStaff(ex.id, ex.login, ex.displayName)}
-                      >
-                        Удалить
-                      </button>
+              {staff.map((ex) => (
+                <div key={ex.id} className={styles.tableRow}>
+                  <div>
+                    <strong>{ex.displayName}</strong>
+                    <div className={styles.hint}>
+                      {ex.login} · {ROLE_LABELS[ex.role] || ex.role}
                     </div>
                   </div>
-                );
-              })}
+                  <div className={styles.rowActions}>
+                    <button
+                      type="button"
+                      className={styles.ghost}
+                      onClick={() =>
+                        void api
+                          .partnerResetStaffPassword(ex.id, generatePassword())
+                          .then((next) => setExecCreated(`Новый пароль: ${next}`))
+                      }
+                    >
+                      Новый пароль
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.danger}
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Удалить сотрудника «${ex.displayName}» (${ex.login})?`,
+                          )
+                        ) {
+                          void api.partnerDeleteStaff(ex.id);
+                        }
+                      }}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))}
               {!staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
             </div>
           </form>
@@ -573,7 +610,7 @@ function PartnerCabinet({
   );
 }
 
-function ExecutorCabinet({
+function SalesCabinet({
   onNavigate,
   onOpenCalc,
 }: {
@@ -582,30 +619,109 @@ function ExecutorCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
+  const [tab, setTab] = useState<'deals' | 'analytics'>('deals');
+
   return (
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
-          <h1>{user.displayName}</h1>
+          <h1>Менеджер · {user.displayName}</h1>
           <p className={styles.lead}>
-            Инструменты продаж · {user.org?.companyName || 'компания'}
+            Сделки, КП и отправка клиенту · {user.org?.companyName || 'компания'}
           </p>
         </div>
-        <button type="button" className={styles.ghost} onClick={api.logout}>
-          Выйти
-        </button>
+        <div className={styles.topActions}>
+          <SyncBadge />
+          <QuickLogout />
+        </div>
+      </header>
+      <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
+      <CabinetTabs
+        tabs={[
+          { id: 'deals', label: `Сделки · ${api.objects.length}` },
+          { id: 'analytics', label: 'Аналитика' },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+      {tab === 'deals' ? (
+        <TabPanel>
+          <ObjectsPanel />
+        </TabPanel>
+      ) : (
+        <TabPanel>
+          <AnalyticsDashboard mode="partner" />
+        </TabPanel>
+      )}
+    </div>
+  );
+}
+
+function MeasurerCabinet({
+  onNavigate,
+  onOpenCalc,
+}: {
+  onNavigate: (r: Route) => void;
+  onOpenCalc: () => void;
+}) {
+  const api = usePartner();
+  const user = api.user!;
+
+  return (
+    <div className={styles.shellWide}>
+      <header className={styles.top}>
+        <div>
+          <h1>Замерщик · {user.displayName}</h1>
+          <p className={styles.lead}>
+            Замер за 5–10 минут · {user.org?.companyName || 'компания'}
+          </p>
+        </div>
+        <div className={styles.topActions}>
+          <SyncBadge />
+          <QuickLogout />
+        </div>
       </header>
       <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
       <div className={`${styles.card} ${styles.panelCard}`}>
-        <h2>Корпоративные параметры</h2>
+        <h2>Параметры компании</h2>
         <p className={styles.lead}>
           РРЦ панели {user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB} ₽ ·{' '}
           {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
-          {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'} ·
-          дюбели {user.org?.dowelsPerPanel ?? 2}/панель
-          {user.org?.dowelPriceRub != null ? ` × ${user.org.dowelPriceRub} ₽` : ''}
+          {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'}
         </p>
       </div>
+      <ObjectsPanel compact />
+      <InstallHint />
+    </div>
+  );
+}
+
+function CrewCabinet({
+  onNavigate,
+  onOpenCalc,
+}: {
+  onNavigate: (r: Route) => void;
+  onOpenCalc: () => void;
+}) {
+  const api = usePartner();
+  const user = api.user!;
+
+  return (
+    <div className={styles.shellWide}>
+      <header className={styles.top}>
+        <div>
+          <h1>Бригада · {user.displayName}</h1>
+          <p className={styles.lead}>
+            Монтаж по объектам · цены скрыты · {user.org?.companyName || 'компания'}
+          </p>
+        </div>
+        <div className={styles.topActions}>
+          <SyncBadge />
+          <QuickLogout />
+        </div>
+      </header>
+      <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
+      <ObjectsPanel />
       <InstallHint />
     </div>
   );
@@ -619,8 +735,14 @@ export function CabinetScreen({ onNavigate }: { onNavigate: (r: Route) => void }
   const openCalc = () => onNavigate('calculator');
 
   if (user.role === 'admin') return <AdminCabinet onNavigate={onNavigate} />;
-  if (user.role === 'executor') {
-    return <ExecutorCabinet onNavigate={onNavigate} onOpenCalc={openCalc} />;
+  if (user.role === 'owner') {
+    return <OwnerCabinet onNavigate={onNavigate} onOpenCalc={openCalc} />;
   }
-  return <PartnerCabinet onNavigate={onNavigate} onOpenCalc={openCalc} />;
+  if (user.role === 'sales') {
+    return <SalesCabinet onNavigate={onNavigate} onOpenCalc={openCalc} />;
+  }
+  if (user.role === 'crew') {
+    return <CrewCabinet onNavigate={onNavigate} onOpenCalc={openCalc} />;
+  }
+  return <MeasurerCabinet onNavigate={onNavigate} onOpenCalc={openCalc} />;
 }

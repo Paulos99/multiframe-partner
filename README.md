@@ -1,22 +1,37 @@
 ﻿# MultiFrame · Кабинет партнёра
 
-Отдельный сервис для коммерческих партнёров: **логин → кабинет (РРЦ, монтаж, крепёж) → проблемомер + калькулятор**.
+Сервис для коммерческих партнёров (натяжные потолки): **логин → кабинет по роли → проблемомер + калькулятор + объекты**.
 
 Публичные проблемомер и калькулятор MF_StP не меняются.
+
+## Роли
+
+| Роль | Логин демо | Пароль | Возможности |
+|------|------------|--------|-------------|
+| Админ StP | `admin` | `admin1234` | Партнёры сети, города, аналитика |
+| Владелец | `partner1` | `demo1234` | Прайс, сотрудники, объекты, аналитика |
+| Менеджер | `sales1` | `exec1234` | Сделки, КП, отправка клиенту |
+| Замерщик | `exec1` | `exec1234` | Замер, калькулятор, черновики объектов |
+| Бригада | `crew1` | `exec1234` | Количества без цен, статус монтажа |
 
 ## Уже задеплоено (Yandex Cloud)
 
 - API Gateway: `https://d5dff69141o8r1ehqm09.l5v6loqa.apigw.yandexcloud.net`
 - Cloud Function: `multiframe-partner-api` (`d4et50596cl0hu9o3d7k`)
-- Демо-вход: логин `partner1`, пароль `demo1234`
 
-Локальный фронт подхватывает URL из `apps/web/.env` (не в git).
+Локальный фронт подхватывает URL из `apps/web/.env`:
+
+```
+VITE_API_URL=https://d5dff69141o8r1ehqm09.l5v6loqa.apigw.yandexcloud.net
+```
+
+Без `VITE_API_URL` кабинет работает в локальном режиме (`localStorage`), с теми же ролями и объектами.
 
 ## Структура
 
-- `apps/web` — React: логин, кабинет, проблемомер, iframe-калькулятор
-- `apps/api` — HTTP API: `/auth/login`, `/auth/me`, `/partner/profile`
-- `packages/shared` — типы профиля
+- `apps/web` — React: логин, кабинеты по ролям, проблемомер, iframe-калькулятор, карточка объекта
+- `apps/api` — HTTP API: auth (JWT + bcrypt), org, staff, objects, analytics
+- `packages/shared` — роли, права, OrgSettings, JobObject, агрегатор аналитики
 - `infra/deploy_yc.py` — деплой Function + Gateway
 
 ## Локально
@@ -27,11 +42,23 @@ npm install
 npm run dev
 ```
 
+## API (v2)
+
+- `POST /auth/login` → `{ token, user }`
+- `GET /auth/me`
+- `PATCH /org/settings`
+- `GET|POST /admin/partners`, `DELETE /admin/partners/:id`
+- `GET|POST /org/staff`, `DELETE /org/staff/:id`
+- `GET|POST /objects`, `PATCH /objects/:id`
+- Analytics: `/analytics/events`, `/analytics/dashboard`
+
+Пароли на сервере — bcrypt. Сессия — JWT 12ч. Для бригады API отдаёт прайс и суммы КП без денег.
+
 ## Профиль партнёра
 
-Поля кабинета применяются в калькуляторе (query-параметры) и в карточке сметы / PDF проблемомера.
+Поля кабинета (включая город) применяются в калькуляторе, смете, PDF и аналитике сети.
 
-Партнёры по умолчанию в памяти функции (сид). Для постоянных правок профиля задайте Object Storage: `PARTNERS_BUCKET` + ключи доступа в env версии функции.
+Данные платформы в Object Storage: ключ `platform-v2.json` (или `PLATFORM_KEY`). Старый `partners.json` мигрирует при первом чтении.
 
 ## Передеплой API
 
