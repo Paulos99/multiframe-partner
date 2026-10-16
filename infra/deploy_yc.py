@@ -43,6 +43,7 @@ GATEWAY_PATHS = (
     "/admin/partners",
     "/admin/partners/reset-password",
     "/admin/partners/{partnerUserId}",
+    "/admin/demo/reset",
     "/objects",
     "/objects/{objectId}",
     "/analytics/events",
@@ -212,6 +213,7 @@ def make_zip() -> Path:
         zip_path.unlink()
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(API_DIR / "index.js", "index.js")
+        zf.write(API_DIR / "demoSeed.js", "demoSeed.js")
         zf.write(API_DIR / "package.json", "package.json")
         nm = API_DIR / "node_modules"
         if not nm.is_dir():

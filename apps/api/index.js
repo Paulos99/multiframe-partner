@@ -4,6 +4,7 @@
  */
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
+import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
 
 const JWT_SECRET = () => new TextEncoder().encode(process.env.JWT_SECRET || 'dev-secret-change-me');
 const ANALYTICS_ADMIN_KEY = () => process.env.ANALYTICS_ADMIN_KEY || 'admin1234';
@@ -108,79 +109,12 @@ function publicUser(user, org) {
 }
 
 function defaultPlatform() {
-  const now = new Date().toISOString();
-  const orgId = 'org_demo';
-  const adminHash = bcrypt.hashSync('admin1234', 10);
-  const ownerHash = bcrypt.hashSync('demo1234', 10);
-  const staffHash = bcrypt.hashSync('exec1234', 10);
-  return {
-    version: 2,
-    users: [
-      {
-        id: 'u_admin',
-        login: 'admin',
-        passwordHash: adminHash,
-        role: 'admin',
-        displayName: 'Администратор StP',
-        orgId: null,
-        createdAt: now,
-      },
-      {
-        id: 'u_partner1',
-        login: 'partner1',
-        passwordHash: ownerHash,
-        role: 'owner',
-        displayName: 'Демо Партнёр',
-        orgId,
-        createdAt: now,
-      },
-      {
-        id: 'u_sales1',
-        login: 'sales1',
-        passwordHash: staffHash,
-        role: 'sales',
-        displayName: 'Демо Менеджер',
-        orgId,
-        createdAt: now,
-      },
-      {
-        id: 'u_measurer1',
-        login: 'exec1',
-        passwordHash: staffHash,
-        role: 'measurer',
-        displayName: 'Демо Замерщик',
-        orgId,
-        createdAt: now,
-      },
-      {
-        id: 'u_crew1',
-        login: 'crew1',
-        passwordHash: staffHash,
-        role: 'crew',
-        displayName: 'Демо Бригада',
-        orgId,
-        createdAt: now,
-      },
-    ],
-    orgs: [
-      {
-        id: orgId,
-        createdAt: now,
-        createdBy: 'u_admin',
-        settings: normalizeOrgSettings({
-          companyName: 'Демо Партнёр',
-          city: 'Москва',
-          panelPriceRub: OFFICIAL_PANEL,
-          pricePerM2: OFFICIAL_M2,
-          installPricePerM2: DEFAULT_INSTALL,
-          dowelsPerPanel: 2,
-          dowelPriceRub: DEFAULT_DOWEL,
-        }),
-      },
-    ],
-    objects: [],
-    activity: [],
-  };
+  const platform = buildDemoPlatform({ withHashes: true });
+  platform.orgs = platform.orgs.map((o) => ({
+    ...o,
+    settings: normalizeOrgSettings(o.settings),
+  }));
+  return platform;
 }
 
 function migrateLegacyPartners(list) {
@@ -939,6 +873,22 @@ export async function handler(event = {}) {
       });
       await savePlatform(platform);
       return json(200, { login, password, user: publicUser(owner, org) });
+    }
+
+    if (method === 'POST' && path.endsWith('/admin/demo/reset')) {
+      const { user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const platform = defaultPlatform();
+      const events = buildDemoAnalyticsEvents();
+      await savePlatform(platform);
+      await saveEvents(events);
+      return json(200, {
+        ok: true,
+        orgs: platform.orgs.length,
+        users: platform.users.length,
+        objects: platform.objects.length,
+        events: events.length,
+      });
     }
 
     if (method === 'POST' && path.endsWith('/admin/partners/reset-password')) {

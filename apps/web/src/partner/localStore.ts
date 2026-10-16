@@ -27,9 +27,16 @@ import {
   redactOrgPrices,
   STAFF_ROLES,
 } from '../../../../packages/shared/partner';
+import {
+  buildLocalDemoAnalytics,
+  buildLocalDemoObjects,
+  buildLocalDemoOrgs,
+  buildLocalDemoUsers,
+} from './demoSeed';
 
-const DB_KEY = 'mf_partner_db_v3';
-const DB_KEY_LEGACY = 'mf_partner_db_v2';
+/** Bumped to force leadership demo seed (two companies + objects). */
+const DB_KEY = 'mf_partner_db_v4';
+const DB_KEY_LEGACY = 'mf_partner_db_v3';
 const SESSION_KEY = 'mf_partner_session_v2';
 const TOKEN_KEY = 'mf_partner_token_v1';
 const ANALYTICS_KEY = 'mf_partner_analytics_v1';
@@ -37,6 +44,7 @@ const ANALYTICS_QUEUE_KEY = 'mf_partner_analytics_queue_v1';
 const OBJECTS_CACHE_KEY = 'mf_partner_objects_v1';
 const OBJECTS_QUEUE_KEY = 'mf_partner_objects_queue_v1';
 const HISTORY_RESET_KEY = 'mf_partner_history_reset_v2';
+const DEMO_ANALYTICS_SEED_KEY = 'mf_partner_demo_analytics_seed_v1';
 const ANALYTICS_CAP = 2000;
 
 export type StoredUser = {
@@ -78,77 +86,15 @@ export function generatePassword(length = 10): string {
 }
 
 function defaultDb(): PartnerDb {
-  const adminId = 'u_admin';
-  const orgId = 'org_demo';
-  const partnerId = 'u_partner1';
-  const now = new Date().toISOString();
   return {
-    users: [
-      {
-        id: adminId,
-        login: 'admin',
-        password: 'admin1234',
-        role: 'admin',
-        displayName: 'Администратор StP',
-        orgId: null,
-        createdAt: now,
-      },
-      {
-        id: partnerId,
-        login: 'partner1',
-        password: 'demo1234',
-        role: 'owner',
-        displayName: 'Демо Партнёр',
-        orgId,
-        createdAt: now,
-      },
-      {
-        id: 'u_sales1',
-        login: 'sales1',
-        password: 'exec1234',
-        role: 'sales',
-        displayName: 'Демо Менеджер',
-        orgId,
-        createdAt: now,
-      },
-      {
-        id: 'u_exec1',
-        login: 'exec1',
-        password: 'exec1234',
-        role: 'measurer',
-        displayName: 'Демо Замерщик',
-        orgId,
-        createdAt: now,
-      },
-      {
-        id: 'u_crew1',
-        login: 'crew1',
-        password: 'exec1234',
-        role: 'crew',
-        displayName: 'Демо Бригада',
-        orgId,
-        createdAt: now,
-      },
-    ],
-    orgs: [
-      {
-        id: orgId,
-        createdAt: now,
-        createdBy: adminId,
-        settings: normalizeOrgSettings({
-          companyName: 'Демо Партнёр',
-          city: 'Москва',
-          panelPriceRub: OFFICIAL_PANEL_PRICE_RUB,
-          pricePerM2: OFFICIAL_PRICE_PER_M2,
-          installPricePerM2: 1500,
-          dowelsPerPanel: 2,
-          dowelPriceRub: 25,
-        }),
-      },
-    ],
+    users: buildLocalDemoUsers() as StoredUser[],
+    orgs: buildLocalDemoOrgs().map((o) => ({
+      ...o,
+      settings: normalizeOrgSettings(o.settings),
+    })),
     links: [],
     activity: [],
-    objects: [],
+    objects: buildLocalDemoObjects(),
   };
 }
 
@@ -207,30 +153,47 @@ export function loadDb(): PartnerDb {
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (!raw) {
-      const legacy = localStorage.getItem(DB_KEY_LEGACY);
-      if (legacy) {
-        const migrated = migrateDb(JSON.parse(legacy) as PartnerDb);
-        saveDb(migrated);
-        return migrated;
+      // Fresh v4 seed (two demo companies). Drop prior local DBs.
+      try {
+        localStorage.removeItem(DB_KEY_LEGACY);
+        localStorage.removeItem('mf_partner_db_v2');
+      } catch {
+        /* ignore */
       }
       const db = defaultDb();
       saveDb(db);
+      seedDemoAnalyticsOnce();
       return db;
     }
     const before = raw;
     const parsed = migrateDb(JSON.parse(raw) as PartnerDb);
-    if (!parsed.users?.length) {
+    if (!parsed.users?.length || !parsed.orgs.some((o) => o.id === 'org_demo_spb')) {
       const db = defaultDb();
       saveDb(db);
+      seedDemoAnalyticsOnce(true);
       return db;
     }
     const after = JSON.stringify(parsed);
     if (after !== before) saveDb(parsed);
+    seedDemoAnalyticsOnce();
     return parsed;
   } catch {
     const db = defaultDb();
     saveDb(db);
+    seedDemoAnalyticsOnce(true);
     return db;
+  }
+}
+
+/** One-shot local analytics month for offline demo dashboards. */
+export function seedDemoAnalyticsOnce(force = false): void {
+  try {
+    if (!force && localStorage.getItem(DEMO_ANALYTICS_SEED_KEY) === '1') return;
+    const events = buildLocalDemoAnalytics() as AnalyticsEvent[];
+    localStorage.setItem(ANALYTICS_KEY, JSON.stringify(events.slice(0, ANALYTICS_CAP)));
+    localStorage.setItem(DEMO_ANALYTICS_SEED_KEY, '1');
+  } catch {
+    /* ignore */
   }
 }
 

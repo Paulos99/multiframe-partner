@@ -7,6 +7,7 @@ import { canSeePrices } from '../../../packages/shared/partner';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
+import { DemoSwitcherFab } from './partner/DemoSwitcher';
 import styles from './partner/partner.module.css';
 
 type Route = 'cabinet' | 'problemomer' | 'calculator';
@@ -50,13 +51,16 @@ function PartnerShell() {
 
   if (route === 'cabinet') {
     return (
-      <CabinetScreen
-        onNavigate={(r) => {
-          if (r === 'calculator') noteTool('calculator');
-          if (r === 'problemomer') noteTool('problemomer');
-          setRoute(r);
-        }}
-      />
+      <>
+        <CabinetScreen
+          onNavigate={(r) => {
+            if (r === 'calculator') noteTool('calculator');
+            if (r === 'problemomer') noteTool('problemomer');
+            setRoute(r);
+          }}
+        />
+        <DemoSwitcherFab />
+      </>
     );
   }
 
@@ -95,6 +99,7 @@ function PartnerShell() {
             <p className={styles.lead}>Нет параметров для калькулятора</p>
           </div>
         )}
+        <DemoSwitcherFab />
       </div>
     );
   }
@@ -130,6 +135,7 @@ function PartnerShell() {
           <CookieNotice />
         </SessionProvider>
       </SmoothScroll>
+      <DemoSwitcherFab />
     </div>
   );
 }

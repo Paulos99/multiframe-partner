@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { DemoLoginPicker, isDemoModeEnabled } from './DemoSwitcher';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
@@ -7,6 +8,7 @@ export function LoginScreen() {
   const [loginName, setLoginName] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const demo = isDemoModeEnabled();
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -20,11 +22,13 @@ export function LoginScreen() {
 
   return (
     <div className={styles.shell}>
+      {demo ? <DemoLoginPicker /> : null}
       <form className={styles.card} onSubmit={(e) => void onSubmit(e)}>
         <h1>Кабинет партнёра MultiFrame</h1>
         <p className={styles.lead}>
-          Проблемомер, калькулятор и объекты компании. На общем планшете после работы нажмите
-          «Выйти».
+          {demo
+            ? 'Или войдите вручную по логину и паролю.'
+            : 'Проблемомер, калькулятор и объекты компании. На общем планшете после работы нажмите «Выйти».'}
         </p>
         <label className={styles.field}>
           Логин
@@ -53,11 +57,13 @@ export function LoginScreen() {
         <button type="submit" className={styles.primary} disabled={loading}>
           {loading ? 'Входим…' : 'Войти'}
         </button>
-        <p className={styles.hint}>
-          Демо: <code>admin</code>/<code>admin1234</code> · владелец <code>partner1</code>/
-          <code>demo1234</code> · менеджер <code>sales1</code> · замерщик <code>exec1</code> ·
-          бригада <code>crew1</code> (пароль сотрудников <code>exec1234</code>)
-        </p>
+        {!demo ? (
+          <p className={styles.hint}>
+            Демо: <code>admin</code>/<code>admin1234</code> · владелец <code>partner1</code>/
+            <code>demo1234</code> · менеджер <code>sales1</code> · замерщик <code>exec1</code> ·
+            бригада <code>crew1</code> (пароль сотрудников <code>exec1234</code>)
+          </p>
+        ) : null}
       </form>
     </div>
   );

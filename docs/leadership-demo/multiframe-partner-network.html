@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Партнёрская сеть MultiFrame · для руководства</title>
+    <style>
+      @page {
+        size: landscape A4;
+        margin: 0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        color: #10231e;
+        background: #0b1f1a;
+      }
+      .slide {
+        width: 297mm;
+        height: 210mm;
+        padding: 18mm 20mm;
+        page-break-after: always;
+        background:
+          radial-gradient(90% 70% at 100% 0%, rgba(42, 179, 139, 0.22), transparent 55%),
+          linear-gradient(135deg, #f4faf7 0%, #e8f2ee 55%, #dfece7 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        position: relative;
+      }
+      .slide:last-child {
+        page-break-after: auto;
+      }
+      .brand {
+        position: absolute;
+        top: 12mm;
+        left: 20mm;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #01644f;
+      }
+      .num {
+        position: absolute;
+        top: 12mm;
+        right: 20mm;
+        font-size: 13px;
+        font-weight: 700;
+        color: #5a6b62;
+      }
+      h1 {
+        margin: 0 0 14px;
+        font-size: 36px;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        max-width: 90%;
+      }
+      p,
+      li {
+        font-size: 18px;
+        line-height: 1.45;
+        color: #243832;
+      }
+      p.lead {
+        max-width: 88%;
+        margin: 0 0 18px;
+      }
+      ul {
+        margin: 0;
+        padding-left: 22px;
+        max-width: 88%;
+      }
+      li + li {
+        margin-top: 10px;
+      }
+      .accent {
+        color: #01644f;
+        font-weight: 700;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 8px;
+        max-width: 92%;
+      }
+      .tile {
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(1, 100, 79, 0.14);
+        border-radius: 14px;
+        padding: 14px 16px;
+      }
+      .tile strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 16px;
+        color: #01644f;
+      }
+      .tile span {
+        font-size: 15px;
+        line-height: 1.4;
+        color: #243832;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="slide">
+      <div class="brand">StP · MultiFrame</div>
+      <div class="num">01 / 05</div>
+      <h1>Проблема: инновационный материал<br />сложно продавать «в поле»</h1>
+      <p class="lead">
+        MultiFrame продаётся по всей России через дистрибьюторов — в основном
+        <span class="accent">потолочные компании</span> со своими бригадами.
+      </p>
+      <ul>
+        <li>Им трудно встроить продукт в свою цепочку продаж и монтажа.</li>
+        <li>Сложно предложить клиенту и объяснить значимость акустического комфорта.</li>
+        <li>Нет простого способа быстро показать эффект на объекте.</li>
+        <li>Инфополе раскачиваем, но рынок принимает материал медленно.</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="brand">StP · MultiFrame</div>
+      <div class="num">02 / 05</div>
+      <h1>Решение: партнёрская сеть<br />как рабочий инструмент продаж</h1>
+      <p class="lead">
+        Единый кабинет для сети партнёров StP: от замера у клиента до статуса монтажа —
+        с инструментами, которые помогают <span class="accent">продавать MultiFrame</span>,
+        а не только считать смету.
+      </p>
+      <div class="grid">
+        <div class="tile">
+          <strong>Для StP</strong>
+          <span>Обзор сети, активность регионов, контроль внедрения.</span>
+        </div>
+        <div class="tile">
+          <strong>Для партнёра</strong>
+          <span>Команда, объекты, аналитика и обучение по ролям.</span>
+        </div>
+        <div class="tile">
+          <strong>На объекте</strong>
+          <span>Проблемомер и калькулятор — аргументы для клиента за 5–10 минут.</span>
+        </div>
+        <div class="tile">
+          <strong>В бригаде</strong>
+          <span>Задания на монтаж без лишних цен — только объёмы и статус.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="brand">StP · MultiFrame</div>
+      <div class="num">03 / 05</div>
+      <h1>Как устроено</h1>
+      <p class="lead">Роли и цепочка сделки — от сети StP до бригады на объекте.</p>
+      <ul>
+        <li><span class="accent">Admin StP</span> — партнёры, аналитика сети, онбординг.</li>
+        <li><span class="accent">Владелец</span> — компания, сотрудники, объекты, KPI.</li>
+        <li><span class="accent">Менеджер / замерщик</span> — проблемомер, калькулятор, карточка объекта, КП.</li>
+        <li><span class="accent">Бригада</span> — задания на монтаж, смена статуса.</li>
+        <li>Поток: <strong>проблемомер → калькулятор → объект → КП → монтаж → закрытие</strong>.</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="brand">StP · MultiFrame</div>
+      <div class="num">04 / 05</div>
+      <h1>Что покажем в демо</h1>
+      <div class="grid">
+        <div class="tile">
+          <strong>Переключатель ролей</strong>
+          <span>Один клик — кабинет admin, владельца, менеджера, замерщика или бригады.</span>
+        </div>
+        <div class="tile">
+          <strong>Две компании</strong>
+          <span>«Потолки Столицы» (Москва) и «Северный Потолок» (СПб).</span>
+        </div>
+        <div class="tile">
+          <strong>Месяц «живой» работы</strong>
+          <span>Объекты по статусам, входы, расчёты, PDF, шаринг — дашборды не пустые.</span>
+        </div>
+        <div class="tile">
+          <strong>Стенд</strong>
+          <span>https://paulos99.github.io/multiframe-partner/ · кнопка «Демо».</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="brand">StP · MultiFrame</div>
+      <div class="num">05 / 05</div>
+      <h1>Запрос к руководству</h1>
+      <p class="lead">
+        Цель показа — увидеть сервис в работе и
+        <span class="accent">зафиксировать приоритеты развития</span>.
+      </p>
+      <ul>
+        <li><strong>Продукт</strong> — что усилить в кабинете и инструментах продажи.</li>
+        <li><strong>Внедрение</strong> — как раскатывать сеть партнёров по регионам.</li>
+        <li><strong>Обучение</strong> — что нужно командам на объекте, чтобы продавать увереннее.</li>
+      </ul>
+      <p class="lead" style="margin-top: 22px">
+        Партнёрская сеть MultiFrame — инфраструктура продаж инновационного потолка,
+        а не ещё один прайс-лист.
+      </p>
+    </section>
+  </body>
+</html>
