@@ -315,7 +315,8 @@ function objectVisibleTo(user, obj) {
   if (!user.orgId || obj.orgId !== user.orgId) return false;
   if (user.role === 'owner') return true;
   if (user.role === 'sales') {
-    return obj.createdBy === user.id || obj.assignedTo === user.id || !obj.assignedTo;
+    // Менеджер видит воронку всей компании (как владелец по объектам).
+    return true;
   }
   if (user.role === 'measurer') {
     return obj.createdBy === user.id || obj.assignedTo === user.id;
