@@ -188,14 +188,19 @@ export async function apiPatchObject(
   return data.object;
 }
 
+export async function apiDeleteObject(id: string): Promise<void> {
+  await request(`/objects/${id}`, { method: 'DELETE' });
+}
+
 export async function apiFlushObjectQueue(
   queue: JobObject[],
 ): Promise<void> {
   for (const obj of queue) {
     try {
       if (obj.pendingSync) {
-        await apiCreateObject(obj).catch(async () => {
-          await apiPatchObject(obj.id, obj);
+        // Prefer PATCH so status updates don't clone; POST upserts by id on the API.
+        await apiPatchObject(obj.id, obj).catch(async () => {
+          await apiCreateObject(obj);
         });
       }
     } catch {

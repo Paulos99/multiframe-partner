@@ -703,6 +703,17 @@ export function listLocalObjects(user: SessionUser): JobObject[] {
     .map((o) => redactObjectForRole(o, user.role));
 }
 
+export function deleteLocalObject(id: string, actor: SessionUser): void {
+  const db = loadDb();
+  const existing = db.objects.find((o) => o.id === id);
+  if (!existing) return;
+  if (!objectVisible(actor, existing)) throw new Error('Недостаточно прав');
+  if (actor.role === 'crew') throw new Error('Бригада не удаляет объекты');
+  saveDb({ ...db, objects: db.objects.filter((o) => o.id !== id) });
+  removeFromObjectQueue(id);
+  cacheObjects(listLocalObjects(actor));
+}
+
 export function upsertLocalObject(
   input: Partial<JobObject> & { id?: string },
   actor: SessionUser,

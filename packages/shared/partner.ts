@@ -67,6 +67,10 @@ export function canCreateObjects(role: UserRole): boolean {
   return role === 'owner' || role === 'sales' || role === 'measurer';
 }
 
+export function canDeleteObjects(role: UserRole): boolean {
+  return role === 'owner' || role === 'sales' || role === 'measurer';
+}
+
 export function canAssignObjects(role: UserRole): boolean {
   return role === 'owner' || role === 'sales';
 }

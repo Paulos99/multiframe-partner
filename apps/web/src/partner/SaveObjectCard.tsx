@@ -16,6 +16,8 @@ export function SaveObjectCard() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Keep one card: save / send update the same object instead of creating clones. */
+  const [objectId, setObjectId] = useState<string | null>(null);
 
   if (!user || !canCreateObjects(user.role)) return null;
 
@@ -51,26 +53,35 @@ export function SaveObjectCard() {
     };
   }
 
+  function objectFields(status: 'measured' | 'quote_sent') {
+    return {
+      ...(objectId ? { id: objectId } : {}),
+      status,
+      clientName,
+      clientPhone,
+      address,
+      city: city || user?.org?.city || '',
+      clientSummary: summary,
+      room: roomPayload(),
+      estimate: estimatePayload(),
+    };
+  }
+
   async function onSave(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setMsg(null);
     setErr(null);
     try {
-      const obj = await saveObject({
-        status: 'measured',
-        clientName,
-        clientPhone,
-        address,
-        city: city || user?.org?.city || '',
-        clientSummary: summary,
-        room: roomPayload(),
-        estimate: estimatePayload(),
-      });
+      const updating = Boolean(objectId);
+      const obj = await saveObject(objectFields('measured'));
+      setObjectId(obj.id);
       setMsg(
         obj.pendingSync
           ? 'Объект сохранён на устройстве — отправится при сети'
-          : 'Объект сохранён',
+          : updating
+            ? 'Объект обновлён'
+            : 'Объект сохранён',
       );
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Не удалось сохранить');
@@ -96,17 +107,13 @@ export function SaveObjectCard() {
       } else {
         await navigator.clipboard.writeText(text);
       }
-      await saveObject({
-        status: 'quote_sent',
-        clientName,
-        clientPhone,
-        address,
-        city: city || user?.org?.city || '',
-        clientSummary: summary,
-        room: roomPayload(),
-        estimate: estimatePayload(),
-      });
-      setMsg(canShare ? 'Отправлено клиенту' : 'Сводка скопирована · статус «КП отправлено»');
+      const obj = await saveObject(objectFields('quote_sent'));
+      setObjectId(obj.id);
+      setMsg(
+        canShare
+          ? 'Отправлено клиенту · статус «КП отправлено»'
+          : 'Сводка скопирована · статус «КП отправлено»',
+      );
     } catch (ex) {
       if ((ex as Error)?.name === 'AbortError') return;
       setErr(ex instanceof Error ? ex.message : 'Не удалось отправить');

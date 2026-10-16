@@ -30,6 +30,7 @@ import {
   apiAdminResetPassword,
   apiCreateObject,
   apiCreateStaff,
+  apiDeleteObject,
   apiDeleteStaff,
   apiListObjects,
   apiListStaff,
@@ -52,6 +53,7 @@ import {
   clearObjectQueue,
   createPartnerAccount,
   createStaffAccount,
+  deleteLocalObject,
   deletePartnerAccount,
   deleteStaffAccount,
   generatePassword,
@@ -138,6 +140,7 @@ type PartnerApi = {
   partnerListExecutors: () => StaffMember[];
   refreshObjects: () => Promise<void>;
   saveObject: (input: Partial<JobObject> & { id?: string }) => Promise<JobObject>;
+  deleteObject: (id: string) => Promise<void>;
   flushObjectQueue: () => Promise<void>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
   refresh: () => void;
@@ -490,6 +493,26 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, remote, refreshObjects, bumpPending],
   );
 
+  const deleteObject = useCallback(
+    async (id: string) => {
+      if (!user) throw new Error('Нет сессии');
+      if (remote && loadToken() && navigator.onLine) {
+        try {
+          await apiDeleteObject(id);
+          removeFromObjectQueue(id);
+          await refreshObjects();
+          return;
+        } catch {
+          /* fall through offline */
+        }
+      }
+      deleteLocalObject(id, user);
+      bumpPending();
+      await refreshObjects();
+    },
+    [user, remote, refreshObjects, bumpPending],
+  );
+
   const noteTool = useCallback(
     (tool: 'problemomer' | 'calculator') => {
       if (user) {
@@ -544,6 +567,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
             : [],
       refreshObjects,
       saveObject,
+      deleteObject,
       flushObjectQueue,
       noteTool,
       refresh,
@@ -570,6 +594,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerDeleteStaff,
       refreshObjects,
       saveObject,
+      deleteObject,
       flushObjectQueue,
       noteTool,
       refresh,

@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react';
 import {
   JOB_OBJECT_STATUS_LABELS,
   ROLE_LABELS,
+  canAssignObjects,
+  canDeleteObjects,
+  canSeePrices,
   type JobObject,
   type JobObjectStatus,
   type UserRole,
 } from '../../../../packages/shared/partner';
-import { canAssignObjects, canSeePrices } from '../../../../packages/shared/partner';
 import { formatRub } from './estimate';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
@@ -24,6 +26,7 @@ export function ObjectsPanel({ compact }: { compact?: boolean }) {
   const user = api.user!;
   const seePrices = canSeePrices(user.role);
   const canAssign = canAssignObjects(user.role);
+  const canDelete = canDeleteObjects(user.role);
   const staff = api.partnerListStaff();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -43,6 +46,20 @@ export function ObjectsPanel({ compact }: { compact?: boolean }) {
       setMsg('Сохранено');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Ошибка');
+    }
+  }
+
+  async function remove(obj: JobObject) {
+    const label = obj.clientName || obj.address || 'объект';
+    if (!window.confirm(`Удалить «${label}»? Это действие нельзя отменить.`)) return;
+    setMsg(null);
+    setErr(null);
+    try {
+      await api.deleteObject(obj.id);
+      setSelectedId(null);
+      setMsg('Объект удалён');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Не удалось удалить');
     }
   }
 
@@ -194,6 +211,14 @@ export function ObjectsPanel({ compact }: { compact?: boolean }) {
                 .slice(0, 3)
                 .map((h) => `${h.login}: ${h.action}${h.detail ? ` (${h.detail})` : ''}`)
                 .join(' · ')}
+            </div>
+          ) : null}
+
+          {canDelete ? (
+            <div className={styles.navRow} style={{ marginTop: 12 }}>
+              <button type="button" className={styles.ghost} onClick={() => void remove(selected)}>
+                Удалить объект
+              </button>
             </div>
           ) : null}
 

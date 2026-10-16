@@ -1116,24 +1116,59 @@ export async function handler(event = {}) {
       if (!user.orgId) return json(400, { message: 'Нет организации' });
       const org = findOrg(platform, user.orgId);
       const body = getBody(event);
-      const obj = normalizeObjectInput(body, null, user, org);
-      obj.history = [
-        {
-          at: obj.createdAt,
+      // Offline sync may re-POST the same id — upsert instead of cloning.
+      const existingIdx =
+        body.id && Array.isArray(platform.objects)
+          ? platform.objects.findIndex((o) => o.id === body.id)
+          : -1;
+      const existing = existingIdx >= 0 ? platform.objects[existingIdx] : null;
+      if (existing && existing.orgId !== user.orgId) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      const obj = normalizeObjectInput(body, existing, user, org);
+      if (existing) {
+        if (body.status && body.status !== existing.status) {
+          obj.history = [
+            {
+              at: obj.updatedAt,
+              userId: user.id,
+              login: user.login,
+              action: 'status',
+              detail: `${existing.status}→${body.status}`,
+            },
+            ...(existing.history || []),
+          ].slice(0, 50);
+        } else {
+          obj.history = [
+            {
+              at: obj.updatedAt,
+              userId: user.id,
+              login: user.login,
+              action: 'update',
+            },
+            ...(existing.history || []),
+          ].slice(0, 50);
+        }
+        platform.objects[existingIdx] = obj;
+      } else {
+        obj.history = [
+          {
+            at: obj.createdAt,
+            userId: user.id,
+            login: user.login,
+            action: 'create',
+            detail: obj.status,
+          },
+        ];
+        platform.objects = [obj, ...(platform.objects || [])].slice(0, OBJECTS_CAP);
+        pushActivity(platform, {
+          orgId: user.orgId,
           userId: user.id,
           login: user.login,
-          action: 'create',
-          detail: obj.status,
-        },
-      ];
-      platform.objects = [obj, ...(platform.objects || [])].slice(0, OBJECTS_CAP);
-      pushActivity(platform, {
-        orgId: user.orgId,
-        userId: user.id,
-        login: user.login,
-        action: 'create_object',
-        detail: obj.address || obj.clientName || obj.id,
-      });
+          action: 'create_object',
+          detail: obj.address || obj.clientName || obj.id,
+        });
+      }
       await savePlatform(platform);
       return json(200, { object: publicObject(obj, user.role) });
     }
@@ -1222,6 +1257,30 @@ export async function handler(event = {}) {
       const obj = (platform.objects || []).find((o) => o.id === objectId);
       if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Объект не найден' });
       return json(200, { object: publicObject(obj, user.role) });
+    }
+
+    if (method === 'DELETE' && /\/objects\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      if (!['owner', 'sales', 'measurer'].includes(user.role)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      const objectId = path.split('/').pop();
+      const idx = (platform.objects || []).findIndex((o) => o.id === objectId);
+      if (idx < 0) return json(404, { message: 'Объект не найден' });
+      const existing = platform.objects[idx];
+      if (!objectVisibleTo(user, existing)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      platform.objects = platform.objects.filter((o) => o.id !== objectId);
+      pushActivity(platform, {
+        orgId: user.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'delete_object',
+        detail: existing.address || existing.clientName || existing.id,
+      });
+      await savePlatform(platform);
+      return json(200, { ok: true });
     }
 
     /* —— Analytics —— */
