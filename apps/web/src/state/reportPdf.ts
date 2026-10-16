@@ -8,7 +8,7 @@ import {
   NOISE_KIND_OPTIONS,
   NOISY_NEIGHBORS_OPTIONS,
   PLANNED_CEILING_OPTIONS,
-  ROOM_TYPE_LABELS,
+  roomTypeLabel,
   SLAB_THICKNESS_OPTIONS,
   SLAB_TYPE_OPTIONS,
   shouldAskNoiseKind,
@@ -240,7 +240,7 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
   const a = sim.after;
   const hybridBefore = comfortClassFor(b.Rw, b.Lnw);
   const hybridAfter = comfortClassFor(a.Rw, a.Lnw);
-  const roomName = room.roomType ? ROOM_TYPE_LABELS[room.roomType] : 'комната';
+  const roomName = roomTypeLabel(room);
   const area = room.ceilingAreaM2 != null ? `${room.ceilingAreaM2} м²` : 'н/д';
   const roomLine = `${roomName} · ${area}`;
   const slabLabel =
@@ -1123,7 +1123,7 @@ export async function downloadAcousticProfilePdf(session: SessionState): Promise
     }
 
     const room = full.answers.room;
-    const roomName = room.roomType ? ROOM_TYPE_LABELS[room.roomType] : 'komnata';
+    const roomName = roomTypeLabel(room, 'komnata');
     const safe = roomName.replace(/[^\wа-яА-ЯёЁ\-]+/gi, '_').slice(0, 24);
     const filename = `MultiFrame_результаты_${safe}_${room.ceilingAreaM2 ?? 'area'}.pdf`;
     triggerDownload(pdf.output('blob'), filename);

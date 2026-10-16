@@ -172,6 +172,8 @@ export const JOB_OBJECT_STATUS_LABELS: Record<JobObjectStatus, string> = {
 
 export type JobObjectRoom = {
   roomType?: string | null;
+  /** Custom name when roomType is «other». */
+  roomTypeCustom?: string | null;
   areaM2?: number | null;
   houseType?: string | null;
   objectStage?: string | null;
@@ -239,6 +241,7 @@ export type AnalyticsAction =
 
 export type AnalyticsObject = {
   roomType?: string | null;
+  roomTypeCustom?: string | null;
   areaM2?: number | null;
   houseType?: string | null;
   objectStage?: string | null;

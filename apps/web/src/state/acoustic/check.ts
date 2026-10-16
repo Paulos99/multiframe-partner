@@ -26,6 +26,7 @@ import { buildAnalyticsPayload } from '../../analytics/payload';
 function sampleRoom(over: Partial<RoomAnswers> = {}): RoomAnswers {
   return {
     roomType: 'living',
+    roomTypeCustom: '',
     ceilingAreaM2: 18,
     slabType: 'monolith',
     slabThickness: 'about_160_200',

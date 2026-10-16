@@ -42,6 +42,7 @@ interface SessionApi {
   goTo: (step: WizardStep) => void;
   restart: () => void;
   setRoomType: (roomType: RoomType) => void;
+  setRoomTypeCustom: (name: string) => void;
   setCeilingArea: (area: number | null) => void;
   patchRoom: (patch: Partial<RoomAnswers>) => void;
   setSlabType: (v: SlabTypeOption) => void;
@@ -174,7 +175,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const setRoomType = useCallback(
-    (roomType: RoomType) => patchRoom({ roomType }),
+    (roomType: RoomType) =>
+      patchRoom({
+        roomType,
+        ...(roomType !== 'other' ? { roomTypeCustom: '' } : {}),
+      }),
+    [patchRoom],
+  );
+
+  const setRoomTypeCustom = useCallback(
+    (roomTypeCustom: string) => patchRoom({ roomTypeCustom }),
     [patchRoom],
   );
 
@@ -259,6 +269,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       goTo,
       restart,
       setRoomType,
+      setRoomTypeCustom,
       setCeilingArea,
       patchRoom,
       setSlabType,
@@ -279,6 +290,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       goTo,
       restart,
       setRoomType,
+      setRoomTypeCustom,
       setCeilingArea,
       patchRoom,
       setSlabType,

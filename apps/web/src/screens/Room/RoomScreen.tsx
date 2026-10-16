@@ -45,6 +45,7 @@ export function RoomScreen() {
   const {
     session,
     setRoomType,
+    setRoomTypeCustom,
     setCeilingArea,
     setSlabType,
     setSlabThickness,
@@ -150,6 +151,21 @@ export function RoomScreen() {
               />
             ))}
           </div>
+
+          {room.roomType === 'other' ? (
+            <Field label="Название комнаты" hint="Как назвать это помещение в отчёте">
+              <TextInput
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                maxLength={60}
+                placeholder="Например, гардеробная"
+                value={room.roomTypeCustom}
+                onChange={(e) => setRoomTypeCustom(e.target.value)}
+                autoFocus
+              />
+            </Field>
+          ) : null}
 
           <Field
             label="Площадь потолка, м²"

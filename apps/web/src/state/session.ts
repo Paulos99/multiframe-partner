@@ -12,7 +12,7 @@ import {
   WIZARD_STEPS,
   CALCULATOR_URL,
   HYBRID_CLASS_LABELS,
-  ROOM_TYPE_LABELS,
+  roomTypeLabel,
   shouldAskNoiseKind,
 } from './types';
 import { deriveProfile } from './derive';
@@ -44,6 +44,7 @@ export type LeadHandoff = {
 function defaultRoom() {
   return {
     roomType: null as SessionState['answers']['room']['roomType'],
+    roomTypeCustom: '',
     ceilingAreaM2: null as number | null,
     slabType: 'unknown' as const,
     slabThickness: 'unknown' as const,
@@ -182,11 +183,10 @@ export function prevStep(step: WizardStep): WizardStep | null {
 }
 
 export function roomBasicsComplete(session: SessionState): boolean {
-  return (
-    session.answers.room.roomType != null &&
-    session.answers.room.ceilingAreaM2 != null &&
-    session.answers.room.ceilingAreaM2 > 0
-  );
+  const room = session.answers.room;
+  if (room.roomType == null) return false;
+  if (room.roomType === 'other' && !room.roomTypeCustom.trim()) return false;
+  return room.ceilingAreaM2 != null && room.ceilingAreaM2 > 0;
 }
 
 export function canProceed(session: SessionState): boolean {
@@ -218,6 +218,12 @@ export function roomNextHint(session: SessionState): string | null {
   }
   if (session.roomSubstep !== 'basics') return null;
   if (session.answers.room.roomType == null) return 'выберите тип';
+  if (
+    session.answers.room.roomType === 'other' &&
+    !session.answers.room.roomTypeCustom.trim()
+  ) {
+    return 'впишите название комнаты';
+  }
   if (
     session.answers.room.ceilingAreaM2 == null ||
     session.answers.room.ceilingAreaM2 <= 0
@@ -299,7 +305,7 @@ export function buildLeadHandoff(
 export function buildClientSummary(session: SessionState): string {
   const handoff = buildLeadHandoff(session);
   const room = handoff.room;
-  const roomName = room.roomType ? ROOM_TYPE_LABELS[room.roomType] : 'комната';
+  const roomName = roomTypeLabel(room);
   const area = room.ceilingAreaM2 != null ? `${room.ceilingAreaM2} м²` : 'площадь н/д';
   const b = handoff.sim.before;
   const a = handoff.sim.after;

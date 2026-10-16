@@ -7,7 +7,7 @@ import {
   NOISE_KIND_OPTIONS,
   NOISY_NEIGHBORS_OPTIONS,
   PLANNED_CEILING_OPTIONS,
-  ROOM_TYPE_LABELS,
+  roomTypeLabel,
   SLAB_THICKNESS_OPTIONS,
   SLAB_TYPE_OPTIONS,
   shouldAskNoiseKind,
@@ -214,7 +214,7 @@ export function useResultProfile() {
   const impactNowFelt = impactFeltFromIndex(sim.before.Lnw);
   const impactAfterFelt = impactFeltFromIndex(sim.after.Lnw);
 
-  const roomLabel = room.roomType ? ROOM_TYPE_LABELS[room.roomType] : null;
+  const roomLabel = room.roomType ? roomTypeLabel(room) : null;
   const slab = resolveSlab(room);
   const slabTypeLabel = optionLabel(SLAB_TYPE_OPTIONS, room.slabType);
   const slabThickLabel = optionLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness);
@@ -246,6 +246,7 @@ export function useResultProfile() {
 
   const partnerObject = {
     roomType: room.roomType || null,
+    roomTypeCustom: room.roomTypeCustom || null,
     areaM2: room.ceilingAreaM2 ?? null,
     houseType: room.houseType || null,
     objectStage: room.objectStage || null,

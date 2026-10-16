@@ -213,6 +213,8 @@ export interface CtaPayload {
 
 export interface RoomAnswers {
   roomType: RoomType | null;
+  /** Custom room name when `roomType === 'other'`; otherwise empty. */
+  roomTypeCustom: string;
   ceilingAreaM2: number | null;
   slabType: SlabTypeOption;
   slabThickness: SlabThicknessOption;
@@ -257,6 +259,19 @@ export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   office: 'Кабинет',
   other: 'Другое',
 };
+
+/** Display label for room type; uses custom name when «Другое». */
+export function roomTypeLabel(
+  room: Pick<RoomAnswers, 'roomType' | 'roomTypeCustom'>,
+  fallback = 'комната',
+): string {
+  if (!room.roomType) return fallback;
+  if (room.roomType === 'other') {
+    const custom = room.roomTypeCustom?.trim();
+    return custom || ROOM_TYPE_LABELS.other;
+  }
+  return ROOM_TYPE_LABELS[room.roomType];
+}
 
 export const SLAB_TYPE_OPTIONS: { id: SlabTypeOption; label: string }[] = [
   { id: 'monolith', label: 'Монолит / сплошная ж/б' },

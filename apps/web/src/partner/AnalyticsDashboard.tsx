@@ -684,6 +684,9 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
                   const o = ev.object;
                   const room =
                     o?.label ||
+                    (typeof o?.roomTypeCustom === 'string' && o.roomTypeCustom.trim()
+                      ? o.roomTypeCustom.trim()
+                      : null) ||
                     (o?.roomType
                       ? ROOM_TYPE_LABELS[o.roomType as RoomType] || o.roomType
                       : '—');

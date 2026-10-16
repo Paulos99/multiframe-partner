@@ -69,8 +69,13 @@ export function decodeRoomAnswers(token: string): RoomAnswers | null {
       // Allow incomplete legacy payloads only when roomWish was present (handled above).
     }
     const { roomWish: _legacy, ...rest } = data as RoomAnswers & { roomWish?: string };
+    const roomTypeCustom =
+      typeof (data as { roomTypeCustom?: unknown }).roomTypeCustom === 'string'
+        ? (data as { roomTypeCustom: string }).roomTypeCustom
+        : '';
     return {
       ...(rest as RoomAnswers),
+      roomTypeCustom,
       roomWishes: roomWishes.length > 0 ? roomWishes : ['other'],
       plannedCeiling: migratePlannedCeiling(data.plannedCeiling),
       noiseKind: migrateNoiseKind(data.noiseKind),

@@ -29,6 +29,7 @@ export function SaveObjectCard() {
   function roomPayload() {
     return {
       roomType: room.roomType,
+      roomTypeCustom: room.roomTypeCustom || null,
       areaM2: area,
       houseType: room.houseType,
       objectStage: room.objectStage,
