@@ -841,6 +841,150 @@
   background: #fff;
 }
 
+.calRoot {
+  position: relative;
+}
+
+.calTrigger {
+  appearance: none;
+  border: 1px solid rgba(1, 100, 79, 0.28);
+  background: #fff;
+  color: #152018;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  padding: 8px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.calTrigger:hover {
+  border-color: #01644f;
+}
+
+.calTriggerLabel {
+  white-space: nowrap;
+}
+
+.calPop {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(340px, calc(100vw - 32px));
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(1, 100, 79, 0.18);
+  box-shadow: 0 16px 40px rgba(12, 51, 44, 0.16);
+}
+
+.calPresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.calPresets .ghost {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+}
+
+.calNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.calNavBtn {
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(1, 100, 79, 0.2);
+  background: #f4faf7;
+  color: #01644f;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.calWeek,
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.calWeek {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #5a6b62;
+  text-align: center;
+}
+
+.calDay {
+  appearance: none;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #152018;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.calDay:hover:not(:disabled) {
+  background: rgba(1, 100, 79, 0.1);
+}
+
+.calDay:disabled {
+  color: #b7c2bc;
+  cursor: default;
+}
+
+.calDayIn {
+  background: rgba(1, 100, 79, 0.12);
+  border-radius: 0;
+}
+
+.calDayEdge {
+  background: #01644f;
+  color: #fff;
+  border-radius: 8px;
+}
+
+.calDayToday:not(.calDayEdge) {
+  box-shadow: inset 0 0 0 1px #01644f;
+}
+
+.calHint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #5a6b62;
+}
+
+@media (max-width: 760px) {
+  .calPop {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: 16vh;
+    width: auto;
+    max-height: calc(100vh - 20vh);
+    overflow: auto;
+  }
+}
+
 .dashSelect {
   appearance: none;
   font: inherit;
@@ -894,6 +1038,8 @@
 :global(body.theme-dark) .card,
 :global(body.theme-dark) .toolBar,
 :global(body.theme-dark) .dashSelect,
+:global(body.theme-dark) .calTrigger,
+:global(body.theme-dark) .calPop,
 :global(body.theme-dark) .field input,
 :global(body.theme-dark) .field select {
   background: #171b22;
@@ -930,4 +1076,27 @@
 
 :global(body.theme-dark) .calcFrame {
   background: #101318;
+}
+
+:global(body.theme-dark) .calNavBtn {
+  background: #12161c;
+  color: #7dceb8;
+  border-color: #2a3140;
+}
+
+:global(body.theme-dark) .calDay {
+  color: #e8eaee;
+}
+
+:global(body.theme-dark) .calDay:disabled {
+  color: #5c6770;
+}
+
+:global(body.theme-dark) .calDayIn {
+  background: rgba(42, 179, 139, 0.22);
+}
+
+:global(body.theme-dark) .calWeek,
+:global(body.theme-dark) .calHint {
+  color: #b4bcc6;
 }

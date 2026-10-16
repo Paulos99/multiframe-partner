@@ -223,6 +223,63 @@ export function monthLabel(value: string): string {
   return `${MONTHS_RU[m - 1] || value} ${y}`;
 }
 
+const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const MONTHS_GEN = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+];
+
+export function ymdLocal(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function ymdShift(days: number, base = new Date()): string {
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + days);
+  return ymdLocal(d);
+}
+
+/** Inclusive local calendar range. Nulls mean all time. */
+export function rangeFromYmd(
+  fromYmd: string | null,
+  toYmd: string | null,
+): { from: string | null; to: string | null } {
+  if (!fromYmd || !toYmd) return { from: null, to: null };
+  const start = parseYmd(fromYmd <= toYmd ? fromYmd : toYmd);
+  const end = parseYmd(fromYmd <= toYmd ? toYmd : fromYmd);
+  end.setHours(23, 59, 59, 999);
+  return { from: start.toISOString(), to: end.toISOString() };
+}
+
+function parseYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+}
+
+export function formatPeriodLabel(fromYmd: string | null, toYmd: string | null): string {
+  if (!fromYmd || !toYmd) return 'Всё время';
+  const a = fromYmd <= toYmd ? fromYmd : toYmd;
+  const b = fromYmd <= toYmd ? toYmd : fromYmd;
+  const [y1, m1, d1] = a.split('-').map(Number);
+  const [y2, m2, d2] = b.split('-').map(Number);
+  if (a === b) return `${d1} ${MONTHS_GEN[m1 - 1]} ${y1}`;
+  if (y1 === y2 && m1 === m2) return `${d1}–${d2} ${MONTHS_GEN[m1 - 1]} ${y1}`;
+  if (y1 === y2) return `${d1} ${MONTHS_SHORT[m1 - 1]} — ${d2} ${MONTHS_SHORT[m2 - 1]} ${y1}`;
+  return `${d1} ${MONTHS_SHORT[m1 - 1]} ${y1} — ${d2} ${MONTHS_SHORT[m2 - 1]} ${y2}`;
+}
+
 /** Inclusive local range for a calendar month, or one day inside it. */
 export function rangeForMonthDay(
   month: string,

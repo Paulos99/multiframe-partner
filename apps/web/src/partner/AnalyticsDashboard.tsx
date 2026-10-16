@@ -14,17 +14,10 @@ import {
   type ObjectStageOption,
   type RoomType,
 } from '../state/types';
-import {
-  fetchAnalyticsDashboard,
-  monthLabel,
-  periodFromDays,
-  rangeForMonthDay,
-  recentMonths,
-} from './analytics';
+import { fetchAnalyticsDashboard, formatPeriodLabel, monthLabel, rangeFromYmd, ymdShift } from './analytics';
+import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
-
-type Period = 7 | 30 | null;
 
 const HOUSE_LABELS = Object.fromEntries(
   HOUSE_TYPE_OPTIONS.map((o) => [o.id, o.label]),
@@ -337,11 +330,9 @@ type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'objects';
 export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   const api = usePartner();
   const user = api.user!;
-  const [period, setPeriod] = useState<Period>(7);
-  const [month, setMonth] = useState('');
-  const [day, setDay] = useState('');
+  const [fromYmd, setFromYmd] = useState<string | null>(() => ymdShift(-6));
+  const [toYmd, setToYmd] = useState<string | null>(() => ymdShift(0));
   const [orgFilter, setOrgFilter] = useState<string>('');
-  const months = useMemo(() => recentMonths(), []);
   const [section, setSection] = useState<AnalyticsTab>('overview');
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -359,9 +350,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const { from, to } = month
-      ? rangeForMonthDay(month, day ? Number(day) : null)
-      : periodFromDays(period);
+    const { from, to } = rangeFromYmd(fromYmd, toYmd);
     const orgId = mode === 'partner' ? user.orgId : orgFilter || null;
     void fetchAnalyticsDashboard({
       mode,
@@ -378,7 +367,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, period, month, day, orgFilter, user.orgId, user.login]);
+  }, [mode, fromYmd, toYmd, orgFilter, user.orgId, user.login]);
 
   const inactivePartners = useMemo(() => {
     if (mode !== 'admin' || !data) return [];
@@ -425,58 +414,18 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             {dash.source === 'api'
               ? 'Данные с сервера'
               : 'Только этот браузер (API недоступен)'}
-            {month
-              ? ` · ${monthLabel(month)}${day ? `, ${day}` : ''}`
-              : period != null
-                ? ` · ${period} дн.`
-                : ' · всё время'}
+            {` · ${formatPeriodLabel(fromYmd, toYmd)}`}
           </p>
         </div>
         <div className={styles.dashFilters}>
-          {([7, 30, null] as Period[]).map((p) => (
-            <button
-              key={String(p)}
-              type="button"
-              className={!month && period === p ? styles.primary : styles.ghost}
-              onClick={() => {
-                setMonth('');
-                setDay('');
-                setPeriod(p);
-              }}
-            >
-              {p == null ? 'Всё' : `${p} дн.`}
-            </button>
-          ))}
-          <select
-            className={styles.dashSelect}
-            aria-label="Месяц"
-            value={month}
-            onChange={(e) => {
-              setMonth(e.target.value);
-              if (!e.target.value) setDay('');
+          <PeriodCalendar
+            fromYmd={fromYmd}
+            toYmd={toYmd}
+            onChange={(from, to) => {
+              setFromYmd(from);
+              setToYmd(to);
             }}
-          >
-            <option value="">Все месяцы</option>
-            {months.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className={styles.dashSelect}
-            aria-label="День месяца"
-            value={day}
-            disabled={!month}
-            onChange={(e) => setDay(e.target.value)}
-          >
-            <option value="">Все дни</option>
-            {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
 
