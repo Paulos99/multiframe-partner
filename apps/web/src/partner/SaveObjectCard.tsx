@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { canCreateObjects, canSeePrices } from '../../../../packages/shared/partner';
 import { useSession } from '../state/SessionContext';
 import { buildClientSummary } from '../state/session';
+import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
@@ -16,6 +17,9 @@ export function SaveObjectCard() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [sentFlash, setSentFlash] = useState(false);
   /** Keep one card: save / send update the same object instead of creating clones. */
   const [objectId, setObjectId] = useState<string | null>(null);
 
@@ -25,6 +29,15 @@ export function SaveObjectCard() {
   const area = room.ceilingAreaM2 ?? null;
   const summary = buildClientSummary(session);
   const est = partner && area ? buildEstimateFromOrg(area, partner) : null;
+  useEffect(() => {
+    if (!savedFlash && !sentFlash) return;
+    const t = window.setTimeout(() => {
+      setSavedFlash(false);
+      setSentFlash(false);
+    }, 1600);
+    return () => window.clearTimeout(t);
+  }, [savedFlash, sentFlash]);
+
   const seePrices = canSeePrices(user.role);
   const sim = session.derived?.simulation;
 
@@ -76,6 +89,7 @@ export function SaveObjectCard() {
       const updating = Boolean(objectId);
       const obj = await saveObject(objectFields('measured'));
       setObjectId(obj.id);
+      setSavedFlash(true);
       setMsg(
         obj.pendingSync
           ? 'Объект сохранён на устройстве — отправится при сети'
@@ -92,6 +106,8 @@ export function SaveObjectCard() {
 
   async function onSendClient() {
     setErr(null);
+    setSending(true);
+    setSentFlash(false);
     try {
       const text = [
         summary,
@@ -109,6 +125,7 @@ export function SaveObjectCard() {
       }
       const obj = await saveObject(objectFields('quote_sent'));
       setObjectId(obj.id);
+      setSentFlash(true);
       setMsg(
         canShare
           ? 'Отправлено клиенту · статус «КП отправлено»'
@@ -117,6 +134,8 @@ export function SaveObjectCard() {
     } catch (ex) {
       if ((ex as Error)?.name === 'AbortError') return;
       setErr(ex instanceof Error ? ex.message : 'Не удалось отправить');
+    } finally {
+      setSending(false);
     }
   }
 
@@ -158,19 +177,30 @@ export function SaveObjectCard() {
             <input value={city} onChange={(e) => setCity(e.target.value)} />
           </label>
         </div>
-        {msg ? <p className={styles.ok}>{msg}</p> : null}
+        {msg ? (
+          <p className={styles.flash} role="status">
+            {msg}
+          </p>
+        ) : null}
         {err ? (
           <p className={styles.error} role="alert">
             {err}
           </p>
         ) : null}
-        <div className={styles.navRow} style={{ marginTop: 12 }}>
-          <button type="submit" className={styles.primary} disabled={busy}>
+        <div className={styles.actionRow}>
+          <Button type="submit" loading={busy} success={savedFlash} disabled={busy || sending}>
             {busy ? 'Сохраняем…' : 'Сохранить объект'}
-          </button>
-          <button type="button" className={styles.ghost} onClick={() => void onSendClient()}>
-            Отправить клиенту
-          </button>
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={sending}
+            success={sentFlash}
+            disabled={busy || sending}
+            onClick={() => void onSendClient()}
+          >
+            {sending ? 'Отправляем…' : 'Отправить КП'}
+          </Button>
         </div>
       </form>
     </section>

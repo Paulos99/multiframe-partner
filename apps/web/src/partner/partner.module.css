@@ -4,8 +4,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 24px 16px 48px;
+  justify-content: flex-start;
+  padding: 24px 16px calc(96px + env(safe-area-inset-bottom));
   background:
     radial-gradient(120% 80% at 100% 0%, rgba(42, 179, 139, 0.18), transparent 55%),
     linear-gradient(180deg, #eef5f2 0%, #f4f7f6 100%);
@@ -161,10 +161,12 @@
   box-sizing: border-box;
   font: inherit;
   font-weight: 500;
+  min-height: 44px;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(1, 100, 79, 0.22);
   background: #f8fbfa;
+  color: inherit;
 }
 
 .field input[type='number'] {
@@ -196,6 +198,7 @@
   border: none;
   font: inherit;
   font-weight: 700;
+  min-height: 44px;
   padding: 12px 16px;
   border-radius: 14px;
   cursor: pointer;
@@ -345,6 +348,30 @@
   gap: 12px;
   padding: 10px 0;
   border-top: 1px solid rgba(1, 100, 79, 0.12);
+  min-width: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.tableRow > div:first-child {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .tableRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rowActions {
+    width: 100%;
+  }
+
+  .rowActions > * {
+    flex: 1 1 calc(50% - 8px);
+    min-height: 44px;
+    text-align: center;
+  }
 }
 
 .activity {
@@ -392,11 +419,33 @@
   font: inherit;
   font-size: 0.88rem;
   font-weight: 700;
+  min-height: 44px;
   padding: 10px 14px;
   border-radius: 10px;
   color: #3d4f46;
   background: transparent;
   transition: background 0.15s ease, color 0.15s ease;
+}
+
+@media (max-width: 760px) {
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Край подсказывает, что вкладки листаются. */
+    -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab,
+  .tabActive {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
 }
 
 .tab:hover {
@@ -916,6 +965,17 @@
   -webkit-overflow-scrolling: touch;
 }
 
+@media (max-width: 760px) {
+  .dashTableScroll::before {
+    content: 'Листайте таблицу вбок';
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #5a6b62;
+  }
+}
+
 .dashTable {
   width: 100%;
   border-collapse: collapse;
@@ -998,6 +1058,7 @@
   color: #b42318;
   font: inherit;
   font-weight: 700;
+  min-height: 44px;
   padding: 12px 16px;
   border-radius: 14px;
   cursor: pointer;
@@ -1370,7 +1431,8 @@
   background: #f0f7f4;
   color: #0c332c;
   border-radius: 10px;
-  padding: 8px 12px;
+  min-height: 44px;
+  padding: 10px 14px;
   font-size: 0.85rem;
   font-weight: 650;
   cursor: pointer;
@@ -1456,4 +1518,363 @@
   background: #1c222c;
   color: #e8eaee;
   border-color: #2a3140;
+}
+
+.loginStack {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.metaLine,
+.reminder {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.metaLine {
+  background: rgba(1, 100, 79, 0.08);
+  color: #152018;
+}
+
+.reminder {
+  background: #fff4e5;
+  color: #8a4b08;
+}
+
+.flash {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ok-soft);
+  color: var(--success-color);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.searchField {
+  position: relative;
+  display: block;
+}
+
+.searchField input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(1, 100, 79, 0.22);
+  background: #f8fbfa;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+}
+
+.chipRow {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.chipRow::-webkit-scrollbar {
+  display: none;
+}
+
+.chip,
+.chipOn {
+  appearance: none;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(1, 100, 79, 0.22);
+  background: #f8fbfa;
+  color: #152018;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.chipOn {
+  background: #01644f;
+  border-color: #01644f;
+  color: #fff;
+}
+
+.chip:disabled,
+.chipOn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.objectList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.objectList > div {
+  width: 100%;
+}
+
+.objectRow,
+.objectRowOn {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  min-height: 56px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(1, 100, 79, 0.14);
+  background: #f8fbfa;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.objectRowOn {
+  border-color: #01644f;
+  box-shadow: inset 0 0 0 1px #01644f;
+}
+
+.objectMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.objectMain strong {
+  word-break: break-word;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  background: #eef1f3;
+  color: #3d4a52;
+}
+
+.badge[data-status='measured'] {
+  background: #e7f1fb;
+  color: #1d4f91;
+}
+
+.badge[data-status='quote_sent'] {
+  background: #fff4e5;
+  color: #8a4b08;
+}
+
+.badge[data-status='install'] {
+  background: #e5f6ef;
+  color: #01644f;
+}
+
+.badge[data-status='closed'] {
+  background: #ecefee;
+  color: #3d4a44;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0 4px;
+}
+
+.callLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #01644f;
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.actionRow > * {
+  flex: 1 1 180px;
+}
+
+.hintCard summary {
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: #152018;
+}
+
+/* Скелетон: идея Magic UI Skeleton (MIT), чистый CSS без лишнего JS. */
+.skeleton {
+  border-radius: 12px;
+  background: linear-gradient(90deg, #e7eeeb 0%, #f7fbf9 45%, #e7eeeb 100%);
+  background-size: 200% 100%;
+  animation: mf-skeleton 1.15s ease-in-out infinite;
+}
+
+.skeletonRow {
+  height: 56px;
+  border-radius: 14px;
+}
+
+.skeletonKpi {
+  min-height: 92px;
+}
+
+.skeletonLine {
+  height: 16px;
+  width: min(100%, 420px);
+}
+
+@keyframes mf-skeleton {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+:global(body.theme-dark) .tab,
+:global(body.theme-dark) .tabActive {
+  color: #c5d0cb;
+}
+
+:global(body.theme-dark) .tabActive {
+  background: #24302b;
+  color: #8ee0c4;
+}
+
+:global(body.theme-dark) .tabs {
+  background: #12161c;
+  border-color: #2a3140;
+}
+
+:global(body.theme-dark) .metaLine,
+:global(body.theme-dark) .objectRow,
+:global(body.theme-dark) .objectRowOn,
+:global(body.theme-dark) .searchField input,
+:global(body.theme-dark) .chip {
+  background: #12161c;
+  color: #e8eaee;
+  border-color: #2a3140;
+}
+
+:global(body.theme-dark) .chipOn {
+  background: #01644f;
+  color: #fff;
+  border-color: #01644f;
+}
+
+:global(body.theme-dark) .reminder {
+  background: #3a2e22;
+  color: #f3d2a4;
+}
+
+:global(body.theme-dark) .badge {
+  background: #24302b;
+  color: #d5e4dc;
+}
+
+:global(body.theme-dark) .badge[data-status='measured'] {
+  background: #1c2a3a;
+  color: #b9d4f5;
+}
+
+:global(body.theme-dark) .badge[data-status='quote_sent'] {
+  background: #3a2e22;
+  color: #f3d2a4;
+}
+
+:global(body.theme-dark) .badge[data-status='install'] {
+  background: #1e2f28;
+  color: #8ee0c4;
+}
+
+:global(body.theme-dark) .badge[data-status='closed'] {
+  background: #22262c;
+  color: #c5ced6;
+}
+
+:global(body.theme-dark) .hintCard,
+:global(body.theme-dark) .summaryBox {
+  background: #12161c;
+  border-color: #2a3140;
+  color: #e8eaee;
+}
+
+:global(body.theme-dark) .hintCard summary,
+:global(body.theme-dark) .objectDetail h3 {
+  color: #e8eaee;
+}
+
+:global(body.theme-dark) .ghost {
+  color: #8ee0c4;
+  border-color: #2a5c4c;
+}
+
+:global(body.theme-dark) .logoutBtn {
+  background: #3a2424;
+  color: #ffb4ae;
+  border-color: #6a3030;
+}
+
+:global(body.theme-dark) .skeleton {
+  background: linear-gradient(90deg, #1c222c 0%, #2a3140 45%, #1c222c 100%);
+  background-size: 200% 100%;
+}
+
+:global(body.theme-dark) .primary {
+  color: #fff;
 }
