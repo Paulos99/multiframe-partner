@@ -68,7 +68,7 @@ export function LoginScreen() {
         <p className={styles.hint}>
           Демо: <code>admin</code>/<code>admin1234</code> · владелец <code>partner1</code>/
           <code>demo1234</code> · менеджер <code>sales1</code> · замерщик <code>exec1</code> ·
-          бригада <code>crew1</code> (пароль сотрудников <code>exec1234</code>)
+          монтажник <code>crew1</code> (пароль сотрудников <code>exec1234</code>)
         </p>
       ) : null}
     </form>

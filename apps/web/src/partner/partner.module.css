@@ -288,6 +288,72 @@
   color: #152018;
 }
 
+.objectSide {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.docMark {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #01644f;
+  background: rgba(1, 100, 79, 0.1);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.docBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.docList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.docRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(1, 100, 79, 0.16);
+  background: #fff;
+}
+
+.docMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.docMeta strong {
+  font-size: 0.92rem;
+}
+
+.docActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.docActions .ghost {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
 .summaryBox {
   margin: 0;
   padding: 12px;
@@ -1877,6 +1943,16 @@
 :global(body.theme-dark) .hintCard summary,
 :global(body.theme-dark) .objectDetail h3 {
   color: #e8eaee;
+}
+
+:global(body.theme-dark) .docRow {
+  background: #1c2622;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(body.theme-dark) .docMark {
+  color: #b7e4d4;
+  background: rgba(183, 228, 212, 0.12);
 }
 
 :global(body.theme-dark) .ghost {

@@ -143,7 +143,7 @@ export function SaveObjectCard() {
     <section className={styles.card} style={{ width: '100%', marginTop: 8 }} aria-label="Объект">
       <h2>Сохранить объект</h2>
       <p className={styles.lead}>
-        Замер появится у менеджера и бригады. Без сети сохранится на телефоне.
+        Замер появится у менеджера. Монтажник увидит объект, когда его назначат. Без сети сохранится на телефоне.
       </p>
       <form onSubmit={(e) => void onSave(e)}>
         <div className={styles.grid2}>
