@@ -5,7 +5,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 24px 16px calc(96px + env(safe-area-inset-bottom));
+  padding: 24px 16px calc(156px + env(safe-area-inset-bottom));
   background:
     radial-gradient(120% 80% at 100% 0%, rgba(42, 179, 139, 0.18), transparent 55%),
     linear-gradient(180deg, #eef5f2 0%, #f4f7f6 100%);
@@ -223,8 +223,8 @@
 .navRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin: 8px 0 18px;
+  gap: 6px;
+  margin: 0 0 10px;
 }
 
 .top {
@@ -232,16 +232,26 @@
   justify-content: space-between;
   align-items: flex-start;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .topActions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
+}
+
+.topActions .ghost,
+.topActions .logoutBtn,
+.navRow .primary,
+.navRow .ghost {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 999px;
 }
 
 .logoutBtn {
@@ -1139,42 +1149,177 @@
 }
 
 .toolHost {
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding-bottom: env(safe-area-inset-bottom);
   background: #f4f7f6;
 }
 
 .toolBar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 4px;
+  box-sizing: border-box;
+  height: calc(44px + env(safe-area-inset-top));
+  padding:
+    env(safe-area-inset-top)
+    max(6px, env(safe-area-inset-right))
+    0
+    max(6px, env(safe-area-inset-left));
   background: #fff;
   color: #152018;
   border-bottom: 1px solid rgba(1, 100, 79, 0.14);
-  position: sticky;
-  top: var(--mf-install-h, 0px);
+  position: relative;
   z-index: 48;
   flex: 0 0 auto;
 }
 
-.toolBar button {
+.toolIconBtn,
+.toolSwitch button,
+.toolDemoBtn {
   appearance: none;
   border: 1px solid rgba(1, 100, 79, 0.22);
   background: #f4faf7;
   color: #01644f;
   font: inherit;
-  font-size: 13px;
-  font-weight: 650;
-  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
   border-radius: 999px;
   cursor: pointer;
+  flex: 0 0 auto;
 }
 
-.toolBar button:hover {
-  background: #e7f3ef;
+.toolIconBtn {
+  width: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.toolIconBtn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.toolSwitch {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  height: 32px;
+  border: 1px solid rgba(1, 100, 79, 0.22);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f4faf7;
+}
+
+.toolSwitch button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolSwitch button[aria-selected='true'] {
+  background: #01644f;
+  color: #fff;
+}
+
+.toolMenuWrap,
+.toolDemoWrap,
+.syncDotWrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.toolMenu,
+.syncPop,
+.toolDemoWrap .demoFabPanel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 70;
+}
+
+.toolMenu {
+  width: min(280px, calc(100vw - 20px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(1, 100, 79, 0.16);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+}
+
+.toolMenuCompany {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #152018;
+}
+
+.toolMenuCaption,
+.toolMenuNotice {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #5a6b62;
+}
+
+.toolMenu .logoutBtn {
+  width: 100%;
+  min-height: 40px;
+}
+
+.toolBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  --mf-toolbar-h: 0px;
+  --mf-install-h: 0px;
+  --header-h: 0px;
+  --safe-top: 0px;
+  --safe-bottom: 0px;
+}
+
+.toolFill {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.toolFill > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .toolBarMeta {
@@ -1190,8 +1335,9 @@
 
 .calcFrame {
   width: 100%;
+  height: 100%;
   flex: 1 1 auto;
-  min-height: calc(100dvh - 48px);
+  min-height: 0;
   border: 0;
   display: block;
   background: #fff;
@@ -1424,10 +1570,34 @@
   border-color: #2a3140;
 }
 
+:global(body.theme-dark) .toolIconBtn,
+:global(body.theme-dark) .toolSwitch,
+:global(body.theme-dark) .toolDemoBtn,
 :global(body.theme-dark) .toolBar button {
   background: #12161c;
   color: #7dceb8;
   border-color: #2a3140;
+}
+
+:global(body.theme-dark) .toolSwitch button[aria-selected='true'] {
+  background: #01644f;
+  color: #fff;
+}
+
+:global(body.theme-dark) .toolMenu,
+:global(body.theme-dark) .syncPop {
+  background: #171b22;
+  color: #e8eaee;
+  border-color: #2a3140;
+}
+
+:global(body.theme-dark) .toolMenuCompany {
+  color: #e8eaee;
+}
+
+:global(body.theme-dark) .toolMenuCaption,
+:global(body.theme-dark) .toolMenuNotice {
+  color: #b4bcc6;
 }
 
 :global(body.theme-dark) .calcFrame {
@@ -1525,9 +1695,9 @@
 
 .demoFabWrap {
   position: fixed;
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(16px, env(safe-area-inset-bottom));
-  z-index: 80;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 70;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1980,10 +2150,71 @@
 }
 
 .trainBtn {
-  flex: 1 1 auto;
-  white-space: normal;
-  line-height: 1.25;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  line-height: 1.1;
   text-align: center;
+}
+
+.syncDotBtn {
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.syncDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: block;
+}
+
+.syncDotOk {
+  background: #01644f;
+  box-shadow: 0 0 0 4px rgba(1, 100, 79, 0.16);
+}
+
+.syncDotWait {
+  background: #c4841d;
+  box-shadow: 0 0 0 4px rgba(196, 132, 29, 0.22);
+}
+
+.syncDotOff {
+  background: #b42318;
+  box-shadow: 0 0 0 4px rgba(180, 35, 24, 0.18);
+}
+
+.syncPop {
+  width: min(240px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  color: #152018;
+  border: 1px solid rgba(1, 100, 79, 0.16);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.syncPop strong {
+  font-size: 0.88rem;
+}
+
+.toolDemoWrap .demoFabPanel {
+  width: min(280px, calc(100vw - 16px));
+  max-height: min(50dvh, 360px);
 }
 
 .combo {

@@ -1,12 +1,11 @@
 .wrap {
-  position: sticky;
-  top: calc(var(--mf-install-h, 0px) + var(--mf-toolbar-h, 0px) + var(--safe-top) + var(--header-h));
-  z-index: 35;
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 3;
   width: 100%;
   margin: 0;
-  padding: 8px 16px 6px;
+  padding: 4px 12px 2px;
   background: color-mix(in srgb, var(--bg-page) 94%, transparent);
-  backdrop-filter: blur(10px);
 }
 
 .list {

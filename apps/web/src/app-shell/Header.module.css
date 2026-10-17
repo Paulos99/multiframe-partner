@@ -1,22 +1,22 @@
 .header {
-  position: sticky;
-  top: calc(var(--mf-install-h, 0px) + var(--mf-toolbar-h, 0px));
-  z-index: 40;
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 4;
   backdrop-filter: blur(12px);
   background: color-mix(in srgb, var(--bg-page) 88%, transparent);
   border-bottom: 1px solid var(--border-color);
-  padding-top: var(--safe-top);
+  padding-top: 0;
 }
 
 .inner {
   width: min(100%, var(--max-w));
   margin: 0 auto;
-  min-height: var(--header-h);
-  padding: 10px 16px;
+  min-height: 40px;
+  padding: 4px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 
 .brand {
@@ -28,8 +28,8 @@
 
 /* Logos are near-white PNGs — darken on light header, keep bright on dark. */
 .stp {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
   flex: 0 0 auto;
   filter: brightness(0) saturate(100%);
@@ -37,9 +37,9 @@
 }
 
 .mf {
-  height: 26px;
+  height: 18px;
   width: auto;
-  max-width: 150px;
+  max-width: 120px;
   object-fit: contain;
   filter: brightness(0) saturate(100%);
   opacity: 0.9;
@@ -92,8 +92,8 @@
 
 .switchTrack {
   position: relative;
-  width: 64px;
-  height: 32px;
+  width: 52px;
+  height: 28px;
   background: #ffffff;
   border: 1px solid var(--border-color);
   border-radius: 999px;
@@ -107,12 +107,12 @@
 
 .switchThumb {
   position: absolute;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #ffffff;
   border: 1px solid var(--border-color);
-  right: 3px;
+  right: 2px;
   transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
 }
 
@@ -141,7 +141,7 @@
 }
 
 .themeSwitch input:checked + .switchTrack .switchThumb {
-  transform: translateX(-32px);
+  transform: translateX(-24px);
   background: #171b22;
   border-color: #2a3140;
 }
