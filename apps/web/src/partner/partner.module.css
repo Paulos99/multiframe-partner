@@ -1570,6 +1570,26 @@
   font-weight: 700;
 }
 
+.toast {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 70;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #01644f;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 750;
+  box-shadow: 0 10px 28px rgba(12, 51, 44, 0.28);
+}
+
+.toastErr {
+  background: #b42318;
+}
+
 .searchField {
   position: relative;
   display: block;

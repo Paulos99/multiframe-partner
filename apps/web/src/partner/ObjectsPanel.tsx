@@ -86,6 +86,15 @@ export function ObjectsPanel({
     });
   }, [selectedId, reduce]);
 
+  useEffect(() => {
+    if (!msg && !err) return;
+    const t = window.setTimeout(() => {
+      setMsg(null);
+      setErr(null);
+    }, 3200);
+    return () => window.clearTimeout(t);
+  }, [msg, err]);
+
   async function patch(obj: JobObject, next: Partial<JobObject>) {
     setMsg(null);
     setErr(null);
@@ -364,18 +373,18 @@ export function ObjectsPanel({
               </button>
             </div>
           ) : null}
-
-          {msg ? (
-            <p className={styles.flash} role="status">
-              {msg}
-            </p>
-          ) : null}
-          {err ? (
-            <p className={styles.error} role="alert">
-              {err}
-            </p>
-          ) : null}
         </div>
+      ) : null}
+
+      {msg ? (
+        <p className={styles.toast} role="status">
+          {msg}
+        </p>
+      ) : null}
+      {err ? (
+        <p className={`${styles.toast} ${styles.toastErr}`} role="alert">
+          {err}
+        </p>
       ) : null}
     </div>
   );
