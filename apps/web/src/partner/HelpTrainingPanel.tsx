@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
+import { MaterialsPanel } from './MaterialsPanel';
 import styles from './partner.module.css';
 
 type HelpSection = {
@@ -32,12 +33,13 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
   admin: {
     id: 'admin',
     title: 'Ваша работа · Админ StP',
-    lead: 'Сеть партнёров по России: заведение компаний и обзор регионов.',
+    lead: 'Сеть STP MultiFrame партнёра: компании по городам РФ и обзор регионов.',
     steps: [
-      'Вкладка «Добавить» — логин владельца, пароль, название компании и город/регион.',
-      'Во вкладке «Партнёры» смотрите список, сбрасывайте пароль или удаляйте организацию целиком.',
+      'Вкладка «Добавить» — логин владельца, пароль, компания и город из справочника, например «Шуя — Ивановская область».',
+      'Произвольный текст вроде «ГГ» не сохранится. Старый город не из справочника виден в списке и подсвечен, пока не выберете замену.',
+      'Во вкладке «Партнёры» смотрите список, меняйте город, сбрасывайте пароль или удаляйте организацию целиком.',
       '«Аналитика» — воронка сети, города и активность партнёров.',
-      'Проблемомер и калькулятор доступны для проверки сценария.',
+      '«Обучение работе с материалом» — методички. Папки и файлы меняет только админ.',
     ],
     cannot: [
       'Не меняйте корпоративный прайс партнёра из админ-кабинета — это делает владелец компании.',
@@ -143,18 +145,46 @@ function SectionBlock({ section, highlight }: { section: HelpSection; highlight?
   );
 }
 
-/** Personal training: common basics + only the current user's role. */
+/** Обучение: кабинет своей роли и методические материалы продукта. */
 export function HelpTrainingPanel({ role }: { role: UserRole }) {
   const personal = useMemo(() => BY_ROLE[role], [role]);
+  const [section, setSection] = useState<'materials' | 'cabinet'>('materials');
 
   return (
     <div className={`${styles.card} ${styles.panelCard} ${styles.helpPanel}`}>
-      <h2>Обучение · {ROLE_LABELS[role]}</h2>
-      <p className={styles.lead}>
-        Личная инструкция для вашей роли. Другие уровни полномочий здесь не показываются.
-      </p>
-      <SectionBlock section={COMMON} />
-      <SectionBlock section={personal} highlight />
+      <h2>Обучение работе с материалом</h2>
+      <div className={styles.tabs} role="tablist" aria-label="Разделы обучения">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={section === 'materials'}
+          className={section === 'materials' ? styles.tabActive : styles.tab}
+          onClick={() => setSection('materials')}
+        >
+          Методические материалы
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={section === 'cabinet'}
+          className={section === 'cabinet' ? styles.tabActive : styles.tab}
+          onClick={() => setSection('cabinet')}
+        >
+          Работа с кабинетом
+        </button>
+      </div>
+      {section === 'materials' ? (
+        <MaterialsPanel canManage={role === 'admin'} />
+      ) : (
+        <>
+          <p className={styles.lead}>
+            Личная инструкция для роли «{ROLE_LABELS[role]}». Другие уровни полномочий здесь не
+            показываются.
+          </p>
+          <SectionBlock section={COMMON} />
+          <SectionBlock section={personal} highlight />
+        </>
+      )}
     </div>
   );
 }

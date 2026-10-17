@@ -4,7 +4,12 @@
  */
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
+import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
+import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
+import { handleMaterials } from './materialsRoutes.js';
+
+ensureIndexFromTsv(ruCitiesTsv);
 
 const JWT_SECRET = () => new TextEncoder().encode(process.env.JWT_SECRET || 'dev-secret-change-me');
 const ANALYTICS_ADMIN_KEY = () => process.env.ANALYTICS_ADMIN_KEY || 'admin1234';
@@ -34,6 +39,14 @@ let memoryEvents = null;
 
 function uid(prefix) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
+}
+
+function cityOrThrow(raw, previous) {
+  const resolved = resolveCity(raw, previous);
+  if (!resolved.ok) {
+    throw Object.assign(new Error(resolved.message), { status: 400 });
+  }
+  return resolved.city;
 }
 
 function normalizeRole(role) {
@@ -198,13 +211,31 @@ async function s3Put(key, body) {
   );
 }
 
-/** PDF bytes live beside platform JSON. In-memory when the bucket is not configured. */
+/** PDF и файлы материалов. Без бакета байты остаются в памяти процесса (демо API). */
 const memoryDocs = new Map();
 
-async function s3PutBytes(key, bytes, contentType) {
+function hasBucket() {
+  return Boolean(process.env.PARTNERS_BUCKET);
+}
+
+async function s3GetBuffer(key) {
+  if (memoryDocs.has(key)) return memoryDocs.get(key);
+  const bucket = process.env.PARTNERS_BUCKET;
+  if (!bucket) return null;
+  const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
+  const client = new S3Client(s3ClientConfig());
+  const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  return Buffer.from(await out.Body.transformToByteArray());
+}
+
+async function s3GetBytes(key) {
+  return s3GetBuffer(key);
+}
+
+async function s3PutBytes(key, body, contentType) {
   const bucket = process.env.PARTNERS_BUCKET;
   if (!bucket) {
-    memoryDocs.set(key, Buffer.from(bytes));
+    memoryDocs.set(key, Buffer.from(body));
     return;
   }
   const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
@@ -213,20 +244,10 @@ async function s3PutBytes(key, bytes, contentType) {
     new PutObjectCommand({
       Bucket: bucket,
       Key: key,
-      Body: bytes,
-      ContentType: contentType || 'application/pdf',
+      Body: body,
+      ContentType: contentType || 'application/octet-stream',
     }),
   );
-}
-
-async function s3GetBytes(key) {
-  if (memoryDocs.has(key)) return memoryDocs.get(key);
-  const bucket = process.env.PARTNERS_BUCKET;
-  if (!bucket) return null;
-  const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-  const client = new S3Client(s3ClientConfig());
-  const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-  return Buffer.from(await out.Body.transformToByteArray());
 }
 
 async function s3Delete(key) {
@@ -797,6 +818,22 @@ export async function handler(event = {}) {
   const method = getMethod(event);
 
   try {
+    const materialsResponse = await handleMaterials({
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      assertRole,
+      json,
+      getBody: () => getBody(event),
+      savePlatform,
+      uid,
+      hasBucket,
+      s3PutBytes,
+      s3GetBuffer,
+      s3Delete,
+    });
+    if (materialsResponse) return materialsResponse;
+
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
       const { login, password } = getBody(event);
@@ -840,6 +877,9 @@ export async function handler(event = {}) {
       }
       const idx = platform.orgs.findIndex((o) => o.id === orgId);
       if (idx < 0) return json(404, { message: 'Организация не найдена' });
+      if (Object.prototype.hasOwnProperty.call(patch, 'city')) {
+        patch.city = cityOrThrow(patch.city, platform.orgs[idx].settings?.city ?? '');
+      }
       const settings = normalizeOrgSettings({ ...platform.orgs[idx].settings, ...patch });
       platform.orgs[idx] = { ...platform.orgs[idx], settings };
       pushActivity(platform, {
@@ -861,6 +901,9 @@ export async function handler(event = {}) {
       const patch = getBody(event);
       const idx = platform.orgs.findIndex((o) => o.id === user.orgId);
       if (idx < 0) return json(404, { message: 'Not found' });
+      if (Object.prototype.hasOwnProperty.call(patch, 'city')) {
+        patch.city = cityOrThrow(patch.city, platform.orgs[idx].settings?.city ?? '');
+      }
       const settings = normalizeOrgSettings({ ...platform.orgs[idx].settings, ...patch });
       platform.orgs[idx] = { ...platform.orgs[idx], settings };
       await savePlatform(platform);
@@ -905,7 +948,7 @@ export async function handler(event = {}) {
       const login = String(body.login || '').trim();
       const password = String(body.password || '').trim();
       const companyName = String(body.companyName || '').trim() || login;
-      const city = String(body.city || '').trim();
+      const city = cityOrThrow(body.city ?? '', null);
       if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
       if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
       const now = new Date().toISOString();
@@ -986,6 +1029,36 @@ export async function handler(event = {}) {
       });
       await savePlatform(platform);
       return json(200, { password: pw });
+    }
+
+    if (method === 'PATCH' && /\/admin\/partners\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const partnerUserId = path.split('/').pop();
+      const partner = platform.users.find(
+        (u) => u.id === partnerUserId && normalizeRole(u.role) === 'owner',
+      );
+      if (!partner?.orgId) return json(404, { message: 'Партнёр не найден' });
+      const idx = platform.orgs.findIndex((o) => o.id === partner.orgId);
+      if (idx < 0) return json(404, { message: 'Организация не найдена' });
+      const body = getBody(event);
+      if (!Object.prototype.hasOwnProperty.call(body, 'city')) {
+        return json(400, { message: 'Укажите город' });
+      }
+      // Правка города не оставляет произвольный текст. Старое невалидное значение
+      // само не подменяется, пока админ не выберет город из справочника.
+      const city = cityOrThrow(body.city, null);
+      const settings = normalizeOrgSettings({ ...platform.orgs[idx].settings, city });
+      platform.orgs[idx] = { ...platform.orgs[idx], settings };
+      pushActivity(platform, {
+        orgId: partner.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'update_partner_city',
+        detail: `${partner.login} · ${city || '—'}`,
+      });
+      await savePlatform(platform);
+      return json(200, { city: settings.city });
     }
 
     if (method === 'DELETE' && /\/admin\/partners\/[^/]+$/.test(path)) {
