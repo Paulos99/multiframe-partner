@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   JOB_OBJECT_STATUS_LABELS,
   ROLE_LABELS,
   canAssignObjects,
+  canCreateObjects,
   canDeleteObjects,
   canSeePrices,
   type JobObject,
@@ -10,42 +11,102 @@ import {
   type UserRole,
 } from '../../../../packages/shared/partner';
 import { formatRub } from './estimate';
+import { RiseItem, StatusSwap, usePrefersReducedMotion } from './motionBits';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
-const STATUSES: JobObjectStatus[] = [
-  'draft',
-  'measured',
-  'quote_sent',
-  'install',
-  'closed',
-];
+const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
 
-export function ObjectsPanel({ compact }: { compact?: boolean }) {
+function telHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
+
+function StatusBadge({ status }: { status: JobObjectStatus }) {
+  return (
+    <StatusSwap statusKey={status} className={styles.badge}>
+      {JOB_OBJECT_STATUS_LABELS[status]}
+    </StatusSwap>
+  );
+}
+
+export function ObjectsPanel({
+  compact,
+  onCreate,
+}: {
+  compact?: boolean;
+  onCreate?: () => void;
+}) {
   const api = usePartner();
   const user = api.user!;
+  const reduce = usePrefersReducedMotion();
   const seePrices = canSeePrices(user.role);
   const canAssign = canAssignObjects(user.role);
   const canDelete = canDeleteObjects(user.role);
+  const canCreate = canCreateObjects(user.role);
   const staff = api.partnerListStaff();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<JobObjectStatus | 'all'>(
+    user.role === 'crew' ? 'install' : 'all',
+  );
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+
+  const counts = useMemo(() => {
+    const map = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<JobObjectStatus, number>;
+    for (const obj of api.objects) map[obj.status] += 1;
+    return map;
+  }, [api.objects]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return api.objects.filter((obj) => {
+      if (statusFilter !== 'all' && obj.status !== statusFilter) return false;
+      if (!q) return true;
+      const hay = [obj.clientName, obj.address, obj.city, obj.clientPhone, JOB_OBJECT_STATUS_LABELS[obj.status]]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [api.objects, query, statusFilter]);
 
   const selected = useMemo(
     () => api.objects.find((o) => o.id === selectedId) || null,
     [api.objects, selectedId],
   );
 
-  async function patch(obj: JobObject, patch: Partial<JobObject>) {
+  useEffect(() => {
+    if (!selectedId || !detailRef.current) return;
+    detailRef.current.scrollIntoView({
+      behavior: reduce ? 'auto' : 'smooth',
+      block: 'nearest',
+    });
+  }, [selectedId, reduce]);
+
+  useEffect(() => {
+    if (!msg && !err) return;
+    const t = window.setTimeout(() => {
+      setMsg(null);
+      setErr(null);
+    }, 3200);
+    return () => window.clearTimeout(t);
+  }, [msg, err]);
+
+  async function patch(obj: JobObject, next: Partial<JobObject>) {
     setMsg(null);
     setErr(null);
+    setPendingId(obj.id);
     try {
-      const next = await api.saveObject({ ...obj, ...patch, id: obj.id });
-      setSelectedId(next.id);
+      const saved = await api.saveObject({ ...obj, ...next, id: obj.id });
+      setSelectedId(saved.id);
       setMsg('Сохранено');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setPendingId(null);
     }
   }
 
@@ -63,16 +124,41 @@ export function ObjectsPanel({ compact }: { compact?: boolean }) {
     }
   }
 
+  const reminder =
+    user.role === 'crew'
+      ? counts.install
+        ? `${counts.install} в монтаже — закройте объект, когда потолок готов`
+        : 'Нет объектов в монтаже'
+      : counts.quote_sent
+        ? `${counts.quote_sent} КП ждут следующего шага`
+        : counts.draft
+          ? `${counts.draft} ещё в черновике`
+          : null;
+
+  const allowedStatuses = (current: JobObjectStatus) =>
+    STATUSES.filter((s) => {
+      if (user.role === 'crew') return s === 'install' || s === 'closed' || s === current;
+      return true;
+    });
+
+  const filters: Array<JobObjectStatus | 'all'> =
+    user.role === 'crew' ? ['install', 'closed', 'all'] : ['all', ...STATUSES];
+
   return (
     <div className={`${styles.card} ${styles.panelCard}`}>
       <h2>{user.role === 'crew' ? 'Задания на монтаж' : 'Объекты'}</h2>
       <p className={styles.lead}>
         {user.role === 'crew'
-          ? 'Количество панелей и крепежа без цен. Отметьте статус монтажа.'
+          ? 'Количество панелей и крепежа без цен. Статус меняется крупными кнопками.'
           : 'Замеры, КП и монтаж в одной карточке. Работает офлайн — синхронизация при появлении сети.'}
       </p>
+      {reminder ? (
+        <p className={styles.reminder} role="status">
+          {reminder}
+        </p>
+      ) : null}
       {api.pendingSyncCount > 0 ? (
-        <p className={styles.ok}>
+        <p className={styles.flash} role="status">
           Ожидают отправки: {api.pendingSyncCount}.{' '}
           <button type="button" className={styles.ghost} onClick={() => void api.flushObjectQueue()}>
             Синхронизировать
@@ -80,54 +166,113 @@ export function ObjectsPanel({ compact }: { compact?: boolean }) {
         </p>
       ) : null}
 
-      <div className={styles.table}>
-        {api.objects.map((obj) => (
-          <button
-            key={obj.id}
-            type="button"
-            className={styles.tableRow}
-            style={{
-              textAlign: 'left',
-              cursor: 'pointer',
-              border:
-                selectedId === obj.id ? '1px solid var(--mf-green, #2ab38b)' : undefined,
-            }}
-            onClick={() => setSelectedId(obj.id)}
-          >
-            <div>
-              <strong>
-                {obj.clientName || 'Без имени'}
-                {obj.pendingSync ? ' · ↻' : ''}
-              </strong>
-              <div className={styles.hint}>
-                {obj.address || 'Адрес не указан'}
-                {obj.city ? ` · ${obj.city}` : ''}
-                {obj.room.areaM2 ? ` · ${obj.room.areaM2} м²` : ''}
-              </div>
-            </div>
-            <div className={styles.hint}>{JOB_OBJECT_STATUS_LABELS[obj.status]}</div>
-          </button>
-        ))}
-        {!api.objects.length ? (
-          <p className={styles.lead}>
-            {api.objectsLoading
-              ? 'Загрузка…'
-              : compact
-                ? 'Пока нет объектов. Сохраните замер из проблемомера.'
-                : 'Пока нет объектов'}
-          </p>
-        ) : null}
+      <label className={styles.searchField}>
+        <span className={styles.srOnly}>Поиск объекта</span>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Имя, адрес или телефон"
+          inputMode="search"
+          enterKeyHint="search"
+        />
+      </label>
+
+      <div className={styles.chipRow} role="toolbar" aria-label="Фильтр по статусу">
+        {filters.map((id) => {
+          const on = statusFilter === id;
+          const label = id === 'all' ? 'Все' : JOB_OBJECT_STATUS_LABELS[id];
+          const n = id === 'all' ? api.objects.length : counts[id];
+          return (
+            <button
+              key={id}
+              type="button"
+              className={on ? styles.chipOn : styles.chip}
+              aria-pressed={on}
+              onClick={() => setStatusFilter(id)}
+            >
+              {label} · {n}
+            </button>
+          );
+        })}
       </div>
 
+      {api.objectsLoading && !api.objects.length ? (
+        <div className={styles.objectList} aria-busy="true" aria-label="Загрузка объектов">
+          <div className={`${styles.skeleton} ${styles.skeletonRow}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonRow}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonRow}`} />
+        </div>
+      ) : (
+        <div className={styles.objectList}>
+          {visible.map((obj, index) => (
+            <RiseItem key={obj.id} index={index}>
+              <button
+                type="button"
+                className={selectedId === obj.id ? styles.objectRowOn : styles.objectRow}
+                onClick={() => setSelectedId(obj.id)}
+              >
+                <span className={styles.objectMain}>
+                  <strong>
+                    {obj.clientName || 'Без имени'}
+                    {obj.pendingSync ? ' · ↻' : ''}
+                  </strong>
+                  <span className={styles.hint}>
+                    {obj.address || 'Адрес не указан'}
+                    {obj.city ? ` · ${obj.city}` : ''}
+                    {obj.room.areaM2 ? ` · ${obj.room.areaM2} м²` : ''}
+                  </span>
+                </span>
+                <StatusBadge status={obj.status} />
+              </button>
+            </RiseItem>
+          ))}
+          {!visible.length ? (
+            <div className={styles.emptyState}>
+              <p className={styles.lead}>
+                {api.objects.length
+                  ? 'Ничего не нашлось по этому фильтру.'
+                  : compact
+                    ? 'Пока нет объектов. Сохраните замер из проблемомера.'
+                    : user.role === 'crew'
+                      ? 'Пока нет заданий.'
+                      : 'Пока нет объектов.'}
+              </p>
+              {api.objects.length ? (
+                <button
+                  type="button"
+                  className={styles.ghost}
+                  onClick={() => {
+                    setQuery('');
+                    setStatusFilter(user.role === 'crew' ? 'install' : 'all');
+                  }}
+                >
+                  Сбросить фильтр
+                </button>
+              ) : canCreate && onCreate ? (
+                <button type="button" className={styles.primary} onClick={onCreate}>
+                  Открыть проблемомер
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      )}
+
       {selected ? (
-        <div className={styles.objectDetail}>
+        <div className={styles.objectDetail} ref={detailRef}>
           <h3>
             {selected.clientName || 'Объект'} · {JOB_OBJECT_STATUS_LABELS[selected.status]}
           </h3>
           <p className={styles.lead}>
-            {[selected.address, selected.city, selected.clientPhone].filter(Boolean).join(' · ') ||
-              'Контакты не заполнены'}
+            {[selected.address, selected.city].filter(Boolean).join(' · ') || 'Адрес не заполнен'}
           </p>
+          {selected.clientPhone ? (
+            <a className={styles.callLink} href={telHref(selected.clientPhone)}>
+              Позвонить {selected.clientPhone}
+            </a>
+          ) : (
+            <p className={styles.hint}>Телефон не указан</p>
+          )}
           {selected.estimate ? (
             <div className={styles.grid2}>
               <div className={styles.field}>
@@ -149,33 +294,33 @@ export function ObjectsPanel({ compact }: { compact?: boolean }) {
             <p className={styles.hint}>Смета ещё не посчитана</p>
           )}
 
-          <label className={styles.field}>
+          <div className={styles.field}>
             Статус
-            <select
-              value={selected.status}
-              onChange={(e) =>
-                void patch(selected, { status: e.target.value as JobObjectStatus })
-              }
-            >
-              {STATUSES.filter((s) => {
-                if (user.role === 'crew') return s === 'install' || s === 'closed' || s === selected.status;
-                return true;
-              }).map((s) => (
-                <option key={s} value={s}>
+            <div className={styles.chipRow} role="group" aria-label="Сменить статус">
+              {allowedStatuses(selected.status).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={selected.status === s ? styles.chipOn : styles.chip}
+                  aria-pressed={selected.status === s}
+                  disabled={pendingId === selected.id}
+                  onClick={() => {
+                    if (s !== selected.status) void patch(selected, { status: s });
+                  }}
+                >
                   {JOB_OBJECT_STATUS_LABELS[s]}
-                </option>
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          </div>
 
           {canAssign && staff.length ? (
             <label className={styles.field}>
               Исполнитель
               <select
                 value={selected.assignedTo || ''}
-                onChange={(e) =>
-                  void patch(selected, { assignedTo: e.target.value || null })
-                }
+                disabled={pendingId === selected.id}
+                onChange={(e) => void patch(selected, { assignedTo: e.target.value || null })}
               >
                 <option value="">Не назначен</option>
                 {staff.map((s) => (
@@ -195,8 +340,15 @@ export function ObjectsPanel({ compact }: { compact?: boolean }) {
                 type="button"
                 className={styles.ghost}
                 onClick={() => {
-                  void navigator.clipboard?.writeText(selected.clientSummary);
-                  setMsg('Сводка скопирована');
+                  const clip = navigator.clipboard;
+                  if (!clip) {
+                    setErr('Не удалось скопировать');
+                    return;
+                  }
+                  void clip.writeText(selected.clientSummary).then(
+                    () => setMsg('Сводка скопирована'),
+                    () => setErr('Не удалось скопировать'),
+                  );
                 }}
               >
                 Скопировать сводку
@@ -215,20 +367,24 @@ export function ObjectsPanel({ compact }: { compact?: boolean }) {
           ) : null}
 
           {canDelete ? (
-            <div className={styles.navRow} style={{ marginTop: 12 }}>
-              <button type="button" className={styles.ghost} onClick={() => void remove(selected)}>
+            <div className={styles.navRow}>
+              <button type="button" className={styles.danger} onClick={() => void remove(selected)}>
                 Удалить объект
               </button>
             </div>
           ) : null}
-
-          {msg ? <p className={styles.ok}>{msg}</p> : null}
-          {err ? (
-            <p className={styles.error} role="alert">
-              {err}
-            </p>
-          ) : null}
         </div>
+      ) : null}
+
+      {msg ? (
+        <p className={styles.toast} role="status">
+          {msg}
+        </p>
+      ) : null}
+      {err ? (
+        <p className={`${styles.toast} ${styles.toastErr}`} role="alert">
+          {err}
+        </p>
       ) : null}
     </div>
   );

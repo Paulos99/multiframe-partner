@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DEMO_ACCOUNTS } from './demoSeed';
+import { ShakeBox } from './motionBits';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
@@ -21,6 +22,11 @@ export function DemoLoginPicker() {
   const { login, loading } = usePartner();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [shake, setShake] = useState(0);
+
+  useEffect(() => {
+    if (err) setShake((n) => n + 1);
+  }, [err]);
 
   if (!isDemoModeEnabled()) return null;
 
@@ -41,7 +47,7 @@ export function DemoLoginPicker() {
   const companyB = DEMO_ACCOUNTS.filter((a) => a.company === 'Северный Потолок');
 
   return (
-    <div className={styles.demoPicker}>
+    <ShakeBox signal={shake} className={styles.demoPicker}>
       <h2>Демо-режим</h2>
       <p className={styles.lead}>
         Один клик — вход в кабинет роли. Для показа руководству.
@@ -99,7 +105,7 @@ export function DemoLoginPicker() {
           ))}
         </div>
       </div>
-    </div>
+    </ShakeBox>
   );
 }
 

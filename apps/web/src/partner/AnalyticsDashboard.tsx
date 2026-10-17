@@ -15,6 +15,7 @@ import {
   type RoomType,
 } from '../state/types';
 import { fetchAnalyticsDashboard, formatPeriodLabel, monthLabel, rangeFromYmd, ymdShift } from './analytics';
+import { CountUp, FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
@@ -120,7 +121,9 @@ function KpiCard({
   return (
     <div className={styles.kpi}>
       <span className={styles.kpiLabel}>{label}</span>
-      <strong>{formatNum(value)}</strong>
+      <strong>
+        <CountUp value={value} />
+      </strong>
       {delta != null ? (
         <span className={`${styles.kpiDelta} ${deltaClass(value, prev)}`}>
           {delta} к пред.
@@ -390,9 +393,16 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
 
   if (loading && !data) {
     return (
-      <div className={`${styles.card} ${styles.dashCard}`}>
-        <h2>{mode === 'admin' ? 'Дашборд аналитики' : 'Аналитика сотрудников'}</h2>
-        <p className={styles.lead}>Загрузка…</p>
+      <div className={`${styles.card} ${styles.dashCard}`} aria-busy="true">
+        <h2>{mode === 'admin' ? 'Аналитика' : 'Аналитика команды'}</h2>
+        <p className={styles.lead}>Считаем показатели…</p>
+        <div className={styles.kpiRow}>
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className={`${styles.skeleton} ${styles.skeletonKpi}`} />
+          ))}
+        </div>
+        <div className={`${styles.skeleton} ${styles.skeletonLine}`} />
+        <div className={`${styles.skeleton} ${styles.skeletonLine}`} />
       </div>
     );
   }
@@ -464,7 +474,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
 
       {section === 'overview' ? (
         <div className={styles.dashSection}>
-          <div className={styles.kpiRow}>
+          <FadeRise className={styles.kpiRow}>
             {mode === 'admin' ? (
               <KpiCard
                 label="Активные компании"
@@ -480,20 +490,20 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
               showDelta={showDelta}
             />
             <KpiCard
-              label="Расчёты PM"
+              label="Проблемомер"
               value={dash.kpi.problemomerResults}
               prev={prev?.problemomerResults}
               showDelta={showDelta}
             />
             <KpiCard
-              label="Расчёты кальк."
+              label="Калькулятор"
               value={dash.kpi.calculatorDone}
               prev={prev?.calculatorDone}
               showDelta={showDelta}
             />
             <KpiCard label="PDF" value={dash.kpi.pdf} prev={prev?.pdf} showDelta={showDelta} />
             <KpiCard
-              label="Шаринг"
+              label="Отправки"
               value={dash.kpi.shares}
               prev={prev?.shares}
               showDelta={showDelta}
@@ -516,7 +526,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
               prev={prev?.panels}
               showDelta={showDelta}
             />
-          </div>
+          </FadeRise>
 
           <h3 className={styles.dashSub}>Воронка</h3>
           <div className={styles.funnelGrid}>

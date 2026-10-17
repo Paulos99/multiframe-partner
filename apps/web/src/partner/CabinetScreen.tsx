@@ -4,13 +4,20 @@ import {
   OFFICIAL_PRICE_PER_M2,
   ROLE_LABELS,
   STAFF_ROLES,
+  type SessionUser,
   type UserRole,
 } from '../../../../packages/shared/partner';
+import { Button } from '../ui/Button';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { ObjectsPanel } from './ObjectsPanel';
 import { generatePassword, usePartner } from './PartnerContext';
 import styles from './partner.module.css';
+
+function roleHeading(role: UserRole, user: SessionUser): string {
+  const company = user.org?.companyName?.trim();
+  return company ? `${ROLE_LABELS[role]} · ${company}` : user.displayName || ROLE_LABELS[role];
+}
 
 type Route = 'cabinet' | 'problemomer' | 'calculator';
 
@@ -41,16 +48,20 @@ function SyncBadge() {
 function ToolButtons({
   onNavigate,
   onOpenCalc,
+  quiet,
 }: {
   onNavigate: (r: Route) => void;
   onOpenCalc: () => void;
+  /** Вторичные действия: бригаде важнее список монтажа, чем инструменты замера. */
+  quiet?: boolean;
 }) {
+  const cls = quiet ? styles.ghost : styles.primary;
   return (
     <div className={styles.navRow}>
-      <button type="button" className={styles.primary} onClick={() => onNavigate('problemomer')}>
+      <button type="button" className={cls} onClick={() => onNavigate('problemomer')}>
         Проблемомер
       </button>
-      <button type="button" className={styles.primary} onClick={onOpenCalc}>
+      <button type="button" className={cls} onClick={onOpenCalc}>
         Калькулятор
       </button>
     </div>
@@ -112,15 +123,18 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [companyName, setCompanyName] = useState('');
   const [city, setCity] = useState('');
   const [created, setCreated] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setErr(null);
     setCreated(null);
+    setSaving(true);
     try {
       const res = await api.adminCreatePartner({ login, password, companyName, city });
-      setCreated(`Создан партнёр ${res.login} · пароль: ${res.password}`);
+      setNotice(`Создан партнёр ${res.login} · пароль: ${res.password}`);
       setLogin('');
       setPassword('');
       setCompanyName('');
@@ -128,6 +142,8 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       setTab('partners');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -208,15 +224,15 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                 />
               </label>
             </div>
-            {created ? <p className={styles.ok}>{created}</p> : null}
-            {err ? (
+            {created ? <p className={styles.flash}>{created}</p> : null}
+            {err && tab === 'add' ? (
               <p className={styles.error} role="alert">
                 {err}
               </p>
             ) : null}
-            <button type="submit" className={styles.primary}>
-              Создать
-            </button>
+            <Button type="submit" loading={saving} disabled={saving}>
+              {saving ? 'Создаём…' : 'Создать'}
+            </Button>
           </form>
         </TabPanel>
       ) : null}
@@ -225,6 +241,16 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         <TabPanel>
           <div className={`${styles.card} ${styles.panelCard}`}>
             <h2>Партнёры сети</h2>
+            {notice ? (
+              <p className={styles.flash} role="status">
+                {notice}
+              </p>
+            ) : null}
+            {err && tab === 'partners' ? (
+              <p className={styles.error} role="alert">
+                {err}
+              </p>
+            ) : null}
             <div className={styles.table}>
               {partners.map((p) => (
                 <div key={p.user.id} className={styles.tableRow}>
@@ -245,9 +271,16 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                       className={styles.ghost}
                       onClick={() => {
                         const pw = generatePassword();
-                        void api.adminResetPassword(p.user.id, pw).then((next) => {
-                          alert(`Новый пароль для ${p.user.login}: ${next}`);
-                        });
+                        void api
+                          .adminResetPassword(p.user.id, pw)
+                          .then((next) => {
+                            setErr(null);
+                            setNotice(`Новый пароль для ${p.user.login}: ${next}`);
+                          })
+                          .catch((ex) => {
+                            setNotice(null);
+                            setErr(ex instanceof Error ? ex.message : 'Ошибка');
+                          });
                       }}
                     >
                       Новый пароль
@@ -325,12 +358,15 @@ function OwnerCabinet({
   const [execCreated, setExecCreated] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [savingOrg, setSavingOrg] = useState(false);
+  const [savingStaff, setSavingStaff] = useState(false);
   const staff = api.partnerListStaff();
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
     setMsg(null);
     setErr(null);
+    setSavingOrg(true);
     try {
       await api.saveOrg({
         companyName: companyName.trim(),
@@ -344,6 +380,8 @@ function OwnerCabinet({
       setMsg(api.remote ? 'Сохранено в облаке' : 'Сохранено в этом браузере');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
+    } finally {
+      setSavingOrg(false);
     }
   }
 
@@ -351,6 +389,7 @@ function OwnerCabinet({
     e.preventDefault();
     setExecCreated(null);
     setErr(null);
+    setSavingStaff(true);
     try {
       const password = execPassword.trim() || generatePassword();
       const res = await api.partnerCreateStaff({
@@ -367,6 +406,8 @@ function OwnerCabinet({
       setExecName('');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
+    } finally {
+      setSavingStaff(false);
     }
   }
 
@@ -374,7 +415,7 @@ function OwnerCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
-          <h1>Владелец · {user.org?.companyName || user.displayName}</h1>
+          <h1>{roleHeading('owner', user)}</h1>
           <p className={styles.lead}>
             Прайс, команда, объекты и воронка компании
             {user.org?.city ? ` · ${user.org.city}` : ''}
@@ -402,7 +443,7 @@ function OwnerCabinet({
 
       {tab === 'objects' ? (
         <TabPanel>
-          <ObjectsPanel />
+          <ObjectsPanel onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}
 
@@ -479,15 +520,19 @@ function OwnerCabinet({
                 />
               </label>
             </div>
-            {msg ? <p className={styles.ok}>{msg}</p> : null}
-            {err ? (
+            {msg ? (
+              <p className={styles.flash} role="status">
+                {msg}
+              </p>
+            ) : null}
+            {err && tab === 'company' ? (
               <p className={styles.error} role="alert">
                 {err}
               </p>
             ) : null}
-            <button type="submit" className={styles.primary}>
-              Сохранить
-            </button>
+            <Button type="submit" loading={savingOrg} disabled={savingOrg}>
+              {savingOrg ? 'Сохраняем…' : 'Сохранить'}
+            </Button>
           </form>
           <InstallHint />
         </TabPanel>
@@ -556,15 +601,19 @@ function OwnerCabinet({
                 </div>
               </label>
             </div>
-            {execCreated ? <p className={styles.ok}>{execCreated}</p> : null}
-            {err ? (
+            {execCreated ? (
+              <p className={styles.flash} role="status">
+                {execCreated}
+              </p>
+            ) : null}
+            {err && tab === 'staff' ? (
               <p className={styles.error} role="alert">
                 {err}
               </p>
             ) : null}
-            <button type="submit" className={styles.primary}>
-              Создать сотрудника
-            </button>
+            <Button type="submit" loading={savingStaff} disabled={savingStaff}>
+              {savingStaff ? 'Создаём…' : 'Создать сотрудника'}
+            </Button>
             <div className={styles.table}>
               {staff.map((ex) => (
                 <div key={ex.id} className={styles.tableRow}>
@@ -640,10 +689,8 @@ function SalesCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
-          <h1>Менеджер · {user.displayName}</h1>
-          <p className={styles.lead}>
-            Сделки, КП и отправка клиенту · {user.org?.companyName || 'компания'}
-          </p>
+          <h1>{roleHeading('sales', user)}</h1>
+          <p className={styles.lead}>Сделки, КП и отправка клиенту</p>
         </div>
         <div className={styles.topActions}>
           <SyncBadge />
@@ -662,7 +709,7 @@ function SalesCabinet({
       />
       {tab === 'deals' ? (
         <TabPanel>
-          <ObjectsPanel />
+          <ObjectsPanel onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}
       {tab === 'analytics' ? (
@@ -694,10 +741,8 @@ function MeasurerCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
-          <h1>Замерщик · {user.displayName}</h1>
-          <p className={styles.lead}>
-            Замер за 5–10 минут · {user.org?.companyName || 'компания'}
-          </p>
+          <h1>{roleHeading('measurer', user)}</h1>
+          <p className={styles.lead}>Замер за 5–10 минут</p>
         </div>
         <div className={styles.topActions}>
           <button
@@ -717,18 +762,20 @@ function MeasurerCabinet({
         <HelpTrainingPanel role="measurer" />
       ) : (
         <>
-          <div className={`${styles.card} ${styles.panelCard}`}>
-            <h2>Параметры компании</h2>
+          <p className={styles.metaLine}>
+            РРЦ панели {user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB} ₽ ·{' '}
+            {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
+            {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'}
+          </p>
+          <ObjectsPanel compact onCreate={() => onNavigate('problemomer')} />
+          <details className={styles.hintCard}>
+            <summary>Офлайн на телефоне</summary>
             <p className={styles.lead}>
-              РРЦ панели {user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB} ₽ ·{' '}
-              {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
-              {user.org?.installPricePerM2 != null
-                ? `${user.org.installPricePerM2} ₽/м²`
-                : 'не задан'}
+              Установите кабинет на устройство: в Chrome — «Установить приложение», на iPhone —
+              «Поделиться → На экран Домой». После первого открытия прайс и объекты доступны без
+              сети; отправка на сервер встаёт в очередь.
             </p>
-          </div>
-          <ObjectsPanel compact />
-          <InstallHint />
+          </details>
         </>
       )}
     </div>
@@ -750,10 +797,8 @@ function CrewCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
-          <h1>Бригада · {user.displayName}</h1>
-          <p className={styles.lead}>
-            Монтаж по объектам · цены скрыты · {user.org?.companyName || 'компания'}
-          </p>
+          <h1>{roleHeading('crew', user)}</h1>
+          <p className={styles.lead}>Монтаж по объектам · цены скрыты</p>
         </div>
         <div className={styles.topActions}>
           <button
@@ -768,13 +813,20 @@ function CrewCabinet({
           <QuickLogout />
         </div>
       </header>
-      <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
+      <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} quiet />
       {showHelp ? (
         <HelpTrainingPanel role="crew" />
       ) : (
         <>
           <ObjectsPanel />
-          <InstallHint />
+          <details className={styles.hintCard}>
+            <summary>Офлайн на телефоне</summary>
+            <p className={styles.lead}>
+              Установите кабинет на устройство: в Chrome — «Установить приложение», на iPhone —
+              «Поделиться → На экран Домой». Количество панелей и крепежа останется на экране без
+              сети.
+            </p>
+          </details>
         </>
       )}
     </div>
