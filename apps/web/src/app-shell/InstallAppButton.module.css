@@ -8,59 +8,53 @@
 
 button.compact.compact {
   appearance: none;
+  box-sizing: border-box;
   flex: 0 0 auto;
+  align-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 40px;
+  height: 36px;
+  min-height: 36px;
+  max-width: 100%;
   margin: 0;
-  padding: 8px 12px;
+  padding: 0 12px 0 10px;
   border-radius: 999px;
   border: 1px solid rgba(1, 100, 79, 0.35);
   background: #fff;
   color: #01644f;
   font: inherit;
-  font-size: 14px;
-  font-weight: 750;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
   white-space: nowrap;
   cursor: pointer;
   position: static;
+  overflow: visible;
 }
 
 button.compact.compact:active {
   transform: scale(0.98);
 }
 
-@media (max-width: 520px) {
-  button.compact.compact {
-    width: 36px;
-    min-height: 36px;
-    padding: 0;
-    gap: 0;
-  }
-
-  button.compact.compact span {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-}
-
-.compact .icon {
-  width: 18px;
-  height: 18px;
+.btnIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: block;
   padding: 0;
   background: none;
   border-radius: 0;
+  color: currentColor;
+}
+
+.label {
+  flex: 0 0 auto;
+  min-width: max-content;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .hint {

@@ -196,7 +196,11 @@ export function loadDb(): PartnerDb {
 /** One-shot local analytics month for offline demo dashboards. */
 export function seedDemoAnalyticsOnce(force = false): void {
   try {
-    if (!force && localStorage.getItem(DEMO_ANALYTICS_SEED_KEY) === '1') return;
+    if (!force && localStorage.getItem(DEMO_ANALYTICS_SEED_KEY) === '1') {
+      const existing = localStorage.getItem(ANALYTICS_KEY);
+      // The one-shot history wipe removes events after the flag is set.
+      if (existing && existing.length > 2) return;
+    }
     const events = buildLocalDemoAnalytics() as AnalyticsEvent[];
     localStorage.setItem(ANALYTICS_KEY, JSON.stringify(events.slice(0, ANALYTICS_CAP)));
     localStorage.setItem(DEMO_ANALYTICS_SEED_KEY, '1');

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { OrgSettings } from '../../../../packages/shared/partner';
-import { fetchAnalyticsDashboard, rangeFromYmd, ymdShift } from './analytics';
+import { fetchAnalyticsDashboard, formatPeriodLabel, rangeFromYmd } from './analytics';
 import { downloadJournalWorkbook } from './journalExport';
-import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
@@ -25,23 +24,28 @@ export function JournalDownload({
   const api = usePartner();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [orgChoice, setOrgChoice] = useState<string | null>(null);
-  const [exportFrom, setExportFrom] = useState<string | null>(null);
-  const [exportTo, setExportTo] = useState<string | null>(null);
-  const [datesReady, setDatesReady] = useState(false);
 
   const partners: PartnerOption[] = mode === 'admin' ? api.adminListPartners() : [];
+  const period = formatPeriodLabel(fromYmd, toYmd);
+  const company =
+    mode !== 'admin'
+      ? api.user?.org?.companyName || api.user?.displayName || 'Компания'
+      : orgId
+        ? partners.find((p) => p.user.orgId === orgId)?.org?.settings.companyName ||
+          partners.find((p) => p.user.orgId === orgId)?.user.displayName ||
+          'Компания'
+        : 'Все компании';
 
-  async function run(from: string | null, to: string | null, companyId: string | null) {
+  async function run() {
     setBusy(true);
     setErr(null);
     try {
-      const range = rangeFromYmd(from, to);
+      const range = rangeFromYmd(fromYmd, toYmd);
       const dash = await fetchAnalyticsDashboard({
         mode,
         from: range.from,
         to: range.to,
-        orgId: companyId,
+        orgId,
         partnerLogin: api.user?.login,
         journal: true,
       });
@@ -54,93 +58,14 @@ export function JournalDownload({
     }
   }
 
-  if (mode !== 'admin') {
-    return (
-      <div className={styles.exportBox}>
-        <button
-          type="button"
-          className={styles.primary}
-          disabled={busy}
-          onClick={() => void run(fromYmd, toYmd, orgId)}
-        >
-          {busy ? 'Готовим файл…' : 'Скачать журнал'}
-        </button>
-        <p className={styles.hint}>Excel с учётом периода на экране. Даты в файле — по Москве.</p>
-        {err ? (
-          <p className={styles.error} role="alert">
-            {err}
-          </p>
-        ) : null}
-      </div>
-    );
-  }
-
-  const companyReady = orgChoice !== null;
-  const companyId = orgChoice === 'all' ? null : orgChoice;
-
   return (
     <div className={styles.exportBox}>
-      <p className={styles.lead}>Выгрузка журнала — три шага.</p>
-      <div className={styles.exportStep}>
-        <span className={styles.exportNum}>1</span>
-        <label className={styles.field}>
-          Компания
-          <select
-            value={orgChoice ?? ''}
-            onChange={(e) => {
-              setOrgChoice(e.target.value);
-              setDatesReady(false);
-              setExportFrom(null);
-              setExportTo(null);
-            }}
-          >
-            <option value="" disabled>
-              Выберите компанию
-            </option>
-            <option value="all">Все компании</option>
-            {partners.map((p) => (
-              <option key={p.user.id} value={p.user.orgId || ''}>
-                {p.org?.settings.companyName || p.user.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      {companyReady ? (
-        <div className={styles.exportStep}>
-          <span className={styles.exportNum}>2</span>
-          <div className={styles.field}>
-            Диапазон дат
-            <PeriodCalendar
-              fromYmd={exportFrom}
-              toYmd={exportTo}
-              onChange={(from, to) => {
-                setExportFrom(from);
-                setExportTo(to);
-                setDatesReady(true);
-              }}
-            />
-            {!datesReady ? (
-              <span className={styles.hint}>
-                Откройте календарь. Быстрый период: 7 дней с {ymdShift(-6)}.
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-      {companyReady && datesReady ? (
-        <div className={styles.exportStep}>
-          <span className={styles.exportNum}>3</span>
-          <button
-            type="button"
-            className={styles.primary}
-            disabled={busy}
-            onClick={() => void run(exportFrom, exportTo, companyId)}
-          >
-            {busy ? 'Готовим файл…' : 'Скачать журнал'}
-          </button>
-        </div>
-      ) : null}
+      <p className={styles.lead}>
+        {company} · {period}
+      </p>
+      <button type="button" className={styles.primary} disabled={busy} onClick={() => void run()}>
+        {busy ? 'Готовим файл…' : 'Скачать журнал (Excel)'}
+      </button>
       {err ? (
         <p className={styles.error} role="alert">
           {err}

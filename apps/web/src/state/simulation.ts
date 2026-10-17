@@ -336,6 +336,39 @@ export function officialComfortLabel(cls: ClassLabel): string {
   return HYBRID_CLASS_LABELS[cls];
 }
 
+const COMFORT_CLASS_ORDER = Object.keys(HYBRID_CLASS_LABELS) as ClassLabel[];
+
+/** User-facing comfort class name from the problem meter (`HYBRID_CLASS_LABELS`). */
+export function comfortClassLabel(value: string | null | undefined): string {
+  if (!value || value === '?' || value === 'unknown') return '';
+  if ((COMFORT_CLASS_ORDER as string[]).includes(value)) {
+    return HYBRID_CLASS_LABELS[value as ClassLabel];
+  }
+  return value;
+}
+
+/** Problem meter transition: «Высокий комфорт (А) → Комфорт (Б)». */
+export function comfortTransitionLabel(
+  before: string | null | undefined,
+  after: string | null | undefined,
+): string {
+  const left = comfortClassLabel(before);
+  const right = comfortClassLabel(after);
+  if (left && right) return `${left} → ${right}`;
+  return left || right;
+}
+
+/** Order of «было → станет» follows the problem meter class list, then the target class. */
+export function comfortTransitionRank(key: string): number {
+  const parts = key.split('→');
+  if (parts.length !== 2) return 10_000;
+  const rank = (value: string) => {
+    const index = COMFORT_CLASS_ORDER.indexOf(value as ClassLabel);
+    return index < 0 ? 50 : index;
+  };
+  return rank(parts[0] || '') * 100 + rank(parts[1] || '');
+}
+
 export function airChip(side: DerivedSimSide): string {
   if (side.Rw >= NORMS.A.Rw) return CLASS_CYR.A;
   if (side.Rw >= NORMS.B.Rw) return CLASS_CYR.B;

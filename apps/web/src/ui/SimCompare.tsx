@@ -5,7 +5,7 @@ import {
   NORM_FOOTNOTE,
   SIMULATION_BADGE,
 } from '../state/types';
-import { airChip, classCyr, impactChip } from '../state/simulation';
+import { airChip, classCyr, comfortTransitionLabel, impactChip } from '../state/simulation';
 import styles from './SimCompare.module.css';
 
 interface Props {
@@ -125,7 +125,7 @@ function ClassScale({ before, after }: { before: ClassLabel; after: ClassLabel }
         })}
       </div>
       <p className={styles.scaleMove}>
-        {HYBRID_CLASS_LABELS[before]} → {HYBRID_CLASS_LABELS[after]}
+        {comfortTransitionLabel(before, after)}
       </p>
     </div>
   );
