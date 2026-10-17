@@ -55,7 +55,7 @@ function ToolButtons({
 }: {
   onNavigate: (r: Route) => void;
   onOpenCalc: () => void;
-  /** Вторичные действия: бригаде важнее список монтажа, чем инструменты замера. */
+  /** Вторичные действия: монтажнику важнее список заданий, чем инструменты замера. */
   quiet?: boolean;
 }) {
   const cls = quiet ? styles.ghost : styles.primary;
@@ -616,8 +616,8 @@ function OwnerCabinet({
           >
             <h2>Сотрудники</h2>
             <p className={styles.lead}>
-              Менеджер ведёт сделки и КП, замерщик сохраняет объекты, бригада видит количества без
-              цен.
+              Менеджер ведёт сделки и КП, замерщик сохраняет объекты, у каждого монтажника свой
+              вход и свои задания. Цены монтажник не видит — только спецификацию и схемы.
             </p>
             <div className={styles.grid2}>
               <label className={styles.field}>
@@ -868,7 +868,7 @@ function CrewCabinet({
       <header className={styles.top}>
         <div>
           <h1>{roleHeading('crew', user)}</h1>
-          <p className={styles.lead}>Монтаж по объектам · цены скрыты</p>
+          <p className={styles.lead}>Личный кабинет монтажника · цены скрыты, PDF схемы доступен</p>
         </div>
         <div className={styles.topActions}>
           <button
@@ -908,7 +908,7 @@ export function CabinetScreen({ onNavigate }: { onNavigate: (r: Route) => void }
   const user = api.user;
   if (!user) return null;
 
-  const openCalc = () => onNavigate('calculator');
+  const openCalc = () => api.requestCalculator(null);
 
   if (user.role === 'admin') return <AdminCabinet onNavigate={onNavigate} />;
   if (user.role === 'owner') {

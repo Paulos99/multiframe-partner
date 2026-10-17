@@ -17,12 +17,14 @@ import type {
 } from '../../../../packages/shared/partner';
 import { loadCities, resolveCity } from './cityCatalog';
 import {
+  canCreateObjects,
   canSeePrices,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
   toPartnerProfile,
+  type JobObjectDocument,
 } from '../../../../packages/shared/partner';
 import {
   apiAdminCreatePartner,
@@ -42,8 +44,12 @@ import {
   apiPatchObject,
   apiResetStaffPassword,
   apiSaveOrg,
+  apiUploadObjectDocuments,
   hasRemoteApi,
+  stripObjectDocuments,
 } from './apiClient';
+import { objectPatchFromCalc, type CabinetCalcMessage } from './cabinetCalc';
+import { withDemoDocuments } from './demoDocuments';
 import {
   bootstrapHistoryReset,
   flushAnalyticsQueue,
@@ -51,6 +57,7 @@ import {
   trackPartnerAnalytics,
 } from './analytics';
 import {
+  appendLocalObjectDocuments,
   cacheObjects,
   clearObjectQueue,
   createPartnerAccount,
@@ -58,6 +65,7 @@ import {
   deleteLocalObject,
   deletePartnerAccount,
   deleteStaffAccount,
+  enqueueObjectDocuments,
   generatePassword,
   listActivity,
   listLocalObjects,
@@ -68,8 +76,10 @@ import {
   loadToken,
   localLogin,
   localLogout,
+  peekObjectDocumentQueue,
   peekObjectQueue,
   removeFromObjectQueue,
+  removeQueuedObjectDocuments,
   resetPartnerPassword,
   resetStaffPassword,
   updatePartnerCity,
@@ -146,6 +156,10 @@ type PartnerApi = {
   saveObject: (input: Partial<JobObject> & { id?: string }) => Promise<JobObject>;
   deleteObject: (id: string) => Promise<void>;
   flushObjectQueue: () => Promise<void>;
+  /** Открыть калькулятор. objectId — обновить эту карточку, null — новый объект на первом расчёте. */
+  requestCalculator: (objectId: string | null) => void;
+  calcRequest: { objectId: string | null; nonce: number } | null;
+  attachCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
   refresh: () => void;
   apiBase: string;
@@ -162,6 +176,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [objectsLoading, setObjectsLoading] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [staffCache, setStaffCache] = useState<StaffMember[]>([]);
+  const [calcRequest, setCalcRequest] = useState<{ objectId: string | null; nonce: number } | null>(
+    null,
+  );
   const [partnersCache, setPartnersCache] = useState<
     Array<{
       user: StoredUser | StaffMember;
@@ -185,11 +202,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     setObjectsLoading(true);
     try {
       if (remote && loadToken()) {
-        const list = await apiListObjects();
+        const list = withDemoDocuments(await apiListObjects(), session.role);
         setObjects(list);
         cacheObjects(list);
       } else {
-        const list = listLocalObjects(session);
+        const list = withDemoDocuments(listLocalObjects(session), session.role);
         setObjects(list);
         cacheObjects(list);
       }
@@ -204,16 +221,13 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const flushObjectQueue = useCallback(async () => {
     if (!remote || !loadToken()) return;
     const queue = peekObjectQueue();
-    if (!queue.length) {
-      bumpPending();
-      return;
-    }
     for (const obj of queue) {
       try {
+        const payload = stripObjectDocuments(obj);
         try {
-          await apiPatchObject(obj.id, obj);
+          await apiPatchObject(obj.id, payload);
         } catch {
-          await apiCreateObject(obj);
+          await apiCreateObject(payload);
         }
         removeFromObjectQueue(obj.id);
       } catch {
@@ -221,6 +235,34 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       }
     }
     if (!peekObjectQueue().length) clearObjectQueue();
+    const docs = peekObjectDocumentQueue();
+    const groups = new Map<string, typeof docs>();
+    for (const doc of docs) {
+      const key = `${doc.objectId}::${doc.versionId}`;
+      const list = groups.get(key) || [];
+      list.push(doc);
+      groups.set(key, list);
+    }
+    for (const [key, list] of groups) {
+      const [objectId, versionId] = key.split('::');
+      try {
+        await apiUploadObjectDocuments(
+          objectId,
+          list.map((d) => ({
+            kind: d.kind,
+            filename: d.filename,
+            pdfBase64: d.pdfBase64,
+            hasScheme: d.hasScheme,
+            panels: d.panels,
+            areaM2: d.areaM2,
+          })),
+          versionId,
+        );
+        removeQueuedObjectDocuments(objectId, versionId);
+      } catch {
+        break;
+      }
+    }
     bumpPending();
     await refreshObjects();
   }, [remote, bumpPending, refreshObjects]);
@@ -509,9 +551,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       if (!user) throw new Error('Нет сессии');
       if (remote && loadToken() && navigator.onLine) {
         try {
+          const payload = stripObjectDocuments(input);
           const obj = input.id
-            ? await apiPatchObject(input.id, input)
-            : await apiCreateObject(input);
+            ? await apiPatchObject(input.id, payload)
+            : await apiCreateObject(payload);
           await refreshObjects();
           return obj;
         } catch {
@@ -544,6 +587,82 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       await refreshObjects();
     },
     [user, remote, refreshObjects, bumpPending],
+  );
+
+  const requestCalculator = useCallback((objectId: string | null) => {
+    setCalcRequest({ objectId, nonce: Date.now() });
+  }, []);
+
+  const attachCalculation = useCallback(
+    async (message: CabinetCalcMessage, objectId: string | null) => {
+      if (!user || !canCreateObjects(user.role)) return null;
+      const existing = objectId ? objects.find((o) => o.id === objectId) : undefined;
+      const patch = objectPatchFromCalc(message, existing, user.org, objectId);
+      const saved = await saveObject(patch);
+      const versionId = `ver_${Date.now().toString(36)}`;
+      const files = [
+        {
+          kind: 'estimate' as const,
+          filename: message.filename || 'MultiFrame.pdf',
+          pdfBase64: message.pdfBase64 || '',
+          hasScheme: Boolean(message.hasScheme),
+          panels: saved.estimate?.panels ?? null,
+          areaM2: saved.room?.areaM2 ?? null,
+        },
+        {
+          kind: 'spec' as const,
+          filename: message.specFilename || 'MultiFrame_spec.pdf',
+          pdfBase64: message.specPdfBase64 || '',
+          hasScheme: Boolean(message.hasScheme),
+          panels: saved.estimate?.panels ?? null,
+          areaM2: saved.room?.areaM2 ?? null,
+        },
+      ].filter((d) => d.pdfBase64.length > 32);
+      if (!files.length) return saved;
+      if (remote && loadToken() && navigator.onLine) {
+        try {
+          const updated = await apiUploadObjectDocuments(saved.id, files, versionId);
+          await refreshObjects();
+          return updated;
+        } catch {
+          /* очередь, если облако не приняло файл */
+        }
+      }
+      const now = new Date().toISOString();
+      const localDocs: JobObjectDocument[] = files.map((d) => ({
+        id: `doc_${Math.random().toString(36).slice(2, 10)}`,
+        versionId,
+        createdAt: now,
+        createdBy: user.id,
+        kind: d.kind,
+        filename: d.filename,
+        hasScheme: d.hasScheme,
+        panels: d.panels,
+        areaM2: d.areaM2,
+        dataBase64: d.pdfBase64,
+      }));
+      enqueueObjectDocuments(
+        saved.id,
+        files.map((d) => ({
+          objectId: saved.id,
+          versionId,
+          kind: d.kind,
+          filename: d.filename,
+          pdfBase64: d.pdfBase64,
+          hasScheme: d.hasScheme,
+          panels: d.panels,
+          areaM2: d.areaM2,
+        })),
+      );
+      try {
+        appendLocalObjectDocuments(saved.id, localDocs, user);
+      } catch {
+        /* объект есть только в облаке — файл останется в очереди */
+      }
+      await refreshObjects();
+      return saved;
+    },
+    [user, objects, remote, saveObject, refreshObjects],
   );
 
   const noteTool = useCallback(
@@ -603,6 +722,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       saveObject,
       deleteObject,
       flushObjectQueue,
+      requestCalculator,
+      calcRequest,
+      attachCalculation,
       noteTool,
       refresh,
       apiBase: remote ? (import.meta.env.VITE_API_URL as string) || '' : '',
@@ -631,6 +753,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       saveObject,
       deleteObject,
       flushObjectQueue,
+      requestCalculator,
+      calcRequest,
+      attachCalculation,
       noteTool,
       refresh,
       tick,
@@ -696,7 +821,7 @@ export function persistPartnerCalcParams(params: PartnerCalcParams): void {
 export function calcUrlFromOrg(
   org: OrgSettings | null | undefined,
   companyName?: string,
-  opts?: { hidePrices?: boolean },
+  opts?: { hidePrices?: boolean; objectId?: string | null },
 ): string {
   const params = partnerCalcParamsFromOrg(org, companyName);
   if (opts?.hidePrices) {
@@ -719,6 +844,7 @@ export function calcUrlFromOrg(
   }
   q.set('dowelsPerPanel', String(params.dowelsPerPanel));
   if (params.company) q.set('company', params.company);
+  if (opts?.objectId) q.set('objectId', opts.objectId);
   q.set('partner', '1');
   const path = `${import.meta.env.BASE_URL || '/'}calculator/index.html`.replace(/\/{2,}/g, '/');
   const origin = typeof window !== 'undefined' ? window.location.origin : '';

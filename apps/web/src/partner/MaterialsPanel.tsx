@@ -139,7 +139,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
     <div className={styles.materials}>
       <p className={styles.lead}>
         Инструкции, презентации и видео по продукту STP MultiFrame. Открываются у владельца,
-        менеджера, замерщика и бригады.
+        менеджера, замерщика и монтажника.
       </p>
       <nav className={styles.crumbs} aria-label="Папки">
         <button type="button" className={styles.linkish} onClick={() => setFolderId(null)}>

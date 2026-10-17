@@ -3,6 +3,7 @@
  */
 import type {
   JobObject,
+  JobObjectDocument,
   OrgSettings,
   SessionUser,
   UserRole,
@@ -191,6 +192,40 @@ export async function apiPatchObject(
 export async function apiDeleteObject(id: string): Promise<void> {
   await request(`/objects/${id}`, { method: 'DELETE' });
 }
+
+export async function apiUploadObjectDocuments(
+  objectId: string,
+  documents: Array<{
+    kind: 'estimate' | 'spec';
+    filename: string;
+    pdfBase64: string;
+    hasScheme: boolean;
+    panels?: number | null;
+    areaM2?: number | null;
+  }>,
+  versionId?: string,
+): Promise<JobObject> {
+  const data = await request<{ object: JobObject }>(`/objects/${objectId}/documents`, {
+    method: 'POST',
+    body: JSON.stringify({ documents, versionId }),
+  });
+  return data.object;
+}
+
+export async function apiFetchObjectDocument(
+  objectId: string,
+  docId: string,
+): Promise<{ id: string; filename: string; kind: string; pdfBase64: string }> {
+  return request(`/objects/${objectId}/documents/${encodeURIComponent(docId)}`);
+}
+
+export function stripObjectDocuments<T extends Partial<JobObject>>(input: T): T {
+  const copy = { ...input };
+  delete copy.documents;
+  return copy;
+}
+
+export type { JobObjectDocument };
 
 export async function apiAdminUpdatePartnerCity(
   partnerUserId: string,

@@ -38,7 +38,7 @@ export const DEMO_ACCOUNTS = [
     password: 'exec1234',
     role: 'crew',
     company: 'Потолки Столицы',
-    label: 'Бригада · Потолки Столицы',
+    label: 'Монтажник · Потолки Столицы',
   },
   {
     login: 'partner2',
@@ -66,7 +66,7 @@ export const DEMO_ACCOUNTS = [
     password: 'exec1234',
     role: 'crew',
     company: 'Северный Потолок',
-    label: 'Бригада · Северный Потолок',
+    label: 'Монтажник · Северный Потолок',
   },
 ];
 
@@ -322,7 +322,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'crew1',
       password: 'exec1234',
       role: 'crew',
-      displayName: 'Бригада · Потолки Столицы',
+      displayName: 'Монтажник · Потолки Столицы',
       orgId: 'org_demo',
     }),
     user({
@@ -354,7 +354,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'crew2',
       password: 'exec1234',
       role: 'crew',
-      displayName: 'Бригада · Северный Потолок',
+      displayName: 'Монтажник · Северный Потолок',
       orgId: 'org_demo_spb',
     }),
   ];

@@ -46,6 +46,8 @@ GATEWAY_PATHS = (
     "/admin/demo/reset",
     "/objects",
     "/objects/{objectId}",
+    "/objects/{objectId}/documents",
+    "/objects/{objectId}/documents/{docId}",
     "/analytics/events",
     "/analytics/dashboard",
     "/materials",

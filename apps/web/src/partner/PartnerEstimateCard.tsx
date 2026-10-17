@@ -47,7 +47,7 @@ export function PartnerEstimateCard({ areaM2 }: { areaM2: number | null }) {
           </p>
         </>
       ) : (
-        <p className={styles.hint}>Цены скрыты для бригады. Детальная раскладка — в калькуляторе.</p>
+        <p className={styles.hint}>Цены скрыты. Спецификация и схема — в PDF объекта.</p>
       )}
     </section>
   );
