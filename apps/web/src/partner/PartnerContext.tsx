@@ -15,6 +15,7 @@ import type {
   SessionUser,
   UserRole,
 } from '../../../../packages/shared/partner';
+import { loadCities, resolveCity } from './cityCatalog';
 import {
   canSeePrices,
   DEFAULT_DOWEL_PRICE_RUB,
@@ -28,6 +29,7 @@ import {
   apiAdminDeletePartner,
   apiAdminListPartners,
   apiAdminResetPassword,
+  apiAdminUpdatePartnerCity,
   apiCreateObject,
   apiCreateStaff,
   apiDeleteObject,
@@ -70,6 +72,7 @@ import {
   removeFromObjectQueue,
   resetPartnerPassword,
   resetStaffPassword,
+  updatePartnerCity,
   saveSession,
   saveToken,
   trackToolOpen,
@@ -110,6 +113,7 @@ type PartnerApi = {
   }) => Promise<{ login: string; password: string }>;
   adminResetPassword: (partnerUserId: string, password: string) => Promise<string>;
   adminDeletePartner: (partnerUserId: string) => Promise<void>;
+  adminUpdatePartnerCity: (partnerUserId: string, city: string) => Promise<string>;
   adminListPartners: () => Array<{
     user: StoredUser | StaffMember;
     org: StoredOrg | { id: string; settings: OrgSettings } | undefined;
@@ -327,11 +331,18 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const saveOrg = useCallback(
     async (patch: Partial<OrgSettings>) => {
       if (!user?.orgId) throw new Error('Нет организации');
+      let nextPatch = patch;
+      if (patch.city !== undefined) {
+        await loadCities();
+        const resolved = resolveCity(patch.city, user.org?.city ?? '');
+        if (!resolved.ok) throw new Error(resolved.message);
+        nextPatch = { ...patch, city: resolved.city };
+      }
       let settings: OrgSettings;
       if (remote && loadToken()) {
-        settings = await apiSaveOrg(patch);
+        settings = await apiSaveOrg(nextPatch);
       } else {
-        settings = updateOrgSettings(user.orgId, patch, user);
+        settings = updateOrgSettings(user.orgId, nextPatch, user);
       }
       const next = { ...user, org: settings, displayName: settings.companyName || user.displayName };
       persistPartnerCalcParams(partnerCalcParamsFromOrg(settings));
@@ -344,14 +355,36 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const adminCreatePartner = useCallback(
     async (input: { login: string; password: string; companyName: string; city?: string }) => {
       if (!user) throw new Error('Нет сессии');
+      await loadCities();
+      const resolved = resolveCity(input.city ?? '', null);
+      if (!resolved.ok) throw new Error(resolved.message);
+      const payload = { ...input, city: resolved.city };
       if (remote && loadToken()) {
-        const res = await apiAdminCreatePartner(input);
+        const res = await apiAdminCreatePartner(payload);
         setTick((n) => n + 1);
         return { login: res.login, password: res.password };
       }
-      const res = createPartnerAccount({ ...input, admin: user });
+      const res = createPartnerAccount({ ...payload, admin: user });
       setTick((n) => n + 1);
       return { login: res.user.login, password: res.password };
+    },
+    [user, remote],
+  );
+
+  const adminUpdatePartnerCity = useCallback(
+    async (partnerUserId: string, city: string) => {
+      if (!user) throw new Error('Нет сессии');
+      await loadCities();
+      const resolved = resolveCity(city, null);
+      if (!resolved.ok) throw new Error(resolved.message);
+      if (remote && loadToken()) {
+        const saved = await apiAdminUpdatePartnerCity(partnerUserId, resolved.city);
+        setTick((n) => n + 1);
+        return saved;
+      }
+      const saved = updatePartnerCity(partnerUserId, resolved.city, user);
+      setTick((n) => n + 1);
+      return saved;
     },
     [user, remote],
   );
@@ -542,6 +575,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminCreatePartner,
       adminResetPassword,
       adminDeletePartner,
+      adminUpdatePartnerCity,
       adminListPartners: () => (remote && partnersCache.length ? partnersCache : listPartners()),
       adminActivity: () => listActivity(),
       partnerCreateStaff,
@@ -589,6 +623,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminCreatePartner,
       adminResetPassword,
       adminDeletePartner,
+      adminUpdatePartnerCity,
       partnerCreateStaff,
       partnerResetStaffPassword,
       partnerDeleteStaff,

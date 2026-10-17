@@ -11,6 +11,9 @@ export const ORG_ROLES: UserRole[] = ['owner', 'sales', 'measurer', 'crew'];
 /** Staff under an owner (analytics “executors” table). */
 export const STAFF_ROLES: UserRole[] = ['sales', 'measurer', 'crew'];
 
+/** Название партнёрской сети в кабинете и демо-материалах. */
+export const PARTNER_NETWORK_NAME = 'Сеть STP MultiFrame партнёра';
+
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Админ StP',
   owner: 'Владелец',

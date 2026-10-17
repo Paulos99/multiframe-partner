@@ -2,6 +2,8 @@
  * Local-first store for partner portal (offline / no API).
  * Survives reloads and works as PWA cache.
  */
+import type { MaterialNode } from '../../../api/materialsLib.js';
+import { resolveCity } from '../../../api/cityCatalog.js';
 import type {
   ActivityEvent,
   AnalyticsDashboard,
@@ -71,6 +73,8 @@ export type PartnerDb = {
   links: ExecutorLink[];
   activity: ActivityEvent[];
   objects: JobObject[];
+  /** Методические материалы. Нет поля — показываем демо и не записываем его. */
+  materials?: MaterialNode[];
 };
 
 function uid(prefix: string): string {
@@ -116,12 +120,14 @@ function migrateDb(raw: PartnerDb): PartnerDb {
         o.settings?.dowelPriceRub != null ? o.settings.dowelPriceRub : DEFAULT_DOWEL_PRICE_RUB,
     }),
   }));
+  const materials = Array.isArray(raw.materials) ? raw.materials : undefined;
   return {
     users,
     orgs,
     links: raw.links || [],
     activity: raw.activity || [],
     objects: raw.objects || [],
+    ...(materials ? { materials } : {}),
   };
 }
 
@@ -326,6 +332,8 @@ export function createPartnerAccount(input: {
   const login = input.login.trim();
   if (!login || !input.password) throw new Error('Укажите логин и пароль');
   if (db.users.some((u) => u.login === login)) throw new Error('Такой логин уже есть');
+  const resolvedCity = resolveCity(input.city ?? '', null);
+  if (!resolvedCity.ok) throw new Error(resolvedCity.message);
   const now = new Date().toISOString();
   const orgId = uid('org');
   const userId = uid('u');
@@ -335,7 +343,7 @@ export function createPartnerAccount(input: {
     createdBy: input.admin.id,
     settings: normalizeOrgSettings({
       companyName: input.companyName.trim() || login,
-      city: input.city?.trim() || '',
+      city: resolvedCity.city,
       panelPriceRub: OFFICIAL_PANEL_PRICE_RUB,
       pricePerM2: OFFICIAL_PRICE_PER_M2,
       installPricePerM2: DEFAULT_INSTALL_PRICE_PER_M2,
@@ -366,6 +374,37 @@ export function createPartnerAccount(input: {
   });
   saveDb(next);
   return { user, org, password: input.password };
+}
+
+export function updatePartnerCity(
+  partnerUserId: string,
+  city: string,
+  admin: SessionUser,
+): string {
+  if (admin.role !== 'admin') throw new Error('Только администратор');
+  const db = loadDb();
+  const partner = db.users.find((u) => u.id === partnerUserId && u.role === 'owner');
+  if (!partner?.orgId) throw new Error('Партнёр не найден');
+  const idx = db.orgs.findIndex((o) => o.id === partner.orgId);
+  if (idx < 0) throw new Error('Организация не найдена');
+  const resolvedCity = resolveCity(city, null);
+  if (!resolvedCity.ok) throw new Error(resolvedCity.message);
+  const settings = normalizeOrgSettings({
+    ...db.orgs[idx]!.settings,
+    city: resolvedCity.city,
+  });
+  const orgs = [...db.orgs];
+  orgs[idx] = { ...orgs[idx]!, settings };
+  let next: PartnerDb = { ...db, orgs };
+  next = pushActivity(next, {
+    orgId: partner.orgId,
+    userId: admin.id,
+    login: admin.login,
+    action: 'update_partner_city',
+    detail: `${partner.login} · ${resolvedCity.city || '—'}`,
+  });
+  saveDb(next);
+  return resolvedCity.city;
 }
 
 export function resetPartnerPassword(
@@ -433,9 +472,15 @@ export function updateOrgSettings(
   const db = loadDb();
   const idx = db.orgs.findIndex((o) => o.id === orgId);
   if (idx < 0) throw new Error('Организация не найдена');
+  let nextPatch = patch;
+  if (patch.city !== undefined) {
+    const resolvedCity = resolveCity(patch.city, db.orgs[idx]!.settings.city);
+    if (!resolvedCity.ok) throw new Error(resolvedCity.message);
+    nextPatch = { ...patch, city: resolvedCity.city };
+  }
   const settings = normalizeOrgSettings({
     ...db.orgs[idx]!.settings,
-    ...patch,
+    ...nextPatch,
   });
   const orgs = [...db.orgs];
   orgs[idx] = { ...orgs[idx]!, settings };
