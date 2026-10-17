@@ -14,6 +14,7 @@ import {
   type ObjectStageOption,
   type RoomType,
 } from '../state/types';
+import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
 import { fetchAnalyticsDashboard, formatPeriodLabel, monthLabel, rangeFromYmd, ymdShift } from './analytics';
 import { JournalDownload } from './JournalDownload';
 import { CountUp, FadeRise } from './motionBits';
@@ -76,7 +77,7 @@ function pct(part: number, whole: number): string {
 
 function labelKey(
   key: string,
-  kind: 'room' | 'house' | 'stage' | 'mode' | 'raw',
+  kind: 'room' | 'house' | 'stage' | 'mode' | 'comfort' | 'raw',
 ): string {
   if (kind === 'room') {
     return ROOM_TYPE_LABELS[key as RoomType] || key;
@@ -89,6 +90,11 @@ function labelKey(
   }
   if (kind === 'mode') {
     return MODE_LABELS[key] || key;
+  }
+  if (kind === 'comfort') {
+    const parts = key.split('→');
+    if (parts.length === 2) return comfortTransitionLabel(parts[0], parts[1]);
+    return comfortTransitionLabel(key, null) || key;
   }
   return key === 'unknown' ? 'Не указано' : key;
 }
@@ -285,7 +291,7 @@ function BreakdownList({
 }: {
   title: string;
   items: AnalyticsBreakdownItem[];
-  kind: 'room' | 'house' | 'stage' | 'mode' | 'raw';
+  kind: 'room' | 'house' | 'stage' | 'mode' | 'comfort' | 'raw';
 }) {
   return (
     <div className={styles.breakdownBlock}>
@@ -294,7 +300,7 @@ function BreakdownList({
         <p className={styles.lead}>Нет данных</p>
       ) : (
         <ul className={styles.breakdownList}>
-          {items.slice(0, 8).map((item) => (
+          {items.slice(0, kind === 'comfort' ? 16 : 8).map((item) => (
             <li key={item.key}>
               <div className={styles.breakdownMeta}>
                 <span>{labelKey(item.key, kind)}</span>
@@ -366,6 +372,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
       to,
       orgId,
       partnerLogin: user.login,
+      journal: section === 'objects',
     }).then((dash) => {
       if (!cancelled) {
         setData(dash);
@@ -375,7 +382,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, fromYmd, toYmd, orgFilter, user.orgId, user.login]);
+  }, [mode, fromYmd, toYmd, orgFilter, user.orgId, user.login, section]);
 
   const inactivePartners = useMemo(() => {
     if (mode !== 'admin' || !data) return [];
@@ -580,9 +587,11 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
               kind="stage"
             />
             <BreakdownList
-              title="Класс звукоизоляции"
-              items={dash.breakdowns.classTransition}
-              kind="raw"
+              title="Класс комфорта"
+              items={[...dash.breakdowns.classTransition].sort(
+                (a, b) => comfortTransitionRank(a.key) - comfortTransitionRank(b.key) || b.count - a.count,
+              )}
+              kind="comfort"
             />
             <BreakdownList
               title="Режим калькулятора"
@@ -682,54 +691,56 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             toYmd={toYmd}
             orgId={mode === 'partner' ? user.orgId : orgFilter || null}
           />
-          <div className={styles.dashTableScroll}>
-            <table className={styles.dashTable}>
-              <thead>
-                <tr>
-                  <th>Дата</th>
-                  <th>Компания</th>
-                  <th>Логин</th>
-                  <th>Инструмент</th>
-                  <th>Комната</th>
-                  <th>м²</th>
-                  <th>Класс</th>
-                  <th>Пан.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dash.recentObjects.map((ev) => {
-                  const o = ev.object;
-                  const room =
-                    o?.label ||
-                    (typeof o?.roomTypeCustom === 'string' && o.roomTypeCustom.trim()
-                      ? o.roomTypeCustom.trim()
-                      : null) ||
-                    (o?.roomType
-                      ? ROOM_TYPE_LABELS[o.roomType as RoomType] || o.roomType
-                      : '—');
-                  const cls =
-                    o?.classBefore && o?.classAfter
-                      ? `${o.classBefore}→${o.classAfter}`
-                      : '—';
-                  return (
-                    <tr key={ev.id}>
-                      <td>{formatWhen(ev.at)}</td>
-                      <td>{ev.companyName || '—'}</td>
-                      <td>{ev.login}</td>
-                      <td>
-                        {toolLabel(ev.tool)} · {actionLabel(ev.action)}
-                      </td>
-                      <td>{room}</td>
-                      <td>{o?.areaM2 != null ? formatNum(Number(o.areaM2)) : '—'}</td>
-                      <td>{cls}</td>
-                      <td>{o?.panels != null ? formatNum(Number(o.panels)) : '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {!dash.recentObjects.length ? <p className={styles.lead}>Объектов пока нет</p> : null}
+          {loading ? (
+            <p className={styles.lead}>Считаем журнал…</p>
+          ) : dash.recentObjects.length ? (
+            <div className={styles.dashTableScroll}>
+              <table className={styles.dashTable}>
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th>Компания</th>
+                    <th>Логин</th>
+                    <th>Инструмент</th>
+                    <th>Комната</th>
+                    <th>м²</th>
+                    <th>Класс</th>
+                    <th>Пан.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dash.recentObjects.map((ev) => {
+                    const o = ev.object;
+                    const room =
+                      o?.label ||
+                      (typeof o?.roomTypeCustom === 'string' && o.roomTypeCustom.trim()
+                        ? o.roomTypeCustom.trim()
+                        : null) ||
+                      (o?.roomType
+                        ? ROOM_TYPE_LABELS[o.roomType as RoomType] || o.roomType
+                        : '—');
+                    const cls = comfortTransitionLabel(o?.classBefore, o?.classAfter) || '—';
+                    return (
+                      <tr key={ev.id}>
+                        <td>{formatWhen(ev.at)}</td>
+                        <td>{ev.companyName || '—'}</td>
+                        <td>{ev.login}</td>
+                        <td>
+                          {toolLabel(ev.tool)} · {actionLabel(ev.action)}
+                        </td>
+                        <td>{room}</td>
+                        <td>{o?.areaM2 != null ? formatNum(Number(o.areaM2)) : '—'}</td>
+                        <td>{cls}</td>
+                        <td>{o?.panels != null ? formatNum(Number(o.panels)) : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className={styles.lead}>Нет записей за выбранный фильтр</p>
+          )}
         </div>
       ) : null}
     </div>

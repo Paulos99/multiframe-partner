@@ -9,6 +9,7 @@
  */
 import type { AnalyticsEvent } from '../../../../packages/shared/partner';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
+import { comfortTransitionLabel } from '../state/simulation';
 import {
   HOUSE_TYPE_OPTIONS,
   OBJECT_STAGE_OPTIONS,
@@ -82,10 +83,7 @@ function roomLabel(event: AnalyticsEvent): string {
 }
 
 function classLabel(event: AnalyticsEvent): string {
-  const before = event.object?.classBefore;
-  const after = event.object?.classAfter;
-  if (before && after) return `${before} → ${after}`;
-  return before || after || '';
+  return comfortTransitionLabel(event.object?.classBefore, event.object?.classAfter);
 }
 
 function roleLabel(role: string): string {
@@ -107,7 +105,7 @@ export const JOURNAL_COLUMNS: JournalColumn[] = [
     format: 'number',
     value: (e) => (e.object?.areaM2 == null ? null : Number(e.object.areaM2)),
   },
-  { key: 'class', header: 'Класс звукоизоляции', format: 'text', value: (e) => classLabel(e) },
+  { key: 'class', header: 'Класс комфорта', format: 'text', value: (e) => classLabel(e) },
   {
     key: 'panels',
     header: 'Панели',

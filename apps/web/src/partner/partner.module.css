@@ -2818,8 +2818,14 @@
 .exportBox {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 8px;
+}
+
+.exportBox .primary {
+  width: auto;
+  max-width: 100%;
 }
 
 .exportStep {

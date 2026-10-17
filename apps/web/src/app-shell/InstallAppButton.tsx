@@ -196,12 +196,29 @@ function useInstall(): InstallApi {
   return ctx;
 }
 
+function IconInstall() {
+  return (
+    <svg className={styles.btnIcon} viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M12 3.5v10" />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M7.5 10.5 12 15l4.5-4.5"
+      />
+      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M5 19.5h14" />
+    </svg>
+  );
+}
+
 function CompactButton() {
   const { install } = useInstall();
   return (
     <button type="button" className={styles.compact} onClick={() => void install()} aria-label="Установить на устройство">
-      <IconPlus />
-      Установить
+      <IconInstall />
+      <span className={styles.label}>Установить</span>
     </button>
   );
 }
