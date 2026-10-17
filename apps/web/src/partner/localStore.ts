@@ -959,6 +959,8 @@ export type QueuedObjectDocument = {
   areaM2?: number | null;
 };
 
+const memoryDocBytes = new Map<string, string>();
+
 function readDocBytes(): Record<string, string> {
   try {
     const raw = localStorage.getItem(DOC_BYTES_KEY);
@@ -971,17 +973,22 @@ function readDocBytes(): Record<string, string> {
 }
 
 export function saveLocalDocBytes(id: string, base64: string): void {
-  const map = readDocBytes();
-  map[id] = base64;
-  const ids = Object.keys(map);
-  while (ids.length > 24) {
-    delete map[ids.shift()!];
+  memoryDocBytes.set(id, base64);
+  try {
+    const map = readDocBytes();
+    map[id] = base64;
+    const ids = Object.keys(map);
+    while (ids.length > 24) {
+      delete map[ids.shift()!];
+    }
+    localStorage.setItem(DOC_BYTES_KEY, JSON.stringify(map));
+  } catch {
+    /* файл остаётся в памяти вкладки, пока localStorage не примет его */
   }
-  localStorage.setItem(DOC_BYTES_KEY, JSON.stringify(map));
 }
 
 export function loadLocalDocBytes(id: string): string | null {
-  return readDocBytes()[id] || null;
+  return memoryDocBytes.get(id) || readDocBytes()[id] || null;
 }
 
 export function enqueueObjectDocuments(objectId: string, docs: QueuedObjectDocument[]): void {

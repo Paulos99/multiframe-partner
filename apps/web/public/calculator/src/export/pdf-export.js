@@ -393,6 +393,19 @@ async function renderPageToPdf(doc, html, { isFirstPage, pageW, pageH }) {
   doc.addImage(imgData, 'JPEG', 0, 0, pageW, pageH);
 }
 
+function pdfFileName({ hidePrices, fileLabel, fileDate }) {
+  const who = String(fileLabel || 'Расчёт')
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'Расчёт';
+  const kind = hidePrices ? 'спецификация' : 'смета';
+  const day = /^\d{4}-\d{2}-\d{2}/.test(String(fileDate || ''))
+    ? String(fileDate).slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  return `${who} — ${kind} — ${day}.pdf`;
+}
+
 export async function exportCalculationPDF({
   bom,
   room,
@@ -402,6 +415,8 @@ export async function exportCalculationPDF({
   areaEstimate = false,
   hidePrices = false,
   download = true,
+  fileLabel = '',
+  fileDate = '',
 }) {
   const [{ jsPDF }] = await Promise.all([
     import('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm'),
@@ -475,19 +490,7 @@ export async function exportCalculationPDF({
     await renderPageToPdf(doc, pages[i], { isFirstPage: i === 0, pageW, pageH });
   }
 
-  const area = Math.round(
-    areaEstimate
-      ? reportCoverageArea(bom)
-      : room.getTotalArea() + room.getTotalWallArea()
-  );
-  const prefix = hidePrices
-    ? areaEstimate
-      ? 'MultiFrame_spec_area'
-      : 'MultiFrame_spec'
-    : areaEstimate
-      ? 'MultiFrame_area'
-      : 'MultiFrame';
-  const filename = `${prefix}_${area}m2_${dateStr.replace(/\./g, '-')}.pdf`;
+  const filename = pdfFileName({ hidePrices, fileLabel, fileDate });
   const blob = doc.output('blob');
   if (download) doc.save(filename);
   return { blob, filename };

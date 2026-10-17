@@ -1301,8 +1301,11 @@ export async function handler(event = {}) {
         const storageKey = `docs/${existing.orgId}/${existing.id}/${docId}.pdf`;
         await s3PutBytes(storageKey, bytes, 'application/pdf');
         const filename =
-          String(raw.filename || '').replace(/[^\w.\-а-яА-ЯёЁ ]+/g, '').trim() ||
-          (kind === 'spec' ? 'MultiFrame_spec.pdf' : 'MultiFrame.pdf');
+          String(raw.filename || '')
+            .replace(/[^\w.\-а-яА-ЯёЁ \u2014\u2013]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 120) || (kind === 'spec' ? 'спецификация.pdf' : 'смета.pdf');
         added.push({
           id: docId,
           versionId,
