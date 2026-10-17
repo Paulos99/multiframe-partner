@@ -144,7 +144,7 @@ function ToolChrome({
 }
 
 function PartnerShell() {
-  const { user, loading, noteTool, logout, calcRequest, attachCalculation } = usePartner();
+  const { user, loading, noteTool, logout, objects, calcRequest, attachCalculation } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
@@ -165,6 +165,7 @@ function PartnerShell() {
       if (event.origin !== window.location.origin) return;
       if (!isCabinetCalcMessage(event.data)) return;
       if (!user || !canCreateObjects(user.role)) return;
+      if (event.data.areaEstimate || event.data.inputMode === 'area' || event.data.hasScheme === false) return;
       const target = linkedObjectId.current || event.data.objectId || null;
       setCalcNotice('Сохраняем объект и PDF…');
       void attachCalculation(event.data, target)
@@ -200,13 +201,22 @@ function PartnerShell() {
     };
   }, [route, user]);
 
+  const calcClientName = calcObjectId
+    ? objects.find((obj) => obj.id === calcObjectId)?.clientName || ''
+    : '';
+
   const calcSrc = useMemo(() => {
     if (!user) return '';
-    return calcUrlFromOrg(user.org, user.org?.companyName, { hidePrices, objectId: calcObjectId });
+    return calcUrlFromOrg(user.org, user.org?.companyName, {
+      hidePrices,
+      objectId: calcObjectId,
+      clientName: calcClientName,
+    });
   }, [
     user,
     hidePrices,
     calcObjectId,
+    calcClientName,
     user?.org?.panelPriceRub,
     user?.org?.pricePerM2,
     user?.org?.installPricePerM2,
