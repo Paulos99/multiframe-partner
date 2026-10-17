@@ -17,6 +17,7 @@ import { ObjectsPanel } from './ObjectsPanel';
 import { NewPasswordButton } from './NewPasswordButton';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
+import { InstallAppButton } from '../app-shell/InstallAppButton';
 import styles from './partner.module.css';
 
 function roleHeading(role: UserRole, user: SessionUser): string {
@@ -41,7 +42,7 @@ function QuickLogout() {
 }
 
 function SyncBadge() {
-  return <SyncStatus />;
+  return <SyncStatus compact />;
 }
 
 function ToolButtons({
@@ -185,6 +186,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         </div>
         <div className={styles.topActions}>
           <SyncBadge />
+          <InstallAppButton />
           <QuickLogout />
         </div>
       </header>
@@ -493,6 +495,7 @@ function OwnerCabinet({
         </div>
         <div className={styles.topActions}>
           <SyncBadge />
+          <InstallAppButton />
           <QuickLogout />
         </div>
       </header>
@@ -750,6 +753,7 @@ function SalesCabinet({
         </div>
         <div className={styles.topActions}>
           <SyncBadge />
+          <InstallAppButton />
           <QuickLogout />
         </div>
       </header>
@@ -806,10 +810,13 @@ function MeasurerCabinet({
             className={`${styles.ghost} ${styles.trainBtn}`}
             onClick={() => setShowHelp((v) => !v)}
             aria-pressed={showHelp}
+            aria-label={showHelp ? 'К объектам' : 'Обучение работе с материалом'}
+            title="Обучение работе с материалом"
           >
-            {showHelp ? 'К объектам' : 'Обучение работе с материалом'}
+            {showHelp ? 'К объектам' : 'Обучение'}
           </button>
           <SyncBadge />
+          <InstallAppButton />
           <QuickLogout />
         </div>
       </header>
@@ -862,10 +869,13 @@ function CrewCabinet({
             className={`${styles.ghost} ${styles.trainBtn}`}
             onClick={() => setShowHelp((v) => !v)}
             aria-pressed={showHelp}
+            aria-label={showHelp ? 'К заданиям' : 'Обучение работе с материалом'}
+            title="Обучение работе с материалом"
           >
-            {showHelp ? 'К заданиям' : 'Обучение работе с материалом'}
+            {showHelp ? 'К заданиям' : 'Обучение'}
           </button>
           <SyncBadge />
+          <InstallAppButton />
           <QuickLogout />
         </div>
       </header>

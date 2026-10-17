@@ -109,7 +109,7 @@ export function DemoLoginPicker() {
   );
 }
 
-export function DemoSwitcherFab() {
+export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
   const { user, login, loading } = usePartner();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -129,7 +129,7 @@ export function DemoSwitcherFab() {
   }
 
   return (
-    <div className={styles.demoFabWrap}>
+    <div className={inline ? styles.toolDemoWrap : styles.demoFabWrap}>
       {open ? (
         <div className={styles.demoFabPanel} role="dialog" aria-label="Демо-режим">
           <div className={styles.demoFabHead}>
@@ -156,9 +156,10 @@ export function DemoSwitcherFab() {
       ) : null}
       <button
         type="button"
-        className={styles.demoFab}
+        className={inline ? styles.toolDemoBtn : styles.demoFab}
         onClick={() => setOpen((v) => !v)}
         title="Демо-режим"
+        aria-expanded={open}
       >
         Демо
       </button>
