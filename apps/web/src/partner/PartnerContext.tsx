@@ -56,7 +56,6 @@ import { withDemoDocuments } from './demoDocuments';
 import {
   bootstrapHistoryReset,
   flushAnalyticsQueue,
-  resetServerAnalyticsOnce,
   trackPartnerAnalytics,
 } from './analytics';
 import {
@@ -307,9 +306,6 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       void flushAnalyticsQueue();
       void flushObjectQueue();
-      if (session?.role === 'admin' || loadSession()?.role === 'admin') {
-        void resetServerAnalyticsOnce();
-      }
     })();
     return () => {
       cancelled = true;
@@ -402,7 +398,6 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         setUser(session);
         setAuthHold(false);
         await rememberSession({ token: loadToken(), apiBase: apiBase(), userId: session.id });
-        if (session.role === 'admin') void resetServerAnalyticsOnce();
         trackPartnerAnalytics({ tool: 'cabinet', action: 'login' });
         void flushAnalyticsQueue();
         void flushObjectQueue();

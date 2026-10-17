@@ -198,7 +198,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
           { id: 'analytics', label: 'Аналитика' },
           { id: 'partners', label: `Партнёры · ${partners.length}` },
           { id: 'add', label: 'Добавить' },
-          { id: 'help', label: 'Обучение работе с материалом' },
+          { id: 'help', label: 'Обучение' },
         ]}
         active={tab}
         onChange={setTab}
@@ -508,7 +508,7 @@ function OwnerCabinet({
           { id: 'company', label: 'Компания' },
           { id: 'staff', label: `Сотрудники · ${staff.length}` },
           { id: 'analytics', label: 'Аналитика' },
-          { id: 'help', label: 'Обучение работе с материалом' },
+          { id: 'help', label: 'Обучение' },
         ]}
         active={tab}
         onChange={setTab}
@@ -762,7 +762,7 @@ function SalesCabinet({
         tabs={[
           { id: 'deals', label: `Сделки · ${api.objects.length}` },
           { id: 'analytics', label: 'Аналитика' },
-          { id: 'help', label: 'Обучение работе с материалом' },
+          { id: 'help', label: 'Обучение' },
         ]}
         active={tab}
         onChange={setTab}
@@ -810,8 +810,8 @@ function MeasurerCabinet({
             className={`${styles.ghost} ${styles.trainBtn}`}
             onClick={() => setShowHelp((v) => !v)}
             aria-pressed={showHelp}
-            aria-label={showHelp ? 'К объектам' : 'Обучение работе с материалом'}
-            title="Обучение работе с материалом"
+            aria-label={showHelp ? 'К объектам' : 'Обучение'}
+            title="Обучение"
           >
             {showHelp ? 'К объектам' : 'Обучение'}
           </button>
@@ -869,8 +869,8 @@ function CrewCabinet({
             className={`${styles.ghost} ${styles.trainBtn}`}
             onClick={() => setShowHelp((v) => !v)}
             aria-pressed={showHelp}
-            aria-label={showHelp ? 'К заданиям' : 'Обучение работе с материалом'}
-            title="Обучение работе с материалом"
+            aria-label={showHelp ? 'К заданиям' : 'Обучение'}
+            title="Обучение"
           >
             {showHelp ? 'К заданиям' : 'Обучение'}
           </button>

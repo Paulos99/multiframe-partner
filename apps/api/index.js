@@ -1575,12 +1575,9 @@ export async function handler(event = {}) {
     }
 
     if (method === 'DELETE' && path.endsWith('/analytics/events')) {
-      const key = header(event, 'X-Analytics-Key');
-      if (key !== ANALYTICS_ADMIN_KEY()) {
-        return json(403, { message: 'Admin key required' });
-      }
-      await saveEvents([]);
-      return json(200, { ok: true, cleared: true });
+      // Bare DELETE used to be fired once from the cabinet and wiped analytics-events.json.
+      // Refuse it. Events are only appended via POST /analytics/events.
+      return json(405, { message: 'Очистка аналитики отключена' });
     }
 
     if (method === 'GET' && path.endsWith('/analytics/dashboard')) {
