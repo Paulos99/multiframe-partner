@@ -1,6 +1,6 @@
 .wrap {
   position: sticky;
-  top: calc(var(--safe-top) + var(--header-h));
+  top: calc(var(--mf-install-h, 0px) + var(--mf-toolbar-h, 0px) + var(--safe-top) + var(--header-h));
   z-index: 35;
   width: 100%;
   margin: 0;

@@ -17,6 +17,19 @@ export function hasRemoteApi(): boolean {
   return Boolean(apiBase());
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+export function isApiError(err: unknown): err is ApiError {
+  return err instanceof ApiError;
+}
+
 async function request<T>(
   path: string,
   opts: RequestInit & { token?: string | null } = {},
@@ -29,10 +42,16 @@ async function request<T>(
   };
   const token = opts.token !== undefined ? opts.token : loadToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${base}${path}`, { ...opts, headers });
+  let res: Response;
+  try {
+    const signal = opts.signal ?? AbortSignal.timeout(12000);
+    res = await fetch(`${base}${path}`, { ...opts, headers, signal });
+  } catch (err) {
+    throw new ApiError(0, err instanceof Error ? err.message : 'Нет сети');
+  }
   const data = (await res.json().catch(() => ({}))) as T & { message?: string };
   if (!res.ok) {
-    throw new Error(data.message || `Ошибка ${res.status}`);
+    throw new ApiError(res.status, data.message || `Ошибка ${res.status}`);
   }
   return data;
 }
@@ -188,8 +207,20 @@ export async function apiPatchObject(
   return data.object;
 }
 
-export async function apiDeleteObject(id: string): Promise<void> {
-  await request(`/objects/${id}`, { method: 'DELETE' });
+export async function apiDeleteObject(
+  id: string,
+  updatedAt?: string,
+): Promise<{ conflict?: string; object?: JobObject }> {
+  const q = updatedAt ? `?updatedAt=${encodeURIComponent(updatedAt)}` : '';
+  try {
+    return await request<{ conflict?: string; object?: JobObject }>(`/objects/${id}${q}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ updatedAt: updatedAt || null }),
+    });
+  } catch (err) {
+    if (isApiError(err) && err.status === 404) return {};
+    throw err;
+  }
 }
 
 export async function apiFlushObjectQueue(

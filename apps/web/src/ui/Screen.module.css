@@ -57,7 +57,7 @@
 /* Sticks under header + progress so the question stays in view on input steps */
 .headSticky {
   position: sticky;
-  top: calc(var(--safe-top) + var(--header-h) + var(--progress-h));
+  top: calc(var(--mf-install-h, 0px) + var(--mf-toolbar-h, 0px) + var(--safe-top) + var(--header-h) + var(--progress-h, 0px));
   z-index: 25;
   margin: -4px -4px 0;
   padding: 8px 4px 10px;

@@ -1,6 +1,6 @@
 .header {
   position: sticky;
-  top: 0;
+  top: calc(var(--mf-install-h, 0px) + var(--mf-toolbar-h, 0px));
   z-index: 40;
   backdrop-filter: blur(12px);
   background: color-mix(in srgb, var(--bg-page) 88%, transparent);

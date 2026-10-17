@@ -15,6 +15,7 @@ import {
   type RoomType,
 } from '../state/types';
 import { fetchAnalyticsDashboard, formatPeriodLabel, monthLabel, rangeFromYmd, ymdShift } from './analytics';
+import { JournalDownload } from './JournalDownload';
 import { CountUp, FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
@@ -675,6 +676,12 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
 
       {section === 'objects' ? (
         <div className={styles.dashSection}>
+          <JournalDownload
+            mode={mode}
+            fromYmd={fromYmd}
+            toYmd={toYmd}
+            orgId={mode === 'partner' ? user.orgId : orgFilter || null}
+          />
           <div className={styles.dashTableScroll}>
             <table className={styles.dashTable}>
               <thead>

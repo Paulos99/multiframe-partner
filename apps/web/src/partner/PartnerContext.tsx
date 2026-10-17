@@ -28,19 +28,17 @@ import {
   apiAdminDeletePartner,
   apiAdminListPartners,
   apiAdminResetPassword,
-  apiCreateObject,
+  apiBase,
   apiCreateStaff,
-  apiDeleteObject,
   apiDeleteStaff,
-  apiListObjects,
   apiListStaff,
   apiLogin,
   apiLogout,
   apiMe,
-  apiPatchObject,
   apiResetStaffPassword,
   apiSaveOrg,
   hasRemoteApi,
+  isApiError,
 } from './apiClient';
 import {
   bootstrapHistoryReset,
@@ -53,12 +51,10 @@ import {
   clearObjectQueue,
   createPartnerAccount,
   createStaffAccount,
-  deleteLocalObject,
   deletePartnerAccount,
   deleteStaffAccount,
   generatePassword,
   listActivity,
-  listLocalObjects,
   listPartners,
   listStaffForOrg,
   loadCachedObjects,
@@ -67,17 +63,17 @@ import {
   localLogin,
   localLogout,
   peekObjectQueue,
-  removeFromObjectQueue,
   resetPartnerPassword,
   resetStaffPassword,
   saveSession,
   saveToken,
   trackToolOpen,
   updateOrgSettings,
-  upsertLocalObject,
   type StoredOrg,
   type StoredUser,
 } from './localStore';
+import { enqueueOutbox, loadCalculationsFor, putObject, rememberSession, type CachedCalculation } from './offlineDb';
+import { countMyOutbox, deleteObjectSynced, flushOutbox, loadVisibleObjects, saveObjectSynced } from './syncEngine';
 
 export type StaffMember = {
   id: string;
@@ -86,9 +82,20 @@ export type StaffMember = {
   displayName: string;
   orgId: string | null;
   createdAt?: string;
-  /** Local-only plaintext password for owner reveal. */
-  password?: string;
 };
+
+export type SyncStatus = 'offline' | 'pending' | 'synced';
+
+function asStaff(member: StaffMember | StoredUser): StaffMember {
+  return {
+    id: member.id,
+    login: member.login,
+    role: member.role,
+    displayName: member.displayName,
+    orgId: member.orgId,
+    createdAt: member.createdAt,
+  };
+}
 
 type PartnerApi = {
   user: SessionUser | null;
@@ -99,6 +106,11 @@ type PartnerApi = {
   objects: JobObject[];
   objectsLoading: boolean;
   pendingSyncCount: number;
+  online: boolean;
+  syncStatus: SyncStatus;
+  calculations: CachedCalculation[];
+  /** JWT expired while the outbox still has rows. Queue is kept until the next login. */
+  authHold: boolean;
   login: (login: string, password: string) => Promise<void>;
   logout: () => void;
   saveOrg: (patch: Partial<OrgSettings>) => Promise<void>;
@@ -157,6 +169,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [objects, setObjects] = useState<JobObject[]>([]);
   const [objectsLoading, setObjectsLoading] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  const [calculations, setCalculations] = useState<CachedCalculation[]>([]);
+  const [authHold, setAuthHold] = useState(false);
   const [staffCache, setStaffCache] = useState<StaffMember[]>([]);
   const [partnersCache, setPartnersCache] = useState<
     Array<{
@@ -168,58 +183,34 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   >([]);
   const remote = hasRemoteApi();
 
-  const bumpPending = useCallback(() => {
-    setPendingSyncCount(peekObjectQueue().length);
-  }, []);
-
   const refreshObjects = useCallback(async () => {
     const session = loadSession();
     if (!session) {
       setObjects([]);
+      setPendingSyncCount(0);
       return;
     }
     setObjectsLoading(true);
     try {
-      if (remote && loadToken()) {
-        const list = await apiListObjects();
-        setObjects(list);
-        cacheObjects(list);
-      } else {
-        const list = listLocalObjects(session);
-        setObjects(list);
-        cacheObjects(list);
-      }
+      const list = await loadVisibleObjects(session, remote);
+      setObjects(list);
+      cacheObjects(list);
     } catch {
       setObjects(loadCachedObjects());
     } finally {
       setObjectsLoading(false);
-      bumpPending();
+      setPendingSyncCount(await countMyOutbox(session.id).catch(() => peekObjectQueue().length));
     }
-  }, [remote, bumpPending]);
+  }, [remote]);
 
   const flushObjectQueue = useCallback(async () => {
-    if (!remote || !loadToken()) return;
-    const queue = peekObjectQueue();
-    if (!queue.length) {
-      bumpPending();
-      return;
-    }
-    for (const obj of queue) {
-      try {
-        try {
-          await apiPatchObject(obj.id, obj);
-        } catch {
-          await apiCreateObject(obj);
-        }
-        removeFromObjectQueue(obj.id);
-      } catch {
-        break;
-      }
-    }
-    if (!peekObjectQueue().length) clearObjectQueue();
-    bumpPending();
+    const session = loadSession();
+    if (!session) return;
+    const result = await flushOutbox(session, remote);
+    if (result === 'auth') setAuthHold(true);
+    if (result === 'ok') setAuthHold(false);
     await refreshObjects();
-  }, [remote, bumpPending, refreshObjects]);
+  }, [remote, refreshObjects]);
 
   const refresh = useCallback(() => {
     setUser(loadSession());
@@ -232,19 +223,48 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       const session = loadSession();
+      try {
+        const legacy = peekObjectQueue();
+        if (legacy.length && session) {
+          for (const obj of legacy) {
+            await enqueueOutbox({
+              id: obj.id,
+              op: 'upsert',
+              updatedAt: obj.updatedAt || new Date().toISOString(),
+              userId: obj.createdBy || session.id,
+              orgId: obj.orgId,
+              payload: obj,
+            });
+            await putObject(obj);
+          }
+          clearObjectQueue();
+        }
+      } catch {
+        /* keep the legacy queue if IndexedDB is blocked */
+      }
       if (remote && loadToken()) {
         try {
           const me = await apiMe();
           if (cancelled) return;
           saveSession(me);
           setUser(me);
-        } catch {
+          await rememberSession({ token: loadToken(), apiBase: apiBase(), userId: me.id });
+        } catch (err) {
           if (cancelled) return;
-          saveToken(null);
+          if (isApiError(err) && err.status === 401) {
+            saveToken(null);
+            setAuthHold(true);
+            await rememberSession({ token: null, apiBase: apiBase(), userId: session?.id || null });
+          } else if (session) {
+            await rememberSession({ token: loadToken(), apiBase: apiBase(), userId: session.id });
+          }
           setUser(session);
         }
       } else {
         setUser(session);
+        if (session) {
+          await rememberSession({ token: loadToken(), apiBase: apiBase(), userId: session.id });
+        }
       }
       setLoading(false);
       void flushAnalyticsQueue();
@@ -264,12 +284,52 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onOnline = () => {
+      setOnline(true);
       void flushAnalyticsQueue();
       void flushObjectQueue();
     };
+    const onOffline = () => {
+      setOnline(false);
+      void refreshObjects();
+    };
+    const onMsg = (ev: MessageEvent) => {
+      if (ev.data?.type === 'mf-flush') {
+        void flushAnalyticsQueue();
+        void flushObjectQueue();
+      }
+    };
     window.addEventListener('online', onOnline);
-    return () => window.removeEventListener('online', onOnline);
-  }, [flushObjectQueue]);
+    window.addEventListener('offline', onOffline);
+    navigator.serviceWorker?.addEventListener('message', onMsg);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      navigator.serviceWorker?.removeEventListener('message', onMsg);
+    };
+  }, [flushObjectQueue, refreshObjects]);
+
+  useEffect(() => {
+    if (!user) {
+      setCalculations([]);
+      return;
+    }
+    let cancelled = false;
+    const reload = () => {
+      void loadCalculationsFor(user)
+        .then((rows) => {
+          if (!cancelled) setCalculations(rows);
+        })
+        .catch(() => undefined);
+    };
+    reload();
+    window.addEventListener('focus', reload);
+    document.addEventListener('visibilitychange', reload);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', reload);
+      document.removeEventListener('visibilitychange', reload);
+    };
+  }, [user, tick, online]);
 
   useEffect(() => {
     const company = user?.org?.companyName || '';
@@ -302,6 +362,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
           session = localLogin(loginName, password);
         }
         setUser(session);
+        setAuthHold(false);
+        await rememberSession({ token: loadToken(), apiBase: apiBase(), userId: session.id });
         if (session.role === 'admin') void resetServerAnalyticsOnce();
         trackPartnerAnalytics({ tool: 'cabinet', action: 'login' });
         void flushAnalyticsQueue();
@@ -319,9 +381,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     if (remote) void apiLogout();
     localLogout(user);
+    void rememberSession({ token: null, apiBase: apiBase(), userId: null });
     setUser(null);
     setObjects([]);
     setStaffCache([]);
+    setCalculations([]);
   }, [user, remote]);
 
   const saveOrg = useCallback(
@@ -474,43 +538,20 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const saveObject = useCallback(
     async (input: Partial<JobObject> & { id?: string }) => {
       if (!user) throw new Error('Нет сессии');
-      if (remote && loadToken() && navigator.onLine) {
-        try {
-          const obj = input.id
-            ? await apiPatchObject(input.id, input)
-            : await apiCreateObject(input);
-          await refreshObjects();
-          return obj;
-        } catch {
-          /* fall through offline */
-        }
-      }
-      const obj = upsertLocalObject(input, user);
-      bumpPending();
+      const obj = await saveObjectSynced(user, remote, input);
       await refreshObjects();
       return obj;
     },
-    [user, remote, refreshObjects, bumpPending],
+    [user, remote, refreshObjects],
   );
 
   const deleteObject = useCallback(
     async (id: string) => {
       if (!user) throw new Error('Нет сессии');
-      if (remote && loadToken() && navigator.onLine) {
-        try {
-          await apiDeleteObject(id);
-          removeFromObjectQueue(id);
-          await refreshObjects();
-          return;
-        } catch {
-          /* fall through offline */
-        }
-      }
-      deleteLocalObject(id, user);
-      bumpPending();
+      await deleteObjectSynced(user, remote, id);
       await refreshObjects();
     },
-    [user, remote, refreshObjects, bumpPending],
+    [user, remote, refreshObjects],
   );
 
   const noteTool = useCallback(
@@ -536,6 +577,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       objects,
       objectsLoading,
       pendingSyncCount,
+      online,
+      syncStatus: (!online ? 'offline' : pendingSyncCount > 0 ? 'pending' : 'synced') as SyncStatus,
+      calculations,
+      authHold,
       login,
       logout,
       saveOrg,
@@ -548,11 +593,12 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerResetStaffPassword,
       partnerDeleteStaff,
       partnerListStaff: () =>
-        staffCache.length
+        (staffCache.length
           ? staffCache
           : user?.orgId
             ? listStaffForOrg(user.orgId)
-            : [],
+            : []
+        ).map(asStaff),
       partnerCreateExecutor: async (input) => {
         const res = await partnerCreateStaff({ ...input, role: 'measurer' });
         return { id: res.id, login: res.login, password: res.password };
@@ -560,11 +606,12 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerResetExecutorPassword: partnerResetStaffPassword,
       partnerDeleteExecutor: partnerDeleteStaff,
       partnerListExecutors: () =>
-        staffCache.length
+        (staffCache.length
           ? staffCache
           : user?.orgId
             ? listStaffForOrg(user.orgId)
-            : [],
+            : []
+        ).map(asStaff),
       refreshObjects,
       saveObject,
       deleteObject,
@@ -583,6 +630,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       objects,
       objectsLoading,
       pendingSyncCount,
+      online,
+      calculations,
+      authHold,
       login,
       logout,
       saveOrg,

@@ -614,6 +614,8 @@ export function aggregateAnalyticsDashboard(
       orgId: string | null;
       role?: string;
     }>;
+    /** When true, the journal arrays are not clipped to the on-screen page. */
+    journalAll?: boolean;
   },
 ): AnalyticsDashboard {
   const events = filterAnalyticsEvents(allEvents, opts);
@@ -742,8 +744,8 @@ export function aggregateAnalyticsDashboard(
     executors,
     recentObjects: events
       .filter((e) => e.action === 'result' || e.action === 'calc_done' || e.action === 'pdf')
-      .slice(0, 40),
-    events: events.slice(0, 200),
+      .slice(0, opts.journalAll ? 5000 : 40),
+    events: events.slice(0, opts.journalAll ? 5000 : 200),
   };
 }
 

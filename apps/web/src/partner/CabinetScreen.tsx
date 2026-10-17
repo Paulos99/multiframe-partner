@@ -11,7 +11,9 @@ import { Button } from '../ui/Button';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { ObjectsPanel } from './ObjectsPanel';
+import { NewPasswordButton } from './NewPasswordButton';
 import { generatePassword, usePartner } from './PartnerContext';
+import { SyncStatus } from './SyncStatus';
 import styles from './partner.module.css';
 
 function roleHeading(role: UserRole, user: SessionUser): string {
@@ -36,13 +38,7 @@ function QuickLogout() {
 }
 
 function SyncBadge() {
-  const api = usePartner();
-  if (!api.pendingSyncCount) return null;
-  return (
-    <span className={styles.syncBadge} title="Объекты ждут отправки на сервер">
-      ↻ {api.pendingSyncCount}
-    </span>
-  );
+  return <SyncStatus />;
 }
 
 function ToolButtons({
@@ -624,17 +620,7 @@ function OwnerCabinet({
                     </div>
                   </div>
                   <div className={styles.rowActions}>
-                    <button
-                      type="button"
-                      className={styles.ghost}
-                      onClick={() =>
-                        void api
-                          .partnerResetStaffPassword(ex.id, generatePassword())
-                          .then((next) => setExecCreated(`Новый пароль: ${next}`))
-                      }
-                    >
-                      Новый пароль
-                    </button>
+                    <NewPasswordButton staffId={ex.id} staffName={ex.displayName} />
                     <button
                       type="button"
                       className={styles.danger}
