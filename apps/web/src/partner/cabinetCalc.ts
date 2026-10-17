@@ -3,6 +3,8 @@ import type { JobObject, JobObjectEstimate, OrgSettings } from '../../../../pack
 export type CabinetCalcMessage = {
   type: 'mf-cabinet-calc';
   objectId?: string | null;
+  inputMode?: string | null;
+  areaEstimate?: boolean;
   hasScheme?: boolean;
   panels?: number | null;
   dowels?: number | null;
@@ -13,6 +15,29 @@ export type CabinetCalcMessage = {
   pdfBase64?: string;
   specPdfBase64?: string;
 };
+
+/** «Козлов Д. — спецификация — 2026-10-17.pdf» */
+export function readablePdfName(
+  clientName: string | null | undefined,
+  kind: 'estimate' | 'spec',
+  at?: string | null,
+): string {
+  const who =
+    String(clientName || 'Расчёт')
+      .replace(/[\\/:*?"<>|]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80) || 'Расчёт';
+  const label = kind === 'spec' ? 'спецификация' : 'смета';
+  const day = at && /^\d{4}-\d{2}-\d{2}/.test(at) ? at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  return `${who} — ${label} — ${day}.pdf`;
+}
+
+/** PDF в объект — только расчёт со схемой: «по размерам» или «начертить схему». */
+export function calcMessageHasScheme(message: CabinetCalcMessage): boolean {
+  if (message.areaEstimate || message.inputMode === 'area') return false;
+  return message.hasScheme !== false && Boolean(message.pdfBase64 || message.specPdfBase64);
+}
 
 export function isCabinetCalcMessage(data: unknown): data is CabinetCalcMessage {
   return Boolean(data && typeof data === 'object' && (data as CabinetCalcMessage).type === 'mf-cabinet-calc');

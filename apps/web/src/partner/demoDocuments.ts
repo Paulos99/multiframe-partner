@@ -1,9 +1,11 @@
 /**
  * Демо-PDF не пишутся в бакет. В ?demo=1 несколько объектов получают
- * карточки документов, а файл собирается в браузере по кнопке.
+ * карточки документов. Файл собирается тем же рендером, что PDF калькулятора:
+ * геометрия комнаты и реальная раскладка панелей, не сетка квадратов.
  */
 import type { JobObject, JobObjectDocument, UserRole } from '../../../../packages/shared/partner';
 import { documentsForRole } from '../../../../packages/shared/partner';
+import { readablePdfName } from './cabinetCalc';
 import { isDemoModeEnabled } from './DemoSwitcher';
 
 const DEMO_IDS = ['obj_a01', 'obj_a03', 'obj_a04', 'obj_a05', 'obj_b01', 'obj_b03'];
@@ -11,22 +13,17 @@ const DEMO_IDS = ['obj_a01', 'obj_a03', 'obj_a04', 'obj_a05', 'obj_b01', 'obj_b0
 function demoDocs(obj: JobObject): JobObjectDocument[] {
   const versions = obj.id === 'obj_a03' || obj.id === 'obj_b03' ? 2 : 1;
   const now = Date.now();
-  const panels = obj.estimate?.panels ?? null;
   const areaM2 = obj.room.areaM2 ?? null;
-  const hasScheme = obj.status === 'install' || obj.status === 'closed';
   const docs: JobObjectDocument[] = [];
   for (let v = 0; v < versions; v += 1) {
-    const older = v < versions - 1;
     const createdAt = new Date(now - (versions - 1 - v) * 36 * 60 * 60 * 1000).toISOString();
     const versionId = `demo_${obj.id}_v${v + 1}`;
-    const panelCount = older && panels ? Math.max(1, panels - 2) : panels;
-    const suffix = older ? `_v${v + 1}` : '';
     const common = {
       versionId,
       createdAt,
       createdBy: 'demo',
-      hasScheme,
-      panels: panelCount,
+      hasScheme: true,
+      panels: null,
       areaM2,
       demo: true as const,
     };
@@ -34,13 +31,13 @@ function demoDocs(obj: JobObject): JobObjectDocument[] {
       ...common,
       id: `${versionId}_estimate`,
       kind: 'estimate',
-      filename: `MultiFrame_${obj.id}${suffix}.pdf`,
+      filename: readablePdfName(obj.clientName, 'estimate', createdAt),
     });
     docs.push({
       ...common,
       id: `${versionId}_spec`,
       kind: 'spec',
-      filename: `MultiFrame_spec_${obj.id}${suffix}.pdf`,
+      filename: readablePdfName(obj.clientName, 'spec', createdAt),
     });
   }
   return docs;
@@ -68,70 +65,141 @@ export function withDemoDocuments(objects: JobObject[], role: UserRole): JobObje
   });
 }
 
-function panelGrid(count: number): string {
-  const n = Math.max(4, Math.min(count || 8, 24));
-  const cells = Array.from({ length: n }, (_, i) => {
-    const cut = i >= n - 2;
-    return `<div style="width:46px;height:34px;border-radius:4px;border:1px solid #01644f;background:${cut ? '#d7efe6' : '#01644f'};color:${cut ? '#01644f' : '#fff'};font-size:10px;display:flex;align-items:center;justify-content:center">${i + 1}</div>`;
-  }).join('');
-  return `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px;border:1px solid #d5e4de;border-radius:10px;background:#f7fbf9">${cells}</div>`;
+/** Размеры комнаты под площадь объекта: как расчёт «по размерам». */
+const DEMO_ROOMS: Record<string, [number, number]> = {
+  obj_a01: [6, 3],
+  obj_a03: [4, 4],
+  obj_a04: [7, 4],
+  obj_a05: [5, 2.6],
+  obj_b01: [6, 3.5],
+  obj_b03: [6.5, 4],
+};
+
+function roomSize(obj: JobObject, older: boolean): [number, number] {
+  const preset = DEMO_ROOMS[obj.id];
+  if (preset) {
+    return older ? [Math.max(3, Math.round((preset[0] - 0.5) * 10) / 10), preset[1]] : preset;
+  }
+  const area = obj.room.areaM2 && obj.room.areaM2 > 0 ? obj.room.areaM2 : 16;
+  const length = Math.max(3, Math.round(Math.sqrt(area * 1.4) * 10) / 10);
+  const width = Math.max(2.5, Math.round((area / length) * 10) / 10);
+  return [length, width];
 }
 
-/** Одностраничный демо-PDF: смета или спецификация без цен, со схемой раскладки. */
-export async function buildDemoPdfBlob(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
-  const hidePrices = doc.kind === 'spec';
-  const panels = doc.panels ?? obj.estimate?.panels ?? 0;
-  const dowels = obj.estimate?.dowels ?? Math.ceil(panels * 2 * 1.15);
-  const area = doc.areaM2 ?? obj.room.areaM2 ?? 0;
-  const money =
-    !hidePrices && obj.estimate?.totalCost != null
-      ? `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e6eeea"><span>Итого КП</span><strong>${obj.estimate.totalCost.toLocaleString('ru-RU')} ₽</strong></div>`
-      : '';
-  const el = document.createElement('div');
-  el.style.cssText =
-    'position:fixed;left:-12000px;top:0;width:794px;background:#fff;color:#24302b;font-family:Segoe UI,Arial,sans-serif;';
-  el.innerHTML = `
-    <div style="background:#01644f;color:#fff;padding:18px 22px">
-      <div style="font-size:20px;font-weight:700">StP MultiFRAME</div>
-      <div style="font-size:13px;opacity:.9;margin-top:4px">${hidePrices ? 'Спецификация для монтажа · без цен' : 'Смета и схема монтажа'}</div>
-    </div>
-    <div style="padding:18px 22px 24px">
-      <h1 style="margin:0 0 6px;font-size:18px;color:#01644f">${obj.clientName || 'Объект'}</h1>
-      <p style="margin:0 0 12px;color:#5c6b66;font-size:13px">${[obj.address, obj.city].filter(Boolean).join(' · ') || 'Адрес не указан'}</p>
-      <div style="font-size:14px">
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e6eeea"><span>Площадь</span><strong>${area} м²</strong></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e6eeea"><span>Панели к закупке</span><strong>${panels} шт.</strong></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e6eeea"><span>Дюбели с запасом 15%</span><strong>${dowels} шт.</strong></div>
-        ${money}
-      </div>
-      <h2 style="font-size:14px;color:#01644f;margin:16px 0 8px">${doc.hasScheme ? 'Схема раскладки панелей' : 'Схема'}</h2>
-      ${
-        doc.hasScheme
-          ? panelGrid(panels)
-          : '<p style="margin:0;color:#5c6b66;font-size:13px">Схема не строилась — расчёт выполнен по площади.</p>'
-      }
-      <p style="margin:14px 0 0;font-size:11px;color:#8aa099">Демо-документ кабинета. Живой PDF калькулятора прикладывается после расчёта.</p>
-    </div>`;
-  document.body.appendChild(el);
-  try {
-    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-      import('html2canvas'),
-      import('jspdf'),
-    ]);
-    const canvas = await html2canvas(el, { scale: 1.4, backgroundColor: '#ffffff', logging: false });
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const imgH = Math.min(pageH, (canvas.height / canvas.width) * pageW);
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.86), 'JPEG', 0, 0, pageW, imgH);
-    return pdf.output('blob');
-  } finally {
-    el.remove();
+function calcSrc(path: string): string {
+  const base = `${import.meta.env.BASE_URL || '/'}calculator/src/${path}`;
+  return base.replace(/([^:]\/)\/+/g, '$1');
+}
+
+/** Нативный import, без переписывания сборщиком: модули калькулятора лежат в public/. */
+const nativeImport = new Function('specifier', 'return import(specifier)') as (
+  specifier: string,
+) => Promise<CalcModules & Record<string, CalcModules[keyof CalcModules]>>;
+
+type CalcModules = {
+  createRectangleVertices: (length: number, width: number) => Array<{ x: number; y: number; label: string }>;
+  Room: new (data?: object) => {
+    vertices: Array<{ x: number; y: number; label?: string }>;
+    wallHeight: number;
+    getTotalArea: () => number;
+    openings: unknown[];
+  };
+  PolygonPanelCalculator: new (vertices: unknown) => {
+    offsetX: number;
+    offsetY: number;
+    calculateBestScheme: (options?: { fast?: boolean }) => {
+      name: string;
+      panels: unknown[];
+      stats: object;
+    };
+  };
+  buildBOM: (input: object) => object;
+  buildPdfSchemeImages: (input: object) => {
+    planImage: string | null;
+    ceilingImage: string | null;
+    wallSurfaces: Array<{ wallResult: unknown; image: string | null }>;
+  };
+  exportCalculationPDF: (input: object) => Promise<{ blob: Blob; filename: string }>;
+};
+
+let calcModules: Promise<CalcModules> | null = null;
+
+function loadCalculator(): Promise<CalcModules> {
+  if (!calcModules) {
+    calcModules = Promise.all([
+      nativeImport(calcSrc('core/polygon-geometry.js')),
+      nativeImport(calcSrc('core/room-model.js')),
+      nativeImport(calcSrc('calculators/polygon-ceiling-calculator.js')),
+      nativeImport(calcSrc('calculators/materials-bom.js')),
+      nativeImport(calcSrc('export/pdf-scheme-render.js')),
+      nativeImport(calcSrc('export/pdf-export.js')),
+    ]).then(([geom, roomMod, calcMod, bomMod, schemeMod, pdfMod]) => ({
+      createRectangleVertices: geom.createRectangleVertices,
+      Room: roomMod.Room,
+      PolygonPanelCalculator: calcMod.PolygonPanelCalculator,
+      buildBOM: bomMod.buildBOM,
+      buildPdfSchemeImages: schemeMod.buildPdfSchemeImages,
+      exportCalculationPDF: pdfMod.exportCalculationPDF,
+    }));
   }
+  return calcModules;
+}
+
+const demoPdfCache = new Map<string, Blob>();
+
+/** PDF калькулятора для демо-комнаты: план и раскладка панелей, смета или спецификация. */
+export async function buildDemoPdfBlob(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+  const cached = demoPdfCache.get(doc.id);
+  if (cached) return cached;
+  const calc = await loadCalculator();
+  const older = /_v1$/.test(doc.versionId) && (obj.id === 'obj_a03' || obj.id === 'obj_b03');
+  const [length, width] = roomSize(obj, older);
+  const room = new calc.Room({
+    vertices: calc.createRectangleVertices(length, width),
+    wallHeight: 2.7,
+  });
+  const ceilingCalc = new calc.PolygonPanelCalculator(room.vertices);
+  const ceilingResult = ceilingCalc.calculateBestScheme({ fast: true });
+  const options = {
+    calcCeiling: true,
+    calcWalls: false,
+    ceilingMounting: 'ceiling_frameless',
+    wallMounting: 'wall_frameless',
+  };
+  const bom = calc.buildBOM({
+    room,
+    ceilingResult,
+    wallResult: null,
+    options,
+  });
+  const images = calc.buildPdfSchemeImages({
+    room,
+    ceilingCalc,
+    ceilingResult,
+    wallResults: [],
+    options,
+    showNumbers: true,
+    showFrame: false,
+  });
+  const file = await calc.exportCalculationPDF({
+    bom,
+    room,
+    ceilingImage: images.ceilingImage,
+    wallSurfaces: images.wallSurfaces,
+    planImage: images.planImage,
+    areaEstimate: false,
+    hidePrices: doc.kind === 'spec',
+    download: false,
+    fileLabel: obj.clientName || 'Объект',
+    fileDate: doc.createdAt,
+  });
+  demoPdfCache.set(doc.id, file.blob);
+  return file.blob;
 }
 
 export function openPdfBlob(blob: Blob, filename: string, download: boolean): void {
-  const url = URL.createObjectURL(blob);
+  const file = new File([blob], filename || 'документ.pdf', { type: 'application/pdf' });
+  const url = URL.createObjectURL(file);
   if (download) {
     const a = document.createElement('a');
     a.href = url;

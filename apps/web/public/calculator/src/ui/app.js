@@ -2107,6 +2107,7 @@ async function publishCalcToCabinet() {
   if (window.parent === window) return;
   if (!state.bom) return;
   if (onboardingDemoActive) return;
+  if (isAreaEstimateMode()) return;
   const params = new URLSearchParams(window.location.search);
   if (params.get('partner') !== '1') return;
   if (getPartnerPricing().hidePrices) return;
@@ -2121,9 +2122,21 @@ async function publishCalcToCabinet() {
   try {
     const input = await collectPdfInput();
     if (calcSignature() !== sig) return;
+    if (input.areaEstimate || !input.hasScheme) return;
     const { exportCalculationPDF } = await import('../export/pdf-export.js');
-    const priced = await exportCalculationPDF({ ...input, hidePrices: false, download: false });
-    const spec = await exportCalculationPDF({ ...input, hidePrices: true, download: false });
+    const fileLabel = params.get('client') || '';
+    const priced = await exportCalculationPDF({
+      ...input,
+      hidePrices: false,
+      download: false,
+      fileLabel,
+    });
+    const spec = await exportCalculationPDF({
+      ...input,
+      hidePrices: true,
+      download: false,
+      fileLabel,
+    });
     const [pdfBase64, specPdfBase64] = await Promise.all([
       blobToBase64(priced.blob),
       blobToBase64(spec.blob),
@@ -2137,6 +2150,7 @@ async function publishCalcToCabinet() {
       {
         type: 'mf-cabinet-calc',
         objectId: params.get('objectId') || null,
+        inputMode: state.inputMode,
         areaEstimate: input.areaEstimate,
         hasScheme: input.hasScheme,
         panels,
@@ -2169,6 +2183,8 @@ async function publishCalcToCabinet() {
 function scheduleCabinetPublish(options = {}) {
   if (options.skipCabinet || onboardingDemoActive) return;
   if (window.parent === window) return;
+  // «По площади» не строит раскладку — объект и PDF не создаём.
+  if (isAreaEstimateMode()) return;
   clearTimeout(publishTimer);
   if (options.silent) {
     publishTimer = setTimeout(() => {
@@ -2191,6 +2207,7 @@ async function handlePDF() {
     ...input,
     hidePrices: getPartnerPricing().hidePrices,
     download: false,
+    fileLabel: new URLSearchParams(window.location.search).get('client') || '',
   });
   triggerPdfDownload(file.blob, file.filename);
   scheduleCabinetPublish({ silent: false });

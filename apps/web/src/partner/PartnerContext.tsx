@@ -46,7 +46,12 @@ import {
   isApiError,
   stripObjectDocuments,
 } from './apiClient';
-import { objectPatchFromCalc, type CabinetCalcMessage } from './cabinetCalc';
+import {
+  calcMessageHasScheme,
+  objectPatchFromCalc,
+  readablePdfName,
+  type CabinetCalcMessage,
+} from './cabinetCalc';
 import { withDemoDocuments } from './demoDocuments';
 import {
   bootstrapHistoryReset,
@@ -623,24 +628,26 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const attachCalculation = useCallback(
     async (message: CabinetCalcMessage, objectId: string | null) => {
       if (!user || !canCreateObjects(user.role)) return null;
+      if (!calcMessageHasScheme(message)) return null;
       const existing = objectId ? objects.find((o) => o.id === objectId) : undefined;
       const patch = objectPatchFromCalc(message, existing, user.org, objectId);
       const saved = await saveObject(patch);
       const versionId = `ver_${Date.now().toString(36)}`;
+      const namedAt = new Date().toISOString();
       const files = [
         {
           kind: 'estimate' as const,
-          filename: message.filename || 'MultiFrame.pdf',
+          filename: readablePdfName(saved.clientName, 'estimate', namedAt),
           pdfBase64: message.pdfBase64 || '',
-          hasScheme: Boolean(message.hasScheme),
+          hasScheme: true,
           panels: saved.estimate?.panels ?? null,
           areaM2: saved.room?.areaM2 ?? null,
         },
         {
           kind: 'spec' as const,
-          filename: message.specFilename || 'MultiFrame_spec.pdf',
+          filename: readablePdfName(saved.clientName, 'spec', namedAt),
           pdfBase64: message.specPdfBase64 || '',
-          hasScheme: Boolean(message.hasScheme),
+          hasScheme: true,
           panels: saved.estimate?.panels ?? null,
           areaM2: saved.room?.areaM2 ?? null,
         },
@@ -853,7 +860,7 @@ export function persistPartnerCalcParams(params: PartnerCalcParams): void {
 export function calcUrlFromOrg(
   org: OrgSettings | null | undefined,
   companyName?: string,
-  opts?: { hidePrices?: boolean; objectId?: string | null },
+  opts?: { hidePrices?: boolean; objectId?: string | null; clientName?: string | null },
 ): string {
   const params = partnerCalcParamsFromOrg(org, companyName);
   if (opts?.hidePrices) {
@@ -877,6 +884,7 @@ export function calcUrlFromOrg(
   q.set('dowelsPerPanel', String(params.dowelsPerPanel));
   if (params.company) q.set('company', params.company);
   if (opts?.objectId) q.set('objectId', opts.objectId);
+  if (opts?.clientName) q.set('client', opts.clientName);
   q.set('partner', '1');
   const path = `${import.meta.env.BASE_URL || '/'}calculator/index.html`.replace(/\/{2,}/g, '/');
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
