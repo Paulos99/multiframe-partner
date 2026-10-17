@@ -34,6 +34,8 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   --header-h: 64px;
+  --mf-install-h: 0px;
+  --mf-toolbar-h: 0px;
   /* Sticky CTA clearance: keep SimCompare metrics/chips above «Далее» on phones. */
   --footer-h: 120px;
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;

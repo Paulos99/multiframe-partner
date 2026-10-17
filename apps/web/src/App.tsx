@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SessionProvider } from './state/SessionContext';
 import { AppShell } from './app-shell/AppShell';
+import { InstallAppButton } from './app-shell/InstallAppButton';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
 import { canCreateObjects, canSeePrices } from '../../../packages/shared/partner';
@@ -9,21 +10,43 @@ import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerCo
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
 import { DemoSwitcherFab } from './partner/DemoSwitcher';
+import { SyncStatus } from './partner/SyncStatus';
 import styles from './partner/partner.module.css';
 
 type Route = 'cabinet' | 'problemomer' | 'calculator';
 
+function ToolBar({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const apply = () => document.documentElement.style.setProperty('--mf-toolbar-h', `${el.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.setProperty('--mf-toolbar-h', '0px');
+    };
+  }, []);
+  return (
+    <div className={styles.toolBar} ref={ref}>
+      {children}
+    </div>
+  );
+}
+
+function ShellFrame({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <InstallAppButton />
+      {children}
+    </>
+  );
+}
+
 function PartnerShell() {
-  const {
-    user,
-    loading,
-    noteTool,
-    logout,
-    pendingSyncCount,
-    flushObjectQueue,
-    calcRequest,
-    attachCalculation,
-  } = usePartner();
+  const { user, loading, noteTool, logout, calcRequest, attachCalculation } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
@@ -80,18 +103,17 @@ function PartnerShell() {
     user?.org?.companyName,
   ]);
 
+  let body: ReactNode;
   if (loading && !user) {
-    return (
+    body = (
       <div className={styles.shell}>
         <p className={styles.lead}>Загрузка…</p>
       </div>
     );
-  }
-
-  if (!user) return <LoginScreen />;
-
-  if (route === 'cabinet') {
-    return (
+  } else if (!user) {
+    body = <LoginScreen />;
+  } else if (route === 'cabinet') {
+    body = (
       <>
         <CabinetScreen
           onNavigate={(r) => {
@@ -103,12 +125,11 @@ function PartnerShell() {
         <DemoSwitcherFab />
       </>
     );
-  }
+  } else if (route === 'calculator') {
 
-  if (route === 'calculator') {
-    return (
+    body = (
       <div className={styles.toolHost}>
-        <div className={styles.toolBar}>
+        <ToolBar>
           <button type="button" onClick={() => setRoute('cabinet')}>
             ← Кабинет
           </button>
@@ -118,6 +139,7 @@ function PartnerShell() {
           <button type="button" className={styles.logoutBtn} onClick={logout} title="Смена сотрудника">
             Выйти
           </button>
+          <SyncStatus />
           <span className={styles.toolBarMeta}>
             {user.org?.companyName || user.displayName}
             {!hidePrices && user.org?.panelPriceRub != null
@@ -126,9 +148,8 @@ function PartnerShell() {
                 ? ' · без цен'
                 : ''}
             {calcNotice ? ` · ${calcNotice}` : ''}
-            {pendingSyncCount > 0 ? ` · ↻ ${pendingSyncCount}` : ''}
           </span>
-        </div>
+        </ToolBar>
         {calcSrc ? (
           <iframe
             key={calcRequest?.nonce || 'calc'}
@@ -145,11 +166,10 @@ function PartnerShell() {
         <DemoSwitcherFab />
       </div>
     );
-  }
-
-  return (
+  } else {
+    body = (
     <div className={styles.toolHost}>
-      <div className={styles.toolBar}>
+      <ToolBar>
         <button type="button" onClick={() => setRoute('cabinet')}>
           ← Кабинет
         </button>
@@ -165,13 +185,9 @@ function PartnerShell() {
         <button type="button" className={styles.logoutBtn} onClick={logout} title="Смена сотрудника">
           Выйти
         </button>
-        {pendingSyncCount > 0 ? (
-          <button type="button" onClick={() => void flushObjectQueue()}>
-            ↻ {pendingSyncCount}
-          </button>
-        ) : null}
+        <SyncStatus />
         <span className={styles.toolBarMeta}>{user.org?.companyName || user.displayName}</span>
-      </div>
+      </ToolBar>
       <SmoothScroll>
         <SessionProvider>
           <AppShell />
@@ -180,7 +196,10 @@ function PartnerShell() {
       </SmoothScroll>
       <DemoSwitcherFab />
     </div>
-  );
+    );
+  }
+
+  return <ShellFrame>{body}</ShellFrame>;
 }
 
 export default function App() {

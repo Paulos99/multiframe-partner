@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { InstallAppButton } from './InstallAppButton';
 import styles from './Header.module.css';
 
 const BASE = import.meta.env.BASE_URL;
@@ -45,7 +44,6 @@ export function Header() {
           <span className={styles.product}>Проблемомер</span>
         </div>
         <div className={styles.themeToggle}>
-          <InstallAppButton />
           <span className={styles.themeLabel}>Тема</span>
           <label className={styles.themeSwitch} title="Светлая / тёмная тема">
             <input

@@ -673,6 +673,23 @@ export function trackToolOpen(session: SessionUser, tool: 'problemomer' | 'calcu
   );
 }
 
+export function isObjectVisible(user: SessionUser, obj: JobObject): boolean {
+  return objectVisible(user, obj);
+}
+
+/**
+ * Remote cache visibility matches the API: owner and sales see the company,
+ * measurer sees own rows, crew sees assignments and монтаж.
+ */
+export function presentCachedObject(user: SessionUser, obj: JobObject): JobObject | null {
+  if (user.role !== 'admin') {
+    if (!user.orgId || obj.orgId !== user.orgId) return null;
+    if (user.role === 'measurer' && obj.createdBy !== user.id && obj.assignedTo !== user.id) return null;
+    if (user.role === 'crew' && obj.assignedTo !== user.id && obj.status !== 'install') return null;
+  }
+  return redactObjectForRole(obj, user.role);
+}
+
 function objectVisible(user: SessionUser, obj: JobObject): boolean {
   if (user.role === 'admin') return true;
   if (!user.orgId || obj.orgId !== user.orgId) return false;
@@ -743,7 +760,7 @@ export function upsertLocalObject(
     id: existing?.id || input.id || uid('obj'),
     orgId: existing?.orgId || actor.orgId,
     createdAt: existing?.createdAt || now,
-    updatedAt: now,
+    updatedAt: input.updatedAt || now,
     createdBy: existing?.createdBy || actor.id,
     assignedTo:
       input.assignedTo !== undefined ? input.assignedTo : existing?.assignedTo ?? null,
@@ -884,11 +901,26 @@ export function clearAnalyticsQueue(): void {
   localStorage.removeItem(ANALYTICS_QUEUE_KEY);
 }
 
-export function buildLocalDashboard(opts: {
-  from?: string | null;
-  to?: string | null;
-  orgId?: string | null;
-}): AnalyticsDashboard {
+function dedupeEvents(list: AnalyticsEvent[]): AnalyticsEvent[] {
+  const seen = new Set<string>();
+  const out: AnalyticsEvent[] = [];
+  for (const event of list) {
+    if (!event?.id || seen.has(event.id)) continue;
+    seen.add(event.id);
+    out.push(event);
+  }
+  return out;
+}
+
+export function buildLocalDashboard(
+  opts: {
+    from?: string | null;
+    to?: string | null;
+    orgId?: string | null;
+    journalAll?: boolean;
+  },
+  extra: AnalyticsEvent[] = [],
+): AnalyticsDashboard {
   const db = loadDb();
   const executorDirectory = db.users
     .filter((u) => isStaffRole(u.role))
@@ -899,7 +931,7 @@ export function buildLocalDashboard(opts: {
       orgId: u.orgId,
       role: u.role,
     }));
-  return aggregateAnalyticsDashboard(loadAnalyticsEvents(), {
+  return aggregateAnalyticsDashboard(dedupeEvents([...extra, ...loadAnalyticsEvents()]), {
     source: 'local',
     from: opts.from,
     to: opts.to,
@@ -909,6 +941,7 @@ export function buildLocalDashboard(opts: {
       ? executorDirectory.filter((e) => e.orgId === opts.orgId).length
       : executorDirectory.length,
     executorDirectory,
+    journalAll: opts.journalAll,
   });
 }
 

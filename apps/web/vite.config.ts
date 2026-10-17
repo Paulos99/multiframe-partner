@@ -10,7 +10,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logo-stp.png', 'logo-multiframe.png', 'og-share.jpg'],
+      includeAssets: [
+        'logo-stp.png',
+        'logo-multiframe.png',
+        'og-share.jpg',
+        'apple-touch-icon.png',
+        'pwa-192.png',
+        'pwa-512.png',
+        'pwa-maskable-512.png',
+        'sw-sync.js',
+      ],
       manifest: {
         name: 'MultiFrame · Кабинет партнёра',
         short_name: 'MF Партнёр',
@@ -22,8 +31,9 @@ export default defineConfig({
         start_url: base,
         scope: base,
         icons: [
-          { src: 'logo-stp.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: 'logo-stp.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
@@ -31,6 +41,7 @@ export default defineConfig({
         // Don't hijack the partner calculator SPA under /calculator/
         navigateFallbackDenylist: [/^\/.*calculator(?:\/|$)/i],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff2,mp3}'],
+        importScripts: ['sw-sync.js'],
       },
     }),
   ],

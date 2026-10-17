@@ -259,13 +259,28 @@ export function ObjectsPanel({
           {reminder}
         </p>
       ) : null}
-      {api.pendingSyncCount > 0 ? (
+      {!api.online ? (
         <p className={styles.flash} role="status">
-          Ожидают отправки: {api.pendingSyncCount}.{' '}
-          <button type="button" className={styles.ghost} onClick={() => void api.flushObjectQueue()}>
-            Синхронизировать
-          </button>
+          Нет сети — показаны замеры и расчёты, сохранённые на устройстве.
         </p>
+      ) : null}
+      {!api.online && api.calculations.length ? (
+        <div className={styles.calcCache}>
+          <h3>Расчёты на устройстве</h3>
+          <ul>
+            {api.calculations.map((calc) => (
+              <li key={calc.id}>
+                <strong>{calc.tool === 'calculator' ? 'Калькулятор' : 'Проблемомер'}</strong>
+                <span>
+                  {calc.label ? `${calc.label} · ` : ''}
+                  {calc.areaM2 != null ? `${calc.areaM2} м² · ` : ''}
+                  {calc.panels != null ? `${calc.panels} пан. · ` : ''}
+                  {new Date(calc.at).toLocaleString('ru-RU')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <label className={styles.searchField}>

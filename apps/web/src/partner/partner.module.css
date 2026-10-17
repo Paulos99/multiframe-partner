@@ -1155,8 +1155,8 @@
   color: #152018;
   border-bottom: 1px solid rgba(1, 100, 79, 0.14);
   position: sticky;
-  top: 0;
-  z-index: 40;
+  top: var(--mf-install-h, 0px);
+  z-index: 48;
   flex: 0 0 auto;
 }
 
@@ -2539,4 +2539,141 @@
   background: #12161c;
   color: #e8eaee;
   border-color: #6a3030;
+}
+
+.syncOk {
+  background: rgba(1, 100, 79, 0.14);
+  color: #01644f;
+}
+
+.syncWait {
+  background: #fff4d6;
+  color: #7a4b00;
+}
+
+.syncOff {
+  background: #f3e4e1;
+  color: #8a2e24;
+}
+
+.oncePassword {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 12px;
+  background: #f4faf7;
+  border: 1px solid rgba(1, 100, 79, 0.18);
+}
+
+.oncePassword p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.oncePassword input {
+  font: inherit;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(1, 100, 79, 0.28);
+  background: #fff;
+  color: inherit;
+}
+
+.exportBox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.exportStep {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.exportStep .field,
+.exportStep .primary {
+  flex: 1;
+  min-width: 0;
+}
+
+.exportNum {
+  width: 28px;
+  height: 28px;
+  margin-top: 22px;
+  border-radius: 50%;
+  background: #01644f;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 750;
+  flex: 0 0 auto;
+}
+
+.calcCache {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calcCache h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.calcCache ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calcCache li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(1, 100, 79, 0.12);
+}
+
+.calcCache span {
+  color: #5a6b62;
+  font-size: 0.85rem;
+}
+
+:global(body.theme-dark) .oncePassword,
+:global(body.theme-dark) .calcCache li {
+  background: #12161c;
+  border-color: #2a3140;
+}
+
+:global(body.theme-dark) .oncePassword input {
+  background: #0e1411;
+  color: #e8f2ef;
+  border-color: #2a5c4c;
+}
+
+:global(body.theme-dark) .syncOk {
+  background: #16352c;
+  color: #8ee0c4;
+}
+
+:global(body.theme-dark) .syncWait {
+  background: #3a3018;
+  color: #f3d48a;
+}
+
+:global(body.theme-dark) .syncOff {
+  background: #3a2424;
+  color: #ffb4ae;
 }

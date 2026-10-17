@@ -425,8 +425,45 @@ function publicObject(obj, role) {
   return copy;
 }
 
+/** Client clock, clamped so a far-future stamp cannot lock the row. */
+function clampClientTime(iso) {
+  const raw = Date.parse(iso || '');
+  if (!iso || Number.isNaN(raw)) return new Date().toISOString();
+  if (raw > Date.now() + 5 * 60 * 1000) return new Date().toISOString();
+  return new Date(raw).toISOString();
+}
+
+/** Last-write-wins: missing or equal timestamps let the incoming write through (idempotent retry). */
+function incomingWins(body, existing) {
+  if (!existing) return true;
+  const inc = Date.parse(body?.updatedAt || '');
+  const cur = Date.parse(existing.updatedAt || '');
+  if (Number.isNaN(inc) || Number.isNaN(cur)) return true;
+  return inc >= cur;
+}
+
+function skippedHistory(existing, body, actor) {
+  const snap = {
+    updatedAt: body?.updatedAt || null,
+    status: body?.status || null,
+    clientName: body?.clientName || null,
+    address: body?.address || null,
+    areaM2: body?.room?.areaM2 ?? null,
+  };
+  return [
+    {
+      at: new Date().toISOString(),
+      userId: actor.id,
+      login: actor.login,
+      action: 'conflict_kept_server',
+      detail: JSON.stringify(snap).slice(0, 400),
+    },
+    ...(existing.history || []),
+  ].slice(0, 50);
+}
+
 function normalizeObjectInput(body, existing, actor, org) {
-  const now = new Date().toISOString();
+  const now = clampClientTime(body?.updatedAt);
   const status = body.status || existing?.status || 'draft';
   const allowed = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
   return {
@@ -716,8 +753,8 @@ function aggregateAnalyticsDashboard(allEvents, opts) {
     executors,
     recentObjects: events
       .filter((e) => e.action === 'result' || e.action === 'calc_done' || e.action === 'pdf')
-      .slice(0, 40),
-    events: events.slice(0, 200),
+      .slice(0, opts.journalAll ? 5000 : 40),
+    events: events.slice(0, opts.journalAll ? 5000 : 200),
   };
 }
 
@@ -1147,21 +1184,29 @@ export async function handler(event = {}) {
 
     if (method === 'POST' && path.endsWith('/org/staff/reset-password')) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, ['owner']);
+      assertRole(user, ['owner', 'admin']);
       const { staffUserId, password } = getBody(event);
-      const idx = platform.users.findIndex(
-        (u) =>
-          u.id === staffUserId &&
-          u.orgId === user.orgId &&
-          STAFF_ROLES.includes(normalizeRole(u.role)),
-      );
+      const idx = platform.users.findIndex((u) => {
+        if (u.id !== staffUserId || !STAFF_ROLES.includes(normalizeRole(u.role))) return false;
+        if (user.role === 'owner') return u.orgId === user.orgId;
+        return true;
+      });
       if (idx < 0) return json(404, { message: 'Сотрудник не найден' });
       const pw = String(password || '').trim();
       if (!pw) return json(400, { message: 'Пустой пароль' });
-      platform.users[idx] = {
+      const nextUser = {
         ...platform.users[idx],
         passwordHash: bcrypt.hashSync(pw, 10),
       };
+      delete nextUser.password;
+      platform.users[idx] = nextUser;
+      pushActivity(platform, {
+        orgId: nextUser.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'reset_staff_password',
+        detail: nextUser.login,
+      });
       await savePlatform(platform);
       return json(200, { password: pw });
     }
@@ -1321,6 +1366,12 @@ export async function handler(event = {}) {
       if (existing && existing.orgId !== user.orgId) {
         return json(403, { message: 'Недостаточно прав' });
       }
+      if (existing && !incomingWins(body, existing)) {
+        const kept = { ...existing, history: skippedHistory(existing, body, user) };
+        platform.objects[existingIdx] = kept;
+        await savePlatform(platform);
+        return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
+      }
       const obj = normalizeObjectInput(body, existing, user, org);
       if (existing) {
         if (body.status && body.status !== existing.status) {
@@ -1380,6 +1431,12 @@ export async function handler(event = {}) {
       }
       if (user.role === 'crew') {
         const body = getBody(event);
+        if (!incomingWins(body, existing)) {
+          const kept = { ...existing, history: skippedHistory(existing, body, user) };
+          platform.objects[idx] = kept;
+          await savePlatform(platform);
+          return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
+        }
         const nextStatus = body.status;
         if (nextStatus && !['install', 'closed'].includes(nextStatus)) {
           return json(403, { message: 'Монтажник меняет только статус монтажа' });
@@ -1387,7 +1444,7 @@ export async function handler(event = {}) {
         const next = {
           ...existing,
           status: nextStatus || existing.status,
-          updatedAt: new Date().toISOString(),
+          updatedAt: clampClientTime(body.updatedAt),
           history: [
             {
               at: new Date().toISOString(),
@@ -1405,6 +1462,12 @@ export async function handler(event = {}) {
       }
       const org = findOrg(platform, existing.orgId);
       const body = getBody(event);
+      if (!incomingWins(body, existing)) {
+        const kept = { ...existing, history: skippedHistory(existing, body, user) };
+        platform.objects[idx] = kept;
+        await savePlatform(platform);
+        return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
+      }
       if (body.assignedTo !== undefined && !['owner', 'sales'].includes(user.role)) {
         return json(403, { message: 'Назначать объекты может владелец или менеджер' });
       }
@@ -1466,6 +1529,15 @@ export async function handler(event = {}) {
       const existing = platform.objects[idx];
       if (!objectVisibleTo(user, existing)) {
         return json(403, { message: 'Недостаточно прав' });
+      }
+      const body = getBody(event);
+      const query = getQuery(event);
+      const deleteBody = { updatedAt: body.updatedAt || query.updatedAt || null };
+      if (deleteBody.updatedAt && !incomingWins(deleteBody, existing)) {
+        const kept = { ...existing, history: skippedHistory(existing, deleteBody, user) };
+        platform.objects[idx] = kept;
+        await savePlatform(platform);
+        return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
       }
       const doomed = existing.documents || [];
       platform.objects = platform.objects.filter((o) => o.id !== objectId);
@@ -1546,6 +1618,7 @@ export async function handler(event = {}) {
           partnerCount: platform.users.filter((u) => normalizeRole(u.role) === 'owner').length,
           executorCount: staffDir.filter((e) => !orgId || e.orgId === orgId).length,
           executorDirectory: staffDir,
+          journalAll: query.journal === '1',
         });
         return json(200, dash);
       } catch {
@@ -1561,6 +1634,7 @@ export async function handler(event = {}) {
             from: query.from || null,
             to: query.to || null,
             orgId: query.orgId || null,
+            journalAll: query.journal === '1',
           });
           return json(200, dash);
         }
@@ -1571,6 +1645,7 @@ export async function handler(event = {}) {
           from: query.from || null,
           to: query.to || null,
           orgId,
+          journalAll: query.journal === '1',
         });
         return json(200, dash);
       }

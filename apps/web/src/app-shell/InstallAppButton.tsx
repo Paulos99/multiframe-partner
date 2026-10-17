@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import styles from './InstallAppButton.module.css';
 
 type BeforeInstallPromptEvent = Event & {
@@ -6,70 +6,250 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
 
+type BrowserKind = 'ios-safari' | 'ios-other' | 'firefox' | 'yandex' | 'opera' | 'edge' | 'chrome' | 'other';
+
 function isIos(): boolean {
   if (typeof navigator === 'undefined') return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const ua = navigator.userAgent;
+  return /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
-    // iOS Safari
+    window.matchMedia('(display-mode: fullscreen)').matches ||
     Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
   );
 }
 
+function detectBrowser(): BrowserKind {
+  const ua = navigator.userAgent;
+  if (isIos()) {
+    const safari = /safari/i.test(ua) && !/crios|fxios|edgios|opios|yabrowser|opt/i.test(ua);
+    return safari ? 'ios-safari' : 'ios-other';
+  }
+  if (/firefox|fxios/i.test(ua)) return 'firefox';
+  if (/YaBrowser/i.test(ua)) return 'yandex';
+  if (/OPR\/|Opera/i.test(ua)) return 'opera';
+  if (/Edg\//i.test(ua)) return 'edge';
+  if (/Chrome|Chromium/i.test(ua)) return 'chrome';
+  return 'other';
+}
+
+function IconShare() {
+  return (
+    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+        d="M8 11.5V18a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-6.5"
+      />
+      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" d="M12 14V4" />
+      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M8.5 7.5 12 4l3.5 3.5" />
+    </svg>
+  );
+}
+
+function IconPlus() {
+  return (
+    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden>
+      <rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" d="M12 8v8M8 12h8" />
+    </svg>
+  );
+}
+
+function IconMenu() {
+  return (
+    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="6" cy="12" r="1.4" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+      <circle cx="18" cy="12" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconCheck() {
+  return (
+    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M8.5 12.2 11 14.7 15.8 9.5" />
+    </svg>
+  );
+}
+
+type Step = { icon: 'share' | 'plus' | 'menu' | 'check'; text: string };
+
+function stepsFor(kind: BrowserKind): { title: string; steps: Step[] } {
+  if (kind === 'ios-safari') {
+    return {
+      title: 'iPhone · Safari',
+      steps: [
+        { icon: 'share', text: 'Нажмите «Поделиться» внизу Safari.' },
+        { icon: 'plus', text: 'Пролистайте список и выберите «На экран Домой».' },
+        { icon: 'check', text: 'Нажмите «Добавить». Иконка StP появится на экране.' },
+      ],
+    };
+  }
+  if (kind === 'ios-other') {
+    return {
+      title: 'iPhone',
+      steps: [
+        { icon: 'share', text: 'Откройте эту страницу в Safari: в Chrome, Firefox или Яндексе нажмите «Поделиться» → Safari.' },
+        { icon: 'plus', text: 'В Safari нажмите «Поделиться», затем «На экран Домой».' },
+        { icon: 'check', text: 'Нажмите «Добавить».' },
+      ],
+    };
+  }
+  if (kind === 'firefox') {
+    return {
+      title: 'Firefox',
+      steps: [
+        { icon: 'menu', text: 'Откройте меню браузера (три полоски).' },
+        { icon: 'plus', text: 'На телефоне выберите «Установить». На компьютере Firefox не ставит приложение как Chrome.' },
+        { icon: 'check', text: 'Если пункта нет, добавьте закладку на панель или откройте кабинет в Chrome, Яндекс Браузере или Edge и нажмите эту кнопку ещё раз.' },
+      ],
+    };
+  }
+  if (kind === 'yandex') {
+    return {
+      title: 'Яндекс Браузер',
+      steps: [
+        { icon: 'menu', text: 'Откройте меню (три полоски справа).' },
+        { icon: 'plus', text: 'Выберите «Установить приложение» или «Добавить на главный экран».' },
+        { icon: 'check', text: 'Подтвердите установку. Если в адресе есть значок монитора — нажмите его.' },
+      ],
+    };
+  }
+  if (kind === 'opera') {
+    return {
+      title: 'Opera',
+      steps: [
+        { icon: 'menu', text: 'Откройте меню Opera.' },
+        { icon: 'plus', text: 'Выберите «На главный экран» или «Установить приложение».' },
+        { icon: 'check', text: 'Подтвердите. Кабинет откроется без адресной строки.' },
+      ],
+    };
+  }
+  if (kind === 'edge') {
+    return {
+      title: 'Edge',
+      steps: [
+        { icon: 'menu', text: 'Откройте меню «…» справа вверху.' },
+        { icon: 'plus', text: 'Приложения → «Установить этот сайт как приложение».' },
+        { icon: 'check', text: 'Подтвердите установку.' },
+      ],
+    };
+  }
+  return {
+    title: kind === 'chrome' ? 'Chrome' : 'Браузер',
+    steps: [
+      { icon: 'menu', text: 'Откройте меню браузера (три точки справа вверху).' },
+      { icon: 'plus', text: 'Выберите «Установить приложение» или значок установки в адресной строке.' },
+      { icon: 'check', text: 'Подтвердите. Ярлык появится на рабочем столе или на экране телефона.' },
+    ],
+  };
+}
+
+function StepIcon({ name }: { name: Step['icon'] }) {
+  if (name === 'share') return <IconShare />;
+  if (name === 'plus') return <IconPlus />;
+  if (name === 'menu') return <IconMenu />;
+  return <IconCheck />;
+}
+
 export function InstallAppButton() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showIosHint, setShowIosHint] = useState(false);
+  const [standalone, setStandalone] = useState(isStandalone);
+  const [open, setOpen] = useState(false);
+  const titleId = useId();
+  const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isStandalone()) return;
-    const onBip = (e: Event) => {
-      e.preventDefault();
-      setDeferred(e as BeforeInstallPromptEvent);
+    if (standalone) {
+      document.documentElement.style.setProperty('--mf-install-h', '0px');
+      return;
+    }
+    const el = barRef.current;
+    if (!el) return;
+    const apply = () => document.documentElement.style.setProperty('--mf-install-h', `${el.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.setProperty('--mf-install-h', '0px');
+    };
+  }, [standalone]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(display-mode: standalone)');
+    const sync = () => setStandalone(isStandalone());
+    sync();
+    mq.addEventListener('change', sync);
+    const onBip = (event: Event) => {
+      event.preventDefault();
+      setDeferred(event as BeforeInstallPromptEvent);
     };
     window.addEventListener('beforeinstallprompt', onBip);
-    return () => window.removeEventListener('beforeinstallprompt', onBip);
+    return () => {
+      mq.removeEventListener('change', sync);
+      window.removeEventListener('beforeinstallprompt', onBip);
+    };
   }, []);
 
-  if (isStandalone()) return null;
+  if (standalone) return null;
 
-  if (deferred) {
-    return (
-      <button
-        type="button"
-        className={styles.btn}
-        onClick={async () => {
-          await deferred.prompt();
-          setDeferred(null);
-        }}
-      >
-        Установить
-      </button>
-    );
+  async function onClick() {
+    if (deferred) {
+      await deferred.prompt();
+      setDeferred(null);
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
   }
 
-  if (isIos()) {
-    return (
-      <div className={styles.iosWrap}>
-        <button
-          type="button"
-          className={styles.btn}
-          onClick={() => setShowIosHint((v) => !v)}
-          aria-expanded={showIosHint}
-        >
-          На экран «Домой»
+  const guide = stepsFor(detectBrowser());
+
+  return (
+    <>
+      <div className={styles.bar} ref={barRef}>
+        <button type="button" className={styles.btn} onClick={() => void onClick()}>
+          <IconPlus />
+          Установить на устройство
         </button>
-        {showIosHint ? (
-          <p className={styles.hint} role="status">
-            Поделиться → На экран «Домой»
-          </p>
-        ) : null}
       </div>
-    );
-  }
-
-  return null;
+      {open ? (
+        <div className={styles.backdrop} role="presentation" onClick={() => setOpen(false)}>
+          <div
+            className={styles.sheet}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.sheetHead}>
+              <h2 id={titleId}>Установить на устройство</h2>
+              <button type="button" className={styles.close} onClick={() => setOpen(false)}>
+                Закрыть
+              </button>
+            </div>
+            <p className={styles.lead}>{guide.title}. Три шага:</p>
+            <ol className={styles.steps}>
+              {guide.steps.map((step) => (
+                <li key={step.text}>
+                  <StepIcon name={step.icon} />
+                  <span>{step.text}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
 }

@@ -5,6 +5,7 @@ import type {
   AnalyticsObject,
   AnalyticsTool,
 } from '../../../../packages/shared/partner';
+import { cacheAnalyticsEvents, loadCachedAnalyticsEvents, rememberCalculation } from './offlineDb';
 import {
   appendAnalyticsEvent,
   buildLocalDashboard,
@@ -80,6 +81,8 @@ export function trackPartnerAnalytics(input: {
     },
   };
   appendAnalyticsEvent(event);
+  void cacheAnalyticsEvents([event]).catch(() => undefined);
+  void rememberCalculation(event).catch(() => undefined);
   void postEvents([event]);
 }
 
@@ -146,18 +149,32 @@ export function bootstrapHistoryReset(): void {
   }
 }
 
+async function cachedEvents(): Promise<AnalyticsEvent[]> {
+  try {
+    return await loadCachedAnalyticsEvents();
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchAnalyticsDashboard(opts: {
   mode: 'admin' | 'partner';
   from?: string | null;
   to?: string | null;
   orgId?: string | null;
   partnerLogin?: string | null;
+  journal?: boolean;
 }): Promise<AnalyticsDashboard> {
-  const local = buildLocalDashboard({
-    from: opts.from,
-    to: opts.to,
-    orgId: opts.mode === 'partner' ? opts.orgId : opts.orgId,
-  });
+  const extra = await cachedEvents();
+  const local = buildLocalDashboard(
+    {
+      from: opts.from,
+      to: opts.to,
+      orgId: opts.mode === 'partner' ? opts.orgId : opts.orgId,
+      journalAll: opts.journal,
+    },
+    extra,
+  );
 
   if (!API_BASE) return local;
 
@@ -166,6 +183,7 @@ export async function fetchAnalyticsDashboard(opts: {
     if (opts.from) q.set('from', opts.from);
     if (opts.to) q.set('to', opts.to);
     if (opts.orgId) q.set('orgId', opts.orgId);
+    if (opts.journal) q.set('journal', '1');
     const headers: Record<string, string> = {
       'X-Analytics-Role': opts.mode === 'admin' ? 'admin' : 'owner',
       'Content-Type': 'application/json',
@@ -194,7 +212,10 @@ export async function fetchAnalyticsDashboard(opts: {
     if (!data.breakdowns.city) {
       data.breakdowns = { ...data.breakdowns, city: local.breakdowns.city || [] };
     }
-    return { ...local, ...data, source: 'api' } as AnalyticsDashboard;
+    const dash = { ...local, ...data, source: 'api' } as AnalyticsDashboard;
+    const toCache = [...(dash.events || []), ...(dash.recentObjects || [])];
+    void cacheAnalyticsEvents(toCache).catch(() => undefined);
+    return dash;
   } catch {
     return local;
   }

@@ -1943,6 +1943,42 @@ function isAreaEstimateMode() {
   return state.inputMode === 'area' || (state.inputMode === 'dims' && state.forceAreaBySize);
 }
 
+function rememberCalcOffline(event) {
+  if (event.action !== 'calc_done' && event.action !== 'result') return Promise.resolve();
+  return new Promise((resolve) => {
+    const req = indexedDB.open('mf-partner-offline', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('objects')) db.createObjectStore('objects', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('calculations')) db.createObjectStore('calculations', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('analytics')) db.createObjectStore('analytics', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+    };
+    req.onerror = () => resolve();
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction(['calculations', 'analytics'], 'readwrite');
+      tx.objectStore('analytics').put(event);
+      tx.objectStore('calculations').put({
+        id: event.id,
+        at: event.at,
+        tool: 'calculator',
+        action: event.action,
+        login: event.login,
+        companyName: event.companyName,
+        orgId: event.orgId,
+        userId: event.userId,
+        areaM2: event.object?.areaM2 ?? null,
+        panels: event.object?.panels ?? null,
+        label: event.object?.label || event.object?.mode || null,
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    };
+  });
+}
+
 function trackPartnerCalcEvent(action) {
   try {
     const raw = localStorage.getItem('mf_partner_session_v2');
@@ -1971,14 +2007,22 @@ function trackPartnerCalcEvent(action) {
     const key = 'mf_partner_analytics_v1';
     const prev = JSON.parse(localStorage.getItem(key) || '[]');
     localStorage.setItem(key, JSON.stringify([event, ...(Array.isArray(prev) ? prev : [])].slice(0, 2000)));
+    const queueOffline = () => {
+      const qKey = 'mf_partner_analytics_queue_v1';
+      const queued = JSON.parse(localStorage.getItem(qKey) || '[]');
+      localStorage.setItem(qKey, JSON.stringify([event, ...(Array.isArray(queued) ? queued : [])].slice(0, 500)));
+    };
+    void rememberCalcOffline(event);
     const api = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '';
-    if (api) {
-      fetch(`${String(api).replace(/\/$/, '')}/analytics/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ events: [event] }),
-      }).catch(() => {});
+    if (!api || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+      queueOffline();
+      return;
     }
+    fetch(`${String(api).replace(/\/$/, '')}/analytics/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events: [event] }),
+    }).catch(() => queueOffline());
   } catch {
     /* ignore */
   }
