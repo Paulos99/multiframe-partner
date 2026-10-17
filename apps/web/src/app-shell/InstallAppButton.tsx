@@ -21,6 +21,33 @@ type BrowserKind = 'ios-safari' | 'ios-other' | 'firefox' | 'yandex' | 'opera' |
 
 const HINT_KEY = 'mf_install_hint_dismissed_v1';
 
+type UserAgentDataLite = {
+  mobile?: boolean;
+  platform?: string;
+};
+
+/** Кнопка и подсказка установки: только Android и iOS/iPadOS. */
+function isMobileInstallTarget(): boolean {
+  if (typeof navigator === 'undefined') return false;
+
+  const uaData = (navigator as Navigator & { userAgentData?: UserAgentDataLite }).userAgentData;
+  if (uaData && (typeof uaData.mobile === 'boolean' || typeof uaData.platform === 'string')) {
+    const platform = (uaData.platform ?? '').toLowerCase();
+    if (uaData.mobile === true) return true;
+    if (platform === 'android' || platform === 'ios') return true;
+    // iPadOS 13+ в Client Hints тоже может назваться macOS.
+    if (platform === 'macos' && navigator.maxTouchPoints > 1) return true;
+    return false;
+  }
+
+  const ua = navigator.userAgent;
+  if (/android/i.test(ua)) return true;
+  if (/iphone|ipad|ipod/i.test(ua)) return true;
+  // iPadOS 13+ сообщает Macintosh; мультитач отличает его от Mac.
+  if (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) return true;
+  return false;
+}
+
 function isIos(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent;
@@ -258,6 +285,7 @@ export function InstallPromptHost({
     sync();
     mq.addEventListener('change', sync);
     const onBip = (event: Event) => {
+      if (!isMobileInstallTarget()) return;
       event.preventDefault();
       setDeferred(event as BeforeInstallPromptEvent);
     };
@@ -283,7 +311,7 @@ export function InstallPromptHost({
     setOpen(true);
   }, [deferred]);
 
-  const hidden = standalone || !enabled;
+  const hidden = standalone || !enabled || !isMobileInstallTarget();
   const value = useMemo(
     () => ({ hidden, install, register }),
     [hidden, install, register],
