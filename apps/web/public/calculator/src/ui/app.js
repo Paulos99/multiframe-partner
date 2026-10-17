@@ -1623,6 +1623,7 @@ async function runCalculation(options = {}) {
 
     if (state.options.calcCeiling && state.options.selectedWallIds.length === 0) {
       runQuickAreaCalc(ceilingArea);
+      scheduleCabinetPublish(options);
       return true;
     }
 
@@ -1788,6 +1789,7 @@ async function runCalculation(options = {}) {
 
   updateLayoutMode();
   updateSchemeModeUi();
+  scheduleCabinetPublish(options);
   return true;
 }
 
@@ -2026,31 +2028,39 @@ function trackPartnerCalcEvent(action) {
   }
 }
 
-async function handlePDF() {
-  if (!state.bom) {
-    alert('Сначала выполните расчёт');
-    return;
-  }
-  const { exportCalculationPDF } = await import('../export/pdf-export.js');
-  const areaEstimate = isAreaEstimateMode();
-  trackPartnerCalcEvent('pdf');
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = () => reject(reader.error || new Error('read'));
+    reader.readAsDataURL(blob);
+  });
+}
 
+function calcSignature() {
+  const panels = state.bom?.total?.panelsWithReserve ?? 0;
+  const dowels = state.bom?.total?.dowelsWithReserve ?? 0;
+  const area = (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0);
+  return `${state.inputMode}|${isAreaEstimateMode() ? 1 : 0}|${panels}|${dowels}|${area}`;
+}
+
+async function collectPdfInput() {
+  const areaEstimate = isAreaEstimateMode();
   if (areaEstimate) {
     const wallSurfaces = (state.wallResult?.wallResults ?? []).map((wr) => ({
       wallResult: wr,
       image: null,
     }));
-    await exportCalculationPDF({
+    return {
       bom: state.bom,
       room: state.room,
       ceilingImage: null,
       wallSurfaces,
       planImage: null,
       areaEstimate: true,
-    });
-    return;
+      hasScheme: false,
+    };
   }
-
   syncFormToRoom();
   const room = state.calcRoom ?? state.room;
   const { buildPdfSchemeImages } = await import('../export/pdf-scheme-render.js');
@@ -2065,14 +2075,125 @@ async function handlePDF() {
     showNumbers,
     showFrame,
   });
-  await exportCalculationPDF({
+  const hasScheme = Boolean(planImage || ceilingImage || wallSurfaces.some((w) => w.image));
+  return {
     bom: state.bom,
     room: state.room,
     ceilingImage,
     wallSurfaces,
     planImage,
     areaEstimate: false,
+    hasScheme,
+  };
+}
+
+let publishTimer = 0;
+let publishLock = false;
+let lastPublishedSig = '';
+
+function triggerPdfDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** Смета с ценами + спецификация без цен уходят в кабинет (родительское окно). */
+async function publishCalcToCabinet() {
+  if (window.parent === window) return;
+  if (!state.bom) return;
+  if (onboardingDemoActive) return;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('partner') !== '1') return;
+  if (getPartnerPricing().hidePrices) return;
+  const sig = calcSignature();
+  if (sig === lastPublishedSig || publishLock) return;
+  publishLock = true;
+  const statusEl = $('schemeStatus');
+  if (statusEl) {
+    statusEl.hidden = false;
+    statusEl.textContent = 'Сохраняем смету в объект…';
+  }
+  try {
+    const input = await collectPdfInput();
+    if (calcSignature() !== sig) return;
+    const { exportCalculationPDF } = await import('../export/pdf-export.js');
+    const priced = await exportCalculationPDF({ ...input, hidePrices: false, download: false });
+    const spec = await exportCalculationPDF({ ...input, hidePrices: true, download: false });
+    const [pdfBase64, specPdfBase64] = await Promise.all([
+      blobToBase64(priced.blob),
+      blobToBase64(spec.blob),
+    ]);
+    const panels = state.bom?.total?.panelsWithReserve ?? null;
+    const dowels = state.bom?.total?.dowelsWithReserve ?? null;
+    const areaM2 =
+      (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0) || state.areaValue || null;
+    const panelsCost = state.bom?.total?.totalCost ?? null;
+    window.parent.postMessage(
+      {
+        type: 'mf-cabinet-calc',
+        objectId: params.get('objectId') || null,
+        areaEstimate: input.areaEstimate,
+        hasScheme: input.hasScheme,
+        panels,
+        dowels,
+        areaM2,
+        panelsCost,
+        filename: priced.filename,
+        specFilename: spec.filename,
+        pdfBase64,
+        specPdfBase64,
+      },
+      window.location.origin,
+    );
+    lastPublishedSig = sig;
+    if (statusEl) statusEl.textContent = 'Смета отправлена в кабинет';
+  } catch (err) {
+    console.warn('[cabinet-pdf]', err);
+    if (statusEl) statusEl.textContent = 'Не удалось приложить PDF';
+  } finally {
+    publishLock = false;
+    if (statusEl) {
+      clearTimeout(publishCalcToCabinet._t);
+      publishCalcToCabinet._t = setTimeout(() => {
+        statusEl.hidden = true;
+      }, 2400);
+    }
+  }
+}
+
+function scheduleCabinetPublish(options = {}) {
+  if (options.skipCabinet || onboardingDemoActive) return;
+  if (window.parent === window) return;
+  clearTimeout(publishTimer);
+  if (options.silent) {
+    publishTimer = setTimeout(() => {
+      void publishCalcToCabinet();
+    }, 2200);
+    return;
+  }
+  void publishCalcToCabinet();
+}
+
+async function handlePDF() {
+  if (!state.bom) {
+    alert('Сначала выполните расчёт');
+    return;
+  }
+  const { exportCalculationPDF } = await import('../export/pdf-export.js');
+  const input = await collectPdfInput();
+  trackPartnerCalcEvent('pdf');
+  const file = await exportCalculationPDF({
+    ...input,
+    hidePrices: getPartnerPricing().hidePrices,
+    download: false,
   });
+  triggerPdfDownload(file.blob, file.filename);
+  scheduleCabinetPublish({ silent: false });
 }
 
 function setupMobileActions() {
@@ -2250,7 +2371,7 @@ function mountPartnerBanner() {
   const pricing = getPartnerPricing();
   const company = pricing.company ? pricing.company : 'Партнёрский режим';
   if (pricing.hidePrices) {
-    banner.innerHTML = `<strong>${company}</strong><span>Режим бригады · только количество</span>`;
+    banner.innerHTML = `<strong>${company}</strong><span>Режим монтажника · только количество</span>`;
   } else {
     const install =
       pricing.installPerM2 != null ? ` · монтаж ${pricing.installPerM2} ₽/м²` : '';
@@ -2314,7 +2435,7 @@ function init() {
   const appOnboarding = setupAppOnboarding({
     getInputMode: () => state.inputMode,
     setInputMode: (mode, opts) => setInputMode(mode, opts),
-    runCalculation: (opts) => runCalculation(opts || { silent: true }),
+    runCalculation: (opts) => runCalculation({ silent: true, ...(opts || {}), skipCabinet: true }),
     applySketchTemplate: (name) => sketchEditor?._applyTemplate?.(name),
     getSketchEditor: () => sketchEditor,
     setSchemeView: (view) => setSchemeView(view),

@@ -3,6 +3,7 @@
  */
 import type {
   JobObject,
+  JobObjectDocument,
   OrgSettings,
   SessionUser,
   UserRole,
@@ -221,6 +222,132 @@ export async function apiDeleteObject(
     if (isApiError(err) && err.status === 404) return {};
     throw err;
   }
+}
+
+export async function apiUploadObjectDocuments(
+  objectId: string,
+  documents: Array<{
+    kind: 'estimate' | 'spec';
+    filename: string;
+    pdfBase64: string;
+    hasScheme: boolean;
+    panels?: number | null;
+    areaM2?: number | null;
+  }>,
+  versionId?: string,
+): Promise<JobObject> {
+  const data = await request<{ object: JobObject }>(`/objects/${objectId}/documents`, {
+    method: 'POST',
+    body: JSON.stringify({ documents, versionId }),
+  });
+  return data.object;
+}
+
+export async function apiFetchObjectDocument(
+  objectId: string,
+  docId: string,
+): Promise<{ id: string; filename: string; kind: string; pdfBase64: string }> {
+  return request(`/objects/${objectId}/documents/${encodeURIComponent(docId)}`);
+}
+
+export function stripObjectDocuments<T extends Partial<JobObject>>(input: T): T {
+  const copy = { ...input };
+  delete copy.documents;
+  return copy;
+}
+
+export type { JobObjectDocument };
+
+export async function apiAdminUpdatePartnerCity(
+  partnerUserId: string,
+  city: string,
+): Promise<string> {
+  const data = await request<{ city: string }>(`/admin/partners/${partnerUserId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ city }),
+  });
+  return data.city;
+}
+
+export async function apiListMaterials(): Promise<
+  import('../../../api/materialsLib.js').PublicMaterial[]
+> {
+  const data = await request<{
+    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+  }>('/materials');
+  return data.materials;
+}
+
+export async function apiCreateMaterialFolder(
+  name: string,
+  parentId: string | null,
+): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{
+    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+  }>('/materials/folders', {
+    method: 'POST',
+    body: JSON.stringify({ name, parentId }),
+  });
+  return data.materials;
+}
+
+export async function apiUploadMaterial(input: {
+  name: string;
+  parentId: string | null;
+  mime: string;
+  contentBase64: string;
+}): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{
+    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+  }>('/materials/files', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data.materials;
+}
+
+export async function apiRenameMaterial(
+  id: string,
+  name: string,
+): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{
+    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+  }>(`/materials/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
+  return data.materials;
+}
+
+export async function apiReplaceMaterial(
+  id: string,
+  input: { name: string; mime: string; contentBase64: string },
+): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{
+    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+  }>(`/materials/${id}/content`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+  return data.materials;
+}
+
+export async function apiDeleteMaterial(
+  id: string,
+): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{
+    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+  }>(`/materials/${id}`, { method: 'DELETE' });
+  return data.materials;
+}
+
+export async function apiMaterialContent(id: string): Promise<{
+  name?: string;
+  mime?: string | null;
+  base64?: string;
+  stub?: string;
+}> {
+  return request(`/materials/${id}/content`);
 }
 
 export async function apiFlushObjectQueue(

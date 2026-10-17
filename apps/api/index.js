@@ -4,7 +4,12 @@
  */
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
+import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
+import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
+import { handleMaterials } from './materialsRoutes.js';
+
+ensureIndexFromTsv(ruCitiesTsv);
 
 const JWT_SECRET = () => new TextEncoder().encode(process.env.JWT_SECRET || 'dev-secret-change-me');
 const ANALYTICS_ADMIN_KEY = () => process.env.ANALYTICS_ADMIN_KEY || 'admin1234';
@@ -34,6 +39,14 @@ let memoryEvents = null;
 
 function uid(prefix) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
+}
+
+function cityOrThrow(raw, previous) {
+  const resolved = resolveCity(raw, previous);
+  if (!resolved.ok) {
+    throw Object.assign(new Error(resolved.message), { status: 400 });
+  }
+  return resolved.city;
 }
 
 function normalizeRole(role) {
@@ -198,6 +211,58 @@ async function s3Put(key, body) {
   );
 }
 
+/** PDF и файлы материалов. Без бакета байты остаются в памяти процесса (демо API). */
+const memoryDocs = new Map();
+
+function hasBucket() {
+  return Boolean(process.env.PARTNERS_BUCKET);
+}
+
+async function s3GetBuffer(key) {
+  if (memoryDocs.has(key)) return memoryDocs.get(key);
+  const bucket = process.env.PARTNERS_BUCKET;
+  if (!bucket) return null;
+  const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
+  const client = new S3Client(s3ClientConfig());
+  const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  return Buffer.from(await out.Body.transformToByteArray());
+}
+
+async function s3GetBytes(key) {
+  return s3GetBuffer(key);
+}
+
+async function s3PutBytes(key, body, contentType) {
+  const bucket = process.env.PARTNERS_BUCKET;
+  if (!bucket) {
+    memoryDocs.set(key, Buffer.from(body));
+    return;
+  }
+  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+  const client = new S3Client(s3ClientConfig());
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType || 'application/octet-stream',
+    }),
+  );
+}
+
+async function s3Delete(key) {
+  memoryDocs.delete(key);
+  const bucket = process.env.PARTNERS_BUCKET;
+  if (!bucket || !key) return;
+  try {
+    const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    const client = new S3Client(s3ClientConfig());
+    await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  } catch (e) {
+    console.warn('s3 delete failed', key, e?.message || e);
+  }
+}
+
 async function loadPlatform() {
   if (memoryPlatform) return memoryPlatform;
   const bucket = process.env.PARTNERS_BUCKET;
@@ -322,13 +387,38 @@ function objectVisibleTo(user, obj) {
     return obj.createdBy === user.id || obj.assignedTo === user.id;
   }
   if (user.role === 'crew') {
-    return obj.assignedTo === user.id || obj.status === 'install';
+    // Задание видно только тому монтажнику, на кого его назначили.
+    return obj.assignedTo === user.id;
   }
   return false;
 }
 
+function publicDocument(doc) {
+  if (!doc) return null;
+  return {
+    id: doc.id,
+    versionId: doc.versionId || doc.id,
+    createdAt: doc.createdAt,
+    createdBy: doc.createdBy || null,
+    kind: doc.kind === 'spec' ? 'spec' : 'estimate',
+    filename: doc.filename || 'MultiFrame.pdf',
+    hasScheme: Boolean(doc.hasScheme),
+    panels: doc.panels ?? null,
+    areaM2: doc.areaM2 ?? null,
+  };
+}
+
+/** Монтажник получает спецификацию без цен. Если её нет — ту же смету, чтобы файл не пропал. */
+function documentsForRole(docs, role) {
+  const list = [...(docs || [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const estimates = list.filter((d) => d.kind === 'estimate');
+  const specs = list.filter((d) => d.kind === 'spec');
+  const picked = canSeePrices(role) ? (estimates.length ? estimates : specs) : specs.length ? specs : estimates;
+  return picked.map(publicDocument);
+}
+
 function publicObject(obj, role) {
-  const copy = { ...obj, history: obj.history || [] };
+  const copy = { ...obj, history: obj.history || [], documents: documentsForRole(obj.documents, role) };
   if (!canSeePrices(role)) {
     copy.estimate = redactEstimate(obj.estimate);
   }
@@ -392,6 +482,8 @@ function normalizeObjectInput(body, existing, actor, org) {
     estimate: body.estimate !== undefined ? body.estimate : existing?.estimate ?? null,
     clientSummary: String(body.clientSummary ?? existing?.clientSummary ?? ''),
     history: existing?.history || [],
+    // PDF только через POST /objects/:id/documents — обычный PATCH их не затирает.
+    documents: Array.isArray(existing?.documents) ? existing.documents : [],
   };
 }
 
@@ -763,6 +855,22 @@ export async function handler(event = {}) {
   const method = getMethod(event);
 
   try {
+    const materialsResponse = await handleMaterials({
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      assertRole,
+      json,
+      getBody: () => getBody(event),
+      savePlatform,
+      uid,
+      hasBucket,
+      s3PutBytes,
+      s3GetBuffer,
+      s3Delete,
+    });
+    if (materialsResponse) return materialsResponse;
+
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
       const { login, password } = getBody(event);
@@ -806,6 +914,9 @@ export async function handler(event = {}) {
       }
       const idx = platform.orgs.findIndex((o) => o.id === orgId);
       if (idx < 0) return json(404, { message: 'Организация не найдена' });
+      if (Object.prototype.hasOwnProperty.call(patch, 'city')) {
+        patch.city = cityOrThrow(patch.city, platform.orgs[idx].settings?.city ?? '');
+      }
       const settings = normalizeOrgSettings({ ...platform.orgs[idx].settings, ...patch });
       platform.orgs[idx] = { ...platform.orgs[idx], settings };
       pushActivity(platform, {
@@ -827,6 +938,9 @@ export async function handler(event = {}) {
       const patch = getBody(event);
       const idx = platform.orgs.findIndex((o) => o.id === user.orgId);
       if (idx < 0) return json(404, { message: 'Not found' });
+      if (Object.prototype.hasOwnProperty.call(patch, 'city')) {
+        patch.city = cityOrThrow(patch.city, platform.orgs[idx].settings?.city ?? '');
+      }
       const settings = normalizeOrgSettings({ ...platform.orgs[idx].settings, ...patch });
       platform.orgs[idx] = { ...platform.orgs[idx], settings };
       await savePlatform(platform);
@@ -871,7 +985,7 @@ export async function handler(event = {}) {
       const login = String(body.login || '').trim();
       const password = String(body.password || '').trim();
       const companyName = String(body.companyName || '').trim() || login;
-      const city = String(body.city || '').trim();
+      const city = cityOrThrow(body.city ?? '', null);
       if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
       if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
       const now = new Date().toISOString();
@@ -952,6 +1066,36 @@ export async function handler(event = {}) {
       });
       await savePlatform(platform);
       return json(200, { password: pw });
+    }
+
+    if (method === 'PATCH' && /\/admin\/partners\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const partnerUserId = path.split('/').pop();
+      const partner = platform.users.find(
+        (u) => u.id === partnerUserId && normalizeRole(u.role) === 'owner',
+      );
+      if (!partner?.orgId) return json(404, { message: 'Партнёр не найден' });
+      const idx = platform.orgs.findIndex((o) => o.id === partner.orgId);
+      if (idx < 0) return json(404, { message: 'Организация не найдена' });
+      const body = getBody(event);
+      if (!Object.prototype.hasOwnProperty.call(body, 'city')) {
+        return json(400, { message: 'Укажите город' });
+      }
+      // Правка города не оставляет произвольный текст. Старое невалидное значение
+      // само не подменяется, пока админ не выберет город из справочника.
+      const city = cityOrThrow(body.city, null);
+      const settings = normalizeOrgSettings({ ...platform.orgs[idx].settings, city });
+      platform.orgs[idx] = { ...platform.orgs[idx], settings };
+      pushActivity(platform, {
+        orgId: partner.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'update_partner_city',
+        detail: `${partner.login} · ${city || '—'}`,
+      });
+      await savePlatform(platform);
+      return json(200, { city: settings.city });
     }
 
     if (method === 'DELETE' && /\/admin\/partners\/[^/]+$/.test(path)) {
@@ -1091,6 +1235,107 @@ export async function handler(event = {}) {
     }
 
     /* —— Job objects —— */
+    const docFileMatch = path.match(/\/objects\/([^/]+)\/documents\/([^/]+)$/);
+    if (docFileMatch && method === 'GET') {
+      const { platform, user } = await requireAuth(event);
+      const objectId = decodeURIComponent(docFileMatch[1]);
+      const docId = decodeURIComponent(docFileMatch[2]);
+      const obj = (platform.objects || []).find((o) => o.id === objectId);
+      if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Объект не найден' });
+      const visible = documentsForRole(obj.documents, user.role);
+      const meta = visible.find((d) => d.id === docId);
+      if (!meta) return json(404, { message: 'Документ не найден' });
+      const stored = (obj.documents || []).find((d) => d.id === meta.id);
+      const key = stored?.storageKey;
+      if (!key) return json(404, { message: 'Файл не найден' });
+      const bytes = await s3GetBytes(key);
+      if (!bytes?.length) return json(404, { message: 'Файл не найден' });
+      return json(200, {
+        id: meta.id,
+        filename: meta.filename,
+        kind: meta.kind,
+        hasScheme: meta.hasScheme,
+        pdfBase64: Buffer.from(bytes).toString('base64'),
+      });
+    }
+
+    const docPostMatch = path.match(/\/objects\/([^/]+)\/documents$/);
+    if (docPostMatch && method === 'POST') {
+      const { platform, user } = await requireAuth(event);
+      if (!['admin', 'owner', 'sales', 'measurer'].includes(user.role)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      const objectId = decodeURIComponent(docPostMatch[1]);
+      const idx = (platform.objects || []).findIndex((o) => o.id === objectId);
+      if (idx < 0) return json(404, { message: 'Объект не найден' });
+      const existing = platform.objects[idx];
+      if (user.role !== 'admin' && existing.orgId !== user.orgId) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      if (!objectVisibleTo(user, existing)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      const body = getBody(event);
+      const incoming = Array.isArray(body.documents) ? body.documents : [];
+      if (!incoming.length) return json(400, { message: 'Нет файлов' });
+      if (incoming.length > 4) return json(400, { message: 'Слишком много файлов за раз' });
+      const now = new Date().toISOString();
+      const versionId = String(body.versionId || uid('ver'));
+      const added = [];
+      for (const raw of incoming) {
+        const kind = raw.kind === 'spec' ? 'spec' : 'estimate';
+        const clean = String(raw.pdfBase64 || '').replace(/^data:application\/pdf;base64,/, '');
+        let bytes;
+        try {
+          bytes = Buffer.from(clean, 'base64');
+        } catch {
+          return json(400, { message: 'Не удалось прочитать PDF' });
+        }
+        if (bytes.length < 5 || bytes.subarray(0, 4).toString() !== '%PDF') {
+          return json(400, { message: 'Файл не похож на PDF' });
+        }
+        if (bytes.length > 8 * 1024 * 1024) {
+          return json(413, { message: 'PDF больше 8 МБ' });
+        }
+        const docId = uid('doc');
+        const storageKey = `docs/${existing.orgId}/${existing.id}/${docId}.pdf`;
+        await s3PutBytes(storageKey, bytes, 'application/pdf');
+        const filename =
+          String(raw.filename || '').replace(/[^\w.\-а-яА-ЯёЁ ]+/g, '').trim() ||
+          (kind === 'spec' ? 'MultiFrame_spec.pdf' : 'MultiFrame.pdf');
+        added.push({
+          id: docId,
+          versionId,
+          createdAt: now,
+          createdBy: user.id,
+          kind,
+          filename: filename.endsWith('.pdf') ? filename : `${filename}.pdf`,
+          storageKey,
+          hasScheme: Boolean(raw.hasScheme),
+          panels: Number.isFinite(Number(raw.panels)) ? Number(raw.panels) : null,
+          areaM2: Number.isFinite(Number(raw.areaM2)) ? Number(raw.areaM2) : null,
+        });
+      }
+      const next = {
+        ...existing,
+        documents: [...added, ...(existing.documents || [])].slice(0, 40),
+        updatedAt: now,
+        history: [
+          {
+            at: now,
+            userId: user.id,
+            login: user.login,
+            action: 'calc_pdf',
+            detail: added.map((d) => d.kind).join('+'),
+          },
+          ...(existing.history || []),
+        ].slice(0, 50),
+      };
+      platform.objects[idx] = next;
+      await savePlatform(platform);
+      return json(200, { object: publicObject(next, user.role) });
+    }
+
     if (method === 'GET' && path.endsWith('/objects')) {
       const { platform, user } = await requireAuth(event);
       if (user.role === 'admin') {
@@ -1194,7 +1439,7 @@ export async function handler(event = {}) {
         }
         const nextStatus = body.status;
         if (nextStatus && !['install', 'closed'].includes(nextStatus)) {
-          return json(403, { message: 'Бригада меняет только статус монтажа' });
+          return json(403, { message: 'Монтажник меняет только статус монтажа' });
         }
         const next = {
           ...existing,
@@ -1294,6 +1539,7 @@ export async function handler(event = {}) {
         await savePlatform(platform);
         return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
       }
+      const doomed = existing.documents || [];
       platform.objects = platform.objects.filter((o) => o.id !== objectId);
       pushActivity(platform, {
         orgId: user.orgId,
@@ -1303,6 +1549,9 @@ export async function handler(event = {}) {
         detail: existing.address || existing.clientName || existing.id,
       });
       await savePlatform(platform);
+      for (const doc of doomed) {
+        if (doc.storageKey) await s3Delete(doc.storageKey);
+      }
       return json(200, { ok: true });
     }
 

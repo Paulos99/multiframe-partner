@@ -15,19 +15,23 @@ import type {
   SessionUser,
   UserRole,
 } from '../../../../packages/shared/partner';
+import { loadCities, resolveCity } from './cityCatalog';
 import {
+  canCreateObjects,
   canSeePrices,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
   toPartnerProfile,
+  type JobObjectDocument,
 } from '../../../../packages/shared/partner';
 import {
   apiAdminCreatePartner,
   apiAdminDeletePartner,
   apiAdminListPartners,
   apiAdminResetPassword,
+  apiAdminUpdatePartnerCity,
   apiBase,
   apiCreateStaff,
   apiDeleteStaff,
@@ -37,9 +41,13 @@ import {
   apiMe,
   apiResetStaffPassword,
   apiSaveOrg,
+  apiUploadObjectDocuments,
   hasRemoteApi,
   isApiError,
+  stripObjectDocuments,
 } from './apiClient';
+import { objectPatchFromCalc, type CabinetCalcMessage } from './cabinetCalc';
+import { withDemoDocuments } from './demoDocuments';
 import {
   bootstrapHistoryReset,
   flushAnalyticsQueue,
@@ -53,6 +61,7 @@ import {
   createStaffAccount,
   deletePartnerAccount,
   deleteStaffAccount,
+  enqueueObjectDocuments,
   generatePassword,
   listActivity,
   listPartners,
@@ -62,9 +71,11 @@ import {
   loadToken,
   localLogin,
   localLogout,
+  peekObjectDocumentQueue,
   peekObjectQueue,
   resetPartnerPassword,
   resetStaffPassword,
+  updatePartnerCity,
   saveSession,
   saveToken,
   trackToolOpen,
@@ -73,7 +84,15 @@ import {
   type StoredUser,
 } from './localStore';
 import { enqueueOutbox, loadCalculationsFor, putObject, rememberSession, type CachedCalculation } from './offlineDb';
-import { countMyOutbox, deleteObjectSynced, flushOutbox, loadVisibleObjects, saveObjectSynced } from './syncEngine';
+import {
+  countMyOutbox,
+  deleteObjectSynced,
+  flushDocumentQueue,
+  flushOutbox,
+  loadVisibleObjects,
+  rememberObjectDocuments,
+  saveObjectSynced,
+} from './syncEngine';
 
 export type StaffMember = {
   id: string;
@@ -122,6 +141,7 @@ type PartnerApi = {
   }) => Promise<{ login: string; password: string }>;
   adminResetPassword: (partnerUserId: string, password: string) => Promise<string>;
   adminDeletePartner: (partnerUserId: string) => Promise<void>;
+  adminUpdatePartnerCity: (partnerUserId: string, city: string) => Promise<string>;
   adminListPartners: () => Array<{
     user: StoredUser | StaffMember;
     org: StoredOrg | { id: string; settings: OrgSettings } | undefined;
@@ -154,6 +174,10 @@ type PartnerApi = {
   saveObject: (input: Partial<JobObject> & { id?: string }) => Promise<JobObject>;
   deleteObject: (id: string) => Promise<void>;
   flushObjectQueue: () => Promise<void>;
+  /** Открыть калькулятор. objectId — обновить эту карточку, null — новый объект на первом расчёте. */
+  requestCalculator: (objectId: string | null) => void;
+  calcRequest: { objectId: string | null; nonce: number } | null;
+  attachCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
   refresh: () => void;
   apiBase: string;
@@ -173,6 +197,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [calculations, setCalculations] = useState<CachedCalculation[]>([]);
   const [authHold, setAuthHold] = useState(false);
   const [staffCache, setStaffCache] = useState<StaffMember[]>([]);
+  const [calcRequest, setCalcRequest] = useState<{ objectId: string | null; nonce: number } | null>(
+    null,
+  );
   const [partnersCache, setPartnersCache] = useState<
     Array<{
       user: StoredUser | StaffMember;
@@ -192,14 +219,17 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     }
     setObjectsLoading(true);
     try {
-      const list = await loadVisibleObjects(session, remote);
+      const list = withDemoDocuments(await loadVisibleObjects(session, remote), session.role);
       setObjects(list);
       cacheObjects(list);
     } catch {
       setObjects(loadCachedObjects());
     } finally {
       setObjectsLoading(false);
-      setPendingSyncCount(await countMyOutbox(session.id).catch(() => peekObjectQueue().length));
+      const queuedDocs = peekObjectDocumentQueue().length;
+      setPendingSyncCount(
+        (await countMyOutbox(session.id).catch(() => peekObjectQueue().length)) + queuedDocs,
+      );
     }
   }, [remote]);
 
@@ -208,7 +238,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     if (!session) return;
     const result = await flushOutbox(session, remote);
     if (result === 'auth') setAuthHold(true);
-    if (result === 'ok') setAuthHold(false);
+    if (result === 'ok' || result === 'idle') {
+      setAuthHold(false);
+      await flushDocumentQueue();
+    }
     await refreshObjects();
   }, [remote, refreshObjects]);
 
@@ -391,11 +424,18 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const saveOrg = useCallback(
     async (patch: Partial<OrgSettings>) => {
       if (!user?.orgId) throw new Error('Нет организации');
+      let nextPatch = patch;
+      if (patch.city !== undefined) {
+        await loadCities();
+        const resolved = resolveCity(patch.city, user.org?.city ?? '');
+        if (!resolved.ok) throw new Error(resolved.message);
+        nextPatch = { ...patch, city: resolved.city };
+      }
       let settings: OrgSettings;
       if (remote && loadToken()) {
-        settings = await apiSaveOrg(patch);
+        settings = await apiSaveOrg(nextPatch);
       } else {
-        settings = updateOrgSettings(user.orgId, patch, user);
+        settings = updateOrgSettings(user.orgId, nextPatch, user);
       }
       const next = { ...user, org: settings, displayName: settings.companyName || user.displayName };
       persistPartnerCalcParams(partnerCalcParamsFromOrg(settings));
@@ -408,14 +448,36 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const adminCreatePartner = useCallback(
     async (input: { login: string; password: string; companyName: string; city?: string }) => {
       if (!user) throw new Error('Нет сессии');
+      await loadCities();
+      const resolved = resolveCity(input.city ?? '', null);
+      if (!resolved.ok) throw new Error(resolved.message);
+      const payload = { ...input, city: resolved.city };
       if (remote && loadToken()) {
-        const res = await apiAdminCreatePartner(input);
+        const res = await apiAdminCreatePartner(payload);
         setTick((n) => n + 1);
         return { login: res.login, password: res.password };
       }
-      const res = createPartnerAccount({ ...input, admin: user });
+      const res = createPartnerAccount({ ...payload, admin: user });
       setTick((n) => n + 1);
       return { login: res.user.login, password: res.password };
+    },
+    [user, remote],
+  );
+
+  const adminUpdatePartnerCity = useCallback(
+    async (partnerUserId: string, city: string) => {
+      if (!user) throw new Error('Нет сессии');
+      await loadCities();
+      const resolved = resolveCity(city, null);
+      if (!resolved.ok) throw new Error(resolved.message);
+      if (remote && loadToken()) {
+        const saved = await apiAdminUpdatePartnerCity(partnerUserId, resolved.city);
+        setTick((n) => n + 1);
+        return saved;
+      }
+      const saved = updatePartnerCity(partnerUserId, resolved.city, user);
+      setTick((n) => n + 1);
+      return saved;
     },
     [user, remote],
   );
@@ -538,7 +600,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const saveObject = useCallback(
     async (input: Partial<JobObject> & { id?: string }) => {
       if (!user) throw new Error('Нет сессии');
-      const obj = await saveObjectSynced(user, remote, input);
+      const obj = await saveObjectSynced(user, remote, stripObjectDocuments(input));
       await refreshObjects();
       return obj;
     },
@@ -552,6 +614,78 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       await refreshObjects();
     },
     [user, remote, refreshObjects],
+  );
+
+  const requestCalculator = useCallback((objectId: string | null) => {
+    setCalcRequest({ objectId, nonce: Date.now() });
+  }, []);
+
+  const attachCalculation = useCallback(
+    async (message: CabinetCalcMessage, objectId: string | null) => {
+      if (!user || !canCreateObjects(user.role)) return null;
+      const existing = objectId ? objects.find((o) => o.id === objectId) : undefined;
+      const patch = objectPatchFromCalc(message, existing, user.org, objectId);
+      const saved = await saveObject(patch);
+      const versionId = `ver_${Date.now().toString(36)}`;
+      const files = [
+        {
+          kind: 'estimate' as const,
+          filename: message.filename || 'MultiFrame.pdf',
+          pdfBase64: message.pdfBase64 || '',
+          hasScheme: Boolean(message.hasScheme),
+          panels: saved.estimate?.panels ?? null,
+          areaM2: saved.room?.areaM2 ?? null,
+        },
+        {
+          kind: 'spec' as const,
+          filename: message.specFilename || 'MultiFrame_spec.pdf',
+          pdfBase64: message.specPdfBase64 || '',
+          hasScheme: Boolean(message.hasScheme),
+          panels: saved.estimate?.panels ?? null,
+          areaM2: saved.room?.areaM2 ?? null,
+        },
+      ].filter((d) => d.pdfBase64.length > 32);
+      if (!files.length) return saved;
+      if (remote && loadToken() && navigator.onLine) {
+        try {
+          const updated = await apiUploadObjectDocuments(saved.id, files, versionId);
+          await refreshObjects();
+          return updated;
+        } catch {
+          /* очередь, если облако не приняло файл */
+        }
+      }
+      const now = new Date().toISOString();
+      const localDocs: JobObjectDocument[] = files.map((d) => ({
+        id: `doc_${Math.random().toString(36).slice(2, 10)}`,
+        versionId,
+        createdAt: now,
+        createdBy: user.id,
+        kind: d.kind,
+        filename: d.filename,
+        hasScheme: d.hasScheme,
+        panels: d.panels,
+        areaM2: d.areaM2,
+        dataBase64: d.pdfBase64,
+      }));
+      enqueueObjectDocuments(
+        saved.id,
+        files.map((d) => ({
+          objectId: saved.id,
+          versionId,
+          kind: d.kind,
+          filename: d.filename,
+          pdfBase64: d.pdfBase64,
+          hasScheme: d.hasScheme,
+          panels: d.panels,
+          areaM2: d.areaM2,
+        })),
+      );
+      const withDocs = await rememberObjectDocuments(saved, localDocs, user);
+      await refreshObjects();
+      return withDocs;
+    },
+    [user, objects, remote, saveObject, refreshObjects],
   );
 
   const noteTool = useCallback(
@@ -587,6 +721,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminCreatePartner,
       adminResetPassword,
       adminDeletePartner,
+      adminUpdatePartnerCity,
       adminListPartners: () => (remote && partnersCache.length ? partnersCache : listPartners()),
       adminActivity: () => listActivity(),
       partnerCreateStaff,
@@ -616,6 +751,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       saveObject,
       deleteObject,
       flushObjectQueue,
+      requestCalculator,
+      calcRequest,
+      attachCalculation,
       noteTool,
       refresh,
       apiBase: remote ? (import.meta.env.VITE_API_URL as string) || '' : '',
@@ -639,6 +777,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminCreatePartner,
       adminResetPassword,
       adminDeletePartner,
+      adminUpdatePartnerCity,
       partnerCreateStaff,
       partnerResetStaffPassword,
       partnerDeleteStaff,
@@ -646,6 +785,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       saveObject,
       deleteObject,
       flushObjectQueue,
+      requestCalculator,
+      calcRequest,
+      attachCalculation,
       noteTool,
       refresh,
       tick,
@@ -711,7 +853,7 @@ export function persistPartnerCalcParams(params: PartnerCalcParams): void {
 export function calcUrlFromOrg(
   org: OrgSettings | null | undefined,
   companyName?: string,
-  opts?: { hidePrices?: boolean },
+  opts?: { hidePrices?: boolean; objectId?: string | null },
 ): string {
   const params = partnerCalcParamsFromOrg(org, companyName);
   if (opts?.hidePrices) {
@@ -734,6 +876,7 @@ export function calcUrlFromOrg(
   }
   q.set('dowelsPerPanel', String(params.dowelsPerPanel));
   if (params.company) q.set('company', params.company);
+  if (opts?.objectId) q.set('objectId', opts.objectId);
   q.set('partner', '1');
   const path = `${import.meta.env.BASE_URL || '/'}calculator/index.html`.replace(/\/{2,}/g, '/');
   const origin = typeof window !== 'undefined' ? window.location.origin : '';

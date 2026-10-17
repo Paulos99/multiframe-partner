@@ -3,7 +3,7 @@
  * Client ids are stable. A newer updatedAt wins; an older offline write is kept
  * in server history and does not erase the fresher record. A 401 leaves the outbox.
  */
-import type { JobObject, SessionUser } from '../../../../packages/shared/partner';
+import type { JobObject, JobObjectDocument, SessionUser } from '../../../../packages/shared/partner';
 import {
   ApiError,
   apiBase,
@@ -11,16 +11,22 @@ import {
   apiDeleteObject,
   apiListObjects,
   apiPatchObject,
+  apiUploadObjectDocuments,
   isApiError,
+  stripObjectDocuments,
 } from './apiClient';
 import {
+  appendLocalObjectDocuments,
   cacheObjects,
   deleteLocalObject,
   loadCachedObjects,
   listLocalObjects,
   loadToken,
+  peekObjectDocumentQueue,
   presentCachedObject,
   removeFromObjectQueue,
+  removeQueuedObjectDocuments,
+  saveLocalDocBytes,
   saveToken,
   upsertLocalObject,
 } from './localStore';
@@ -66,15 +72,53 @@ export async function loadVisibleObjects(user: SessionUser, remote: boolean): Pr
     base = await loadAllObjects();
     if (!base.length) base = loadCachedObjects();
   }
-  const merged = mergeObjects(base, outbox);
+  const merged = withQueuedDocuments(mergeObjects(base, outbox));
   return merged
     .map((obj) => presentCachedObject(user, obj))
     .filter((obj): obj is JobObject => obj != null);
 }
 
+function withoutDocBytes(obj: JobObject): JobObject {
+  if (!obj.documents?.length) return obj;
+  return {
+    ...obj,
+    documents: obj.documents.map((doc) => {
+      const copy = { ...doc };
+      delete copy.dataBase64;
+      return copy;
+    }),
+  };
+}
+
+/** PDF bytes stay in the document queue. The object outbox keeps only file names. */
+function withQueuedDocuments(objects: JobObject[]): JobObject[] {
+  const queued = peekObjectDocumentQueue();
+  if (!queued.length) return objects;
+  return objects.map((obj) => {
+    const extra = queued.filter((doc) => doc.objectId === obj.id);
+    if (!extra.length) return obj;
+    const have = new Set((obj.documents || []).map((doc) => `${doc.versionId}:${doc.kind}`));
+    const add: JobObjectDocument[] = extra
+      .filter((doc) => !have.has(`${doc.versionId}:${doc.kind}`))
+      .map((doc) => ({
+        id: `q_${obj.id}_${doc.versionId}_${doc.kind}`,
+        versionId: doc.versionId,
+        createdAt: obj.updatedAt,
+        createdBy: obj.createdBy,
+        kind: doc.kind,
+        filename: doc.filename,
+        hasScheme: doc.hasScheme,
+        panels: doc.panels ?? null,
+        areaM2: doc.areaM2 ?? null,
+      }));
+    if (!add.length) return obj;
+    return { ...obj, documents: [...add, ...(obj.documents || [])].slice(0, 40) };
+  });
+}
+
 async function queueUpsert(user: SessionUser, draft: Partial<JobObject> & { id: string; updatedAt: string }) {
-  const obj = upsertLocalObject(draft, user);
-  const payload: JobObject = { ...obj, pendingSync: true };
+  const obj = upsertLocalObject(withoutDocBytes(draft as JobObject), user);
+  const payload: JobObject = withoutDocBytes({ ...obj, pendingSync: true });
   const op: OutboxOp = {
     id: obj.id,
     op: 'upsert',
@@ -97,7 +141,7 @@ export async function saveObjectSynced(
 ): Promise<JobObject> {
   const id = input.id || newObjectId();
   const updatedAt = new Date().toISOString();
-  const draft = { ...input, id, updatedAt };
+  const draft = stripObjectDocuments({ ...input, id, updatedAt });
   if (!remote) return upsertLocalObject(draft, user);
 
   if (loadToken() && navigator.onLine) {
@@ -209,11 +253,12 @@ export async function flushOutbox(user: SessionUser, remote: boolean): Promise<'
         await removeOutbox(item.id);
         continue;
       }
+      const wire = stripObjectDocuments(item.payload);
       let obj: JobObject;
       try {
-        obj = await apiPatchObject(item.id, item.payload);
+        obj = await apiPatchObject(item.id, wire);
       } catch (err) {
-        if (isApiError(err) && err.status === 404) obj = await apiCreateObject(item.payload);
+        if (isApiError(err) && err.status === 404) obj = await apiCreateObject(wire);
         else throw err;
       }
       await putObject({ ...obj, pendingSync: false });
@@ -229,4 +274,82 @@ export async function flushOutbox(user: SessionUser, remote: boolean): Promise<'
     }
   }
   return 'ok';
+}
+
+/** Upload calculator PDFs after the object itself is on the server. */
+export async function flushDocumentQueue(): Promise<void> {
+  if (!navigator.onLine || !loadToken()) return;
+  const waiting = new Set(
+    (await listOutbox()).filter((op) => op.op !== 'delete').map((op) => op.id),
+  );
+  const docs = peekObjectDocumentQueue().filter((doc) => !waiting.has(doc.objectId));
+  const groups = new Map<string, typeof docs>();
+  for (const doc of docs) {
+    const key = `${doc.objectId}::${doc.versionId}`;
+    const list = groups.get(key) || [];
+    list.push(doc);
+    groups.set(key, list);
+  }
+  for (const [key, list] of groups) {
+    const splitAt = key.indexOf('::');
+    const objectId = key.slice(0, splitAt);
+    const versionId = key.slice(splitAt + 2);
+    try {
+      const updated = await apiUploadObjectDocuments(
+        objectId,
+        list.map((doc) => ({
+          kind: doc.kind,
+          filename: doc.filename,
+          pdfBase64: doc.pdfBase64,
+          hasScheme: doc.hasScheme,
+          panels: doc.panels,
+          areaM2: doc.areaM2,
+        })),
+        versionId,
+      );
+      removeQueuedObjectDocuments(objectId, versionId);
+      await putObject(withoutDocBytes({ ...updated, pendingSync: false }));
+    } catch (err) {
+      if (isApiError(err) && err.status === 401) return;
+      break;
+    }
+  }
+}
+
+/** Keep PDF names on the offline object. Bytes stay in the document queue, not in the API body. */
+export async function rememberObjectDocuments(
+  object: JobObject,
+  docs: JobObjectDocument[],
+  user: SessionUser,
+): Promise<JobObject> {
+  const meta = docs.map((doc) => {
+    if (doc.dataBase64) {
+      try {
+        saveLocalDocBytes(doc.id, doc.dataBase64);
+      } catch {
+        /* the upload queue still holds the file */
+      }
+    }
+    const copy = { ...doc };
+    delete copy.dataBase64;
+    return copy;
+  });
+  const next = withoutDocBytes({
+    ...object,
+    documents: [...meta, ...(object.documents || [])].slice(0, 40),
+  });
+  await putObject(next);
+  const op = (await listOutbox()).find((row) => row.id === object.id && row.op === 'upsert');
+  if (op) {
+    await enqueueOutbox({
+      ...op,
+      payload: withoutDocBytes({ ...op.payload, documents: next.documents, pendingSync: true }),
+    });
+  }
+  try {
+    appendLocalObjectDocuments(object.id, docs, user);
+  } catch {
+    /* local mirror is optional when the card lives in IndexedDB */
+  }
+  return next;
 }

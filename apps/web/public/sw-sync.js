@@ -66,16 +66,18 @@ async function flushOutboxInSw() {
         body: JSON.stringify({ updatedAt: item.updatedAt }),
       });
     } else {
+      const payload = { ...(item.payload || {}) };
+      delete payload.documents;
       res = await fetch(`${base}/objects/${item.id}`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify(item.payload),
+        body: JSON.stringify(payload),
       });
       if (res.status === 404) {
         res = await fetch(`${base}/objects`, {
           method: 'POST',
           headers,
-          body: JSON.stringify(item.payload),
+          body: JSON.stringify(payload),
         });
       }
     }

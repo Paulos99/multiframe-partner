@@ -2,12 +2,15 @@
  * Local-first store for partner portal (offline / no API).
  * Survives reloads and works as PWA cache.
  */
+import type { MaterialNode } from '../../../api/materialsLib.js';
+import { resolveCity } from '../../../api/cityCatalog.js';
 import type {
   ActivityEvent,
   AnalyticsDashboard,
   AnalyticsEvent,
   ExecutorLink,
   JobObject,
+  JobObjectDocument,
   JobObjectStatus,
   OrgSettings,
   SessionUser,
@@ -17,6 +20,7 @@ import {
   aggregateAnalyticsDashboard,
   canEditOrg,
   canManageStaff,
+  documentsForRole,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
   isStaffRole,
@@ -71,6 +75,8 @@ export type PartnerDb = {
   links: ExecutorLink[];
   activity: ActivityEvent[];
   objects: JobObject[];
+  /** Методические материалы. Нет поля — показываем демо и не записываем его. */
+  materials?: MaterialNode[];
 };
 
 function uid(prefix: string): string {
@@ -116,12 +122,14 @@ function migrateDb(raw: PartnerDb): PartnerDb {
         o.settings?.dowelPriceRub != null ? o.settings.dowelPriceRub : DEFAULT_DOWEL_PRICE_RUB,
     }),
   }));
+  const materials = Array.isArray(raw.materials) ? raw.materials : undefined;
   return {
     users,
     orgs,
     links: raw.links || [],
     activity: raw.activity || [],
     objects: raw.objects || [],
+    ...(materials ? { materials } : {}),
   };
 }
 
@@ -326,6 +334,8 @@ export function createPartnerAccount(input: {
   const login = input.login.trim();
   if (!login || !input.password) throw new Error('Укажите логин и пароль');
   if (db.users.some((u) => u.login === login)) throw new Error('Такой логин уже есть');
+  const resolvedCity = resolveCity(input.city ?? '', null);
+  if (!resolvedCity.ok) throw new Error(resolvedCity.message);
   const now = new Date().toISOString();
   const orgId = uid('org');
   const userId = uid('u');
@@ -335,7 +345,7 @@ export function createPartnerAccount(input: {
     createdBy: input.admin.id,
     settings: normalizeOrgSettings({
       companyName: input.companyName.trim() || login,
-      city: input.city?.trim() || '',
+      city: resolvedCity.city,
       panelPriceRub: OFFICIAL_PANEL_PRICE_RUB,
       pricePerM2: OFFICIAL_PRICE_PER_M2,
       installPricePerM2: DEFAULT_INSTALL_PRICE_PER_M2,
@@ -366,6 +376,37 @@ export function createPartnerAccount(input: {
   });
   saveDb(next);
   return { user, org, password: input.password };
+}
+
+export function updatePartnerCity(
+  partnerUserId: string,
+  city: string,
+  admin: SessionUser,
+): string {
+  if (admin.role !== 'admin') throw new Error('Только администратор');
+  const db = loadDb();
+  const partner = db.users.find((u) => u.id === partnerUserId && u.role === 'owner');
+  if (!partner?.orgId) throw new Error('Партнёр не найден');
+  const idx = db.orgs.findIndex((o) => o.id === partner.orgId);
+  if (idx < 0) throw new Error('Организация не найдена');
+  const resolvedCity = resolveCity(city, null);
+  if (!resolvedCity.ok) throw new Error(resolvedCity.message);
+  const settings = normalizeOrgSettings({
+    ...db.orgs[idx]!.settings,
+    city: resolvedCity.city,
+  });
+  const orgs = [...db.orgs];
+  orgs[idx] = { ...orgs[idx]!, settings };
+  let next: PartnerDb = { ...db, orgs };
+  next = pushActivity(next, {
+    orgId: partner.orgId,
+    userId: admin.id,
+    login: admin.login,
+    action: 'update_partner_city',
+    detail: `${partner.login} · ${resolvedCity.city || '—'}`,
+  });
+  saveDb(next);
+  return resolvedCity.city;
 }
 
 export function resetPartnerPassword(
@@ -433,9 +474,15 @@ export function updateOrgSettings(
   const db = loadDb();
   const idx = db.orgs.findIndex((o) => o.id === orgId);
   if (idx < 0) throw new Error('Организация не найдена');
+  let nextPatch = patch;
+  if (patch.city !== undefined) {
+    const resolvedCity = resolveCity(patch.city, db.orgs[idx]!.settings.city);
+    if (!resolvedCity.ok) throw new Error(resolvedCity.message);
+    nextPatch = { ...patch, city: resolvedCity.city };
+  }
   const settings = normalizeOrgSettings({
     ...db.orgs[idx]!.settings,
-    ...patch,
+    ...nextPatch,
   });
   const orgs = [...db.orgs];
   orgs[idx] = { ...orgs[idx]!, settings };
@@ -469,7 +516,7 @@ export function createStaffAccount(input: {
   }
   const role = normalizeRole(input.role);
   if (!STAFF_ROLES.includes(role)) {
-    throw new Error('Роль: менеджер, замерщик или бригада');
+    throw new Error('Роль: менеджер, замерщик или монтажник');
   }
   const db = loadDb();
   const login = input.login.trim();
@@ -654,15 +701,17 @@ function objectVisible(user: SessionUser, obj: JobObject): boolean {
     return obj.createdBy === user.id || obj.assignedTo === user.id;
   }
   if (user.role === 'crew') {
-    return obj.assignedTo === user.id || obj.status === 'install';
+    return obj.assignedTo === user.id;
   }
   return false;
 }
 
 function redactObjectForRole(obj: JobObject, role: UserRole): JobObject {
-  if (role !== 'crew') return obj;
+  const documents = documentsForRole(obj.documents, role);
+  if (role !== 'crew') return { ...obj, documents };
   return {
     ...obj,
+    documents,
     estimate: obj.estimate
       ? {
           panels: obj.estimate.panels,
@@ -688,7 +737,7 @@ export function deleteLocalObject(id: string, actor: SessionUser): void {
   const existing = db.objects.find((o) => o.id === id);
   if (!existing) return;
   if (!objectVisible(actor, existing)) throw new Error('Недостаточно прав');
-  if (actor.role === 'crew') throw new Error('Бригада не удаляет объекты');
+  if (actor.role === 'crew') throw new Error('Монтажник не удаляет объекты');
   saveDb({ ...db, objects: db.objects.filter((o) => o.id !== id) });
   removeFromObjectQueue(id);
   cacheObjects(listLocalObjects(actor));
@@ -699,7 +748,7 @@ export function upsertLocalObject(
   actor: SessionUser,
 ): JobObject {
   if (!actor.orgId) throw new Error('Нет организации');
-  if (actor.role === 'crew' && !input.id) throw new Error('Бригада не создаёт объекты');
+  if (actor.role === 'crew' && !input.id) throw new Error('Монтажник не создаёт объекты');
   const db = loadDb();
   const now = new Date().toISOString();
   const org = db.orgs.find((o) => o.id === actor.orgId);
@@ -724,6 +773,7 @@ export function upsertLocalObject(
     estimate: input.estimate !== undefined ? input.estimate : existing?.estimate ?? null,
     clientSummary: input.clientSummary ?? existing?.clientSummary ?? '',
     history: existing?.history || [],
+    documents: existing?.documents,
     pendingSync: true,
   };
 
@@ -893,4 +943,107 @@ export function buildLocalDashboard(
     executorDirectory,
     journalAll: opts.journalAll,
   });
+}
+
+const DOC_BYTES_KEY = 'mf_partner_doc_bytes_v1';
+const DOC_QUEUE_KEY = 'mf_partner_doc_queue_v1';
+
+export type QueuedObjectDocument = {
+  objectId: string;
+  versionId: string;
+  kind: 'estimate' | 'spec';
+  filename: string;
+  pdfBase64: string;
+  hasScheme: boolean;
+  panels?: number | null;
+  areaM2?: number | null;
+};
+
+function readDocBytes(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(DOC_BYTES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveLocalDocBytes(id: string, base64: string): void {
+  const map = readDocBytes();
+  map[id] = base64;
+  const ids = Object.keys(map);
+  while (ids.length > 24) {
+    delete map[ids.shift()!];
+  }
+  localStorage.setItem(DOC_BYTES_KEY, JSON.stringify(map));
+}
+
+export function loadLocalDocBytes(id: string): string | null {
+  return readDocBytes()[id] || null;
+}
+
+export function enqueueObjectDocuments(objectId: string, docs: QueuedObjectDocument[]): void {
+  try {
+    const prev = readJsonArray<QueuedObjectDocument>(DOC_QUEUE_KEY).filter((d) => d.objectId !== objectId || !docs.some((n) => n.versionId === d.versionId && n.kind === d.kind));
+    localStorage.setItem(DOC_QUEUE_KEY, JSON.stringify([...docs, ...prev].slice(0, 20)));
+  } catch {
+    /* quota — bytes stay in DOC_BYTES_KEY when they fit */
+  }
+}
+
+export function peekObjectDocumentQueue(): QueuedObjectDocument[] {
+  return readJsonArray<QueuedObjectDocument>(DOC_QUEUE_KEY);
+}
+
+export function removeQueuedObjectDocuments(objectId: string, versionId: string): void {
+  const next = peekObjectDocumentQueue().filter(
+    (d) => !(d.objectId === objectId && d.versionId === versionId),
+  );
+  localStorage.setItem(DOC_QUEUE_KEY, JSON.stringify(next));
+}
+
+export function appendLocalObjectDocuments(
+  objectId: string,
+  docs: JobObjectDocument[],
+  actor: SessionUser,
+): JobObject {
+  if (!actor.orgId) throw new Error('Нет организации');
+  if (actor.role === 'crew') throw new Error('Монтажник не прикладывает смету');
+  const db = loadDb();
+  const existing = db.objects.find((o) => o.id === objectId);
+  if (!existing || !objectVisible(actor, existing)) throw new Error('Объект не найден');
+  const now = new Date().toISOString();
+  const meta = docs.map((d) => {
+    if (d.dataBase64) {
+      try {
+        saveLocalDocBytes(d.id, d.dataBase64);
+      } catch {
+        /* keep going; open may fail until the file is uploaded */
+      }
+    }
+    const copy = { ...d };
+    delete copy.dataBase64;
+    return copy;
+  });
+  const next: JobObject = {
+    ...existing,
+    documents: [...meta, ...(existing.documents || [])].slice(0, 40),
+    updatedAt: now,
+    pendingSync: existing.pendingSync,
+    history: [
+      {
+        at: now,
+        userId: actor.id,
+        login: actor.login,
+        action: 'calc_pdf',
+        detail: meta.map((d) => d.filename).join(', '),
+      },
+      ...(existing.history || []),
+    ].slice(0, 50),
+  };
+  saveDb({ ...db, objects: db.objects.map((o) => (o.id === next.id ? next : o)) });
+  cacheObjects(listLocalObjects(actor));
+  return redactObjectForRole(next, actor.role);
 }

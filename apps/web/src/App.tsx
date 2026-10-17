@@ -4,7 +4,8 @@ import { AppShell } from './app-shell/AppShell';
 import { InstallAppButton } from './app-shell/InstallAppButton';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
-import { canSeePrices } from '../../../packages/shared/partner';
+import { canCreateObjects, canSeePrices } from '../../../packages/shared/partner';
+import { isCabinetCalcMessage } from './partner/cabinetCalc';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
@@ -45,9 +46,39 @@ function ShellFrame({ children }: { children: ReactNode }) {
 }
 
 function PartnerShell() {
-  const { user, loading, noteTool, logout } = usePartner();
+  const { user, loading, noteTool, logout, calcRequest, attachCalculation } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
+  const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
+  const [calcNotice, setCalcNotice] = useState<string | null>(null);
+  const linkedObjectId = useRef<string | null>(null);
   const hidePrices = user ? !canSeePrices(user.role) : false;
+
+  useEffect(() => {
+    if (!calcRequest) return;
+    linkedObjectId.current = calcRequest.objectId;
+    setCalcObjectId(calcRequest.objectId);
+    setCalcNotice(null);
+    if (user) noteTool('calculator');
+    setRoute('calculator');
+  }, [calcRequest, noteTool, user]);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      if (!isCabinetCalcMessage(event.data)) return;
+      if (!user || !canCreateObjects(user.role)) return;
+      const target = linkedObjectId.current || event.data.objectId || null;
+      setCalcNotice('Сохраняем объект и PDF…');
+      void attachCalculation(event.data, target)
+        .then((obj) => {
+          if (obj) linkedObjectId.current = obj.id;
+          setCalcNotice(obj ? 'Объект в кабинете обновлён, PDF приложен' : 'Не удалось сохранить');
+        })
+        .catch(() => setCalcNotice('Не удалось сохранить объект'));
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [user, attachCalculation]);
 
   useEffect(() => {
     try {
@@ -59,10 +90,11 @@ function PartnerShell() {
 
   const calcSrc = useMemo(() => {
     if (!user) return '';
-    return calcUrlFromOrg(user.org, user.org?.companyName, { hidePrices });
+    return calcUrlFromOrg(user.org, user.org?.companyName, { hidePrices, objectId: calcObjectId });
   }, [
     user,
     hidePrices,
+    calcObjectId,
     user?.org?.panelPriceRub,
     user?.org?.pricePerM2,
     user?.org?.installPricePerM2,
@@ -115,10 +147,12 @@ function PartnerShell() {
               : hidePrices
                 ? ' · без цен'
                 : ''}
+            {calcNotice ? ` · ${calcNotice}` : ''}
           </span>
         </ToolBar>
         {calcSrc ? (
           <iframe
+            key={calcRequest?.nonce || 'calc'}
             title="Калькулятор MultiFrame · партнёр"
             className={styles.calcFrame}
             src={calcSrc}

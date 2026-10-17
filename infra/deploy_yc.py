@@ -46,8 +46,15 @@ GATEWAY_PATHS = (
     "/admin/demo/reset",
     "/objects",
     "/objects/{objectId}",
+    "/objects/{objectId}/documents",
+    "/objects/{objectId}/documents/{docId}",
     "/analytics/events",
     "/analytics/dashboard",
+    "/materials",
+    "/materials/folders",
+    "/materials/files",
+    "/materials/{materialId}",
+    "/materials/{materialId}/content",
 )
 
 
@@ -212,9 +219,16 @@ def make_zip() -> Path:
     if zip_path.exists():
         zip_path.unlink()
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.write(API_DIR / "index.js", "index.js")
-        zf.write(API_DIR / "demoSeed.js", "demoSeed.js")
-        zf.write(API_DIR / "package.json", "package.json")
+        for rel in (
+            "index.js",
+            "demoSeed.js",
+            "cityCatalog.js",
+            "materialsLib.js",
+            "materialsRoutes.js",
+            "package.json",
+            "data/ru-cities.js",
+        ):
+            zf.write(API_DIR / rel, rel)
         nm = API_DIR / "node_modules"
         if not nm.is_dir():
             raise SystemExit("Run npm install in apps/api first")

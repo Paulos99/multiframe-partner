@@ -6,11 +6,16 @@ import {
   canCreateObjects,
   canDeleteObjects,
   canSeePrices,
+  documentsForRole,
   type JobObject,
+  type JobObjectDocument,
   type JobObjectStatus,
   type UserRole,
 } from '../../../../packages/shared/partner';
+import { apiFetchObjectDocument } from './apiClient';
+import { buildDemoPdfBlob, openPdfBlob } from './demoDocuments';
 import { formatRub } from './estimate';
+import { loadLocalDocBytes } from './localStore';
 import { RiseItem, StatusSwap, usePrefersReducedMotion } from './motionBits';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
@@ -19,6 +24,76 @@ const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install
 
 function telHref(phone: string): string {
   return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
+
+function formatDocWhen(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function ObjectDocuments({
+  obj,
+  role,
+  busyId,
+  onOpen,
+}: {
+  obj: JobObject;
+  role: UserRole;
+  busyId: string | null;
+  onOpen: (doc: JobObjectDocument, download: boolean) => void;
+}) {
+  const docs = documentsForRole(obj.documents, role);
+  const seePrices = canSeePrices(role);
+  return (
+    <div className={styles.docBlock}>
+      <div className={styles.field}>
+        {seePrices ? 'Смета и схемы' : 'Спецификация и схемы'}
+        <span className={styles.hint}>
+          {docs.length
+            ? seePrices
+              ? 'Последний расчёт сверху. Предыдущие версии остаются.'
+              : 'Без цен: панели, крепёж и схема раскладки, если её нарисовали.'
+            : 'PDF появится после расчёта в калькуляторе.'}
+        </span>
+      </div>
+      {docs.length ? (
+        <ul className={styles.docList}>
+          {docs.map((doc, index) => (
+            <li key={doc.id} className={styles.docRow}>
+              <div className={styles.docMeta}>
+                <strong>{index === 0 ? 'Последний расчёт' : 'Предыдущая версия'}</strong>
+                <span className={styles.hint}>
+                  {formatDocWhen(doc.createdAt)}
+                  {doc.areaM2 ? ` · ${doc.areaM2} м²` : ''}
+                  {doc.panels ? ` · ${doc.panels} пан.` : ''}
+                  {doc.hasScheme ? ' · схема раскладки' : ' · без схемы'}
+                </span>
+              </div>
+              <div className={styles.docActions}>
+                <button
+                  type="button"
+                  className={styles.ghost}
+                  disabled={busyId === doc.id}
+                  onClick={() => onOpen(doc, false)}
+                >
+                  {busyId === doc.id ? 'Открываем…' : 'Открыть'}
+                </button>
+                <button
+                  type="button"
+                  className={styles.ghost}
+                  disabled={busyId === doc.id}
+                  onClick={() => onOpen(doc, true)}
+                >
+                  Скачать
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: JobObjectStatus }) {
@@ -52,6 +127,7 @@ export function ObjectsPanel({
     user.role === 'crew' ? 'install' : 'all',
   );
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [docBusy, setDocBusy] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
 
   const counts = useMemo(() => {
@@ -110,6 +186,32 @@ export function ObjectsPanel({
     }
   }
 
+  async function openDocument(obj: JobObject, doc: JobObjectDocument, download: boolean) {
+    setDocBusy(doc.id);
+    setErr(null);
+    try {
+      let blob: Blob;
+      if (doc.demo) {
+        blob = await buildDemoPdfBlob(obj, doc);
+      } else {
+        const local = doc.dataBase64 || loadLocalDocBytes(doc.id);
+        if (local) {
+          const bin = Uint8Array.from(atob(local), (c) => c.charCodeAt(0));
+          blob = new Blob([bin], { type: 'application/pdf' });
+        } else {
+          const file = await apiFetchObjectDocument(obj.id, doc.id);
+          const bin = Uint8Array.from(atob(file.pdfBase64), (c) => c.charCodeAt(0));
+          blob = new Blob([bin], { type: 'application/pdf' });
+        }
+      }
+      openPdfBlob(blob, doc.filename, download);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Не удалось открыть PDF');
+    } finally {
+      setDocBusy(null);
+    }
+  }
+
   async function remove(obj: JobObject) {
     const label = obj.clientName || obj.address || 'объект';
     if (!window.confirm(`Удалить «${label}»? Это действие нельзя отменить.`)) return;
@@ -149,8 +251,8 @@ export function ObjectsPanel({
       <h2>{user.role === 'crew' ? 'Задания на монтаж' : 'Объекты'}</h2>
       <p className={styles.lead}>
         {user.role === 'crew'
-          ? 'Количество панелей и крепежа без цен. Статус меняется крупными кнопками.'
-          : 'Замеры, КП и монтаж в одной карточке. Работает офлайн — синхронизация при появлении сети.'}
+          ? 'Только ваши задания. PDF — спецификация для закупки и схема раскладки, без цен.'
+          : 'Замеры, КП и монтаж в одной карточке. Расчёт в калькуляторе сам создаёт объект и прикладывает PDF.'}
       </p>
       {reminder ? (
         <p className={styles.reminder} role="status">
@@ -237,7 +339,12 @@ export function ObjectsPanel({
                     {obj.room.areaM2 ? ` · ${obj.room.areaM2} м²` : ''}
                   </span>
                 </span>
-                <StatusBadge status={obj.status} />
+                <span className={styles.objectSide}>
+                  {documentsForRole(obj.documents, user.role).length ? (
+                    <span className={styles.docMark}>PDF</span>
+                  ) : null}
+                  <StatusBadge status={obj.status} />
+                </span>
               </button>
             </RiseItem>
           ))}
@@ -309,6 +416,23 @@ export function ObjectsPanel({
             <p className={styles.hint}>Смета ещё не посчитана</p>
           )}
 
+          <ObjectDocuments
+            obj={selected}
+            role={user.role}
+            busyId={docBusy}
+            onOpen={(doc, download) => void openDocument(selected, doc, download)}
+          />
+
+          {canCreate ? (
+            <button
+              type="button"
+              className={styles.ghost}
+              onClick={() => api.requestCalculator(selected.id)}
+            >
+              Пересчитать в калькуляторе
+            </button>
+          ) : null}
+
           <div className={styles.field}>
             Статус
             <div className={styles.chipRow} role="group" aria-label="Сменить статус">
@@ -332,6 +456,9 @@ export function ObjectsPanel({
           {canAssign && staff.length ? (
             <label className={styles.field}>
               Исполнитель
+              <span className={styles.hint}>
+                Монтажник видит только объекты, назначенные лично ему.
+              </span>
               <select
                 value={selected.assignedTo || ''}
                 disabled={pendingId === selected.id}

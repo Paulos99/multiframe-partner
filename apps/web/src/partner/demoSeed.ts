@@ -66,7 +66,14 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     password: 'exec1234',
     role: 'crew',
     company: 'Потолки Столицы',
-    label: 'Бригада · Потолки Столицы',
+    label: 'Монтажник · Потолки Столицы',
+  },
+  {
+    login: 'crew1b',
+    password: 'exec1234',
+    role: 'crew',
+    company: 'Потолки Столицы',
+    label: 'Монтажник 2 · Потолки Столицы',
   },
   {
     login: 'partner2',
@@ -94,7 +101,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     password: 'exec1234',
     role: 'crew',
     company: 'Северный Потолок',
-    label: 'Бригада · Северный Потолок',
+    label: 'Монтажник · Северный Потолок',
   },
 ];
 
@@ -265,11 +272,12 @@ export function buildLocalDemoUsers(): DemoUser[] {
     { id: 'u_partner1', login: 'partner1', password: 'demo1234', role: 'owner', displayName: 'Владелец · Потолки Столицы', orgId: 'org_demo', createdAt: now },
     { id: 'u_sales1', login: 'sales1', password: 'exec1234', role: 'sales', displayName: 'Менеджер · Потолки Столицы', orgId: 'org_demo', createdAt: now },
     { id: 'u_exec1', login: 'exec1', password: 'exec1234', role: 'measurer', displayName: 'Замерщик · Потолки Столицы', orgId: 'org_demo', createdAt: now },
-    { id: 'u_crew1', login: 'crew1', password: 'exec1234', role: 'crew', displayName: 'Бригада · Потолки Столицы', orgId: 'org_demo', createdAt: now },
+    { id: 'u_crew1', login: 'crew1', password: 'exec1234', role: 'crew', displayName: 'Монтажник · Потолки Столицы', orgId: 'org_demo', createdAt: now },
+    { id: 'u_crew1b', login: 'crew1b', password: 'exec1234', role: 'crew', displayName: 'Монтажник 2 · Потолки Столицы', orgId: 'org_demo', createdAt: now },
     { id: 'u_partner2', login: 'partner2', password: 'demo1234', role: 'owner', displayName: 'Владелец · Северный Потолок', orgId: 'org_demo_spb', createdAt: now },
     { id: 'u_sales2', login: 'sales2', password: 'exec1234', role: 'sales', displayName: 'Менеджер · Северный Потолок', orgId: 'org_demo_spb', createdAt: now },
     { id: 'u_exec2', login: 'exec2', password: 'exec1234', role: 'measurer', displayName: 'Замерщик · Северный Потолок', orgId: 'org_demo_spb', createdAt: now },
-    { id: 'u_crew2', login: 'crew2', password: 'exec1234', role: 'crew', displayName: 'Бригада · Северный Потолок', orgId: 'org_demo_spb', createdAt: now },
+    { id: 'u_crew2', login: 'crew2', password: 'exec1234', role: 'crew', displayName: 'Монтажник · Северный Потолок', orgId: 'org_demo_spb', createdAt: now },
   ];
 }
 
@@ -291,10 +299,11 @@ export function buildLocalDemoOrgs(): DemoOrg[] {
 }
 
 export function buildLocalDemoObjects(): JobObject[] {
+  const moscow = SPECS_A.map((s) =>
+    makeObject(s, 'org_demo', 'Москва', 'u_partner1', 'u_exec1', s.id === 'obj_a04' ? 'u_crew1b' : 'u_crew1'),
+  );
   return [
-    ...SPECS_A.map((s) =>
-      makeObject(s, 'org_demo', 'Москва', 'u_partner1', 'u_exec1', 'u_crew1'),
-    ),
+    ...moscow,
     ...SPECS_B.map((s) =>
       makeObject(s, 'org_demo_spb', 'Санкт-Петербург', 'u_partner2', 'u_exec2', 'u_crew2'),
     ),

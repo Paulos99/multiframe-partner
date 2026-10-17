@@ -11,12 +11,15 @@ export const ORG_ROLES: UserRole[] = ['owner', 'sales', 'measurer', 'crew'];
 /** Staff under an owner (analytics “executors” table). */
 export const STAFF_ROLES: UserRole[] = ['sales', 'measurer', 'crew'];
 
+/** Название партнёрской сети в кабинете и демо-материалах. */
+export const PARTNER_NETWORK_NAME = 'Сеть STP MultiFrame партнёра';
+
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Админ StP',
   owner: 'Владелец',
   sales: 'Менеджер',
   measurer: 'Замерщик',
-  crew: 'Бригада',
+  crew: 'Монтажник',
 };
 
 export function isOrgRole(role: string): role is UserRole {
@@ -196,6 +199,43 @@ export type JobObjectEstimate = {
   totalCost?: number | null;
 };
 
+/** estimate — смета с ценами; spec — спецификация и схемы без цен для монтажника. */
+export type JobDocumentKind = 'estimate' | 'spec';
+
+export type JobObjectDocument = {
+  id: string;
+  /** Общий id одного прогона калькулятора (смета + спецификация). */
+  versionId: string;
+  createdAt: string;
+  createdBy: string;
+  kind: JobDocumentKind;
+  filename: string;
+  /** Ключ в Object Storage. Байты в platform JSON не кладём. */
+  storageKey?: string | null;
+  hasScheme: boolean;
+  panels?: number | null;
+  areaM2?: number | null;
+  /** Демо-карточка без файла в бакете: PDF собирается в браузере. */
+  demo?: boolean;
+  /** Только локальное хранилище. API это поле не отдаёт. */
+  dataBase64?: string | null;
+};
+
+/**
+ * Для ролей с ценами — смета. Для монтажника — спецификация без цен.
+ * Если пары нет, отдаём тот документ, который есть, чтобы файл не пропал.
+ */
+export function documentsForRole(
+  docs: JobObjectDocument[] | null | undefined,
+  role: UserRole,
+): JobObjectDocument[] {
+  const list = [...(docs || [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const estimates = list.filter((d) => d.kind === 'estimate');
+  const specs = list.filter((d) => d.kind === 'spec');
+  if (canSeePrices(role)) return estimates.length ? estimates : specs;
+  return specs.length ? specs : estimates;
+}
+
 export type JobObjectHistoryEntry = {
   at: string;
   userId: string | null;
@@ -220,6 +260,8 @@ export type JobObject = {
   estimate: JobObjectEstimate | null;
   clientSummary: string;
   history: JobObjectHistoryEntry[];
+  /** Версии PDF калькулятора, новые первыми. Предыдущие не затираются. */
+  documents?: JobObjectDocument[];
   /** Local-only pending sync flag. */
   pendingSync?: boolean;
 };

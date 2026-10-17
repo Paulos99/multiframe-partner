@@ -119,7 +119,7 @@ function reportCoverageArea(bom) {
   return (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
 }
 
-function buildSchemeSummaryBody({ bom, room, dateStr, planImage }) {
+function buildSchemeSummaryBody({ bom, room, dateStr, planImage, hidePrices = false }) {
   const bounds = getBounds(room.vertices ?? []);
   const sizeLabel = `${(bounds.maxX - bounds.minX).toFixed(1)}×${(bounds.maxY - bounds.minY).toFixed(1)} м (${room.vertices?.length ?? 0} сторон)`;
 
@@ -151,17 +151,17 @@ function buildSchemeSummaryBody({ bom, room, dateStr, planImage }) {
     { compact: true }
   );
 
-  const totalsRows = totalsRowsList(bom);
+  const totalsRows = totalsRowsList(bom, hidePrices);
 
   return `
     <div style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
-      <h1 style="text-align:center;font-size:15px;margin:0 0 4px;color:${BRAND};flex-shrink:0">СВОДНЫЙ РАСЧЁТ</h1>
+      <h1 style="text-align:center;font-size:15px;margin:0 0 4px;color:${BRAND};flex-shrink:0">${hidePrices ? 'СПЕЦИФИКАЦИЯ ДЛЯ МОНТАЖА' : 'СВОДНЫЙ РАСЧЁТ'}</h1>
       <p style="font-size:10px;color:#5f6b73;margin:0 0 8px;text-align:center;flex-shrink:0">Дата: ${dateStr}</p>
       <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:8px;flex-shrink:0">
         <div style="flex:1;min-width:0">${paramsBlock}</div>
         ${planBlock}
       </div>
-      <h2 style="font-size:12px;color:${BRAND};margin:0 0 4px;flex-shrink:0">Итого по проекту</h2>
+      <h2 style="font-size:12px;color:${BRAND};margin:0 0 4px;flex-shrink:0">${hidePrices ? 'Количество к закупке' : 'Итого по проекту'}</h2>
       ${statsBlock(totalsRows, { compact: true, columns: 2 })}
       <h2 style="font-size:12px;color:${BRAND};margin:4px 0 2px;flex-shrink:0">Состав отчёта</h2>
       <ul style="font-size:10px;line-height:1.45;margin:0;padding-left:16px;color:#333;flex-shrink:0">${surfacesList}</ul>
@@ -171,7 +171,7 @@ function buildSchemeSummaryBody({ bom, room, dateStr, planImage }) {
     </div>`;
 }
 
-function buildAreaSummaryBody({ bom, dateStr }) {
+function buildAreaSummaryBody({ bom, dateStr, hidePrices = false }) {
   const ceilingArea = bom.ceiling?.area ?? 0;
   const wallsArea = bom.walls?.area ?? 0;
   const wallCount = bom.walls?.wallResults?.length ?? 0;
@@ -194,7 +194,7 @@ function buildAreaSummaryBody({ bom, dateStr }) {
   }
 
   return `
-    <h1 style="text-align:center;font-size:15px;margin:0 0 6px;color:${BRAND}">ПРИБЛИЗИТЕЛЬНЫЙ РАСЧЁТ ПО ПЛОЩАДИ</h1>
+    <h1 style="text-align:center;font-size:15px;margin:0 0 6px;color:${BRAND}">${hidePrices ? 'СПЕЦИФИКАЦИЯ ПО ПЛОЩАДИ' : 'ПРИБЛИЗИТЕЛЬНЫЙ РАСЧЁТ ПО ПЛОЩАДИ'}</h1>
     <p style="font-size:10px;color:#5f6b73;margin:0 0 8px;text-align:center">Дата: ${dateStr}</p>
     ${statsBlock(
       [
@@ -206,24 +206,28 @@ function buildAreaSummaryBody({ bom, dateStr }) {
       ],
       { compact: true }
     )}
-    <h2 style="font-size:12px;color:${BRAND};margin:0 0 4px">Итого по проекту</h2>
-    ${statsBlock(totalsRowsList(bom), { compact: true, columns: 2 })}
+    <h2 style="font-size:12px;color:${BRAND};margin:0 0 4px">${hidePrices ? 'Количество к закупке' : 'Итого по проекту'}</h2>
+    ${statsBlock(totalsRowsList(bom, hidePrices), { compact: true, columns: 2 })}
     <h2 style="font-size:12px;color:${BRAND};margin:8px 0 4px">Состав отчёта</h2>
     <ul style="font-size:10px;line-height:1.45;margin:0;padding-left:16px;color:#333">${surfacesList || '<li>Нет поверхностей</li>'}</ul>`;
 }
 
-function totalsRowsList(bom) {
+function totalsRowsList(bom, hidePrices = false) {
   return [
     bom.ceiling
       ? {
           label: `Потолок (${bom.ceiling.mountingLabel})`,
-          value: `${bom.ceiling.stats.withReserve} пан. · ${formatRub(bom.ceiling.stats.totalCost)}`,
+          value: hidePrices
+            ? `${bom.ceiling.stats.withReserve} пан.`
+            : `${bom.ceiling.stats.withReserve} пан. · ${formatRub(bom.ceiling.stats.totalCost)}`,
         }
       : null,
     bom.walls
       ? {
           label: `Стены (${bom.walls.mountingLabel})`,
-          value: `${bom.walls.stats.withReserve} пан. · ${formatRub(bom.walls.stats.totalCost)}`,
+          value: hidePrices
+            ? `${bom.walls.stats.withReserve} пан.`
+            : `${bom.walls.stats.withReserve} пан. · ${formatRub(bom.walls.stats.totalCost)}`,
         }
       : null,
     bom.total
@@ -239,7 +243,7 @@ function totalsRowsList(bom) {
         }
       : null,
     ...frameStatsRows(bom.total?.frame),
-    bom.total
+    !hidePrices && bom.total
       ? {
           label: 'Общая стоимость панелей',
           value: formatRub(bom.total.totalCost),
@@ -256,7 +260,7 @@ function frameStatsRows(frame) {
   }));
 }
 
-function buildCeilingBody({ bom, ceilingImage }) {
+function buildCeilingBody({ bom, ceilingImage, hidePrices = false }) {
   const s = bom.ceiling.stats;
   const frame = bom.ceiling.frame;
   const rows = [
@@ -267,7 +271,7 @@ function buildCeilingBody({ bom, ceilingImage }) {
     { label: 'К закупке', value: `${s.withReserve} шт.` },
     { label: 'Дюбели (с запасом 15%)', value: `${s.dowels.withReserve} шт.` },
     ...frameStatsRows(frame),
-    { label: 'Стоимость панелей', value: formatRub(s.totalCost) },
+    hidePrices ? null : { label: 'Стоимость панелей', value: formatRub(s.totalCost) },
   ];
   const maxH = schemeMaxHeightMm(rows.filter(Boolean).length);
 
@@ -294,7 +298,7 @@ function formatOpeningLine(o) {
   return detail;
 }
 
-function buildWallBody({ wr, stats, image, mountingLabel, areaEstimate = false }) {
+function buildWallBody({ wr, stats, image, mountingLabel, areaEstimate = false, hidePrices = false }) {
   const wallHeight =
     wr.grossArea && wr.wall?.length ? wr.grossArea / wr.wall.length : null;
   const openingsLines =
@@ -319,7 +323,7 @@ function buildWallBody({ wr, stats, image, mountingLabel, areaEstimate = false }
     { label: 'К закупке', value: `${stats.withReserve} шт.` },
     { label: 'Дюбели (с запасом 15%)', value: `${stats.dowels.withReserve} шт.` },
     ...frameStatsRows(stats.frame),
-    { label: 'Стоимость панелей', value: formatRub(stats.totalCost) },
+    hidePrices ? null : { label: 'Стоимость панелей', value: formatRub(stats.totalCost) },
   ];
 
   const openingsBlock = areaEstimate
@@ -396,6 +400,8 @@ export async function exportCalculationPDF({
   wallSurfaces = [],
   planImage = null,
   areaEstimate = false,
+  hidePrices = false,
+  download = true,
 }) {
   const [{ jsPDF }] = await Promise.all([
     import('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm'),
@@ -411,11 +417,15 @@ export async function exportCalculationPDF({
 
   pages.push(
     pageShell({
-      title: `Расчёт материалов | ${dateStr}`,
-      subtitle: areaEstimate ? 'Оценка по площади' : 'Сводная страница',
+      title: `${hidePrices ? 'Спецификация материалов' : 'Расчёт материалов'} | ${dateStr}`,
+      subtitle: hidePrices
+        ? 'Без цен · для закупки и монтажа'
+        : areaEstimate
+          ? 'Оценка по площади'
+          : 'Сводная страница',
       bodyHtml: areaEstimate
-        ? buildAreaSummaryBody({ bom, dateStr })
-        : buildSchemeSummaryBody({ bom, room, dateStr, planImage }),
+        ? buildAreaSummaryBody({ bom, dateStr, hidePrices })
+        : buildSchemeSummaryBody({ bom, room, dateStr, planImage, hidePrices }),
       pageLabel: `Страница ${pageNum} из ${totalPages}`,
     })
   );
@@ -424,9 +434,13 @@ export async function exportCalculationPDF({
   if (includeCeilingPage) {
     pages.push(
       pageShell({
-        title: `Расчёт материалов | ${dateStr}`,
+        title: `${hidePrices ? 'Спецификация материалов' : 'Расчёт материалов'} | ${dateStr}`,
         subtitle: 'Потолок',
-        bodyHtml: buildCeilingBody({ bom, ceilingImage: areaEstimate ? null : ceilingImage }),
+        bodyHtml: buildCeilingBody({
+          bom,
+          ceilingImage: areaEstimate ? null : ceilingImage,
+          hidePrices,
+        }),
         pageLabel: `Страница ${pageNum} из ${totalPages}`,
       })
     );
@@ -437,7 +451,7 @@ export async function exportCalculationPDF({
     const stats = buildWallSurfaceStats(wallResult, bom.wallMounting, room.wallHeight);
     pages.push(
       pageShell({
-        title: `Расчёт материалов | ${dateStr}`,
+        title: `${hidePrices ? 'Спецификация материалов' : 'Расчёт материалов'} | ${dateStr}`,
         subtitle: 'Развёртка стены',
         bodyHtml: buildWallBody({
           wr: wallResult,
@@ -445,6 +459,7 @@ export async function exportCalculationPDF({
           image: areaEstimate ? null : image,
           mountingLabel: bom.walls?.mountingLabel ?? stats.mountingLabel,
           areaEstimate,
+          hidePrices,
         }),
         pageLabel: `Страница ${pageNum} из ${totalPages}`,
       })
@@ -465,6 +480,15 @@ export async function exportCalculationPDF({
       ? reportCoverageArea(bom)
       : room.getTotalArea() + room.getTotalWallArea()
   );
-  const prefix = areaEstimate ? 'MultiFrame_area' : 'MultiFrame';
-  doc.save(`${prefix}_${area}m2_${dateStr.replace(/\./g, '-')}.pdf`);
+  const prefix = hidePrices
+    ? areaEstimate
+      ? 'MultiFrame_spec_area'
+      : 'MultiFrame_spec'
+    : areaEstimate
+      ? 'MultiFrame_area'
+      : 'MultiFrame';
+  const filename = `${prefix}_${area}m2_${dateStr.replace(/\./g, '-')}.pdf`;
+  const blob = doc.output('blob');
+  if (download) doc.save(filename);
+  return { blob, filename };
 }

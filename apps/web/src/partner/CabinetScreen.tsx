@@ -1,7 +1,8 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
+  PARTNER_NETWORK_NAME,
   ROLE_LABELS,
   STAFF_ROLES,
   type SessionUser,
@@ -9,6 +10,8 @@ import {
 } from '../../../../packages/shared/partner';
 import { Button } from '../ui/Button';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { CityField } from './CityField';
+import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { ObjectsPanel } from './ObjectsPanel';
 import { NewPasswordButton } from './NewPasswordButton';
@@ -48,7 +51,7 @@ function ToolButtons({
 }: {
   onNavigate: (r: Route) => void;
   onOpenCalc: () => void;
-  /** Вторичные действия: бригаде важнее список монтажа, чем инструменты замера. */
+  /** Вторичные действия: монтажнику важнее список заданий, чем инструменты замера. */
   quiet?: boolean;
 }) {
   const cls = quiet ? styles.ghost : styles.primary;
@@ -122,6 +125,20 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [catalogReady, setCatalogReady] = useState(citiesReady());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCity, setEditCity] = useState('');
+  const [savingCity, setSavingCity] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void loadCities().then(() => {
+      if (live) setCatalogReady(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -160,7 +177,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
-          <h1>Сеть StP · партнёры</h1>
+          <h1>{PARTNER_NETWORK_NAME}</h1>
           <p className={styles.lead}>
             Партнёры по регионам, официальные РРЦ и сетевая аналитика.
             {api.remote ? ' · облако' : ' · локальный режим'}
@@ -179,7 +196,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
           { id: 'analytics', label: 'Аналитика' },
           { id: 'partners', label: `Партнёры · ${partners.length}` },
           { id: 'add', label: 'Добавить' },
-          { id: 'help', label: 'Обучение' },
+          { id: 'help', label: 'Обучение работе с материалом' },
         ]}
         active={tab}
         onChange={setTab}
@@ -212,12 +229,8 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                 />
               </label>
               <label className={styles.field}>
-                Город / регион
-                <input
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="Например, Казань"
-                />
+                Город
+                <CityField value={city} onChange={setCity} />
               </label>
             </div>
             {created ? <p className={styles.flash}>{created}</p> : null}
@@ -248,20 +261,42 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
               </p>
             ) : null}
             <div className={styles.table}>
-              {partners.map((p) => (
-                <div key={p.user.id} className={styles.tableRow}>
+              {partners.map((p) => {
+                const cityName = p.org?.settings.city?.trim() || '';
+                const cityBad = catalogReady && Boolean(cityName) && !isKnownCity(cityName);
+                return (
+                <div key={p.user.id} className={`${styles.tableRow} ${cityBad ? styles.tableRowWarn : ''}`}>
                   <div>
                     <strong>{p.org?.settings.companyName || p.user.displayName}</strong>
                     <div className={styles.hint}>
                       {p.user.login}
-                      {p.org?.settings.city ? ` · ${p.org.settings.city}` : ''} · сотрудников:{' '}
-                      {p.executorCount}
+                      {cityName ? (
+                        <>
+                          {' · '}
+                          <span className={cityBad ? styles.cityBadText : undefined}>{cityName}</span>
+                        </>
+                      ) : (
+                        ' · город не указан'
+                      )}
+                      {cityBad ? <span className={styles.cityBadge}>не из справочника</span> : null}
+                      {' · '}сотрудников: {p.executorCount}
                       {p.lastLogin
                         ? ` · вход ${new Date(p.lastLogin).toLocaleDateString('ru-RU')}`
                         : ''}
                     </div>
                   </div>
                   <div className={styles.rowActions}>
+                    <button
+                      type="button"
+                      className={styles.ghost}
+                      onClick={() => {
+                        setErr(null);
+                        setEditingId(p.user.id);
+                        setEditCity(cityName);
+                      }}
+                    >
+                      {cityBad ? 'Исправить город' : 'Город'}
+                    </button>
                     <button
                       type="button"
                       className={styles.ghost}
@@ -296,8 +331,47 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                       Удалить
                     </button>
                   </div>
+                  {editingId === p.user.id ? (
+                    <div className={styles.cityEdit}>
+                      <label className={styles.field}>
+                        Город
+                        <CityField value={editCity} onChange={setEditCity} />
+                      </label>
+                      <div className={styles.rowActions}>
+                        <button
+                          type="button"
+                          className={styles.primary}
+                          disabled={savingCity}
+                          onClick={() => {
+                            setSavingCity(true);
+                            setErr(null);
+                            void api
+                              .adminUpdatePartnerCity(p.user.id, editCity)
+                              .then((saved) => {
+                                setNotice(`Город обновлён: ${saved || 'не указан'}`);
+                                setEditingId(null);
+                              })
+                              .catch((ex) => {
+                                setErr(ex instanceof Error ? ex.message : 'Ошибка');
+                              })
+                              .finally(() => setSavingCity(false));
+                          }}
+                        >
+                          {savingCity ? 'Сохраняем…' : 'Сохранить город'}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.ghost}
+                          onClick={() => setEditingId(null)}
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              ))}
+                );
+              })}
               {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
             </div>
           </div>
@@ -431,7 +505,7 @@ function OwnerCabinet({
           { id: 'company', label: 'Компания' },
           { id: 'staff', label: `Сотрудники · ${staff.length}` },
           { id: 'analytics', label: 'Аналитика' },
-          { id: 'help', label: 'Обучение' },
+          { id: 'help', label: 'Обучение работе с материалом' },
         ]}
         active={tab}
         onChange={setTab}
@@ -452,12 +526,8 @@ function OwnerCabinet({
               <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
             </label>
             <label className={styles.field}>
-              Город / регион
-              <input
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Для аналитики сети StP"
-              />
+              Город в сети STP MultiFrame партнёра
+              <CityField value={city} onChange={setCity} />
             </label>
             <div className={styles.grid2}>
               <label className={styles.field}>
@@ -542,8 +612,8 @@ function OwnerCabinet({
           >
             <h2>Сотрудники</h2>
             <p className={styles.lead}>
-              Менеджер ведёт сделки и КП, замерщик сохраняет объекты, бригада видит количества без
-              цен.
+              Менеджер ведёт сделки и КП, замерщик сохраняет объекты, у каждого монтажника свой
+              вход и свои задания. Цены монтажник не видит — только спецификацию и схемы.
             </p>
             <div className={styles.grid2}>
               <label className={styles.field}>
@@ -688,7 +758,7 @@ function SalesCabinet({
         tabs={[
           { id: 'deals', label: `Сделки · ${api.objects.length}` },
           { id: 'analytics', label: 'Аналитика' },
-          { id: 'help', label: 'Обучение' },
+          { id: 'help', label: 'Обучение работе с материалом' },
         ]}
         active={tab}
         onChange={setTab}
@@ -733,11 +803,11 @@ function MeasurerCabinet({
         <div className={styles.topActions}>
           <button
             type="button"
-            className={styles.ghost}
+            className={`${styles.ghost} ${styles.trainBtn}`}
             onClick={() => setShowHelp((v) => !v)}
             aria-pressed={showHelp}
           >
-            {showHelp ? 'К объектам' : 'Обучение'}
+            {showHelp ? 'К объектам' : 'Обучение работе с материалом'}
           </button>
           <SyncBadge />
           <QuickLogout />
@@ -784,16 +854,16 @@ function CrewCabinet({
       <header className={styles.top}>
         <div>
           <h1>{roleHeading('crew', user)}</h1>
-          <p className={styles.lead}>Монтаж по объектам · цены скрыты</p>
+          <p className={styles.lead}>Личный кабинет монтажника · цены скрыты, PDF схемы доступен</p>
         </div>
         <div className={styles.topActions}>
           <button
             type="button"
-            className={styles.ghost}
+            className={`${styles.ghost} ${styles.trainBtn}`}
             onClick={() => setShowHelp((v) => !v)}
             aria-pressed={showHelp}
           >
-            {showHelp ? 'К заданиям' : 'Обучение'}
+            {showHelp ? 'К заданиям' : 'Обучение работе с материалом'}
           </button>
           <SyncBadge />
           <QuickLogout />
@@ -824,7 +894,7 @@ export function CabinetScreen({ onNavigate }: { onNavigate: (r: Route) => void }
   const user = api.user;
   if (!user) return null;
 
-  const openCalc = () => onNavigate('calculator');
+  const openCalc = () => api.requestCalculator(null);
 
   if (user.role === 'admin') return <AdminCabinet onNavigate={onNavigate} />;
   if (user.role === 'owner') {
