@@ -15,3 +15,4 @@ apps/web/public/calculator/node_modules/
 apps/web/public/calculator/dist/
 
 infra/__pycache__/
+crew-test-pdfs/
