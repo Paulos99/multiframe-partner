@@ -175,11 +175,13 @@ test('profile validates current password, changes password and uploads compresse
   const upload = page.waitForRequest(
     (r) => r.url().endsWith('/me/avatar') && r.method() === 'PUT',
   );
-  await dialog.getByLabel('Фото', { exact: true }).setInputFiles({
-    name: 'test.png',
-    mimeType: 'image/png',
-    buffer: Buffer.from(png, 'base64'),
-  });
+  await dialog
+    .getByLabel('Фото', { exact: true })
+    .setInputFiles({
+      name: 'test.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(png, 'base64'),
+    });
   const request = await upload;
   expect(request.postDataJSON().mime).toBe('image/webp');
   expect(
@@ -188,11 +190,7 @@ test('profile validates current password, changes password and uploads compresse
   await expect(dialog.getByRole('status')).toHaveText('Фото обновлено');
   await expect(dialog.getByRole('img', { name: 'Фото профиля' })).toBeVisible();
   await expect
-    .poll(() =>
-      dialog
-        .getByRole('img', { name: 'Фото профиля' })
-        .evaluate((img: HTMLImageElement) => img.naturalWidth),
-    )
+    .poll(() => dialog.getByRole('img', { name: 'Фото профиля' }).evaluate((img: HTMLImageElement) => img.naturalWidth))
     .toBe(256);
   await dialog
     .getByLabel('Текущий пароль', { exact: true })
@@ -268,21 +266,8 @@ test('admin uses the same board and editor in projects', async ({ page }) => {
   ).toBeVisible();
 });
 
-test('diagnostic and calculator open without runtime regressions', async ({
-  page,
-}) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await enter(page);
-  await page.getByRole('button', { name: 'Проблемомер', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Начать', exact: true }),
-  ).toBeVisible();
-  await page.getByRole('tab', { name: 'Калькулятор', exact: true }).click();
-  await expect(
-    page
-      .frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]')
-      .getByRole('heading', { name: 'Что вы знаете о помещении?' }),
-  ).toBeVisible();
-  expect(errors).toEqual([]);
+test('diagnostic and calculator open without runtime regressions', async ({page}) => {
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await enter(page);
+ await page.getByRole('button',{name:'Проблемомер',exact:true}).click();await expect(page.getByRole('button',{name:'Начать',exact:true})).toBeVisible();
+ await page.getByRole('tab',{name:'Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
 });

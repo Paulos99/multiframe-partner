@@ -1,5 +1,7 @@
 import type {
+  JobObject,
   JobObjectStatus,
+  Project,
   UserRole,
 } from '../../../../packages/shared/partner';
 export const KANBAN_STAGES: JobObjectStatus[] = [
@@ -15,7 +17,6 @@ export function canMoveRoom(role: UserRole, target: JobObjectStatus) {
     (role !== 'crew' || target === 'install' || target === 'closed')
   );
 }
-import type { JobObject, Project } from '../../../../packages/shared/partner';
 export type BoardSort = 'manual' | 'updatedAt' | 'createdAt' | 'client';
 export function sortRooms(
   rooms: JobObject[],

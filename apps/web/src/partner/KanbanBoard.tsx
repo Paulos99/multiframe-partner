@@ -249,6 +249,20 @@ export function KanbanBoard({
     }
     if (target && target.status === room.status && target.id !== room.id)
       next = arrayMove(next, next.indexOf(room), next.indexOf(target));
+    const column = (list: JobObject[]) =>
+      list
+        .filter((r) => r.status === room.status)
+        .map((r) => r.id)
+        .join('|');
+    const original = snapshot.current.find((r) => r.id === room.id);
+    if (
+      original?.status === room.status &&
+      column(next) === column(snapshot.current)
+    ) {
+      // Dropped back in place: nothing to save.
+      setLocal(null);
+      return;
+    }
     void commit(room, next);
   }
   function content(room: JobObject) {
