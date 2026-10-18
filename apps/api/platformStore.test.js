@@ -179,6 +179,65 @@ describe('актуальные чтение и запись платформы',
     assert.equal(measurer.passwordHash === stored.users.find((user) => user.login === 'admin').passwordHash, false);
   });
 
+  test('автопроект и объект переживают конфликт записи вместе', async () => {
+    const a = isolateDocumentCacheForTests();
+    const b = isolateDocumentCacheForTests();
+    const ownerA = await login(a, 'partner1', 'demo1234');
+    const ownerB = await login(b, 'partner1', 'demo1234');
+    await a.run(() => call('GET', '/objects', { token: ownerA }));
+    await b.run(() => call('GET', '/projects', { token: ownerB }));
+    conflicts = 0;
+
+    let release = () => {};
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    arm = { gate, release, seen: 0 };
+
+    const [roomRes, projectRes] = await Promise.all([
+      a.run(() =>
+        call('POST', '/objects', {
+          token: ownerA,
+          body: {
+            clientName: 'Параллельная квартира',
+            address: 'ул. Параллельная, 1',
+            city: 'Москва',
+            roomName: 'Кухня',
+            room: { areaM2: 12 },
+          },
+        }),
+      ),
+      b.run(() =>
+        call('POST', '/projects', {
+          token: ownerB,
+          body: { name: 'Проект с другого экземпляра', address: 'ул. Другая, 2' },
+        }),
+      ),
+    ]);
+    assert.equal(roomRes.statusCode, 200, roomRes.body);
+    assert.equal(projectRes.statusCode, 200, projectRes.body);
+    assert.equal(conflicts >= 1, true, 'ожидался конфликт If-Match');
+
+    const room = JSON.parse(roomRes.body).object;
+    assert.match(room.projectId, /^prj_/);
+    assert.equal(room.roomName, 'Кухня');
+    const other = JSON.parse(projectRes.body).project;
+    const stored = JSON.parse(objects.get(idOf('test-partners', 'platform-v2.json')));
+    const savedRoom = stored.objects.find((item) => item.id === room.id);
+    const savedProject = stored.projects.find((item) => item.id === room.projectId);
+    const savedOther = stored.projects.find((item) => item.id === other.id);
+    assert.ok(savedRoom, 'комната потерялась при повторе записи');
+    assert.equal(savedRoom.projectId, room.projectId);
+    assert.equal(savedRoom.clientName, 'Параллельная квартира');
+    assert.equal(savedRoom.room.areaM2, 12);
+    assert.ok(savedProject, 'автопроект потерялся при повторе записи');
+    assert.equal(savedProject.name, 'Параллельная квартира');
+    assert.equal(savedProject.address, 'ул. Параллельная, 1');
+    assert.equal(savedProject.orgId, savedRoom.orgId);
+    assert.ok(savedOther, 'чужой проект затёрт записью комнаты');
+    assert.equal(savedOther.name, 'Проект с другого экземпляра');
+  });
+
   test('два одновременных файла остаются в ответе того, кто записал вторым', async () => {
     const a = isolateDocumentCacheForTests();
     const b = isolateDocumentCacheForTests();

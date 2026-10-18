@@ -5,6 +5,7 @@ import type {
   AnalyticsObject,
   AnalyticsTool,
 } from '../../../../packages/shared/partner';
+import { getAnalyticsSessionId } from '../analytics/sessionId';
 import { cacheAnalyticsEvents, loadCachedAnalyticsEvents, rememberCalculation } from './offlineDb';
 import {
   appendAnalyticsEvent,
@@ -75,6 +76,7 @@ export function trackPartnerAnalytics(input: {
     city,
     tool: input.tool,
     action: input.action,
+    sessionId: getAnalyticsSessionId(),
     object: {
       ...(input.object || {}),
       city: input.object?.city || city || null,

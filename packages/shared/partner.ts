@@ -1,5 +1,7 @@
 /** Shared types — partner portal roles, org settings, job objects. */
 
+import { computeAnalyticsFunnel } from './funnel.ts';
+
 export type UserRole = 'admin' | 'owner' | 'sales' | 'measurer' | 'crew';
 
 /** @deprecated migrated to owner / staff roles */
@@ -340,6 +342,8 @@ export type AnalyticsEvent = {
   city?: string;
   tool: AnalyticsTool;
   action: AnalyticsAction;
+  /** Один проход воронки. Старые события без поля схлопываются запасным ключом. */
+  sessionId?: string | null;
   object?: AnalyticsObject | null;
 };
 
@@ -547,19 +551,7 @@ function computeKpi(
 }
 
 function computeFunnel(events: AnalyticsEvent[]): AnalyticsFunnel {
-  return {
-    problemomer: {
-      open: events.filter((e) => e.tool === 'problemomer' && e.action === 'open').length,
-      result: events.filter((e) => e.tool === 'problemomer' && e.action === 'result').length,
-      pdf: events.filter((e) => e.tool === 'problemomer' && e.action === 'pdf').length,
-      share: events.filter((e) => e.tool === 'problemomer' && e.action === 'share').length,
-    },
-    calculator: {
-      open: events.filter((e) => e.tool === 'calculator' && e.action === 'open').length,
-      calcDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done').length,
-      pdf: events.filter((e) => e.tool === 'calculator' && e.action === 'pdf').length,
-    },
-  };
+  return computeAnalyticsFunnel(events);
 }
 
 function toBreakdown(counts: Map<string, number>): AnalyticsBreakdownItem[] {
