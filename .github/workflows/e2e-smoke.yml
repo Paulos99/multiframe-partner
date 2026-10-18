@@ -1,0 +1,57 @@
+name: e2e smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Read-only production smoke
+        run: npx playwright test
+        env:
+          E2E_BASE_URL: https://paulos99.github.io/multiframe-partner/
+          E2E_API_URL: https://d5dff69141o8r1ehqm09.l5v6loqa.apigw.yandexcloud.net
+          E2E_ADMIN_LOGIN: ${{ secrets.E2E_ADMIN_LOGIN }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_OWNER_LOGIN: ${{ secrets.E2E_OWNER_LOGIN }}
+          E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+          E2E_SALES_LOGIN: ${{ secrets.E2E_SALES_LOGIN }}
+          E2E_SALES_PASSWORD: ${{ secrets.E2E_SALES_PASSWORD }}
+          E2E_MEASURER_LOGIN: ${{ secrets.E2E_MEASURER_LOGIN }}
+          E2E_MEASURER_PASSWORD: ${{ secrets.E2E_MEASURER_PASSWORD }}
+          E2E_CREW_LOGIN: ${{ secrets.E2E_CREW_LOGIN }}
+          E2E_CREW_PASSWORD: ${{ secrets.E2E_CREW_PASSWORD }}
+          E2E_OWNER_B_LOGIN: ${{ secrets.E2E_OWNER_B_LOGIN }}
+          E2E_OWNER_B_PASSWORD: ${{ secrets.E2E_OWNER_B_PASSWORD }}
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-screenshots
+          path: e2e/artifacts
+          if-no-files-found: ignore
