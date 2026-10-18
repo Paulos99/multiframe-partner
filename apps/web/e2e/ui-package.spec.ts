@@ -297,3 +297,19 @@ test('diagnostic and calculator open without runtime regressions', async ({page}
  await page.getByRole('tab',{name:'Инструменты',exact:true}).click();await page.getByRole('button',{name:'Открыть Проблемомер',exact:true}).click();await expect(page.getByRole('button',{name:'Начать',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Кабинет',exact:true}).click();await page.getByRole('button',{name:'Открыть Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
 });
+
+for (const role of ['admin', 'owner'] as const) {
+  test(`${role}: сводка аналитики без «Объёма», «Отправок», «Входов» и «По дням месяца»`, async ({ page }) => {
+    await enter(page, role);
+    if (role === 'owner') await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toBeVisible();
+    for (const label of ['Средняя м²', 'Готовых расчётов', 'Площадь, м²', 'Панели']) {
+      await expect(page.getByText(label, { exact: true })).toHaveCount(1);
+    }
+    for (const gone of ['Объём', 'По дням месяца', 'По месяцам']) {
+      await expect(page.getByRole('heading', { name: gone, exact: true })).toHaveCount(0);
+    }
+    await expect(page.getByText('Отправки', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Сумма м²', { exact: true })).toHaveCount(0);
+  });
+}
