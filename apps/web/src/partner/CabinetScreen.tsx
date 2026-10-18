@@ -13,7 +13,7 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
-import { ObjectsPanel } from './ObjectsPanel';
+import { NetworkOverview, RoleWorkspace } from './RoleOverview';
 import { NewPasswordButton } from './NewPasswordButton';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
@@ -192,6 +192,9 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       </header>
 
       <ToolButtons onNavigate={onNavigate} onOpenCalc={() => onNavigate('calculator')} />
+
+      <NetworkOverview count={partners.length} onPartners={() => setTab('partners')}
+        onAdd={() => setTab('add')} onLearning={() => setTab('help')} />
 
       <CabinetTabs
         tabs={[
@@ -516,7 +519,7 @@ function OwnerCabinet({
 
       {tab === 'objects' ? (
         <TabPanel>
-          <ObjectsPanel onCreate={() => onNavigate('problemomer')} />
+          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}
 
@@ -769,7 +772,7 @@ function SalesCabinet({
       />
       {tab === 'deals' ? (
         <TabPanel>
-          <ObjectsPanel onCreate={() => onNavigate('problemomer')} />
+          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}
       {tab === 'analytics' ? (
@@ -830,7 +833,7 @@ function MeasurerCabinet({
             {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
             {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'}
           </p>
-          <ObjectsPanel compact onCreate={() => onNavigate('problemomer')} />
+          <RoleWorkspace compact onCreate={() => onNavigate('problemomer')} />
           <details className={styles.hintCard}>
             <summary>Офлайн на телефоне</summary>
             <p className={styles.lead}>
@@ -884,7 +887,7 @@ function CrewCabinet({
         <HelpTrainingPanel role="crew" />
       ) : (
         <>
-          <ObjectsPanel />
+          <RoleWorkspace />
           <details className={styles.hintCard}>
             <summary>Офлайн на телефоне</summary>
             <p className={styles.lead}>

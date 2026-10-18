@@ -180,7 +180,7 @@ type PartnerApi = {
   flushObjectQueue: () => Promise<void>;
   /** Открыть калькулятор. objectId — обновить эту карточку, null — новый объект на первом расчёте. */
   requestCalculator: (objectId: string | null) => void;
-  calcRequest: { objectId: string | null; nonce: number } | null;
+  calcRequest: { objectId: string | null; nonce: number; areaM2?: number | null } | null;
   attachCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
   refresh: () => void;
@@ -201,7 +201,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [calculations, setCalculations] = useState<CachedCalculation[]>([]);
   const [authHold, setAuthHold] = useState(false);
   const [staffCache, setStaffCache] = useState<StaffMember[]>([]);
-  const [calcRequest, setCalcRequest] = useState<{ objectId: string | null; nonce: number } | null>(
+  const [calcRequest, setCalcRequest] = useState<{ objectId: string | null; nonce: number; areaM2?: number | null } | null>(
     null,
   );
   const [partnersCache, setPartnersCache] = useState<
@@ -416,6 +416,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     localLogout(user);
     void rememberSession({ token: null, apiBase: apiBase(), userId: null });
     setUser(null);
+    setCalcRequest(null);
     setObjects([]);
     setStaffCache([]);
     setCalculations([]);
@@ -617,8 +618,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   );
 
   const requestCalculator = useCallback((objectId: string | null) => {
-    setCalcRequest({ objectId, nonce: Date.now() });
-  }, []);
+    const areaM2 = objectId ? objects.find(obj => obj.id === objectId)?.room.areaM2 : null;
+    // Capture once on opening: saving a new result must not reload the active iframe.
+    setCalcRequest({ objectId, nonce: Date.now(), areaM2 });
+  }, [objects]);
 
   const attachCalculation = useCallback(
     async (message: CabinetCalcMessage, objectId: string | null) => {
@@ -855,7 +858,7 @@ export function persistPartnerCalcParams(params: PartnerCalcParams): void {
 export function calcUrlFromOrg(
   org: OrgSettings | null | undefined,
   companyName?: string,
-  opts?: { hidePrices?: boolean; objectId?: string | null; clientName?: string | null },
+  opts?: { hidePrices?: boolean; objectId?: string | null; clientName?: string | null; areaM2?: number | null },
 ): string {
   const params = partnerCalcParamsFromOrg(org, companyName);
   if (opts?.hidePrices) {
@@ -880,6 +883,12 @@ export function calcUrlFromOrg(
   if (params.company) q.set('company', params.company);
   if (opts?.objectId) q.set('objectId', opts.objectId);
   if (opts?.clientName) q.set('client', opts.clientName);
+  if (opts?.objectId && typeof opts.areaM2 === 'number' && Number.isFinite(opts.areaM2) && opts.areaM2 > 0) {
+    q.set('area', String(opts.areaM2));
+    q.set('mode', 'area');
+    q.set('walls', '0');
+    q.set('source', 'cabinet');
+  }
   q.set('partner', '1');
   const path = `${import.meta.env.BASE_URL || '/'}calculator/index.html`.replace(/\/{2,}/g, '/');
   const origin = typeof window !== 'undefined' ? window.location.origin : '';

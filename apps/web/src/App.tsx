@@ -144,7 +144,7 @@ function ToolChrome({
 }
 
 function PartnerShell() {
-  const { user, loading, noteTool, logout, objects, calcRequest, attachCalculation } = usePartner();
+  const { user, loading, noteTool, logout, objects, calcRequest, attachCalculation, requestCalculator } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
@@ -152,7 +152,15 @@ function PartnerShell() {
   const hidePrices = user ? !canSeePrices(user.role) : false;
 
   useEffect(() => {
-    if (!calcRequest) return;
+    if (user) return;
+    linkedObjectId.current = null;
+    setCalcObjectId(null);
+    setCalcNotice(null);
+    setRoute('cabinet');
+  }, [user]);
+
+  useEffect(() => {
+    if (!calcRequest || !user) return;
     linkedObjectId.current = calcRequest.objectId;
     setCalcObjectId(calcRequest.objectId);
     setCalcNotice(null);
@@ -211,12 +219,14 @@ function PartnerShell() {
       hidePrices,
       objectId: calcObjectId,
       clientName: calcClientName,
+      areaM2: calcRequest?.objectId === calcObjectId ? calcRequest?.areaM2 : null,
     });
   }, [
     user,
     hidePrices,
     calcObjectId,
     calcClientName,
+    calcRequest,
     user?.org?.panelPriceRub,
     user?.org?.pricePerM2,
     user?.org?.installPricePerM2,
@@ -239,7 +249,10 @@ function PartnerShell() {
       <>
         <CabinetScreen
           onNavigate={(r) => {
-            if (r === 'calculator') noteTool('calculator');
+            if (r === 'calculator') {
+              requestCalculator(null);
+              return;
+            }
             if (r === 'problemomer') noteTool('problemomer');
             setRoute(r);
           }}
@@ -260,8 +273,7 @@ function PartnerShell() {
           setRoute('problemomer');
         }}
         onCalculator={() => {
-          noteTool('calculator');
-          setRoute('calculator');
+          if (route !== 'calculator') requestCalculator(null);
         }}
         onLogout={logout}
       />
