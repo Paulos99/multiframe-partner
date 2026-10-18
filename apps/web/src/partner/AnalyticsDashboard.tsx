@@ -355,17 +355,9 @@ function funnelStepsCalc(f: AnalyticsFunnel) {
 
 type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'objects';
 
-export function AnalyticsDashboard({
-  mode,
-  showPeriodControl,
-}: {
-  mode: 'admin' | 'partner';
-  /** На главной STP период уже стоит над карточками. Второй календарь не показываем. */
-  showPeriodControl?: boolean;
-}) {
+export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   const api = usePartner();
   const user = api.user!;
-  const periodControl = showPeriodControl ?? mode !== 'admin';
   const period = useSyncExternalStore(subscribeAnalyticsPeriod, getAnalyticsPeriod, getAnalyticsPeriod);
   const focusOrg = useSyncExternalStore(subscribeAnalyticsFocusOrg, getAnalyticsFocusOrg, getAnalyticsFocusOrg);
   const fromYmd = period.fromYmd;
@@ -458,15 +450,15 @@ export function AnalyticsDashboard({
             {` · ${formatPeriodLabel(fromYmd, toYmd)}`}
           </p>
         </div>
-        {periodControl ? (
-          <div className={styles.dashFilters}>
-            <PeriodCalendar
-              fromYmd={fromYmd}
-              toYmd={toYmd}
-              onChange={(from, to) => setAnalyticsPeriod(from, to)}
-            />
-          </div>
-        ) : null}
+        {/* Единственный выбор периода: общий для всей аналитики (и админа, и партнёра). */}
+        <div className={styles.dashFilters} role="group" aria-label="Период аналитики">
+          <PeriodCalendar
+            fromYmd={fromYmd}
+            toYmd={toYmd}
+            onChange={(from, to) => setAnalyticsPeriod(from, to)}
+            triggerClassName={styles.dashPeriodTrigger}
+          />
+        </div>
       </div>
 
       {mode === 'admin' ? (

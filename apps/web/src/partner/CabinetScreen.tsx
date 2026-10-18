@@ -13,7 +13,7 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
-import { NetworkOverview, RoleWorkspace } from './RoleOverview';
+import { RoleWorkspace } from './RoleOverview';
 import { AnimatePresence, FadeRise, m, motionPresets } from './motionBits';
 import { ObjectsPanel } from './ObjectsPanel';
 import { StaffPanel } from './StaffPanel';
@@ -164,8 +164,6 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       profile={profileOf(api.user!, api.logout)}
     >
       <FrameBody>
-      <NetworkOverview />
-
       {tab === 'partners' ? (
         <TabPanel>
           <div className={`${styles.card} ${styles.panelCard}`}>

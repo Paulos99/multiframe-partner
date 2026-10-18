@@ -12,30 +12,51 @@ async function enter(page: Page, role = 'owner', pw = password) {
     page.getByRole('button', { name: 'Мой профиль', exact: true }),
   ).toBeVisible();
 }
-test('admin keeps one shared period control without the duplicate overview', async ({ page }) => {
+test('admin keeps one shared period control inside the analytics card', async ({ page }) => {
   await enter(page, 'admin');
-  const controls = page.getByRole('region', { name: 'Управление партнёрской сетью' });
+  await expect(page.getByRole('region', { name: 'Управление партнёрской сетью' })).toHaveCount(0);
   await expect(page.getByText('Партнёры и поддержка команды', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Последнее событие', { exact: false })).toHaveCount(0);
+  const controls = page.getByRole('group', { name: 'Период аналитики' });
   const calendar = controls.locator('button[aria-controls]');
   await expect(page.locator('button[aria-controls]')).toHaveCount(1);
+  await expect(controls.getByRole('button')).toHaveCount(1);
+  const title = await page.getByRole('heading', { name: 'Аналитика', exact: true }).boundingBox();
+  const picker = await calendar.boundingBox();
+  expect(title && picker && picker.x > title.x + title.width, 'период справа от заголовка').toBeTruthy();
+  expect(title && picker && picker.y < title.y + title.height + 8, 'период в строке заголовка').toBeTruthy();
   await calendar.click();
   const updated = page.waitForRequest((r) => new URL(r.url()).pathname === '/analytics/dashboard' && !new URL(r.url()).searchParams.has('from'));
   await page.getByRole('button', { name: 'Всё время', exact: true }).click();
   await updated;
   await expect(calendar).toHaveText('Всё время');
-  await expect(controls.getByRole('button')).toHaveCount(1);
   await page.getByRole('tab', { name: /^Партнёры ·/ }).click();
   await expect(page.getByRole('heading', { name: /Партнёры/ })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Период аналитики' })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'Добавить', exact: true })).toHaveCount(0);
   const add = page.getByRole('button', { name: 'Добавить', exact: true });
   await expect(add).toHaveAttribute('aria-expanded', 'false');
   await add.click();
   await expect(page.getByRole('heading', { name: 'Новый партнёр', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Свернуть', exact: true })).toHaveAttribute('aria-expanded', 'true');
-  await expect(calendar).toHaveText('Всё время');
   await page.getByRole('tab', { name: 'Обучение', exact: true }).click();
-  await expect(calendar).toHaveText('Всё время');
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Период аналитики' }).locator('button[aria-controls]')).toHaveText('Всё время');
+});
+
+test('phone: analytics period wraps under the title, full width, 44px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await enter(page, 'admin');
+  const calendar = page.getByRole('group', { name: 'Период аналитики' }).locator('button[aria-controls]');
+  await expect(calendar).toBeVisible();
+  const title = (await page.getByRole('heading', { name: 'Аналитика', exact: true }).boundingBox())!;
+  const box = (await calendar.boundingBox())!;
+  expect(box.y).toBeGreaterThan(title.y + title.height - 1);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  const card = (await page.getByRole('group', { name: 'Период аналитики' }).boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(card.width - 1);
+  const r = await page.evaluate(() => ({ sw: document.scrollingElement!.scrollWidth, w: window.innerWidth }));
+  expect(r.sw).toBeLessThanOrEqual(r.w);
 });
 
 test('kanban drag persists stage after reload, opens existing room editor', async ({
