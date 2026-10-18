@@ -21,7 +21,6 @@ FOLDER_ID = "b1gibd821or94p6f9v1q"
 SA_ID = "aje4r8khao2t9nl9dp8e"
 FUNC_NAME = "multiframe-partner-api"
 GW_NAME = "multiframe-partner-gw"
-BUCKET_NAME = os.environ.get("PARTNERS_BUCKET", "multiframe-partner-data")
 ROOT = Path(__file__).resolve().parents[1]
 API_DIR = ROOT / "apps" / "api"
 KEY_PATHS = [
@@ -242,11 +241,17 @@ def load_storage_env() -> dict[str, str]:
             data = json.loads(secrets_path.read_text(encoding="utf-8"))
         except Exception as e:
             print("WARN read partner-storage.json:", e)
-    bucket = os.environ.get("PARTNERS_BUCKET") or data.get("PARTNERS_BUCKET") or ""
+    bucket = (os.environ.get("PARTNERS_BUCKET") or data.get("PARTNERS_BUCKET") or "").strip()
+    materials = (os.environ.get("MATERIALS_BUCKET") or data.get("MATERIALS_BUCKET") or "").strip()
     access = os.environ.get("YC_ACCESS_KEY_ID") or data.get("YC_ACCESS_KEY_ID") or ""
     secret = os.environ.get("YC_SECRET_ACCESS_KEY") or data.get("YC_SECRET_ACCESS_KEY") or ""
     out: dict[str, str] = {}
     if bucket and access and secret:
+        if materials and materials == bucket:
+            raise SystemExit(
+                "MATERIALS_BUCKET совпадает с PARTNERS_BUCKET. "
+                "Материалы нельзя писать в бакет кабинета."
+            )
         out = {
             "PARTNERS_BUCKET": bucket,
             "YC_ACCESS_KEY_ID": access,
@@ -254,7 +259,15 @@ def load_storage_env() -> dict[str, str]:
             "YC_REGION": data.get("YC_REGION") or os.environ.get("YC_REGION") or "ru-central1",
             "PLATFORM_KEY": "platform-v2.json",
         }
-        print("storage env: bucket", bucket)
+        if materials:
+            out["MATERIALS_BUCKET"] = materials
+            print("storage env: bucket", bucket, "materials", materials)
+        else:
+            print(
+                "storage env: bucket",
+                bucket,
+                "(MATERIALS_BUCKET не задан — загрузка материалов ответит 503)",
+            )
     else:
         print("storage env: none (in-memory seed; set ~/.yc/partner-storage.json for Object Storage)")
     return out
@@ -266,14 +279,22 @@ def try_ensure_bucket_and_keys(token: str) -> dict[str, str]:
     if existing:
         return existing
 
+    bucket_name = (os.environ.get("PARTNERS_BUCKET") or "").strip()
+    if not bucket_name:
+        print(
+            "PARTNERS_BUCKET не задан — бакет кабинета не создаётся, "
+            "имя multiframe-partner-data не подставляется. Деплой продолжится с in-memory seed."
+        )
+        return {}
+
     # Create bucket via Object Storage API (S3-compatible needs keys; use Resource Manager / storage API)
-    print("trying to create Object Storage bucket", BUCKET_NAME)
+    print("trying to create Object Storage bucket", bucket_name)
     status, body = api_soft(
         "POST",
         "https://storage.api.cloud.yandex.net/storage/v1/buckets",
         token,
         {
-            "name": BUCKET_NAME,
+            "name": bucket_name,
             "folderId": FOLDER_ID,
             "defaultStorageClass": "STANDARD",
             "maxSize": "1073741824",
@@ -285,7 +306,7 @@ def try_ensure_bucket_and_keys(token: str) -> dict[str, str]:
         },
     )
     if status in (200, 201):
-        print("bucket created", BUCKET_NAME)
+        print("bucket created", bucket_name)
     elif status == 409 or (isinstance(body, dict) and "already" in json.dumps(body).lower()):
         print("bucket already exists or conflict", status, body)
     else:
@@ -324,7 +345,7 @@ def try_ensure_bucket_and_keys(token: str) -> dict[str, str]:
 
     if access_key and secret_key:
         secrets = {
-            "PARTNERS_BUCKET": BUCKET_NAME,
+            "PARTNERS_BUCKET": bucket_name,
             "YC_ACCESS_KEY_ID": access_key,
             "YC_SECRET_ACCESS_KEY": secret_key,
             "YC_REGION": "ru-central1",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -169,18 +170,30 @@ def load_storage_env() -> dict[str, str]:
     if not STORAGE_PATH.is_file():
         return {}
     data = json.loads(STORAGE_PATH.read_text(encoding="utf-8"))
-    bucket = data.get("PARTNERS_BUCKET") or ""
-    access = data.get("YC_ACCESS_KEY_ID") or ""
-    secret = data.get("YC_SECRET_ACCESS_KEY") or ""
+    bucket = (os.environ.get("PARTNERS_BUCKET") or data.get("PARTNERS_BUCKET") or "").strip()
+    materials = (os.environ.get("MATERIALS_BUCKET") or data.get("MATERIALS_BUCKET") or "").strip()
+    access = os.environ.get("YC_ACCESS_KEY_ID") or data.get("YC_ACCESS_KEY_ID") or ""
+    secret = os.environ.get("YC_SECRET_ACCESS_KEY") or data.get("YC_SECRET_ACCESS_KEY") or ""
     if not (bucket and access and secret):
+        print("PARTNERS_BUCKET не задан — окружение хранилища не передаётся, имя бакета не подставляется.")
         return {}
-    return {
+    if materials and materials == bucket:
+        raise SystemExit(
+            "MATERIALS_BUCKET совпадает с PARTNERS_BUCKET. "
+            "Материалы нельзя писать в бакет кабинета."
+        )
+    out = {
         "PARTNERS_BUCKET": bucket,
         "YC_ACCESS_KEY_ID": access,
         "YC_SECRET_ACCESS_KEY": secret,
-        "YC_REGION": data.get("YC_REGION") or "ru-central1",
+        "YC_REGION": data.get("YC_REGION") or os.environ.get("YC_REGION") or "ru-central1",
         "PLATFORM_KEY": "platform-v2.json",
     }
+    if materials:
+        out["MATERIALS_BUCKET"] = materials
+    else:
+        print("MATERIALS_BUCKET не задан — загрузка материалов ответит 503.")
+    return out
 
 
 def find_function_id(token: str) -> str:

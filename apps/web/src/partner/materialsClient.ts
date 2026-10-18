@@ -178,14 +178,31 @@ export async function deleteMaterialItem(id: string): Promise<PublicMaterial[]> 
 
 export type MaterialContent =
   | { kind: 'stub'; stub: string; name: string }
-  | { kind: 'file'; name: string; mime: string; blob: Blob };
+  | { kind: 'file'; name: string; mime: string; blob: Blob }
+  | { kind: 'remote'; name: string; mime: string; url: string };
+
+type MaterialPayload = {
+  name?: string;
+  mime?: string | null;
+  base64?: string;
+  stub?: string;
+  url?: string;
+};
 
 export async function openMaterial(item: PublicMaterial): Promise<MaterialContent> {
   if (!item.hasFile && item.stub) {
     return { kind: 'stub', stub: item.stub, name: item.name };
   }
   if (useRemote()) {
-    const data = await apiMaterialContent(item.id);
+    const data: MaterialPayload = await apiMaterialContent(item.id);
+    if (data.url) {
+      return {
+        kind: 'remote',
+        name: data.name || item.name,
+        mime: data.mime || item.mime || 'application/octet-stream',
+        url: data.url,
+      };
+    }
     if (data.stub && !data.base64) {
       return { kind: 'stub', stub: data.stub, name: data.name || item.name };
     }

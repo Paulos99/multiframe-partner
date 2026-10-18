@@ -52,6 +52,7 @@ jobs:
       - name: Optional Object Storage env
         env:
           PARTNERS_BUCKET: ${{ secrets.PARTNERS_BUCKET }}
+          MATERIALS_BUCKET: ${{ secrets.MATERIALS_BUCKET }}
           YC_ACCESS_KEY_ID: ${{ secrets.YC_ACCESS_KEY_ID }}
           YC_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_ACCESS_KEY }}
         run: |
@@ -59,13 +60,26 @@ jobs:
             python - <<'PY'
           import json, os
           from pathlib import Path
+          partners = os.environ["PARTNERS_BUCKET"].strip()
+          materials = os.environ.get("MATERIALS_BUCKET", "").strip()
+          if materials and materials == partners:
+              raise SystemExit(
+                  "MATERIALS_BUCKET совпадает с PARTNERS_BUCKET. "
+                  "Материалы нельзя писать в бакет кабинета."
+              )
+          payload = {
+              "PARTNERS_BUCKET": partners,
+              "YC_ACCESS_KEY_ID": os.environ["YC_ACCESS_KEY_ID"],
+              "YC_SECRET_ACCESS_KEY": os.environ["YC_SECRET_ACCESS_KEY"],
+              "YC_REGION": "ru-central1",
+          }
+          if materials:
+              payload["MATERIALS_BUCKET"] = materials
+              print("MATERIALS_BUCKET will be passed to the function")
+          else:
+              print("MATERIALS_BUCKET is empty — material uploads will return 503")
           Path.home().joinpath(".yc").mkdir(parents=True, exist_ok=True)
-          Path.home().joinpath(".yc/partner-storage.json").write_text(json.dumps({
-            "PARTNERS_BUCKET": os.environ["PARTNERS_BUCKET"],
-            "YC_ACCESS_KEY_ID": os.environ["YC_ACCESS_KEY_ID"],
-            "YC_SECRET_ACCESS_KEY": os.environ["YC_SECRET_ACCESS_KEY"],
-            "YC_REGION": "ru-central1",
-          }, indent=2))
+          Path.home().joinpath(".yc/partner-storage.json").write_text(json.dumps(payload, indent=2))
           print("partner-storage.json written")
           PY
           else

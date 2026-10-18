@@ -15,7 +15,7 @@ import styles from './partner.module.css';
 
 type Preview =
   | { mode: 'stub'; name: string; stub: string }
-  | { mode: 'file'; name: string; mime: string; url: string };
+  | { mode: 'file'; name: string; mime: string; url: string; revoke: boolean };
 
 export function MaterialsPanel({ canManage }: { canManage: boolean }) {
   const [items, setItems] = useState<PublicMaterial[]>([]);
@@ -48,7 +48,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (!preview || preview.mode !== 'file') return;
+    if (!preview || preview.mode !== 'file' || !preview.revoke) return;
     const url = preview.url;
     return () => URL.revokeObjectURL(url);
   }, [preview]);
@@ -112,12 +112,21 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
       const content = await openMaterial(item);
       if (content.kind === 'stub') {
         setPreview({ mode: 'stub', name: content.name, stub: content.stub });
+      } else if (content.kind === 'remote') {
+        setPreview({
+          mode: 'file',
+          name: content.name,
+          mime: content.mime,
+          url: content.url,
+          revoke: false,
+        });
       } else {
         setPreview({
           mode: 'file',
           name: content.name,
           mime: content.mime,
           url: URL.createObjectURL(content.blob),
+          revoke: true,
         });
       }
     } catch (ex) {
@@ -343,9 +352,20 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
               ) : (
                 <p className={styles.lead}>
                   Файл загружен.{' '}
-                  <a className={styles.callLink} href={preview.url} download={preview.name}>
-                    Скачать
-                  </a>
+                  {preview.revoke ? (
+                    <a className={styles.callLink} href={preview.url} download={preview.name}>
+                      Скачать
+                    </a>
+                  ) : (
+                    <a
+                      className={styles.callLink}
+                      href={preview.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Скачать
+                    </a>
+                  )}
                 </p>
               )}
             </div>
