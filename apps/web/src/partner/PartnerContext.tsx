@@ -12,6 +12,8 @@ import type {
   JobObject,
   OrgSettings,
   PartnerProfile,
+  Project,
+  ProjectInput,
   SessionUser,
   UserRole,
 } from '../../../../packages/shared/partner';
@@ -95,7 +97,10 @@ import {
   flushOutbox,
   loadVisibleObjects,
   rememberObjectDocuments,
+  flushProjectOutbox,
+  loadVisibleProjects,
   saveObjectSynced,
+  saveProjectSynced,
 } from './syncEngine';
 
 export type StaffMember = {
@@ -175,12 +180,25 @@ type PartnerApi = {
   /** @deprecated */
   partnerListExecutors: () => StaffMember[];
   refreshObjects: () => Promise<void>;
+  projects: Project[];
+  projectsLoading: boolean;
+  projectsError: string | null;
+  projectsUnavailable: boolean;
+  refreshProjects: () => Promise<void>;
+  createProject: (input: ProjectInput) => Promise<Project>;
+  updateProject: (id: string, input: ProjectInput) => Promise<Project>;
+  attachRoomToProject: (roomId: string, projectId: string) => Promise<void>;
   saveObject: (input: Partial<JobObject> & { id?: string }) => Promise<JobObject>;
   deleteObject: (id: string) => Promise<void>;
   flushObjectQueue: () => Promise<void>;
   /** Открыть калькулятор. objectId — обновить эту карточку, null — новый объект на первом расчёте. */
   requestCalculator: (objectId: string | null) => void;
   calcRequest: { objectId: string | null; nonce: number; areaM2?: number | null } | null;
+  requestDiagnosis: (objectId: string) => void;
+  clearDiagnosis: () => void;
+  diagnosisRequest: { objectId: string; nonce: number } | null;
+  openObject: (id: string) => void;
+  openedObjectId: string | null;
   attachCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
   refresh: () => void;
@@ -196,6 +214,12 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [tick, setTick] = useState(0);
   const [objects, setObjects] = useState<JobObject[]>([]);
   const [objectsLoading, setObjectsLoading] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [projectsUnavailable, setProjectsUnavailable] = useState(false);
+  const [diagnosisRequest, setDiagnosisRequest] = useState<{ objectId: string; nonce: number } | null>(null);
+  const [openedObjectId, setOpenedObjectId] = useState<string | null>(null);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const [calculations, setCalculations] = useState<CachedCalculation[]>([]);
@@ -237,17 +261,42 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     }
   }, [remote]);
 
+  const refreshProjects = useCallback(async () => {
+    const session = loadSession();
+    if (!session) {
+      setProjects([]);
+      setProjectsError(null);
+      setProjectsUnavailable(false);
+      return;
+    }
+    setProjectsLoading(true);
+    try {
+      const result = await loadVisibleProjects(session, remote);
+      setProjects(result.projects);
+      setProjectsError(result.error);
+      setProjectsUnavailable(result.unavailable);
+    } catch (err) {
+      setProjects([]);
+      setProjectsError(err instanceof Error ? err.message : 'Не удалось загрузить проекты');
+      setProjectsUnavailable(true);
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, [remote]);
+
   const flushObjectQueue = useCallback(async () => {
     const session = loadSession();
     if (!session) return;
     const result = await flushOutbox(session, remote);
-    if (result === 'auth') setAuthHold(true);
-    if (result === 'ok' || result === 'idle') {
+    const projectsResult = await flushProjectOutbox(session, remote);
+    if (result === 'auth' || projectsResult === 'auth') setAuthHold(true);
+    else if (result === 'ok' || result === 'idle') {
       setAuthHold(false);
       await flushDocumentQueue();
     }
     await refreshObjects();
-  }, [remote, refreshObjects]);
+    await refreshProjects();
+  }, [remote, refreshObjects, refreshProjects]);
 
   const refresh = useCallback(() => {
     setUser(loadSession());
@@ -313,8 +362,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   }, [remote, flushObjectQueue]);
 
   useEffect(() => {
-    if (user) void refreshObjects();
-  }, [user?.id, refreshObjects]);
+    if (user) {
+      void refreshObjects();
+      void refreshProjects();
+    }
+  }, [user?.id, refreshObjects, refreshProjects]);
 
   useEffect(() => {
     const onOnline = () => {
@@ -417,7 +469,12 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     void rememberSession({ token: null, apiBase: apiBase(), userId: null });
     setUser(null);
     setCalcRequest(null);
+    setDiagnosisRequest(null);
+    setOpenedObjectId(null);
     setObjects([]);
+    setProjects([]);
+    setProjectsError(null);
+    setProjectsUnavailable(false);
     setStaffCache([]);
     setCalculations([]);
   }, [user, remote]);
@@ -608,6 +665,35 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, remote, refreshObjects],
   );
 
+  const createProject = useCallback(
+    async (input: ProjectInput) => {
+      if (!user) throw new Error('Нет сессии');
+      const project = await saveProjectSynced(user, remote, input);
+      await refreshProjects();
+      return project;
+    },
+    [user, remote, refreshProjects],
+  );
+
+  const updateProject = useCallback(
+    async (id: string, input: ProjectInput) => {
+      if (!user) throw new Error('Нет сессии');
+      const project = await saveProjectSynced(user, remote, input, id);
+      await refreshProjects();
+      return project;
+    },
+    [user, remote, refreshProjects],
+  );
+
+  const attachRoomToProject = useCallback(
+    async (roomId: string, projectId: string) => {
+      const room = objects.find((obj) => obj.id === roomId);
+      await saveObject({ ...(room || {}), id: roomId, projectId });
+      await refreshProjects();
+    },
+    [objects, saveObject, refreshProjects],
+  );
+
   const deleteObject = useCallback(
     async (id: string) => {
       if (!user) throw new Error('Нет сессии');
@@ -616,6 +702,14 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     },
     [user, remote, refreshObjects],
   );
+
+  const requestDiagnosis = useCallback((objectId: string) => {
+    setDiagnosisRequest({ objectId, nonce: Date.now() });
+  }, []);
+
+  const clearDiagnosis = useCallback(() => setDiagnosisRequest(null), []);
+
+  const openObject = useCallback((id: string) => setOpenedObjectId(id), []);
 
   const requestCalculator = useCallback((objectId: string | null) => {
     const areaM2 = objectId ? objects.find(obj => obj.id === objectId)?.room.areaM2 : null;
@@ -753,11 +847,24 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
             : []
         ).map(asStaff),
       refreshObjects,
+      projects,
+      projectsLoading,
+      projectsError,
+      projectsUnavailable,
+      refreshProjects,
+      createProject,
+      updateProject,
+      attachRoomToProject,
       saveObject,
       deleteObject,
       flushObjectQueue,
       requestCalculator,
       calcRequest,
+      requestDiagnosis,
+      clearDiagnosis,
+      diagnosisRequest,
+      openObject,
+      openedObjectId,
       attachCalculation,
       noteTool,
       refresh,
@@ -787,11 +894,24 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerResetStaffPassword,
       partnerDeleteStaff,
       refreshObjects,
+      projects,
+      projectsLoading,
+      projectsError,
+      projectsUnavailable,
+      refreshProjects,
+      createProject,
+      updateProject,
+      attachRoomToProject,
       saveObject,
       deleteObject,
       flushObjectQueue,
       requestCalculator,
       calcRequest,
+      requestDiagnosis,
+      clearDiagnosis,
+      diagnosisRequest,
+      openObject,
+      openedObjectId,
       attachCalculation,
       noteTool,
       refresh,

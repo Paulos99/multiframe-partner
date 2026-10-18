@@ -5,6 +5,8 @@ import type {
   JobObject,
   JobObjectDocument,
   OrgSettings,
+  Project,
+  ProjectInput,
   SessionUser,
   UserRole,
 } from '../../../../packages/shared/partner';
@@ -206,6 +208,27 @@ export async function apiPatchObject(
     body: JSON.stringify(patch),
   });
   return data.object;
+}
+
+export async function apiListProjects(): Promise<Project[]> {
+  const data = await request<{ projects: Project[] }>('/projects');
+  return data.projects;
+}
+
+export async function apiCreateProject(input: ProjectInput): Promise<Project> {
+  const data = await request<{ project: Project }>('/projects', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data.project;
+}
+
+export async function apiUpdateProject(id: string, input: ProjectInput): Promise<Project> {
+  const data = await request<{ project: Project }>(`/projects/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data.project;
 }
 
 export async function apiDeleteObject(

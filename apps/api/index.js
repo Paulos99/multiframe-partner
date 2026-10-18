@@ -2,6 +2,8 @@
  * Yandex Cloud Function HTTP handler — multi-role partner platform.
  * Storage: Object Storage JSON or in-memory seed.
  */
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
@@ -9,6 +11,7 @@ import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
 import { documentsForRole, findVisibleDocument } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
+import { applyObjectProjectFields, handleProjects } from './projects.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -240,8 +243,31 @@ async function s3Delete(key) {
   }
 }
 
+/** Локальный JSON только без бакета. В облаке платформа по-прежнему в PARTNERS_BUCKET. */
+function platformFilePath() {
+  if (partnerBucket()) return '';
+  return String(process.env.PLATFORM_FILE || '').trim();
+}
+
+export function resetPlatformMemoryForTests() {
+  memoryPlatform = null;
+  memoryEvents = null;
+}
+
 async function loadPlatform() {
   if (memoryPlatform) return memoryPlatform;
+  const file = platformFilePath();
+  if (file) {
+    try {
+      const parsed = JSON.parse(readFileSync(file, 'utf8'));
+      if (parsed?.users && parsed?.orgs) {
+        memoryPlatform = parsed;
+        return memoryPlatform;
+      }
+    } catch (e) {
+      if (e?.code !== 'ENOENT') console.warn('platform file load failed', e?.message || e);
+    }
+  }
   const bucket = partnerBucket();
   if (bucket) {
     try {
@@ -277,6 +303,12 @@ async function loadPlatform() {
 
 async function savePlatform(platform) {
   memoryPlatform = platform;
+  const file = platformFilePath();
+  if (file) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(platform, null, 2));
+    return;
+  }
   await s3Put(PLATFORM_S3_KEY(), JSON.stringify(platform, null, 2));
 }
 
@@ -415,10 +447,16 @@ function skippedHistory(existing, body, actor) {
   ].slice(0, 50);
 }
 
-function normalizeObjectInput(body, existing, actor, org) {
+function normalizeObjectInput(body, existing, actor, org, platform) {
   const now = clampClientTime(body?.updatedAt);
   const status = body.status || existing?.status || 'draft';
   const allowed = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
+  const link = applyObjectProjectFields(
+    body,
+    existing,
+    platform,
+    existing?.orgId || actor.orgId,
+  );
   return {
     id: existing?.id || body.id || uid('obj'),
     orgId: existing?.orgId || actor.orgId,
@@ -437,6 +475,7 @@ function normalizeObjectInput(body, existing, actor, org) {
     history: existing?.history || [],
     // PDF только через POST /objects/:id/documents — обычный PATCH их не затирает.
     documents: Array.isArray(existing?.documents) ? existing.documents : [],
+    ...link,
   };
 }
 
@@ -819,6 +858,19 @@ export async function handler(event = {}) {
       uid,
     });
     if (materialsResponse) return materialsResponse;
+
+    const projectsResponse = await handleProjects({
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      json,
+      getBody: () => getBody(event),
+      savePlatform,
+      uid,
+      objectVisibleTo,
+      pushActivity,
+    });
+    if (projectsResponse) return projectsResponse;
 
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
@@ -1323,7 +1375,7 @@ export async function handler(event = {}) {
         await savePlatform(platform);
         return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
       }
-      const obj = normalizeObjectInput(body, existing, user, org);
+      const obj = normalizeObjectInput(body, existing, user, org, platform);
       if (existing) {
         if (body.status && body.status !== existing.status) {
           obj.history = [
@@ -1422,7 +1474,7 @@ export async function handler(event = {}) {
       if (body.assignedTo !== undefined && !['owner', 'sales'].includes(user.role)) {
         return json(403, { message: 'Назначать объекты может владелец или менеджер' });
       }
-      const next = normalizeObjectInput(body, existing, user, org);
+      const next = normalizeObjectInput(body, existing, user, org, platform);
       if (body.status && body.status !== existing.status) {
         next.history = [
           {

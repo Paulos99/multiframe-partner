@@ -261,8 +261,35 @@ export type JobObject = {
   history: JobObjectHistoryEntry[];
   /** Версии PDF калькулятора, новые первыми. Предыдущие не затираются. */
   documents?: JobObjectDocument[];
+  /** Помещение входит в проект компании. У старых объектов поля нет. */
+  projectId?: string | null;
+  /** Название помещения внутри проекта. У старых объектов поля нет. */
+  roomName?: string | null;
   /** Local-only pending sync flag. */
   pendingSync?: boolean;
+};
+
+/** Проект компании: несколько помещений одного адреса. Сумм и смет в записи нет. */
+export type Project = {
+  id: string;
+  orgId: string;
+  name: string;
+  clientName: string;
+  clientPhone: string;
+  address: string;
+  city: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+};
+
+export type ProjectInput = {
+  id?: string;
+  name?: string;
+  clientName?: string;
+  clientPhone?: string;
+  address?: string;
+  city?: string;
 };
 
 export type ActivityEvent = {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { canSeePrices, JOB_OBJECT_STATUS_LABELS, type JobObject, type UserRole } from '../../../../packages/shared/partner';
 import { formatRub } from './estimate';
+import { preliminaryRoomTotal } from './projectSummary';
 import styles from './Projects.module.css';
 
 // Structural UI contract; persistence and API belong to projectClient.
@@ -10,17 +11,17 @@ export type ProjectView = {
 };
 export type ProjectRoom = JobObject & { projectId?: string | null; roomName?: string | null };
 
-export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenRoom, onCalculate, onAttach }: {
+export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenRoom, onDiagnose, onCalculate, onAttach }: {
   project: ProjectView; rooms: ProjectRoom[]; ungrouped: ProjectRoom[]; role: UserRole;
-  onBack: () => void; onOpenRoom: (id: string) => void; onCalculate: (id: string) => void;
+  onBack: () => void; onOpenRoom: (id: string) => void; onDiagnose?: (id: string) => void;
+  onCalculate: (id: string) => void;
   onAttach?: (roomId: string, projectId: string) => Promise<void>;
 }) {
   const [roomId, setRoomId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const priced = canSeePrices(role);
-  const complete = rooms.filter(room => room.estimate && typeof room.estimate.totalCost === 'number' && Number.isFinite(room.estimate.totalCost));
-  const total = complete.reduce((sum, room) => sum + (room.estimate?.totalCost || 0), 0);
+  const summary = preliminaryRoomTotal(rooms);
   const eligible = ungrouped.filter(room => room.orgId === project.orgId && !room.projectId);
   async function attach() {
     if (!roomId || !onAttach) return;
@@ -35,8 +36,8 @@ export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenR
       <p className={styles.muted}>{[project.clientName, project.address, project.city].filter(Boolean).join(' · ') || 'Контакт и адрес пока не заполнены'}</p>
     </div><span className={styles.badge}>Помещений: {rooms.length}</span></div>
     {priced && rooms.length > 0 ? <div className={styles.summary}>
-      <div><span>Предварительный итог</span><strong>{complete.length ? formatRub(total) : 'Расчётов пока нет'}</strong></div>
-      <p>Рассчитано {complete.length} из {rooms.length} помещений. {complete.length < rooms.length ? 'Сумма неполная. ' : ''}Итог обновляется при пересчёте комнат; это ещё не зафиксированное предложение.</p>
+      <div><span>Предварительный итог</span><strong>{summary.calculated ? formatRub(summary.total) : 'Расчётов пока нет'}</strong></div>
+      <p>Рассчитано {summary.calculated} из {summary.rooms} помещений. {summary.calculated < summary.rooms ? 'Сумма неполная. ' : ''}Итог обновляется при пересчёте комнат; это ещё не зафиксированное предложение.</p>
     </div> : null}
     <div className={styles.rooms}>
       {rooms.map(room => <article className={styles.room} key={room.id}>
@@ -45,6 +46,7 @@ export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenR
         </div>
         <div className={styles.actions}>
           <button className={styles.secondary} onClick={() => onOpenRoom(room.id)}>Карточка и документы</button>
+          {onDiagnose && role !== 'crew' && role !== 'admin' ? <button className={styles.secondary} onClick={() => onDiagnose(room.id)}>Диагностика</button> : null}
           {role !== 'crew' && role !== 'admin' ? <button className={styles.primary} onClick={() => onCalculate(room.id)}>Рассчитать</button> : null}
         </div>
       </article>)}

@@ -4,11 +4,11 @@ import { ProjectDetail, type ProjectRoom, type ProjectView } from './ProjectDeta
 import styles from './Projects.module.css';
 
 export type NewProjectInput = Pick<ProjectView, 'name' | 'clientName' | 'clientPhone' | 'address' | 'city'>;
-export function ProjectsPanel({ projects, rooms, role, loading, error, onRetry, onCreate, onAttach, onOpenRoom, onCalculate }: {
+export function ProjectsPanel({ projects, rooms, role, loading, error, onRetry, onCreate, onAttach, onOpenRoom, onDiagnose, onCalculate }: {
   projects: ProjectView[]; rooms: ProjectRoom[]; role: UserRole; loading?: boolean; error?: string;
   onRetry: () => void; onCreate?: (input: NewProjectInput) => Promise<ProjectView>;
   onAttach?: (roomId: string, projectId: string) => Promise<void>;
-  onOpenRoom: (id: string) => void; onCalculate: (id: string) => void;
+  onOpenRoom: (id: string) => void; onDiagnose?: (id: string) => void; onCalculate: (id: string) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -33,7 +33,7 @@ export function ProjectsPanel({ projects, rooms, role, loading, error, onRetry, 
   }
   if (selected) return <ProjectDetail key={selected.id} project={selected} role={role}
     rooms={rooms.filter(room => room.projectId === selected.id && room.orgId === selected.orgId)} ungrouped={ungrouped}
-    onBack={() => setSelectedId(null)} onOpenRoom={onOpenRoom} onCalculate={onCalculate} onAttach={onAttach} />;
+    onBack={() => setSelectedId(null)} onOpenRoom={onOpenRoom} onDiagnose={onDiagnose} onCalculate={onCalculate} onAttach={onAttach} />;
   return <section className={styles.panel} aria-label="Проекты">
     <div className={styles.header}><div><p className={styles.caption}>Клиент · помещения · результат</p><h2>Проекты</h2>
       <p className={styles.muted}>Объедините комнаты одной квартиры. Расчёты и документы останутся у каждого помещения.</p>

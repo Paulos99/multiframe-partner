@@ -135,6 +135,14 @@ export function ObjectsPanel({
   const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!api.openedObjectId) return;
+    if (!api.objects.some((obj) => obj.id === api.openedObjectId)) return;
+    setStatusFilter('all');
+    setQuery('');
+    setSelectedId(api.openedObjectId);
+  }, [api.openedObjectId, api.objects]);
+
+  useEffect(() => {
     if (!filterRequest) return;
     setStatusFilter(filterRequest.status);
     setQuery('');

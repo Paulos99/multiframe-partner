@@ -50,6 +50,8 @@ GATEWAY_PATHS = (
     "/objects/{objectId}",
     "/objects/{objectId}/documents",
     "/objects/{objectId}/documents/{docId}",
+    "/projects",
+    "/projects/{projectId}",
     "/analytics/events",
     "/analytics/dashboard",
     "/materials",

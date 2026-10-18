@@ -13,6 +13,8 @@ import type {
   JobObjectDocument,
   JobObjectStatus,
   OrgSettings,
+  Project,
+  ProjectInput,
   SessionUser,
   UserRole,
 } from '../../../../packages/shared/partner';
@@ -31,6 +33,7 @@ import {
   redactOrgPrices,
   STAFF_ROLES,
 } from '../../../../packages/shared/partner';
+import { carriedObjectLink } from './objectLink';
 import {
   buildLocalDemoAnalytics,
   buildLocalDemoObjects,
@@ -47,6 +50,8 @@ const ANALYTICS_KEY = 'mf_partner_analytics_v1';
 const ANALYTICS_QUEUE_KEY = 'mf_partner_analytics_queue_v1';
 const OBJECTS_CACHE_KEY = 'mf_partner_objects_v1';
 const OBJECTS_QUEUE_KEY = 'mf_partner_objects_queue_v1';
+const PROJECTS_CACHE_KEY = 'mf_partner_projects_v1';
+const PROJECTS_READY_KEY = 'mf_partner_projects_ready_v1';
 const HISTORY_RESET_KEY = 'mf_partner_history_reset_v2';
 const DEMO_ANALYTICS_SEED_KEY = 'mf_partner_demo_analytics_seed_v1';
 const ANALYTICS_CAP = 2000;
@@ -75,6 +80,8 @@ export type PartnerDb = {
   links: ExecutorLink[];
   activity: ActivityEvent[];
   objects: JobObject[];
+  /** Проекты компании. Пустой список — не демо-подмена сервера. */
+  projects?: Project[];
   /** Методические материалы. Нет поля — показываем демо и не записываем его. */
   materials?: MaterialNode[];
 };
@@ -101,6 +108,7 @@ function defaultDb(): PartnerDb {
     links: [],
     activity: [],
     objects: buildLocalDemoObjects(),
+    projects: [],
   };
 }
 
@@ -129,6 +137,7 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     links: raw.links || [],
     activity: raw.activity || [],
     objects: raw.objects || [],
+    projects: Array.isArray(raw.projects) ? raw.projects : [],
     ...(materials ? { materials } : {}),
   };
 }
@@ -736,6 +745,85 @@ export function listLocalObjects(user: SessionUser): JobObject[] {
     .map((o) => redactObjectForRole(o, user.role));
 }
 
+function projectVisibleLocal(user: SessionUser, project: Project, objects: JobObject[]): boolean {
+  if (user.role === 'admin') return true;
+  if (!user.orgId || project.orgId !== user.orgId) return false;
+  if (user.role === 'owner' || user.role === 'sales') return true;
+  return objects.some((obj) => obj.projectId === project.id && objectVisible(user, obj));
+}
+
+export function listLocalProjects(user: SessionUser): Project[] {
+  const db = loadDb();
+  return (db.projects || []).filter((project) => projectVisibleLocal(user, project, db.objects));
+}
+
+export function upsertLocalProject(input: ProjectInput, actor: SessionUser): Project {
+  if (actor.role !== 'owner' && actor.role !== 'sales') throw new Error('Недостаточно прав');
+  if (!actor.orgId) throw new Error('Нет организации');
+  const db = loadDb();
+  const projects = db.projects || [];
+  const existing = input.id ? projects.find((project) => project.id === input.id) : undefined;
+  if (existing && existing.orgId !== actor.orgId) throw new Error('Недостаточно прав');
+  const name = String(input.name ?? existing?.name ?? '').trim();
+  if (!name) throw new Error('Укажите название проекта');
+  const now = new Date().toISOString();
+  const project: Project = {
+    id: existing?.id || input.id || uid('prj'),
+    orgId: existing?.orgId || actor.orgId,
+    name: name.slice(0, 250),
+    clientName: String(input.clientName ?? existing?.clientName ?? '').trim(),
+    clientPhone: String(input.clientPhone ?? existing?.clientPhone ?? '').trim(),
+    address: String(input.address ?? existing?.address ?? '').trim(),
+    city: String(input.city ?? existing?.city ?? '').trim(),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    createdBy: existing?.createdBy || actor.id,
+  };
+  saveDb({
+    ...db,
+    projects: existing
+      ? projects.map((item) => (item.id === project.id ? project : item))
+      : [project, ...projects],
+  });
+  return project;
+}
+
+export function cacheProjects(projects: Project[]): void {
+  try {
+    localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(projects));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadCachedProjects(): Project[] {
+  try {
+    const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as Project[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markProjectsApiReady(ready: boolean): void {
+  try {
+    if (ready) localStorage.setItem(PROJECTS_READY_KEY, '1');
+    else localStorage.removeItem(PROJECTS_READY_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function projectsApiReady(): boolean {
+  try {
+    return localStorage.getItem(PROJECTS_READY_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function deleteLocalObject(id: string, actor: SessionUser): void {
   const db = loadDb();
   const existing = db.objects.find((o) => o.id === id);
@@ -779,6 +867,7 @@ export function upsertLocalObject(
     history: existing?.history || [],
     documents: existing?.documents,
     pendingSync: true,
+    ...carriedObjectLink(input, existing),
   };
 
   if (!existing) {
