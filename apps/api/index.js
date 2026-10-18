@@ -4,7 +4,7 @@ import { handleProfile } from './profileRoutes.js';
  * Storage: Object Storage JSON or in-memory seed.
  */
 import bcrypt from 'bcryptjs';
-import { SignJWT, jwtVerify } from 'jose';
+import { signToken as signAuthToken, verifyToken } from './authTokens.js';
 import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
 import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
@@ -29,8 +29,11 @@ import {
 
 ensureIndexFromTsv(ruCitiesTsv);
 
-const JWT_SECRET = () => new TextEncoder().encode(process.env.JWT_SECRET || 'dev-secret-change-me');
-const ANALYTICS_ADMIN_KEY = () => process.env.ANALYTICS_ADMIN_KEY || 'admin1234';
+const ANALYTICS_ADMIN_KEY = () => {
+  const key = process.env.ANALYTICS_ADMIN_KEY;
+  if (!key) throw new Error('ANALYTICS_ADMIN_KEY must be configured');
+  return key;
+};
 const PLATFORM_S3_KEY = () => process.env.PLATFORM_KEY || 'platform-v2.json';
 const ANALYTICS_S3_KEY = () => process.env.ANALYTICS_KEY || 'analytics-events.json';
 const ANALYTICS_CAP = 5000;
@@ -46,7 +49,7 @@ const DEFAULT_INSTALL = 1500;
 const DEFAULT_DOWEL = 25;
 
 const CORS = {
-  'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
+  'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || 'https://paulos99.github.io',
   'Access-Control-Allow-Headers':
     'Content-Type, Authorization, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
@@ -334,22 +337,17 @@ function findUser(platform, idOrLogin) {
 }
 
 async function signToken(user) {
-  return new SignJWT({ login: user.login, role: normalizeRole(user.role), orgId: user.orgId, sessionVersion: user.sessionVersion || 0 })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setSubject(user.id)
-    .setIssuedAt()
-    .setExpirationTime('12h')
-    .sign(JWT_SECRET());
+  return signAuthToken({ ...user, role: normalizeRole(user.role) });
 }
 
 async function requireAuth(event) {
   const token = getAuth(event);
   if (!token) throw Object.assign(new Error('Unauthorized'), { status: 401 });
-  const { payload } = await jwtVerify(token, JWT_SECRET());
+  const { payload, usedPreviousKey } = await verifyToken(token);
   const platform = await loadPlatform();
   const user = findUser(platform, payload.sub) || findUser(platform, payload.login);
   if (!user || user.loginDisabled || (payload.sessionVersion || 0) !== (user.sessionVersion || 0)) throw Object.assign(new Error('Unauthorized'), { status: 401 });
-  return { platform, user: { ...user, role: normalizeRole(user.role) }, payload };
+  return { platform, user: { ...user, role: normalizeRole(user.role) }, payload, usedPreviousKey };
 }
 
 function assertRole(user, roles) {
@@ -872,9 +870,9 @@ export async function handler(event = {}) {
     }
 
     if (method === 'GET' && path.endsWith('/auth/me')) {
-      const { platform, user } = await requireAuth(event);
+      const { platform, user, usedPreviousKey } = await requireAuth(event);
       const org = user.orgId ? findOrg(platform, user.orgId) : null;
-      return json(200, { user: publicUser(user, org) });
+      return json(200, { user: publicUser(user, org), ...(usedPreviousKey ? { token: await signToken(user) } : {}) });
     }
 
     if (method === 'POST' && path.endsWith('/auth/logout')) {

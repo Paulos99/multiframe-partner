@@ -7,6 +7,8 @@ on:
     paths:
       - 'apps/api/**'
       - 'infra/deploy_yc.py'
+      - 'infra/function_env.py'
+      - 'infra/function_env_test.py'
       - 'infra/function_bundle.py'
       - 'infra/function_package.py'
       - 'infra/verify_function_bundle.py'
@@ -37,7 +39,9 @@ jobs:
         run: pip install cryptography
 
       - name: Test that deploy verifies the zip before upload
-        run: python infra/deploy_verify_guard_test.py
+        run: |
+          python infra/function_env_test.py
+          python infra/deploy_verify_guard_test.py
 
       - name: Write SA key
         env:
@@ -88,4 +92,10 @@ jobs:
           fi
 
       - name: Deploy function + API Gateway
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_SECRET_PREVIOUS: ${{ secrets.JWT_SECRET_PREVIOUS }}
+          ANALYTICS_ADMIN_KEY: ${{ secrets.ANALYTICS_ADMIN_KEY }}
+          JWT_SECRET_PREVIOUS_CLEAR: ${{ vars.JWT_SECRET_PREVIOUS_CLEAR }}
+          CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
         run: python infra/deploy_yc.py

@@ -177,9 +177,6 @@ export async function fetchAnalyticsDashboard(opts: {
       }
     })();
     if (token) headers.Authorization = `Bearer ${token}`;
-    if (opts.mode === 'admin') {
-      headers['X-Analytics-Key'] = 'admin1234';
-    }
     if (opts.partnerLogin) headers['X-Partner-Login'] = opts.partnerLogin;
     if (opts.orgId) headers['X-Analytics-Org'] = opts.orgId;
 
