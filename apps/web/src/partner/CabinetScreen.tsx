@@ -22,6 +22,7 @@ import { SyncStatus } from './SyncStatus';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
 import styles from './partner.module.css';
+import addStyles from './AdminPartners.module.css';
 
 function roleHeading(role: UserRole, user: SessionUser): string {
   const company = user.org?.companyName?.trim();
@@ -184,7 +185,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       {tab === 'partners' ? (
         <TabPanel>
           <div className={`${styles.card} ${styles.panelCard}`}>
-            <div className={styles.sectionHead}>
+            <div className={addStyles.sectionHead}>
               <h2>Партнёры сети</h2>
               <Button
                 variant={addOpen ? 'secondary' : 'primary'}
@@ -203,13 +204,13 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                 <m.div
                   key="add-partner"
                   id="admin-add-partner"
-                  className={styles.addPartnerWrap}
+                  className={addStyles.addPartnerWrap}
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={motionPresets.transition}
                 >
-                  <form className={styles.addPartnerForm} onSubmit={(e) => void onCreate(e)}>
+                  <form className={addStyles.addPartnerForm} onSubmit={(e) => void onCreate(e)}>
                     <h3>Новый партнёр</h3>
                     <div className={styles.grid2}>
                       <label className={styles.field}>
