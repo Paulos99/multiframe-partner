@@ -175,11 +175,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       profile={profileOf(api.user!, api.logout)}
     >
       <FrameBody>
-      <NetworkOverview count={partners.length} onPartners={() => setTab('partners')}
-        onAdd={() => {
-          setTab('partners');
-          setAddOpen(true);
-        }} onLearning={() => setTab('help')} />
+      <NetworkOverview />
 
       {tab === 'partners' ? (
         <TabPanel>
