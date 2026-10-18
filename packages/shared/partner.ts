@@ -223,7 +223,7 @@ export type JobObjectDocument = {
 
 /**
  * Для ролей с ценами — смета. Для монтажника — спецификация без цен.
- * Если пары нет, отдаём тот документ, который есть, чтобы файл не пропал.
+ * Если спецификации нет, монтажнику не выдаём смету с ценами.
  */
 export function documentsForRole(
   docs: JobObjectDocument[] | null | undefined,
@@ -233,7 +233,7 @@ export function documentsForRole(
   const estimates = list.filter((d) => d.kind === 'estimate');
   const specs = list.filter((d) => d.kind === 'spec');
   if (canSeePrices(role)) return estimates.length ? estimates : specs;
-  return specs.length ? specs : estimates;
+  return specs;
 }
 
 export type JobObjectHistoryEntry = {

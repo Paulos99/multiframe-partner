@@ -408,12 +408,12 @@ function publicDocument(doc) {
   };
 }
 
-/** Монтажник получает спецификацию без цен. Если её нет — ту же смету, чтобы файл не пропал. */
+/** Монтажник получает только спецификации без цен, даже если смета — единственный файл. */
 function documentsForRole(docs, role) {
   const list = [...(docs || [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   const estimates = list.filter((d) => d.kind === 'estimate');
   const specs = list.filter((d) => d.kind === 'spec');
-  const picked = canSeePrices(role) ? (estimates.length ? estimates : specs) : specs.length ? specs : estimates;
+  const picked = canSeePrices(role) ? (estimates.length ? estimates : specs) : specs;
   return picked.map(publicDocument);
 }
 
