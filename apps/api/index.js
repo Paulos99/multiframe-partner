@@ -8,7 +8,7 @@ import { signToken as signAuthToken, verifyToken } from './authTokens.js';
 import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
 import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
-import { documentsForRole, findVisibleDocument } from './documentAccess.js';
+import { findVisibleDocument, incomingDocumentKind, visibleDocuments } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
 import {
   loadStoredDocument,
@@ -86,10 +86,6 @@ function assignableStaffRole(raw) {
   return null;
 }
 
-function canSeePrices(role) {
-  return role === 'admin' || role === 'owner' || role === 'sales' || role === 'measurer';
-}
-
 function normalizeOrgSettings(partial = {}) {
   return {
     companyName: String(partial.companyName || '').trim(),
@@ -114,33 +110,9 @@ function normalizeOrgSettings(partial = {}) {
   };
 }
 
-function redactOrg(org) {
-  if (!org) return null;
-  return {
-    ...org,
-    panelPriceRub: 0,
-    pricePerM2: 0,
-    installPricePerM2: null,
-    dowelPriceRub: null,
-  };
-}
-
-function redactEstimate(est) {
-  if (!est) return null;
-  return {
-    panels: est.panels || 0,
-    dowels: est.dowels || 0,
-    panelsCost: null,
-    installCost: null,
-    dowelsCost: null,
-    totalCost: null,
-  };
-}
-
 function publicUser(user, org) {
   const role = normalizeRole(user.role);
   let settings = org ? normalizeOrgSettings(org.settings) : null;
-  if (settings && !canSeePrices(role)) settings = redactOrg(settings);
   return {
     id: user.id,
     login: user.login,
@@ -207,7 +179,7 @@ function migrateLegacyPartners(list) {
   return null;
 }
 
-/** PDF смет и спецификаций. Без бакета байты остаются в памяти процесса (демо API). */
+/** PDF смет и профилей. Без бакета байты остаются в памяти процесса (демо API). */
 const memoryDocs = new Map();
 
 async function s3GetBuffer(key) {
@@ -374,12 +346,9 @@ function objectVisibleTo(user, obj) {
   return false;
 }
 
-function publicObject(obj, role) {
-  const copy = { ...obj, history: obj.history || [], documents: documentsForRole(obj.documents, role) };
-  if (!canSeePrices(role)) {
-    copy.estimate = redactEstimate(obj.estimate);
-  }
-  return copy;
+/** Цены видят все роли: смета объекта отдаётся целиком. */
+function publicObject(obj) {
+  return { ...obj, history: obj.history || [], documents: visibleDocuments(obj.documents) };
 }
 
 /** Client clock, clamped so a far-future stamp cannot lock the row. */
@@ -1266,7 +1235,7 @@ export async function handler(event = {}) {
       const docId = decodeURIComponent(docFileMatch[2]);
       const obj = (platform.objects || []).find((o) => o.id === objectId);
       if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Объект не найден' });
-      const meta = findVisibleDocument(obj.documents, user.role, docId);
+      const meta = findVisibleDocument(obj.documents, docId);
       if (!meta) return json(404, { message: 'Документ не найден' });
       const stored = (obj.documents || []).find((d) => d.id === meta.id);
       const key = stored?.storageKey;
@@ -1306,7 +1275,7 @@ export async function handler(event = {}) {
       const versionId = String(body.versionId || uid('ver'));
       const added = [];
       for (const raw of incoming) {
-        const kind = raw.kind === 'spec' ? 'spec' : 'estimate';
+        const kind = incomingDocumentKind(raw.kind);
         const clean = String(raw.pdfBase64 || '').replace(/^data:application\/pdf;base64,/, '');
         let bytes;
         try {
@@ -1328,7 +1297,7 @@ export async function handler(event = {}) {
             .replace(/[^\w.\-а-яА-ЯёЁ \u2014\u2013]+/g, ' ')
             .replace(/\s+/g, ' ')
             .trim()
-            .slice(0, 120) || (kind === 'spec' ? 'спецификация.pdf' : 'смета.pdf');
+            .slice(0, 120) || (kind === 'profile' ? 'профиль.pdf' : 'смета.pdf');
         added.push({
           id: docId,
           versionId,
@@ -1351,7 +1320,7 @@ export async function handler(event = {}) {
             at: now,
             userId: user.id,
             login: user.login,
-            action: 'calc_pdf',
+            action: added.every((d) => d.kind === 'profile') ? 'profile_pdf' : 'calc_pdf',
             detail: added.map((d) => d.kind).join('+'),
           },
           ...(existing.history || []),

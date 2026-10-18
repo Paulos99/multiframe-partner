@@ -71,13 +71,18 @@ test('карточки открывают нужный инструмент, «�
   expect(errors).toEqual([]);
 });
 
-test('монтажник: калькулятор описан без цен, инструмент открывается', async ({ page }) => {
+test('монтажник: калькулятор с ценами, как у всех', async ({ page }) => {
   await enter(page, 'crew');
   await toolsItem(page, 'crew').click();
   const calc = page.locator('article[data-tool="calculator"]');
-  await expect(calc).not.toContainText('сумму');
+  await expect(calc).toContainText('сумму по прайсу');
+  await expect(calc).toContainText('Смету');
+  await expect(page.getByText('спецификац', { exact: false })).toHaveCount(0);
   await calc.getByRole('button', { name: 'Открыть Калькулятор', exact: true }).click();
-  await expect(page.locator('iframe[title="Калькулятор MultiFrame · партнёр"]')).toBeVisible();
+  const frame = page.locator('iframe[title="Калькулятор MultiFrame · партнёр"]');
+  await expect(frame).toBeVisible();
+  await expect(frame).not.toHaveAttribute('src', /hidePrices/);
+  await expect(frame).toHaveAttribute('src', /panelPrice=2396/);
 });
 
 for (const vp of [

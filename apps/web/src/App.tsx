@@ -6,7 +6,7 @@ import { AppShell } from './app-shell/AppShell';
 import { InstallPromptHost } from './app-shell/InstallAppButton';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
-import { canCreateObjects, canSeePrices, type SessionUser } from '../../../packages/shared/partner';
+import { canCreateObjects, type SessionUser } from '../../../packages/shared/partner';
 import { isCabinetCalcMessage } from './partner/cabinetCalc';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
@@ -22,8 +22,7 @@ function ShellFrame({ children, install }: { children: ReactNode; install: boole
   return <InstallPromptHost enabled={install}>{children}</InstallPromptHost>;
 }
 
-function toolCaption(user: SessionUser, hidePrices: boolean): string {
-  if (hidePrices) return 'Режим монтажника · только количество';
+function toolCaption(user: SessionUser): string {
   const org = user.org;
   const bits: string[] = [];
   if (org?.panelPriceRub != null) bits.push(`РРЦ ${org.panelPriceRub} ₽/панель`);
@@ -132,7 +131,6 @@ function PartnerShell() {
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
   const linkedObjectId = useRef<string | null>(null);
-  const hidePrices = user ? !canSeePrices(user.role) : false;
 
   useEffect(() => {
     if (user) return;
@@ -201,14 +199,12 @@ function PartnerShell() {
   const calcSrc = useMemo(() => {
     if (!user) return '';
     return calcUrlFromOrg(user.org, user.org?.companyName, {
-      hidePrices,
       objectId: calcObjectId,
       clientName: calcClientName,
       areaM2: calcRequest?.objectId === calcObjectId ? calcRequest?.areaM2 : null,
     });
   }, [
     user,
-    hidePrices,
     calcObjectId,
     calcClientName,
     calcRequest,
@@ -253,7 +249,7 @@ function PartnerShell() {
       <ToolChrome
         route={route}
         company={user.org?.companyName || user.displayName}
-        caption={toolCaption(user, hidePrices)}
+        caption={toolCaption(user)}
         notice={route === 'calculator' ? calcNotice : null}
         onCabinet={() => setRoute('cabinet')}
         onLogout={logout}

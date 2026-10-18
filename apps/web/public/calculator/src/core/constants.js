@@ -72,11 +72,7 @@ function numOrNull(v) {
 export function getPartnerPricing() {
   const stored = readStoredPartner();
   const org = readSessionOrg();
-  const hidePrices =
-    partnerString('hidePrices') === '1' ||
-    stored?.hidePrices === true ||
-    (typeof window !== 'undefined' &&
-      (window).__MF_HIDE_PRICES__ === true);
+  // Цены видят все роли. Старый ?hidePrices=1 больше ничего не прячет.
   const partnerPanel = partnerParam('panelPrice') ?? numOrNull(stored?.panelPrice) ?? null;
   const partnerM2 = partnerParam('pricePerM2') ?? numOrNull(stored?.pricePerM2) ?? null;
   const partnerDowels =
@@ -95,27 +91,11 @@ export function getPartnerPricing() {
     partnerString('partner') === '1' ||
     Boolean(stored?.company) ||
     Boolean(org?.companyName) ||
-    partnerPanel != null ||
-    hidePrices;
+    partnerPanel != null;
 
-  if (isPartnerMode && !hidePrices) {
+  if (isPartnerMode) {
     if (partnerInstall == null) partnerInstall = DEFAULT_INSTALL_PER_M2;
     if (partnerDowelPrice == null) partnerDowelPrice = DEFAULT_DOWEL_PRICE;
-  }
-
-  if (hidePrices) {
-    return {
-      panelPriceRub: 0,
-      pricePerM2: 0,
-      installPerM2: null,
-      dowelPrice: null,
-      dowelsPerPanel: partnerDowels && partnerDowels > 0 ? partnerDowels : 2,
-      company: partnerCompany,
-      enabled: isPartnerMode,
-      hidePrices: true,
-      officialPanelPrice: OFFICIAL_PANEL,
-      officialPricePerM2: OFFICIAL_M2,
-    };
   }
 
   return {

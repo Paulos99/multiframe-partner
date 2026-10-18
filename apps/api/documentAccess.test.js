@@ -2,14 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import { documentsForRole as serverDocuments, findVisibleDocument } from './documentAccess.js';
+import {
+  findVisibleDocument,
+  incomingDocumentKind,
+  visibleDocuments as serverDocuments,
+} from './documentAccess.js';
 
-// Клиентский отбор лежит в TypeScript. Берём тело функции как есть, без загрузчика типов.
+// Клиентский отбор лежит в TypeScript. Берём тело функции и снимаем аннотации типов.
 const partnerSource = readFileSync(new URL('../../packages/shared/partner.ts', import.meta.url), 'utf8');
 
-function functionBody(name) {
+function functionSource(name) {
   const start = partnerSource.indexOf(`export function ${name}`);
-  const brace = partnerSource.indexOf('{', start);
+  const brace = partnerSource.indexOf('{\n', start);
   assert.ok(start >= 0 && brace > start, name);
   let depth = 0;
   for (let i = brace; i < partnerSource.length; i += 1) {
@@ -23,85 +27,96 @@ function functionBody(name) {
 }
 
 const clientDocuments = runInNewContext(
-  `function canSeePrices(role) ${functionBody('canSeePrices')}
-   function documentsForRole(docs, role) ${functionBody('documentsForRole')}
-   documentsForRole`,
+  `function visibleDocuments(docs) ${functionSource('visibleDocuments')}
+   visibleDocuments`,
 );
 
 const estimate = {
   id: 'priced',
+  versionId: 'v2',
   kind: 'estimate',
   createdAt: '2026-10-18T10:00:00Z',
   filename: 'estimate.pdf',
-  totalCost: 180000,
-  panelsCost: 120000,
-  installCost: 40000,
-  dowelsCost: 20000,
   storageKey: 'docs/org/obj/priced.pdf',
   pdfBase64: 'priced-bytes',
 };
-const spec = {
-  id: 'unpriced',
+const pairedSpec = {
+  id: 'paired-spec',
+  versionId: 'v2',
   kind: 'spec',
-  createdAt: '2026-10-18T09:00:00Z',
+  createdAt: '2026-10-18T10:00:00Z',
   filename: 'spec.pdf',
-  totalCost: 180000,
-  panelsCost: 120000,
-  storageKey: 'docs/org/obj/unpriced.pdf',
-  pdfBase64: 'spec-bytes',
+  storageKey: 'docs/org/obj/paired-spec.pdf',
 };
-const priceKeys = ['totalCost', 'panelsCost', 'installCost', 'dowelsCost', 'pdfBase64', 'storageKey'];
+const loneSpec = {
+  id: 'lone-spec',
+  versionId: 'v1',
+  kind: 'spec',
+  createdAt: '2026-10-17T09:00:00Z',
+  filename: 'old-spec.pdf',
+  storageKey: 'docs/org/obj/lone-spec.pdf',
+};
+const profile = {
+  id: 'profile',
+  versionId: 'p1',
+  kind: 'profile',
+  createdAt: '2026-10-18T11:00:00Z',
+  filename: 'profile.pdf',
+  storageKey: 'docs/org/obj/profile.pdf',
+};
 
 for (const [name, select] of [['client', clientDocuments], ['server', serverDocuments]]) {
-  test(`${name}: crew cannot list or select an estimate when no specification exists`, () => {
-    assert.equal(select([estimate], 'crew').length, 0);
-    assert.equal(select([estimate], 'crew').find((d) => d.id === estimate.id), undefined);
-    assert.equal(select([], 'crew').length, 0);
-    assert.equal(select(undefined, 'crew').length, 0);
+  test(`${name}: estimate and profile are listed newest first`, () => {
+    const docs = select([estimate, profile]);
+    assert.deepEqual(Array.from(docs, (d) => d.id), ['profile', 'priced']);
+    assert.deepEqual(Array.from(docs, (d) => d.kind), ['profile', 'estimate']);
   });
 
-  test(`${name}: crew receives only specifications across document versions`, () => {
-    const older = { ...spec, id: 'older', createdAt: '2026-10-17T09:00:00Z' };
-    const input = [older, estimate, spec];
-    assert.deepEqual(Array.from(select(input, 'crew'), (d) => d.id), ['unpriced', 'older']);
-    assert.deepEqual(Array.from(select(input, 'crew'), (d) => d.kind), ['spec', 'spec']);
-    assert.equal(input[0].id, 'older');
+  test(`${name}: old estimate + spec pair shows one estimate`, () => {
+    const docs = select([pairedSpec, estimate]);
+    assert.deepEqual(Array.from(docs, (d) => d.id), ['priced']);
   });
 
-  test(`${name}: owner, manager and STP see estimate and spec together`, () => {
-    for (const role of ['admin', 'owner', 'sales', 'measurer']) {
-      const both = select([spec, estimate], role);
-      assert.deepEqual(Array.from(both, (d) => d.id), [estimate.id, spec.id]);
-      assert.deepEqual(Array.from(both, (d) => d.kind), ['estimate', 'spec']);
-      assert.equal(select([spec], role)[0].id, spec.id);
-      assert.equal(select([estimate], role)[0].id, estimate.id);
-    }
+  test(`${name}: old spec without estimate stays visible`, () => {
+    const docs = select([loneSpec]);
+    assert.deepEqual(Array.from(docs, (d) => d.id), ['lone-spec']);
+    assert.equal(select([estimate, pairedSpec, loneSpec]).length, 2);
+  });
+
+  test(`${name}: empty input`, () => {
+    assert.equal(select([]).length, 0);
+    assert.equal(select(undefined).length, 0);
   });
 }
 
-test('server: crew document list has no prices and hides the estimate file', () => {
-  const docs = serverDocuments([estimate, spec], 'crew');
-  assert.deepEqual(Array.from(docs, (d) => d.id), [spec.id]);
-  assert.equal(docs.some((d) => d.kind === 'estimate'), false);
-  for (const doc of docs) {
-    for (const key of priceKeys) assert.equal(doc[key], undefined);
+test('server: list has no storage key or bytes', () => {
+  for (const doc of serverDocuments([estimate, profile, loneSpec])) {
+    assert.equal(doc.storageKey, undefined);
+    assert.equal(doc.pdfBase64, undefined);
   }
 });
 
-test('server: owner keeps both files, crew estimate read is 404', () => {
-  for (const role of ['admin', 'owner', 'sales']) {
-    assert.equal(findVisibleDocument([estimate, spec], role, estimate.id)?.kind, 'estimate');
-    assert.equal(findVisibleDocument([estimate, spec], role, spec.id)?.kind, 'spec');
-  }
-  assert.equal(findVisibleDocument([estimate, spec], 'crew', spec.id)?.kind, 'spec');
-  assert.equal(findVisibleDocument([estimate, spec], 'crew', estimate.id), null);
-  assert.equal(findVisibleDocument([estimate], 'crew', estimate.id), null);
+test('server: download finds estimate, profile and old spec for any document id', () => {
+  const docs = [estimate, pairedSpec, loneSpec, profile];
+  assert.equal(findVisibleDocument(docs, estimate.id)?.kind, 'estimate');
+  assert.equal(findVisibleDocument(docs, profile.id)?.kind, 'profile');
+  assert.equal(findVisibleDocument(docs, loneSpec.id)?.kind, 'spec');
+  assert.equal(findVisibleDocument(docs, pairedSpec.id)?.kind, 'spec');
+  assert.equal(findVisibleDocument(docs, 'missing'), null);
+  assert.equal(findVisibleDocument(docs, ''), null);
 });
 
-test('download route uses the shared visibility check and answers 404', () => {
+test('incoming kind: profile is kept, spec and unknown become estimate', () => {
+  assert.equal(incomingDocumentKind('profile'), 'profile');
+  assert.equal(incomingDocumentKind('estimate'), 'estimate');
+  assert.equal(incomingDocumentKind('spec'), 'estimate');
+  assert.equal(incomingDocumentKind(undefined), 'estimate');
+});
+
+test('API has no role-based price hiding', () => {
   const source = readFileSync(new URL('./index.js', import.meta.url), 'utf8');
   assert.match(source, /from '\.\/documentAccess\.js'/);
-  assert.match(source, /findVisibleDocument\(obj\.documents, user\.role, docId\)/);
+  assert.match(source, /findVisibleDocument\(obj\.documents, docId\)/);
   assert.match(source, /if \(!meta\) return json\(404, \{ message: 'Документ не найден' \}\)/);
-  assert.doesNotMatch(source, /estimates\.length \? estimates : specs/);
+  assert.doesNotMatch(source, /canSeePrices|redactOrg|redactEstimate/);
 });

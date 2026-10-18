@@ -8,8 +8,9 @@ import {
   canAssignObjects,
   canCreateObjects,
   canDeleteObjects,
-  canSeePrices,
-  documentsForRole,
+  documentDisplayKind,
+  documentLabel,
+  visibleDocuments,
   type JobObject,
   type JobObjectDocument,
   type JobObjectStatus,
@@ -41,63 +42,63 @@ function formatDocWhen(iso: string): string {
 
 function ObjectDocuments({
   obj,
-  role,
   busyId,
   onOpen,
 }: {
   obj: JobObject;
-  role: UserRole;
   busyId: string | null;
   onOpen: (doc: JobObjectDocument, download: boolean) => void;
 }) {
-  const docs = documentsForRole(obj.documents, role);
-  const seePrices = canSeePrices(role);
+  const docs = visibleDocuments(obj.documents);
   return (
     <div className={styles.docBlock}>
       <div className={styles.field}>
-        {seePrices ? 'Сметы и спецификации' : 'Спецификации без цен'}
+        Документы
         <span className={styles.hint}>
           {docs.length
-            ? seePrices
-              ? 'Смета — с ценами, спецификация — без цен. Старые версии сохраняются.'
-              : 'Без цен: панели, крепёж и схема раскладки, если её нарисовали.'
-            : 'PDF появится после расчёта в калькуляторе.'}
+            ? '«Смета» — из калькулятора: цены, количество и схема раскладки. «Профиль» — из проблемомера: акустика комнаты. Старые версии сохраняются.'
+            : '«Смета» появится после расчёта в калькуляторе, «Профиль» — после сохранения проблемомера.'}
         </span>
       </div>
       {docs.length ? (
         <ul className={styles.docList}>
-          {docs.map((doc, index) => (
-            <li key={doc.id} className={styles.docRow}>
-              <div className={styles.docMeta}>
-                <strong>{doc.kind === 'spec' ? 'Спецификация без цен' : 'Смета с ценами'}</strong>
-                <span className={styles.hint}>
-                  {docs.findIndex(item => item.kind === doc.kind) === index ? 'Последняя версия' : 'Предыдущая версия'}
-                  {formatDocWhen(doc.createdAt) ? ` · ${formatDocWhen(doc.createdAt)}` : ''}
-                  {doc.areaM2 ? ` · ${doc.areaM2} м²` : ''}
-                  {doc.panels ? ` · ${doc.panels} пан.` : ''}
-                  {doc.hasScheme ? ' · схема раскладки' : ' · без схемы'}
-                </span>
-              </div>
-              <div className={styles.docActions}>
-                <button
-                  type="button"
-                  className={styles.ghost}
-                  disabled={busyId === doc.id}
-                  onClick={() => onOpen(doc, false)}
-                >
-                  {busyId === doc.id ? 'Открываем…' : 'Открыть'}
-                </button>
-                <button
-                  type="button"
-                  className={styles.ghost}
-                  disabled={busyId === doc.id}
-                  onClick={() => onOpen(doc, true)}
-                >
-                  Скачать
-                </button>
-              </div>
-            </li>
-          ))}
+          {docs.map((doc, index) => {
+            const kind = documentDisplayKind(doc.kind);
+            const latest = docs.findIndex((item) => documentDisplayKind(item.kind) === kind) === index;
+            return (
+              <li key={doc.id} className={styles.docRow} data-doc-kind={kind}>
+                <div className={styles.docMeta}>
+                  <strong>{documentLabel(doc.kind)}</strong>
+                  <span className={styles.hint}>
+                    {latest ? 'Последняя версия' : 'Предыдущая версия'}
+                    {formatDocWhen(doc.createdAt) ? ` · ${formatDocWhen(doc.createdAt)}` : ''}
+                    {doc.areaM2 ? ` · ${doc.areaM2} м²` : ''}
+                    {kind === 'estimate' && doc.panels ? ` · ${doc.panels} пан.` : ''}
+                    {kind === 'estimate' ? (doc.hasScheme ? ' · схема раскладки' : ' · без схемы') : ''}
+                    {doc.kind === 'spec' ? ' · старый файл без цен' : ''}
+                  </span>
+                </div>
+                <div className={styles.docActions}>
+                  <button
+                    type="button"
+                    className={styles.ghost}
+                    disabled={busyId === doc.id}
+                    onClick={() => onOpen(doc, false)}
+                  >
+                    {busyId === doc.id ? 'Открываем…' : 'Открыть'}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.ghost}
+                    disabled={busyId === doc.id}
+                    onClick={() => onOpen(doc, true)}
+                  >
+                    Скачать
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>
@@ -132,7 +133,6 @@ export function ObjectsPanel({
   const api = usePartner();
   const user = api.user!;
   const reduce = usePrefersReducedMotion();
-  const seePrices = canSeePrices(user.role);
   const canAssign = canAssignObjects(user.role);
   const canDelete = canDeleteObjects(user.role);
   const canCreate = canCreateObjects(user.role);
@@ -404,7 +404,7 @@ export function ObjectsPanel({
           <h2>{user.role === 'crew' ? 'Задания на монтаж' : 'Объекты'}</h2>
           <p className={styles.lead}>
             {user.role === 'crew'
-              ? 'Только ваши комнаты. PDF — спецификация для закупки и схема раскладки, без цен.'
+              ? 'Только ваши комнаты. В карточке — «Смета» с ценами и схемой раскладки и «Профиль» комнаты.'
               : 'Проект — это клиент и адрес. Комнаты внутри считаются отдельно, площади не смешиваются.'}
           </p>
         </div>
@@ -493,7 +493,7 @@ export function ObjectsPanel({
           </button>
           <h3>{selectedCard.title}</h3>
           <p className={styles.lead}>{selectedCard.subtitle}</p>
-          {seePrices && selectedRooms.length ? (
+          {selectedRooms.length ? (
             <p className={styles.hint}>
               Предварительный итог: {summary.calculated ? formatRub(summary.total) : 'расчётов пока нет'}. Рассчитано {summary.calculated} из {summary.rooms}. Это ещё не зафиксированное предложение.
             </p>
@@ -663,7 +663,7 @@ export function ObjectsPanel({
                 Дюбели
                 <strong>{selected.estimate.dowels} шт.</strong>
               </div>
-              {seePrices && selected.estimate.totalCost != null ? (
+              {selected.estimate.totalCost != null ? (
                 <div className={styles.field}>
                   Итого комнаты
                   <strong>{formatRub(selected.estimate.totalCost)}</strong>
@@ -676,7 +676,6 @@ export function ObjectsPanel({
 
           <ObjectDocuments
             obj={selected}
-            role={user.role}
             busyId={docBusy}
             onOpen={(doc, download) => void openDocument(selected, doc, download)}
           />
@@ -754,7 +753,7 @@ export function ObjectsPanel({
             </label>
           ) : null}
 
-          {selected.clientSummary && seePrices ? (
+          {selected.clientSummary ? (
             <div className={styles.field}>
               Сводка для клиента
               <pre className={styles.summaryBox}>{selected.clientSummary}</pre>

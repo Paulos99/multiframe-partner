@@ -486,7 +486,6 @@ function partnerDowelCost(bom) {
 
 function partnerGrandTotal(bom, area, panelsCost) {
   if (!PARTNER_PRICING.enabled) return null;
-  if (getPartnerPricing().hidePrices) return null;
   if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
   const install = partnerInstallCost(area) ?? 0;
   const dowelCost = partnerDowelCost(bom) ?? 0;
@@ -2102,7 +2101,7 @@ function triggerPdfDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-/** Смета с ценами + спецификация без цен уходят в кабинет (родительское окно). */
+/** Смета (цены, количество и схема раскладки) уходит в кабинет (родительское окно). */
 async function publishCalcToCabinet() {
   if (window.parent === window) return;
   if (!state.bom) return;
@@ -2110,7 +2109,6 @@ async function publishCalcToCabinet() {
   if (isAreaEstimateMode()) return;
   const params = new URLSearchParams(window.location.search);
   if (params.get('partner') !== '1') return;
-  if (getPartnerPricing().hidePrices) return;
   const sig = calcSignature();
   if (sig === lastPublishedSig || publishLock) return;
   publishLock = true;
@@ -2131,16 +2129,7 @@ async function publishCalcToCabinet() {
       download: false,
       fileLabel,
     });
-    const spec = await exportCalculationPDF({
-      ...input,
-      hidePrices: true,
-      download: false,
-      fileLabel,
-    });
-    const [pdfBase64, specPdfBase64] = await Promise.all([
-      blobToBase64(priced.blob),
-      blobToBase64(spec.blob),
-    ]);
+    const pdfBase64 = await blobToBase64(priced.blob);
     const panels = state.bom?.total?.panelsWithReserve ?? null;
     const dowels = state.bom?.total?.dowelsWithReserve ?? null;
     const areaM2 =
@@ -2158,9 +2147,7 @@ async function publishCalcToCabinet() {
         areaM2,
         panelsCost,
         filename: priced.filename,
-        specFilename: spec.filename,
         pdfBase64,
-        specPdfBase64,
       },
       window.location.origin,
     );
@@ -2205,7 +2192,7 @@ async function handlePDF() {
   trackPartnerCalcEvent('pdf');
   const file = await exportCalculationPDF({
     ...input,
-    hidePrices: getPartnerPricing().hidePrices,
+    hidePrices: false,
     download: false,
     fileLabel: new URLSearchParams(window.location.search).get('client') || '',
   });
@@ -2389,13 +2376,9 @@ function mountPartnerBanner() {
   banner.className = 'partner-calc-banner';
   const pricing = getPartnerPricing();
   const company = pricing.company ? pricing.company : 'Партнёрский режим';
-  if (pricing.hidePrices) {
-    banner.innerHTML = `<strong>${company}</strong><span>Режим монтажника · только количество</span>`;
-  } else {
-    const install =
-      pricing.installPerM2 != null ? ` · монтаж ${pricing.installPerM2} ₽/м²` : '';
-    banner.innerHTML = `<strong>${company}</strong><span>РРЦ ${PANEL.priceRub} ₽/панель · ${PANEL.pricePerM2} ₽/м²${install}</span><span class="partner-calc-banner__hint">Офиц. ${pricing.officialPanelPrice} ₽</span>`;
-  }
+  const install =
+    pricing.installPerM2 != null ? ` · монтаж ${pricing.installPerM2} ₽/м²` : '';
+  banner.innerHTML = `<strong>${company}</strong><span>РРЦ ${PANEL.priceRub} ₽/панель · ${PANEL.pricePerM2} ₽/м²${install}</span><span class="partner-calc-banner__hint">Офиц. ${pricing.officialPanelPrice} ₽</span>`;
   const shell = document.querySelector('.app-shell');
   if (shell) shell.prepend(banner);
   else document.body.prepend(banner);
@@ -2403,7 +2386,7 @@ function mountPartnerBanner() {
 
 /** Replace store CTA with green «Итого» card — one grand total; breakdown lives in results. */
 function mountPartnerTotalCard() {
-  if (!PARTNER_PRICING.enabled || getPartnerPricing().hidePrices) return;
+  if (!PARTNER_PRICING.enabled) return;
   if (document.getElementById('partnerTotalCard')) return;
   const buy = document.getElementById('buyMultiframeBtn');
   if (!buy) return;

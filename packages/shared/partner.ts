@@ -48,10 +48,6 @@ export function normalizeRole(role: string | null | undefined): UserRole {
   return 'measurer';
 }
 
-export function canSeePrices(role: UserRole): boolean {
-  return role === 'admin' || role === 'owner' || role === 'sales' || role === 'measurer';
-}
-
 export function canEditOrg(role: UserRole): boolean {
   return role === 'admin' || role === 'owner';
 }
@@ -120,18 +116,6 @@ export type OrgSettings = {
   /** Price per dowel ₽. Null = quantity only. */
   dowelPriceRub: number | null;
 };
-
-/** Strip money fields for crew / clients who must not see RRC. */
-export function redactOrgPrices(org: OrgSettings | null): OrgSettings | null {
-  if (!org) return null;
-  return {
-    ...org,
-    panelPriceRub: 0,
-    pricePerM2: 0,
-    installPricePerM2: null,
-    dowelPriceRub: null,
-  };
-}
 
 export type SessionUser = {
   avatarUrl?: string | null;
@@ -206,12 +190,32 @@ export type JobObjectEstimate = {
   totalCost?: number | null;
 };
 
-/** estimate — смета с ценами; spec — спецификация и схемы без цен для монтажника. */
-export type JobDocumentKind = 'estimate' | 'spec';
+/**
+ * Документы объекта.
+ * estimate — «Смета»: PDF калькулятора с ценами, количеством и схемой раскладки.
+ * profile — «Профиль»: PDF проблемомера, акустический профиль помещения.
+ * spec — старые записи «спецификация без цен» (до 18.10.2026). Новые не создаются,
+ * читаются как смета той же версии, если цены у версии нет.
+ */
+export type JobDocumentKind = 'estimate' | 'profile' | 'spec';
+
+export const JOB_DOCUMENT_LABELS: Record<'estimate' | 'profile', string> = {
+  estimate: 'Смета',
+  profile: 'Профиль',
+};
+
+/** Как показывать запись: старая spec — это смета. */
+export function documentDisplayKind(kind: string | null | undefined): 'estimate' | 'profile' {
+  return kind === 'profile' ? 'profile' : 'estimate';
+}
+
+export function documentLabel(kind: string | null | undefined): string {
+  return JOB_DOCUMENT_LABELS[documentDisplayKind(kind)];
+}
 
 export type JobObjectDocument = {
   id: string;
-  /** Общий id одного прогона калькулятора (смета + спецификация). */
+  /** Общий id одного сохранения (прогон калькулятора или проблемомера). */
   versionId: string;
   createdAt: string;
   createdBy: string;
@@ -229,17 +233,28 @@ export type JobObjectDocument = {
 };
 
 /**
- * Владелец, менеджер, замерщик и STP видят смету и спецификацию вместе.
- * Монтажник — только спецификацию без цен. Смета не подставляется, если спецификации нет.
+ * Документы объекта одинаково для всех ролей: сметы и профили, новые сверху.
+ * Старая пара «смета + спецификация» одной версии показывается одной сметой (с ценами).
+ * Спецификация без пары остаётся видна как смета, чтобы старые файлы не пропали.
  * То же правило, что в apps/api/documentAccess.js.
  */
-export function documentsForRole(
-  docs: JobObjectDocument[] | null | undefined,
-  role: UserRole,
-): JobObjectDocument[] {
+export function visibleDocuments(docs: JobObjectDocument[] | null | undefined): JobObjectDocument[] {
   const list = [...(docs || [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  if (canSeePrices(role)) return list.filter((d) => d.kind === 'estimate' || d.kind === 'spec');
-  return list.filter((d) => d.kind === 'spec');
+  const pricedVersions = new Set(list.filter((d) => d.kind === 'estimate').map((d) => d.versionId || d.id));
+  return list.filter((d) => {
+    if (d.kind === 'estimate' || d.kind === 'profile') return true;
+    if (d.kind === 'spec') return !pricedVersions.has(d.versionId || d.id);
+    return false;
+  });
+}
+
+/** «Смета · Профиль» — какие документы есть у объекта. Пусто, если документов нет. */
+export function documentKindsSummary(docs: JobObjectDocument[] | null | undefined): string {
+  const kinds = new Set(visibleDocuments(docs).map((d) => documentDisplayKind(d.kind)));
+  return (['estimate', 'profile'] as const)
+    .filter((kind) => kinds.has(kind))
+    .map((kind) => JOB_DOCUMENT_LABELS[kind])
+    .join(' · ');
 }
 
 export type JobObjectHistoryEntry = {
@@ -866,14 +881,6 @@ export function normalizeOrgSettings(
 
 export function toPartnerProfile(user: SessionUser): PartnerProfile | null {
   if (!user.org) return null;
-  if (!canSeePrices(user.role) && user.role !== 'admin') {
-    const org = normalizeOrgSettings(redactOrgPrices(user.org) || user.org);
-    return {
-      ...user,
-      ...org,
-      companyName: org.companyName,
-    };
-  }
   const org = normalizeOrgSettings(user.org);
   return {
     ...user,

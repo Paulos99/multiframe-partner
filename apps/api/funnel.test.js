@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import {
   computeAnalyticsFunnel,
   funnelPassKey,
-  funnelPercents,
+  funnelStopPercents,
   funnelStepPercent,
 } from '../../packages/shared/funnel.js';
 
@@ -30,29 +30,26 @@ function ev(partial) {
 function assertAtMost100(funnel) {
   for (const steps of [funnel.problemomer, funnel.calculator]) {
     const values = Object.values(steps);
-    const percents = funnelPercents(values);
-    assert.equal(percents[0], '100%');
-    let previousPercent = 100;
-    for (let index = 0; index < values.length; index += 1) {
-      if (index > 0) {
-        assert.ok(
-          values[index] <= values[index - 1],
-          `этап ${values[index]} больше предыдущего ${values[index - 1]}`,
-        );
-      }
-      const text = percents[index];
-      if (index === 0) continue;
-      if (values[0] === 0) {
-        assert.equal(text, '—');
-        continue;
-      }
-      const percent = Number(text.replace('%', ''));
-      assert.equal(Number.isFinite(percent), true, text);
-      assert.ok(percent <= 100, text);
-      assert.ok(percent <= previousPercent, `${text} больше предыдущих ${previousPercent}%`);
-      previousPercent = percent;
+    for (let index = 1; index < values.length; index += 1) {
+      assert.ok(
+        values[index] <= values[index - 1],
+        `этап ${values[index]} больше предыдущего ${values[index - 1]}`,
+      );
     }
+    assertStopsSum100(values);
   }
+}
+
+function assertStopsSum100(values) {
+  const percents = funnelStopPercents(values);
+  assert.equal(percents.length, values.length);
+  if (!(values[0] > 0)) {
+    assert.deepEqual(percents, values.map(() => '—'));
+    return;
+  }
+  const numbers = percents.map((text) => Number(text.replace('%', '')));
+  for (const n of numbers) assert.ok(Number.isInteger(n) && n >= 0 && n <= 100, String(n));
+  assert.equal(numbers.reduce((sum, n) => sum + n, 0), 100, percents.join(' '));
 }
 
 function assertSameFunnel(events) {
@@ -73,8 +70,10 @@ function assertSameFunnel(events) {
     [0, 0, 0, 0],
     [10, 4, 2, 1],
     [7, 6, 0, 0],
+    [23, 21, 10, 2],
+    [5, 7, 3, 0],
   ]) {
-    assert.deepEqual(fromTypeScript.funnelPercents(counts), funnelPercents(counts));
+    assert.deepEqual(fromTypeScript.funnelStopPercents(counts), funnelStopPercents(counts));
   }
 }
 
@@ -153,13 +152,13 @@ test('пустые данные не делят на ноль', () => {
       calculator: { open: 0, calcDone: 0, pdf: 0 },
     });
     assert.deepEqual(
-      funnelPercents([
+      funnelStopPercents([
         funnel.problemomer.open,
         funnel.problemomer.result,
         funnel.problemomer.pdf,
         funnel.problemomer.share,
       ]),
-      ['100%', '—', '—', '—'],
+      ['—', '—', '—', '—'],
     );
     assert.equal(funnelStepPercent(1, 0), '—');
     assert.equal(funnelStepPercent(0, 0), '—');
@@ -264,25 +263,19 @@ test('каждый этап — доля от всех открытий, пер�
     funnel.problemomer.pdf,
     funnel.problemomer.share,
   ];
-  const percents = funnelPercents(counts);
-  // От предыдущего этапа PDF был бы 2/4 = 50%, шаринг 1/2 = 50%.
-  // От всех открытий: 4/10, 2/10 и 1/10.
-  assert.deepEqual(percents, ['100%', '40%', '20%', '10%']);
-  assert.notEqual(percents[2], `${Math.round((2 / 4) * 100)}%`);
-  assert.equal(percents[0], '100%');
-  for (let index = 1; index < counts.length; index += 1) {
-    assert.ok(counts[index] <= counts[index - 1]);
-    assert.ok(Number(percents[index].replace('%', '')) <= Number(percents[index - 1].replace('%', '')));
-    assert.ok(Number(percents[index].replace('%', '')) <= 100);
-  }
-  assert.equal(funnelPercents([0, 0, 0, 0])[0], '100%');
+  const percents = funnelStopPercents(counts);
+  // Где остановились: только открыли 10−4 = 6, до расчёта 4−2 = 2, до PDF 2−1 = 1, поделился 1.
+  assert.deepEqual(percents, ['60%', '20%', '10%', '10%']);
+  assertStopsSum100(counts);
+  assert.deepEqual(funnelStopPercents([0, 0, 0, 0]), ['—', '—', '—', '—']);
   const ui = readFileSync(
     new URL('../web/src/partner/AnalyticsDashboard.tsx', import.meta.url),
     'utf8',
   );
-  assert.match(ui, /% от всех открытий/);
+  assert.match(ui, /где остановились, в сумме 100%/);
+  assert.equal(ui.includes('% от всех открытий'), false);
   assert.equal(ui.includes('Процент от открытий'), false);
-  assert.match(ui, /funnelPercents\(/);
+  assert.match(ui, /funnelStopPercents\(/);
   assertSameFunnel(events);
 });
 
@@ -302,3 +295,19 @@ async function loadTypeScriptFunnel() {
   writeFileSync(file, js);
   return import(pathToFileURL(file).href);
 }
+
+test('«где остановились»: 23/21/10/2 даёт ровно 100% методом наибольшего остатка', () => {
+  // Точные доли: 2/23 = 8,70%, 11/23 = 47,83%, 8/23 = 34,78%, 2/23 = 8,70%.
+  // 9 + 48 + 35 + 9 было бы 101%; лишний процент не добавляется, равный остаток отдаётся раннему этапу.
+  assert.deepEqual(funnelStopPercents([23, 21, 10, 2]), ['9%', '48%', '35%', '8%']);
+  assertStopsSum100([23, 21, 10, 2]);
+  assert.deepEqual(funnelStopPercents([23, 21, 10]), ['9%', '48%', '43%']);
+});
+
+test('«где остановились»: невозрастание, без отрицательных долей', () => {
+  // 7 расчётов при 5 открытиях выравниваются до 5: остановились 0, 2, 3, 0.
+  assert.deepEqual(funnelStopPercents([5, 7, 3, 0]), ['0%', '40%', '60%', '0%']);
+  assert.deepEqual(funnelStopPercents([3, 3, 3]), ['0%', '0%', '100%']);
+  assert.deepEqual(funnelStopPercents([1, 0, 0]), ['100%', '0%', '0%']);
+  for (const counts of [[7, 6, 0, 0], [3, 1, 1], [100, 33, 33, 1], [6, 5, 4, 3]]) assertStopsSum100(counts);
+});

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { canCreateObjects, canSeePrices } from '../../../../packages/shared/partner';
+import { canCreateObjects, type JobObject } from '../../../../packages/shared/partner';
+import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { useSession } from '../state/SessionContext';
 import type { RoomAnswers } from '../state/types';
 import { buildClientSummary } from '../state/session';
@@ -9,8 +10,17 @@ import { usePartner } from './PartnerContext';
 import listStyles from './ProjectList.module.css';
 import styles from './partner.module.css';
 
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').replace(/^data:[^,]*,/, ''));
+    reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать PDF'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export function SaveObjectCard() {
-  const { user, saveObject, createProject, partner, diagnosisRequest, objects, projects } = usePartner();
+  const { user, saveObject, createProject, partner, diagnosisRequest, objects, projects, attachProfile } = usePartner();
   const { session, patchRoom, setCeilingArea } = useSession();
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -27,6 +37,9 @@ export function SaveObjectCard() {
   const [projectChoice, setProjectChoice] = useState('new');
   const [roomName, setRoomName] = useState('');
   const appliedDiagnosis = useRef<number | null>(null);
+  /** Последний приложенный «Профиль»: объект + ответы. Повторное сохранение без правок не плодит файлы. */
+  const attachedProfile = useRef<string | null>(null);
+  const [profileNote, setProfileNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!diagnosisRequest || appliedDiagnosis.current === diagnosisRequest.nonce) return;
@@ -62,7 +75,6 @@ export function SaveObjectCard() {
   const est = partner && area ? buildEstimateFromOrg(area, partner) : null;
 
 
-  const seePrices = canSeePrices(user.role);
   const sim = session.derived?.simulation;
 
   function roomPayload() {
@@ -83,10 +95,10 @@ export function SaveObjectCard() {
     return {
       panels: est.panels,
       dowels: est.dowels,
-      panelsCost: seePrices ? est.panelsCost : null,
-      installCost: seePrices ? est.installCost : null,
-      dowelsCost: seePrices ? est.dowelsCost : null,
-      totalCost: seePrices ? est.totalCost : null,
+      panelsCost: est.panelsCost,
+      installCost: est.installCost,
+      dowelsCost: est.dowelsCost,
+      totalCost: est.totalCost,
     };
   }
 
@@ -125,6 +137,22 @@ export function SaveObjectCard() {
     return project.id;
   }
 
+  /** «Профиль» — PDF проблемомера — уходит в карточку объекта рядом со сметой. */
+  async function attachProfileTo(obj: JobObject) {
+    const sig = `${obj.id}:${JSON.stringify(session.answers)}`;
+    if (attachedProfile.current === sig) return;
+    attachedProfile.current = sig;
+    setProfileNote('Прикладываем «Профиль» к объекту…');
+    try {
+      const { blob } = await renderAcousticProfilePdf(session, { compact: true });
+      const saved = await attachProfile(obj, await blobToBase64(blob));
+      setProfileNote(saved ? '«Профиль» приложен к объекту' : null);
+    } catch {
+      attachedProfile.current = null;
+      setProfileNote('Не удалось приложить «Профиль». Сохраните объект ещё раз.');
+    }
+  }
+
   async function onSave(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -136,6 +164,7 @@ export function SaveObjectCard() {
       const obj = await saveObject(objectFields('measured', linked));
       if (obj.projectId) setProjectChoice(obj.projectId);
       setObjectId(obj.id);
+      void attachProfileTo(obj);
       setSavedFlash(true);
       setMsg(
         obj.pendingSync
@@ -160,7 +189,7 @@ export function SaveObjectCard() {
         summary,
         address ? `\nАдрес: ${address}` : '',
         clientName ? `\nКлиент: ${clientName}` : '',
-        seePrices && est ? `\nОриентир КП: ${est.totalCost.toLocaleString('ru-RU')} ₽` : '',
+        est ? `\nОриентир КП: ${est.totalCost.toLocaleString('ru-RU')} ₽` : '',
       ]
         .filter(Boolean)
         .join('');
@@ -174,6 +203,7 @@ export function SaveObjectCard() {
       const obj = await saveObject(objectFields('quote_sent', linked));
       if (obj.projectId) setProjectChoice(obj.projectId);
       setObjectId(obj.id);
+      void attachProfileTo(obj);
       setSentFlash(true);
       setMsg(
         canShare
@@ -252,6 +282,11 @@ export function SaveObjectCard() {
         {msg ? (
           <p className={styles.flash} role="status">
             {msg}
+          </p>
+        ) : null}
+        {profileNote ? (
+          <p className={styles.hint} role="status" data-testid="profile-attach-note">
+            {profileNote}
           </p>
         ) : null}
         {err ? (

@@ -21,7 +21,6 @@ import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
-import { canSeePrices } from '../../../../packages/shared/partner';
 import { ToolsPanel } from './ToolsPanel';
 import { consumeReturnToTools } from './toolsReturn';
 import styles from './partner.module.css';
@@ -378,7 +377,6 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       {tab === 'tools' ? (
         <TabPanel>
           <ToolsPanel
-            seePrices={canSeePrices(api.user!.role)}
             onProblemomer={() => onNavigate('problemomer')}
             onCalculator={() => onNavigate('calculator')}
           />
@@ -585,7 +583,6 @@ function OwnerCabinet({
       {tab === 'tools' ? (
         <TabPanel>
           <ToolsPanel
-            seePrices={canSeePrices(api.user!.role)}
             onProblemomer={() => onNavigate('problemomer')}
             onCalculator={onOpenCalc}
           />
@@ -655,7 +652,6 @@ function SalesCabinet({
       {tab === 'tools' ? (
         <TabPanel>
           <ToolsPanel
-            seePrices={canSeePrices(api.user!.role)}
             onProblemomer={() => onNavigate('problemomer')}
             onCalculator={onOpenCalc}
           />
@@ -706,7 +702,6 @@ function MeasurerCabinet({
       <FrameBody>
       {view === 'tools' ? (
         <ToolsPanel
-          seePrices={canSeePrices(user.role)}
           onProblemomer={() => onNavigate('problemomer')}
           onCalculator={onOpenCalc}
         />
@@ -751,7 +746,7 @@ function CrewCabinet({
   return (
     <CabinetChrome
       title={roleHeading('crew', user)}
-      lead="Личный кабинет монтажника · цены скрыты, PDF схемы доступен"
+      lead="Личный кабинет монтажника · смета со схемой и профиль комнаты"
       mode="buttons"
       items={[
         { id: 'objects', label: 'Задания', active: view === 'home', onSelect: () => setView('home') },
@@ -769,7 +764,6 @@ function CrewCabinet({
       <FrameBody>
       {view === 'tools' ? (
         <ToolsPanel
-          seePrices={canSeePrices(user.role)}
           onProblemomer={() => onNavigate('problemomer')}
           onCalculator={onOpenCalc}
         />

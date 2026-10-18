@@ -29,7 +29,7 @@ for (const account of DEMO_ACCOUNTS) {
 }
 equal(demoRoleLabel(DEMO_ACCOUNTS[1]!), 'Владелец');
 equal(demoRoleHint(DEMO_ACCOUNTS[5]!), 'Вторая бригада');
-equal(demoRoleHint(DEMO_ACCOUNTS[4]!), 'Задания без цен');
+equal(demoRoleHint(DEMO_ACCOUNTS[4]!), 'Задания на монтаж');
 
 equal(folderCountLabel(0), 'Пока пусто');
 equal(folderCountLabel(1), '1 материал');
