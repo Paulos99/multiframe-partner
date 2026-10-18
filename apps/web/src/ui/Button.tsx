@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { m as motion, useReducedMotion } from 'motion/react';
+import { motionPresets } from '../partner/motionBits';
 import styles from './Button.module.css';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -52,7 +53,7 @@ export function Button({
       data-loading={loading ? '1' : undefined}
       whileHover={!reduce && !inactive && canHover ? { y: -2 } : undefined}
       whileTap={!reduce && !inactive ? { scale: 0.97 } : undefined}
-      transition={{ type: 'spring', stiffness: 520, damping: 34, mass: 0.6 }}
+      transition={motionPresets.layout}
       {...rest}
     >
       {loading ? <span className={styles.spinner} aria-hidden /> : null}

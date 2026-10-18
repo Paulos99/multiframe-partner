@@ -1,3 +1,4 @@
+import { PageTransition } from '../partner/motionBits';
 import type { ReactNode } from 'react';
 import { CabinetBrand } from '../partner/CabinetBrand';
 import { ProfileMenu } from './ProfileMenu';
@@ -54,7 +55,7 @@ export function CabinetChrome({
             />
           </div>
         </header>
-        <div className={styles.work}>{children}</div>
+        <PageTransition className={styles.work} pageKey={items.find(item=>item.active)?.id||title}>{children}</PageTransition>
       </div>
     </div>
   );

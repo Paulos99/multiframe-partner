@@ -181,6 +181,7 @@ type PartnerApi = {
   /** @deprecated */
   partnerListExecutors: () => StaffMember[];
   refreshObjects: () => Promise<void>;
+  acceptProfile: (profile: SessionUser) => void;
   projects: Project[];
   projectsLoading: boolean;
   projectsError: string | null;
@@ -909,6 +910,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
             : []
         ).map(asStaff),
       refreshObjects,
+      acceptProfile: (profile: SessionUser) => { saveSession(profile); setUser(profile); },
       projects,
       projectsLoading,
       projectsError,

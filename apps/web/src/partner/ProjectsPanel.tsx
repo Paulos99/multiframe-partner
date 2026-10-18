@@ -1,3 +1,4 @@
+import { Skeleton } from './Skeleton';
 import { useState, type FormEvent } from 'react';
 import type { UserRole } from '../../../../packages/shared/partner';
 import { ProjectDetail, type ProjectRoom, type ProjectView } from './ProjectDetail';
@@ -45,7 +46,7 @@ export function ProjectsPanel({ projects, rooms, role, loading, error, onRetry, 
       <button className={styles.primary} type="submit" disabled={busy || !form.name.trim()}>{busy ? 'Сохраняем…' : 'Создать проект'}</button>
     </form> : null}
     <input className={styles.search} aria-label="Поиск проекта" placeholder="Клиент, адрес или название проекта" value={query} onChange={event => setQuery(event.target.value)} />
-    {loading ? <p role="status">Загружаем проекты…</p> : null}
+    {loading ? <Skeleton kind="cards" count={3} label="Загрузка проектов"/> : null}
     {error ? <div className={styles.error} role="alert"><p>{error}</p><button className={styles.secondary} onClick={onRetry}>Повторить загрузку</button></div> : null}
     <div className={styles.grid}>{filtered.map(project => {
       const projectRooms = rooms.filter(room => room.projectId === project.id && room.orgId === project.orgId);

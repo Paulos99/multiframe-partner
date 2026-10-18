@@ -161,3 +161,14 @@
   font-size: 0.92rem;
   line-height: 1.4;
 }
+
+/* Compact navigation without removing instructional text. */
+.panel { gap: 12px; padding: 16px; }
+.section { padding: 12px; margin-top: 10px; }
+.sectionHead { cursor: pointer; min-height: 32px; }
+.section[open] .sectionHead { margin-bottom: 10px; }
+.steps { gap: 7px; }
+.steps li { font-size: .9rem; }
+.sectionHead::before { content: '›'; transition: transform .2s; }
+.section[open] .sectionHead::before { transform: rotate(90deg); }
+@media(prefers-reduced-motion: reduce) { .sectionHead::before { transition: none; } }

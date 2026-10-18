@@ -178,3 +178,8 @@ body.theme-dark::-webkit-scrollbar-thumb:hover {
     transition: none;
   }
 }
+
+/* Reserve scrollbar space before loading or opening dialogs. */
+html { scrollbar-gutter: stable; }
+
+[data-reveal] { transition: none; }

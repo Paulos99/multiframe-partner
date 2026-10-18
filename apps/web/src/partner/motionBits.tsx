@@ -15,10 +15,26 @@
  * Смена бейджа: короткое opacity/scale, в духе Magic UI «Animated Badge» (MIT).
  * Платный код (codeandchill.store и аналоги) не используется.
  */
-import { animate, motion, useReducedMotion } from 'motion/react';
+import { animate, m as motion, useReducedMotion, LazyMotion, domMax, MotionConfig, AnimatePresence } from 'motion/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-const EASE = [0.22, 1, 0.36, 1] as const;
+export const EASE = [0.22, 1, 0.36, 1] as const;
+export const motionPresets = {
+  page: { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -4 } },
+  modal: { initial: { opacity: 0, scale: .98, y: 8 }, animate: { opacity: 1, scale: 1, y: 0 }, exit: { opacity: 0, scale: .98 } },
+  transition: { duration: .38, ease: EASE },
+  layout: { type: 'spring' as const, stiffness: 280, damping: 32 },
+};
+export function MotionProvider({children}: {children: ReactNode}) {
+  return <LazyMotion features={domMax} strict><MotionConfig reducedMotion="user" transition={motionPresets.transition}>{children}</MotionConfig></LazyMotion>;
+}
+export function PageTransition({children, pageKey, className}: {children: ReactNode; pageKey: string; className?: string}) {
+  const reduce = usePrefersReducedMotion();
+  return <AnimatePresence mode="wait" initial={false}><motion.div key={pageKey} className={className}
+    initial={reduce ? false : motionPresets.page.initial} animate={motionPresets.page.animate}
+    exit={reduce ? {opacity:1} : motionPresets.page.exit} transition={reduce ? {duration:0} : motionPresets.transition}>{children}</motion.div></AnimatePresence>;
+}
+export { motion as m, AnimatePresence };
 
 export function usePrefersReducedMotion(): boolean {
   return useReducedMotion() === true;
@@ -42,7 +58,7 @@ export function FadeRise({
       className={className}
       initial={reduce ? false : { opacity: 0, y: blur ? 16 : 10, filter: blur ? 'blur(8px)' : 'blur(0px)' }}
       animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-      transition={{ duration: blur ? 0.48 : 0.32, delay, ease: EASE }}
+      transition={{ duration: reduce ? 0 : 0.42, delay: reduce ? 0 : delay, ease: EASE }}
     >
       {children}
     </motion.div>
@@ -92,7 +108,8 @@ export function RiseItem({
       className={className}
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.26, delay: Math.min(index, 7) * 0.035, ease: EASE }}
+      layout={!reduce} exit={reduce ? undefined : { opacity: 0, scale: .98 }}
+      transition={{ duration: reduce ? 0 : .38, delay: reduce ? 0 : Math.min(index, 5) * .025, ease: EASE }}
     >
       {children}
     </motion.div>
@@ -148,4 +165,23 @@ export function CountUp({ value }: { value: number }) {
   if (Number.isInteger(value)) return <>{Math.round(n)}</>;
   const shown = Math.abs(value - n) < 0.05 ? value : Math.round(n * 10) / 10;
   return <>{shown}</>;
+}
+
+/** Shared Motion reveal for the existing diagnostic sections. */
+export function usePageReveal(key:string) {
+  const reduce=usePrefersReducedMotion();
+  useEffect(()=>{
+    const controls: Array<{stop:()=>void}>=[];
+    const observer=new IntersectionObserver(entries=>{
+      entries.filter(e=>e.isIntersecting).forEach((entry,index)=>{
+        const element=entry.target as HTMLElement;observer.unobserve(element);
+        element.classList.add('is-revealed');
+        if(!reduce) controls.push(animate(element,{opacity:[0,1],y:[8,0]},{...motionPresets.transition,delay:Math.min(index,5)*.025}));
+      });
+    },{threshold:.05});
+    document.querySelectorAll<HTMLElement>('[data-reveal]').forEach(element=>{
+      if(reduce) element.classList.add('is-revealed');else observer.observe(element);
+    });
+    return()=>{observer.disconnect();controls.forEach(c=>c.stop());};
+  },[key,reduce]);
 }
