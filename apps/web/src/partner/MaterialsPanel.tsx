@@ -1,4 +1,4 @@
-import { m, AnimatePresence, motionPresets, usePrefersReducedMotion } from './motionBits';
+import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { Skeleton } from './Skeleton';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PublicMaterial } from '../../../api/materialsLib.js';
@@ -14,10 +14,7 @@ import {
   uploadMaterialFile,
 } from './materialsClient';
 import styles from './MaterialsPanel.module.css';
-
-type Preview =
-  | { mode: 'stub'; name: string; stub: string }
-  | { mode: 'file'; name: string; mime: string; url: string; revoke: boolean };
+import { openFilePreview, type PreviewItem, type PreviewSource } from '../ui/filePreview/previewStore';
 
 export { PREPARING_LABEL };
 
@@ -74,7 +71,6 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
   const [makingFolder, setMakingFolder] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
-  const [preview, setPreview] = useState<Preview | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const replaceId = useRef<string | null>(null);
 
@@ -94,20 +90,6 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
     void reload();
   }, []);
 
-  useEffect(() => {
-    if (!preview || preview.mode !== 'file' || !preview.revoke) return;
-    const url = preview.url;
-    return () => URL.revokeObjectURL(url);
-  }, [preview]);
-
-  useEffect(() => {
-    if (!preview) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setPreview(null);
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [preview]);
 
   const crumbs = useMemo(() => {
     const chain: PublicMaterial[] = [];
@@ -152,42 +134,16 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
     }
   }
 
-  async function openItem(item: PublicMaterial) {
+  function openItem(item: PublicMaterial) {
     if (item.kind === 'folder') {
       setFolderId(item.id);
       setMakingFolder(false);
       return;
     }
-    setBusy(true);
-    setStatus('Открываем…');
+    // Окно предпросмотра листает все файлы текущей папки; содержимое грузится лениво.
+    const index = Math.max(0, files.findIndex((entry) => entry.id === item.id));
     setError(null);
-    try {
-      const content = await openMaterial(item);
-      if (content.kind === 'stub') {
-        setPreview({ mode: 'stub', name: content.name, stub: content.stub });
-      } else if (content.kind === 'remote') {
-        setPreview({
-          mode: 'file',
-          name: content.name,
-          mime: content.mime,
-          url: content.url,
-          revoke: false,
-        });
-      } else {
-        setPreview({
-          mode: 'file',
-          name: content.name,
-          mime: content.mime,
-          url: URL.createObjectURL(content.blob),
-          revoke: true,
-        });
-      }
-    } catch (ex) {
-      setError(ex instanceof Error ? ex.message : 'Не удалось открыть файл');
-    } finally {
-      setBusy(false);
-      setStatus(null);
-    }
+    openFilePreview(files.map(materialPreviewItem), index);
   }
 
   async function onFilePick(file: File | undefined) {
@@ -428,42 +384,6 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
         </>
       ) : null}
 
-      <AnimatePresence>{preview ? (
-        <m.div initial={reduce?false:motionPresets.modal.initial} animate={motionPresets.modal.animate} exit={reduce?undefined:motionPresets.modal.exit} className={styles.viewer} role="dialog" aria-modal="true" aria-label={preview.name}>
-          <div className={styles.sheet}>
-            <header className={styles.head}>
-              <h3>{preview.name}</h3>
-              <button type="button" className={styles.ghost} onClick={() => setPreview(null)} autoFocus>
-                Закрыть
-              </button>
-            </header>
-            <div className={styles.body}>
-              {preview.mode === 'stub' ? (
-                <MaterialStubView stub={preview.stub} />
-              ) : preview.mime.startsWith('video/') ? (
-                <video className={styles.media} controls src={preview.url} />
-              ) : preview.mime.startsWith('image/') ? (
-                <img className={styles.media} src={preview.url} alt={preview.name} />
-              ) : preview.mime === 'application/pdf' ? (
-                <iframe className={styles.frame} title={preview.name} src={preview.url} />
-              ) : (
-                <p className={styles.lead}>
-                  Файл можно скачать.{' '}
-                  {preview.revoke ? (
-                    <a className={styles.download} href={preview.url} download={preview.name}>
-                      Скачать
-                    </a>
-                  ) : (
-                    <a className={styles.download} href={preview.url} target="_blank" rel="noopener noreferrer">
-                      Скачать
-                    </a>
-                  )}
-                </p>
-              )}
-            </div>
-          </div>
-        </m.div>
-      ) : null}</AnimatePresence>
     </div>
   );
 }
@@ -506,4 +426,19 @@ function ItemActions({
       </button>
     </div>
   );
+}
+
+function materialPreviewItem(item: PublicMaterial): PreviewItem {
+  return {
+    id: item.id,
+    name: item.name,
+    mime: item.mime,
+    size: item.size,
+    load: async (): Promise<PreviewSource> => {
+      const content = await openMaterial(item);
+      if (content.kind === 'stub') return { node: <MaterialStubView stub={content.stub} /> };
+      if (content.kind === 'remote') return { url: content.url, mime: content.mime };
+      return { blob: content.blob, mime: content.mime };
+    },
+  };
 }
