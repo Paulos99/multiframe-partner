@@ -416,6 +416,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     localLogout(user);
     void rememberSession({ token: null, apiBase: apiBase(), userId: null });
     setUser(null);
+    setCalcRequest(null);
     setObjects([]);
     setStaffCache([]);
     setCalculations([]);

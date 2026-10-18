@@ -152,7 +152,15 @@ function PartnerShell() {
   const hidePrices = user ? !canSeePrices(user.role) : false;
 
   useEffect(() => {
-    if (!calcRequest) return;
+    if (user) return;
+    linkedObjectId.current = null;
+    setCalcObjectId(null);
+    setCalcNotice(null);
+    setRoute('cabinet');
+  }, [user]);
+
+  useEffect(() => {
+    if (!calcRequest || !user) return;
     linkedObjectId.current = calcRequest.objectId;
     setCalcObjectId(calcRequest.objectId);
     setCalcNotice(null);
