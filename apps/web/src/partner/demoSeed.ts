@@ -1,6 +1,7 @@
 /**
  * Client-side mirror of apps/api/demoSeed.js for offline / local fallback.
  */
+import { boostCapitalEvents } from '../../../../packages/shared/demoAnalyticsBoost.js';
 import {
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
@@ -458,5 +459,5 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
     }
   }
 
-  return events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return boostCapitalEvents(events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)));
 }
