@@ -89,6 +89,12 @@ export function objectPatchFromCalc(
     estimate,
     clientSummary: existing?.clientSummary || summary,
   };
+  if (existing && Object.prototype.hasOwnProperty.call(existing, 'projectId')) {
+    patch.projectId = existing.projectId ?? null;
+  }
+  if (existing && Object.prototype.hasOwnProperty.call(existing, 'roomName')) {
+    patch.roomName = existing.roomName ?? null;
+  }
   const id = existing?.id || targetId;
   if (id) {
     patch.id = id;

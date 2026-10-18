@@ -144,7 +144,7 @@ function ToolChrome({
 }
 
 function PartnerShell() {
-  const { user, loading, noteTool, logout, objects, calcRequest, attachCalculation, requestCalculator } = usePartner();
+  const { user, loading, noteTool, logout, objects, calcRequest, attachCalculation, requestCalculator, diagnosisRequest, clearDiagnosis } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
@@ -167,6 +167,12 @@ function PartnerShell() {
     if (user) noteTool('calculator');
     setRoute('calculator');
   }, [calcRequest, noteTool, user]);
+
+  useEffect(() => {
+    if (!diagnosisRequest || !user) return;
+    noteTool('problemomer');
+    setRoute('problemomer');
+  }, [diagnosisRequest, noteTool, user]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -253,7 +259,10 @@ function PartnerShell() {
               requestCalculator(null);
               return;
             }
-            if (r === 'problemomer') noteTool('problemomer');
+            if (r === 'problemomer') {
+              clearDiagnosis();
+              noteTool('problemomer');
+            }
             setRoute(r);
           }}
         />

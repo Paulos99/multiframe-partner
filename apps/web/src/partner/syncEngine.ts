@@ -3,14 +3,17 @@
  * Client ids are stable. A newer updatedAt wins; an older offline write is kept
  * in server history and does not erase the fresher record. A 401 leaves the outbox.
  */
-import type { JobObject, JobObjectDocument, SessionUser } from '../../../../packages/shared/partner';
+import type { JobObject, JobObjectDocument, Project, ProjectInput, SessionUser } from '../../../../packages/shared/partner';
 import {
   ApiError,
   apiBase,
   apiCreateObject,
+  apiCreateProject,
   apiDeleteObject,
   apiListObjects,
+  apiListProjects,
   apiPatchObject,
+  apiUpdateProject,
   apiUploadObjectDocuments,
   isApiError,
   stripObjectDocuments,
@@ -18,31 +21,45 @@ import {
 import {
   appendLocalObjectDocuments,
   cacheObjects,
+  cacheProjects,
   deleteLocalObject,
+  listLocalProjects,
   loadCachedObjects,
+  loadCachedProjects,
   listLocalObjects,
   loadToken,
+  markProjectsApiReady,
   peekObjectDocumentQueue,
   presentCachedObject,
+  projectsApiReady,
   removeFromObjectQueue,
   removeQueuedObjectDocuments,
   saveLocalDocBytes,
   saveToken,
   upsertLocalObject,
+  upsertLocalProject,
 } from './localStore';
 import {
   deleteStoredObject,
   enqueueOutbox,
+  enqueueProjectOutbox,
   listOutbox,
+  listProjectOutbox,
   loadAllObjects,
+  loadAllProjects,
   mergeObjects,
+  mergeProjects,
   newObjectId,
   putObject,
+  putProject,
   registerBackgroundSync,
   rememberSession,
   removeOutbox,
+  removeProjectOutbox,
   replaceServerObjects,
+  replaceServerProjects,
   type OutboxOp,
+  type ProjectOutboxOp,
 } from './offlineDb';
 
 export async function countMyOutbox(userId: string): Promise<number> {
@@ -352,4 +369,149 @@ export async function rememberObjectDocuments(
     /* local mirror is optional when the card lives in IndexedDB */
   }
   return next;
+}
+
+export type ProjectLoadResult = {
+  projects: Project[];
+  error: string | null;
+  unavailable: boolean;
+};
+
+function routeMissing(status: number): boolean {
+  return status === 404 || status === 405 || status === 501;
+}
+
+const PROJECTS_UNAVAILABLE = 'Проекты на сервере пока недоступны';
+
+async function visibleProjectQueue(user: SessionUser): Promise<ProjectOutboxOp[]> {
+  const rows = await listProjectOutbox();
+  return rows.filter((op) => op.userId === user.id);
+}
+
+export async function loadVisibleProjects(user: SessionUser, remote: boolean): Promise<ProjectLoadResult> {
+  if (!remote) {
+    return { projects: listLocalProjects(user), error: null, unavailable: false };
+  }
+  const queued = await visibleProjectQueue(user).catch(() => []);
+  if (!loadToken() || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+    if (!projectsApiReady()) {
+      return { projects: [], error: PROJECTS_UNAVAILABLE, unavailable: true };
+    }
+    const cached = loadCachedProjects();
+    const stored = cached.length ? cached : await loadAllProjects().catch(() => []);
+    return { projects: mergeProjects(stored, queued), error: null, unavailable: false };
+  }
+  try {
+    const list = await apiListProjects();
+    markProjectsApiReady(true);
+    cacheProjects(list);
+    await replaceServerProjects(list, user.orgId, user.role === 'admin');
+    return { projects: mergeProjects(list, queued), error: null, unavailable: false };
+  } catch (err) {
+    if (isApiError(err) && err.status === 401) {
+      saveToken(null);
+      await rememberSession({ token: null, apiBase: apiBase(), userId: user.id });
+      return { projects: [], error: 'Нужно войти снова', unavailable: true };
+    }
+    if (isApiError(err) && routeMissing(err.status)) {
+      markProjectsApiReady(false);
+      return { projects: [], error: PROJECTS_UNAVAILABLE, unavailable: true };
+    }
+    return {
+      projects: [],
+      error: err instanceof Error ? err.message : PROJECTS_UNAVAILABLE,
+      unavailable: true,
+    };
+  }
+}
+
+async function queueProject(user: SessionUser, project: Project): Promise<Project> {
+  const op: ProjectOutboxOp = {
+    id: project.id,
+    op: 'upsert',
+    updatedAt: project.updatedAt,
+    userId: user.id,
+    orgId: project.orgId,
+    payload: project,
+  };
+  await enqueueProjectOutbox(op);
+  await putProject(project);
+  cacheProjects(mergeProjects(loadCachedProjects().filter((item) => item.id !== project.id), [op]));
+  await registerBackgroundSync();
+  return project;
+}
+
+export async function saveProjectSynced(
+  user: SessionUser,
+  remote: boolean,
+  input: ProjectInput,
+  id?: string,
+): Promise<Project> {
+  if (!remote) return upsertLocalProject(id ? { ...input, id } : input, user);
+  const draft: ProjectInput = id ? { ...input, id } : input;
+  if (loadToken() && (typeof navigator === 'undefined' || navigator.onLine)) {
+    try {
+      const project = id ? await apiUpdateProject(id, draft) : await apiCreateProject(draft);
+      markProjectsApiReady(true);
+      await putProject(project);
+      if (project.id) await removeProjectOutbox(project.id);
+      const cached = loadCachedProjects().filter((item) => item.id !== project.id);
+      cacheProjects([project, ...cached]);
+      return project;
+    } catch (err) {
+      if (isApiError(err) && err.status === 401) {
+        saveToken(null);
+        await rememberSession({ token: null, apiBase: apiBase(), userId: user.id });
+        throw err;
+      }
+      if (isApiError(err) && routeMissing(err.status) && !id) {
+        markProjectsApiReady(false);
+        throw Object.assign(new Error(PROJECTS_UNAVAILABLE), { name: 'ProjectsUnavailableError' });
+      }
+      if (isApiError(err) && id && err.status === 404 && projectsApiReady()) throw err;
+      if (isApiError(err) && routeMissing(err.status)) {
+        markProjectsApiReady(false);
+        throw Object.assign(new Error(PROJECTS_UNAVAILABLE), { name: 'ProjectsUnavailableError' });
+      }
+      if (isApiError(err) && err.status !== 0 && err.status < 500 && err.status !== 408) throw err;
+    }
+  }
+  if (!projectsApiReady() && remote) {
+    throw Object.assign(new Error(PROJECTS_UNAVAILABLE), { name: 'ProjectsUnavailableError' });
+  }
+  const local = upsertLocalProject(
+    id ? { ...input, id } : { ...input, id: input.id || `prj_${Date.now().toString(36)}` },
+    user,
+  );
+  return queueProject(user, local);
+}
+
+export async function flushProjectOutbox(
+  user: SessionUser,
+  remote: boolean,
+): Promise<'ok' | 'auth' | 'offline' | 'idle' | 'unavailable'> {
+  if (!remote) return 'idle';
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
+  if (!loadToken()) return 'auth';
+  const mine = await visibleProjectQueue(user);
+  if (!mine.length) return 'ok';
+  for (const item of mine) {
+    try {
+      let project: Project;
+      try {
+        project = await apiUpdateProject(item.id, item.payload);
+      } catch (err) {
+        if (isApiError(err) && err.status === 404) project = await apiCreateProject(item.payload);
+        else throw err;
+      }
+      await putProject(project);
+      await removeProjectOutbox(item.id);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return 'auth';
+      if (err instanceof ApiError && routeMissing(err.status)) return 'unavailable';
+      if (err instanceof ApiError && err.status === 403) continue;
+      return 'offline';
+    }
+  }
+  return 'ok';
 }

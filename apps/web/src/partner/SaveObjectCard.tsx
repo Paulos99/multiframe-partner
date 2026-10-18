@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { canCreateObjects, canSeePrices } from '../../../../packages/shared/partner';
 import { useSession } from '../state/SessionContext';
+import type { RoomAnswers } from '../state/types';
 import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
@@ -8,8 +9,8 @@ import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
 export function SaveObjectCard() {
-  const { user, saveObject, partner } = usePartner();
-  const { session } = useSession();
+  const { user, saveObject, partner, diagnosisRequest, objects } = usePartner();
+  const { session, patchRoom, setCeilingArea } = useSession();
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -22,6 +23,22 @@ export function SaveObjectCard() {
   const [sentFlash, setSentFlash] = useState(false);
   /** Keep one card: save / send update the same object instead of creating clones. */
   const [objectId, setObjectId] = useState<string | null>(null);
+  const appliedDiagnosis = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!diagnosisRequest || appliedDiagnosis.current === diagnosisRequest.nonce) return;
+    const obj = objects.find((item) => item.id === diagnosisRequest.objectId);
+    if (!obj) return;
+    appliedDiagnosis.current = diagnosisRequest.nonce;
+    setObjectId(obj.id);
+    setClientName(obj.clientName || '');
+    setClientPhone(obj.clientPhone || '');
+    setAddress(obj.address || '');
+    setCity(obj.city || user?.org?.city || '');
+    const answers = obj.room?.answers;
+    if (answers && typeof answers === 'object') patchRoom(answers as Partial<RoomAnswers>);
+    if (typeof obj.room?.areaM2 === 'number') setCeilingArea(obj.room.areaM2);
+  }, [diagnosisRequest, objects, patchRoom, setCeilingArea, user?.org?.city]);
 
   if (!user || !canCreateObjects(user.role)) return null;
 
@@ -67,8 +84,15 @@ export function SaveObjectCard() {
   }
 
   function objectFields(status: 'measured' | 'quote_sent') {
+    const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
     return {
       ...(objectId ? { id: objectId } : {}),
+      ...(existing && Object.prototype.hasOwnProperty.call(existing, 'projectId')
+        ? { projectId: existing.projectId }
+        : {}),
+      ...(existing && Object.prototype.hasOwnProperty.call(existing, 'roomName')
+        ? { roomName: existing.roomName }
+        : {}),
       status,
       clientName,
       clientPhone,

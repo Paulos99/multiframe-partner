@@ -14,6 +14,7 @@ import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { NetworkOverview, RoleWorkspace } from './RoleOverview';
+import { ProjectsCabinet } from './ProjectsCabinet';
 import { NewPasswordButton } from './NewPasswordButton';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
@@ -112,7 +113,7 @@ function TabPanel({ children }: { children: ReactNode }) {
   return <div className={styles.tabPanel}>{children}</div>;
 }
 
-type AdminTab = 'add' | 'partners' | 'analytics' | 'help';
+type AdminTab = 'add' | 'partners' | 'projects' | 'analytics' | 'help';
 
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
@@ -200,6 +201,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         tabs={[
           { id: 'analytics', label: 'Аналитика' },
           { id: 'partners', label: `Партнёры · ${partners.length}` },
+          { id: 'projects', label: 'Проекты' },
           { id: 'add', label: 'Добавить' },
           { id: 'help', label: 'Обучение' },
         ]}
@@ -390,6 +392,16 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         </TabPanel>
       ) : null}
 
+      {tab === 'projects' ? (
+        <TabPanel>
+          <ProjectsCabinet
+            onOpenRoom={(id) => api.openObject(id)}
+            onDiagnose={(id) => api.requestDiagnosis(id)}
+            onCalculate={(id) => api.requestCalculator(id)}
+          />
+        </TabPanel>
+      ) : null}
+
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="admin" />
@@ -399,7 +411,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   );
 }
 
-type OwnerTab = 'objects' | 'company' | 'staff' | 'analytics' | 'help';
+type OwnerTab = 'projects' | 'objects' | 'company' | 'staff' | 'analytics' | 'help';
 
 function OwnerCabinet({
   onNavigate,
@@ -507,6 +519,7 @@ function OwnerCabinet({
 
       <CabinetTabs
         tabs={[
+          { id: 'projects', label: 'Проекты' },
           { id: 'objects', label: `Объекты · ${api.objects.length}` },
           { id: 'company', label: 'Компания' },
           { id: 'staff', label: `Сотрудники · ${staff.length}` },
@@ -516,6 +529,19 @@ function OwnerCabinet({
         active={tab}
         onChange={setTab}
       />
+
+      {tab === 'projects' ? (
+        <TabPanel>
+          <ProjectsCabinet
+            onOpenRoom={(id) => {
+              api.openObject(id);
+              setTab('objects');
+            }}
+            onDiagnose={(id) => api.requestDiagnosis(id)}
+            onCalculate={(id) => api.requestCalculator(id)}
+          />
+        </TabPanel>
+      ) : null}
 
       {tab === 'objects' ? (
         <TabPanel>
@@ -745,7 +771,7 @@ function SalesCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [tab, setTab] = useState<'deals' | 'analytics' | 'help'>('deals');
+  const [tab, setTab] = useState<'projects' | 'deals' | 'analytics' | 'help'>('deals');
 
   return (
     <div className={styles.shellWide}>
@@ -763,6 +789,7 @@ function SalesCabinet({
       <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
       <CabinetTabs
         tabs={[
+          { id: 'projects', label: 'Проекты' },
           { id: 'deals', label: `Сделки · ${api.objects.length}` },
           { id: 'analytics', label: 'Аналитика' },
           { id: 'help', label: 'Обучение' },
@@ -770,6 +797,18 @@ function SalesCabinet({
         active={tab}
         onChange={setTab}
       />
+      {tab === 'projects' ? (
+        <TabPanel>
+          <ProjectsCabinet
+            onOpenRoom={(id) => {
+              api.openObject(id);
+              setTab('deals');
+            }}
+            onDiagnose={(id) => api.requestDiagnosis(id)}
+            onCalculate={(id) => api.requestCalculator(id)}
+          />
+        </TabPanel>
+      ) : null}
       {tab === 'deals' ? (
         <TabPanel>
           <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
@@ -833,6 +872,11 @@ function MeasurerCabinet({
             {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
             {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'}
           </p>
+          <ProjectsCabinet
+            onOpenRoom={(id) => api.openObject(id)}
+            onDiagnose={(id) => api.requestDiagnosis(id)}
+            onCalculate={(id) => api.requestCalculator(id)}
+          />
           <RoleWorkspace compact onCreate={() => onNavigate('problemomer')} />
           <details className={styles.hintCard}>
             <summary>Офлайн на телефоне</summary>
@@ -887,6 +931,11 @@ function CrewCabinet({
         <HelpTrainingPanel role="crew" />
       ) : (
         <>
+          <ProjectsCabinet
+            onOpenRoom={(id) => api.openObject(id)}
+            onDiagnose={(id) => api.requestDiagnosis(id)}
+            onCalculate={(id) => api.requestCalculator(id)}
+          />
           <RoleWorkspace />
           <details className={styles.hintCard}>
             <summary>Офлайн на телефоне</summary>

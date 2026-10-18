@@ -3,10 +3,10 @@
  * Objects, calculations and analytics events survive reloads without a network.
  * The outbox is not cleared on logout or on 401 — a later login flushes it.
  */
-import type { AnalyticsEvent, JobObject } from '../../../../packages/shared/partner';
+import type { AnalyticsEvent, JobObject, Project } from '../../../../packages/shared/partner';
 
 const DB_NAME = 'mf-partner-offline';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export type OutboxOp = {
   id: string;
@@ -15,6 +15,15 @@ export type OutboxOp = {
   userId: string;
   orgId: string;
   payload: JobObject;
+};
+
+export type ProjectOutboxOp = {
+  id: string;
+  op: 'upsert';
+  updatedAt: string;
+  userId: string;
+  orgId: string;
+  payload: Project;
 };
 
 export type CachedCalculation = {
@@ -68,6 +77,10 @@ function openDb(): Promise<IDBDatabase> {
         db.createObjectStore('analytics', { keyPath: 'id' });
       }
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+      if (!db.objectStoreNames.contains('projects')) db.createObjectStore('projects', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('projectOutbox')) {
+        db.createObjectStore('projectOutbox', { keyPath: 'id' });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error('IndexedDB'));
@@ -155,6 +168,56 @@ export async function enqueueOutbox(op: OutboxOp): Promise<void> {
 
 export async function removeOutbox(id: string): Promise<void> {
   await deleteRow('outbox', id);
+}
+
+export async function putProject(project: Project): Promise<void> {
+  await putRow('projects', project);
+}
+
+export async function loadAllProjects(): Promise<Project[]> {
+  return getAll<Project>('projects');
+}
+
+/** Снимок сервера. Локальные проекты в очереди не стираются. */
+export async function replaceServerProjects(
+  next: Project[],
+  orgId: string | null,
+  isAdmin: boolean,
+): Promise<void> {
+  const existing = await getAll<Project>('projects');
+  const pending = new Set((await getAll<ProjectOutboxOp>('projectOutbox')).map((op) => op.id));
+  const nextIds = new Set(next.map((project) => project.id));
+  const db = await openDb();
+  const tx = db.transaction('projects', 'readwrite');
+  const store = tx.objectStore('projects');
+  for (const project of existing) {
+    const sameScope = isAdmin || (orgId != null && project.orgId === orgId);
+    if (sameScope && !nextIds.has(project.id) && !pending.has(project.id)) store.delete(project.id);
+  }
+  for (const project of next) store.put(project);
+  await txDone(tx);
+}
+
+export async function listProjectOutbox(): Promise<ProjectOutboxOp[]> {
+  const rows = await getAll<ProjectOutboxOp>('projectOutbox');
+  return rows.sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : 1));
+}
+
+export async function enqueueProjectOutbox(op: ProjectOutboxOp): Promise<void> {
+  await putRow('projectOutbox', op);
+}
+
+export async function removeProjectOutbox(id: string): Promise<void> {
+  await deleteRow('projectOutbox', id);
+}
+
+export function mergeProjects(base: Project[], outbox: ProjectOutboxOp[]): Project[] {
+  const map = new Map(base.map((project) => [project.id, project]));
+  for (const op of outbox) {
+    const cur = map.get(op.id);
+    if (!cur || op.updatedAt >= (cur.updatedAt || '')) map.set(op.id, op.payload);
+  }
+  return [...map.values()].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
 }
 
 export function mergeObjects(base: JobObject[], outbox: OutboxOp[]): JobObject[] {
