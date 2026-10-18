@@ -67,11 +67,13 @@ export function LoginScreen() {
         <ShakeBox signal={shake} className={styles.stack}>
           <section className={styles.card}>
             <header className={styles.brand}>
-              <img
-                className={styles.logo}
-                src={`${import.meta.env.BASE_URL}logo-stp.png`}
-                alt="StP MultiFrame"
-              />
+              <span className={styles.logoBox}>
+                <img
+                  className={styles.logo}
+                  src={`${import.meta.env.BASE_URL}logo-stp.png`}
+                  alt="StP MultiFrame"
+                />
+              </span>
               <h1>Кабинет партнёра</h1>
               <p className={styles.lead}>
                 {demo ? 'Выберите роль, чтобы открыть кабинет.' : 'Проблемомер, калькулятор и объекты компании.'}

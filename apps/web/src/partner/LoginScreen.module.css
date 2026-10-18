@@ -49,13 +49,21 @@
   gap: 8px;
 }
 
-.logo {
+.logoBox {
+  display: block;
   width: min(210px, 68%);
-  height: auto;
   padding: 6px 8px;
   border: 1px solid #e4e7eb;
   border-radius: var(--cab-radius-md);
   background: #fff;
+}
+
+/* Файл логотипа белый: на белой плашке затемняем, иначе логотип не виден. */
+.logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: brightness(0) saturate(100%);
 }
 
 .brand h1,
