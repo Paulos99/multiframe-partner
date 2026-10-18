@@ -96,6 +96,11 @@ setObjectStoreTransportForTests(async (op) => {
     avatars.set(op.key, op.body);
     return {};
   }
+  // Удаление материалов/аватаров — только в памяти этого процесса.
+  if (op.action === 'delete') {
+    avatars.delete(op.key);
+    return null;
+  }
   if (op.action === 'sign-get')
     return `http://127.0.0.1:4181/test-avatar/${encodeURIComponent(op.key)}`;
   throw new Error('Unexpected storage operation in isolated test');
