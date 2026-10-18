@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import {
   computeAnalyticsFunnel,
   funnelPassKey,
+  funnelStopCounts,
   funnelStopPercents,
   funnelStepPercent,
 } from '../../packages/shared/funnel.js';
@@ -310,4 +311,21 @@ test('«где остановились»: невозрастание, без о
   assert.deepEqual(funnelStopPercents([3, 3, 3]), ['0%', '0%', '100%']);
   assert.deepEqual(funnelStopPercents([1, 0, 0]), ['100%', '0%', '0%']);
   for (const counts of [[7, 6, 0, 0], [3, 1, 1], [100, 33, 33, 1], [6, 5, 4, 3]]) assertStopsSum100(counts);
+});
+
+test('скриншот Павла: в строках остановившиеся, а не дошедшие', () => {
+  // Проблемомер: открыли 10, посчитали 10, PDF 5, поделился 1.
+  assert.deepEqual(funnelStopCounts([10, 10, 5, 1]), [0, 5, 4, 1]);
+  assert.deepEqual(funnelStopPercents([10, 10, 5, 1]), ['0%', '50%', '40%', '10%']);
+  assert.deepEqual(fromTypeScript.funnelStopCounts([10, 10, 5, 1]), [0, 5, 4, 1]);
+  // Калькулятор: открыли 10, посчитали 5, PDF 5.
+  assert.deepEqual(funnelStopCounts([10, 5, 5]), [5, 0, 5]);
+  assert.deepEqual(funnelStopPercents([10, 5, 5]), ['50%', '0%', '50%']);
+  assert.deepEqual(fromTypeScript.funnelStopPercents([10, 5, 5]), ['50%', '0%', '50%']);
+  const ui = readFileSync(new URL('../web/src/partner/AnalyticsDashboard.tsx', import.meta.url), 'utf8');
+  for (const label of ['Только открыл', 'Посчитал, без PDF', 'Скачал PDF, не поделился', 'Поделился']) {
+    assert.ok(ui.includes(`'${label}'`), label);
+  }
+  for (const old of ['До расчёта', 'До PDF', 'Дошли до этапа']) assert.equal(ui.includes(old), false, old);
+  assert.match(ui, /funnelStopCounts\(/);
 });
