@@ -3,8 +3,9 @@
  * Loads credentials from ~/.yc/partner-storage.json or env.
  *
  * Usage: node apps/api/scripts/seed-s3-direct.mjs
- * After write, warm Cloud Function instances may still serve old memory —
- * call POST /admin/demo/reset or redeploy: python infra/mf_doh_patch_deploy.py
+ * The next API request re-reads by ETag, so a warm instance does not keep
+ * serving the previous copy. A later save uses If-Match and will not roll
+ * this object back. POST /admin/demo/reset still rebuilds demo data in-process.
  */
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';

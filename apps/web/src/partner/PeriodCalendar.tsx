@@ -22,6 +22,7 @@ type Props = {
   fromYmd: string | null;
   toYmd: string | null;
   onChange: (fromYmd: string | null, toYmd: string | null) => void;
+  triggerClassName?: string;
 };
 
 function monthCells(year: number, month: number): Array<string | null> {
@@ -36,7 +37,7 @@ function monthCells(year: number, month: number): Array<string | null> {
   return cells;
 }
 
-export function PeriodCalendar({ fromYmd, toYmd, onChange }: Props) {
+export function PeriodCalendar({ fromYmd, toYmd, onChange, triggerClassName }: Props) {
   const today = ymdLocal(new Date());
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<string | null>(null);
@@ -98,7 +99,7 @@ export function PeriodCalendar({ fromYmd, toYmd, onChange }: Props) {
     <div className={styles.calRoot} ref={rootRef}>
       <button
         type="button"
-        className={styles.calTrigger}
+        className={[styles.calTrigger, triggerClassName].filter(Boolean).join(' ')}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
