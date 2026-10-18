@@ -85,8 +85,9 @@ test('preview opens PDF and image, navigates with arrows and closes', async ({ p
 
   await image.getByRole('button', { name: 'Следующий файл' }).click();
   const doc = page.getByRole('dialog', { name: 'Просмотр: Договор.docx' });
-  await expect(doc).toHaveAttribute('data-file-kind', 'office');
-  await expect(doc.getByText('Этот формат нельзя показать в браузере', { exact: false })).toBeVisible();
+  await expect(doc).toHaveAttribute('data-file-kind', 'docx');
+  // Содержимое — не настоящий .docx: окно показывает ошибку и даёт скачать файл.
+  await expect(doc.getByRole('alert')).toBeVisible();
   await expect(doc.getByRole('link', { name: /Скачать/ }).last()).toHaveAttribute('download', 'Договор.docx');
 
   await page.keyboard.press('ArrowRight');

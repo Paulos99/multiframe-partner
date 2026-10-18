@@ -440,6 +440,16 @@ export async function apiDeleteMaterial(
   return data.materials;
 }
 
+/** Подписанная ссылка на PDF-копию материала для просмотра (404 — копии нет). */
+export async function apiMaterialPreview(id: string): Promise<{
+  name?: string;
+  mime?: string | null;
+  url?: string;
+  base64?: string;
+}> {
+  return request(`/materials/${id}/preview`);
+}
+
 export async function apiMaterialContent(id: string): Promise<{
   name?: string;
   mime?: string | null;

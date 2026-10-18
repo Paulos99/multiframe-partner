@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -20,14 +22,18 @@ import {
   formatFileSize,
   isInlinePreviewable,
   stepIndex,
+  wordPreviewPlan,
   ZOOM_MAX,
   type FileKind,
 } from './fileKind';
+// Просмотр Word (вместе с docx-preview) грузится только при открытии документа.
+const WordView = lazy(() => import('./WordPreview').then((mod) => ({ default: mod.WordView })));
 import {
   closeFilePreview,
   getFilePreviewState,
   setFilePreviewIndex,
   subscribeFilePreview,
+  type PdfCopySource,
   type PreviewItem,
   type PreviewSource,
 } from './previewStore';
@@ -43,7 +49,15 @@ import {
 type Resolved =
   | { status: 'loading' }
   | { status: 'error'; message: string; url?: string; mime?: string | null }
-  | { status: 'ready'; url?: string; mime?: string | null; size?: number | null; node?: ReactNode };
+  | {
+      status: 'ready';
+      url?: string;
+      mime?: string | null;
+      size?: number | null;
+      node?: ReactNode;
+      /** PDF-копия для просмотра (.doc и запасной вариант для .docx). */
+      pdfCopyUrl?: string;
+    };
 
 const PHONE_QUERY = '(max-width: 640px)';
 
@@ -80,14 +94,33 @@ function useResolvedSources(items: PreviewItem[]) {
 
   const resolve = useCallback((item: PreviewItem | undefined) => {
     if (!item || cache.current.has(item.id) || loading.current.has(item.id)) return;
+    const copyUrl = (copy: PdfCopySource | undefined): string | undefined => {
+      if (!copy) return undefined;
+      if ('url' in copy) return copy.url;
+      const url = URL.createObjectURL(copy.blob);
+      owned.current.push(url);
+      return url;
+    };
     const fromSource = (src: PreviewSource): Resolved => {
       if ('node' in src) return { status: 'ready', node: src.node };
       if ('blob' in src) {
         const url = URL.createObjectURL(src.blob);
         owned.current.push(url);
-        return { status: 'ready', url, mime: src.mime || src.blob.type || item.mime, size: src.blob.size };
+        return {
+          status: 'ready',
+          url,
+          mime: src.mime || src.blob.type || item.mime,
+          size: src.blob.size,
+          pdfCopyUrl: copyUrl(src.pdfCopy),
+        };
       }
-      return { status: 'ready', url: src.url, mime: src.mime || item.mime, size: src.size ?? item.size };
+      return {
+        status: 'ready',
+        url: src.url,
+        mime: src.mime || item.mime,
+        size: src.size ?? item.size,
+        pdfCopyUrl: copyUrl(src.pdfCopy),
+      };
     };
     if (item.source) {
       cache.current.set(item.id, fromSource(item.source));
@@ -308,6 +341,7 @@ function FilePreviewDialog({ items, index }: { items: PreviewItem[]; index: numb
                 item={item}
                 kind={kind}
                 resolved={resolved}
+                phone={phone}
                 onError={(message) => fail(item, message)}
               />
             </m.div>
@@ -345,11 +379,13 @@ function PreviewBody({
   item,
   kind,
   resolved,
+  phone,
   onError,
 }: {
   item: PreviewItem;
   kind: FileKind;
   resolved: Resolved;
+  phone: boolean;
   onError: (message: string) => void;
 }) {
   const [loaded, setLoaded] = useState(false);
@@ -365,6 +401,8 @@ function PreviewBody({
   if (resolved.status === 'error')
     return <FileCard item={item} kind={kind} url={resolved.url} error={resolved.message} />;
   if (resolved.node) return <div className={styles.custom}>{resolved.node}</div>;
+  if ((kind === 'docx' || kind === 'doc') && resolved.url)
+    return <WordBody item={item} kind={kind} url={resolved.url} size={resolved.size} pdfCopyUrl={resolved.pdfCopyUrl} phone={phone} />;
   const url = resolved.url;
   if (!url || !isInlinePreviewable(kind)) return <FileCard item={item} kind={kind} url={url} size={resolved.size} />;
 
@@ -414,18 +452,87 @@ function PreviewBody({
   );
 }
 
+/** Word: .docx рисуем в браузере; .doc — PDF-копия, если есть, иначе карточка «Скачать». */
+function WordBody({
+  item,
+  kind,
+  url,
+  size,
+  pdfCopyUrl,
+  phone,
+}: {
+  item: PreviewItem;
+  kind: FileKind;
+  url: string;
+  size?: number | null;
+  pdfCopyUrl?: string;
+  phone: boolean;
+}) {
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const plan = wordPreviewPlan(kind, { hasPdfCopy: !!pdfCopyUrl, size: size ?? item.size });
+  if (plan === 'render' && !renderError)
+    return (
+      <Suspense fallback={<PreviewSkeleton kind={kind} />}>
+        <WordView name={item.name} kind={kind} url={url} size={size ?? item.size} phone={phone} onFail={setRenderError} />
+      </Suspense>
+    );
+  if (pdfCopyUrl) return <PdfCopyFrame name={item.name} url={pdfCopyUrl} />;
+  if (renderError) return <FileCard item={item} kind={kind} url={url} size={size} error={renderError} />;
+  return (
+    <FileCard
+      item={item}
+      kind={kind}
+      url={url}
+      size={size}
+      note={
+        kind === 'doc'
+          ? 'Старый формат Word (.doc) браузер не показывает. Скачайте файл и откройте его в Word или в приложении «Документы».'
+          : 'Документ слишком большой для просмотра в браузере. Скачайте его и откройте в Word.'
+      }
+    />
+  );
+}
+
+/** PDF-копия документа во встроенном просмотрщике браузера. Кнопка «Скачать» в шапке отдаёт оригинал. */
+function PdfCopyFrame({ name, url }: { name: string; url: string }) {
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (loaded) return;
+    const t = window.setTimeout(() => setLoaded(true), 3500);
+    return () => window.clearTimeout(t);
+  }, [loaded]);
+  return (
+    <div className={styles.copyWrap}>
+      <p className={styles.copyNote}>PDF-копия документа для просмотра. «Скачать» сохранит оригинал.</p>
+      <div className={styles.frameWrap}>
+        {!loaded ? <PreviewSkeleton kind="pdf" /> : null}
+        <iframe
+          className={styles.frame}
+          data-loaded={loaded ? 'true' : 'false'}
+          data-pdf-copy="true"
+          title={`PDF-копия: ${name}`}
+          src={`${url}#view=FitH`}
+          onLoad={() => setLoaded(true)}
+        />
+      </div>
+    </div>
+  );
+}
+
 function FileCard({
   item,
   kind,
   url,
   size,
   error,
+  note,
 }: {
   item: PreviewItem;
   kind: FileKind;
   url?: string;
   size?: number | null;
   error?: string;
+  note?: string;
 }) {
   const info = [fileKindLabel(kind, item.name), formatFileSize(size ?? item.size)].filter(Boolean).join(' · ');
   return (
@@ -436,7 +543,7 @@ function FileCard({
       <p className={styles.cardNote}>
         {error
           ? `${error}. ${url ? 'Файл можно скачать.' : ''}`
-          : 'Этот формат нельзя показать в браузере. Скачайте файл и откройте его в программе.'}
+          : note || 'Этот формат нельзя показать в браузере. Скачайте файл и откройте его в программе.'}
       </p>
       {url ? (
         <a className={styles.primary} href={url} download={item.name}>
@@ -538,7 +645,7 @@ function ZoomableImage({ src, alt, onError }: { src: string; alt: string; onErro
 }
 
 function FileGlyph({ kind }: { kind: FileKind }) {
-  const label = kind === 'pdf' ? 'PDF' : kind === 'audio' ? '♪' : kind === 'video' ? '▶' : kind === 'image' ? 'IMG' : 'DOC';
+  const label = kind === 'docx' || kind === 'doc' ? 'W' : kind === 'pdf' ? 'PDF' : kind === 'audio' ? '♪' : kind === 'video' ? '▶' : kind === 'image' ? 'IMG' : 'DOC';
   return (
     <span className={styles.glyph} data-kind={kind} aria-hidden="true">
       <svg viewBox="0 0 40 48">

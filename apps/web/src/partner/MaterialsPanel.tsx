@@ -9,6 +9,7 @@ import {
   listMaterials,
   materialKindLabel,
   openMaterial,
+  openMaterialPdfCopy,
   renameMaterialItem,
   replaceMaterialFile,
   uploadMaterialFile,
@@ -505,10 +506,11 @@ function materialPreviewItem(item: PublicMaterial): PreviewItem {
     mime: item.mime,
     size: item.size,
     load: async (): Promise<PreviewSource> => {
-      const content = await openMaterial(item);
+      const [content, pdfCopy] = await Promise.all([openMaterial(item), openMaterialPdfCopy(item)]);
+      const extra = pdfCopy ? { pdfCopy } : {};
       if (content.kind === 'stub') return { node: <MaterialStubView stub={content.stub} /> };
-      if (content.kind === 'remote') return { url: content.url, mime: content.mime };
-      return { blob: content.blob, mime: content.mime };
+      if (content.kind === 'remote') return { url: content.url, mime: content.mime, ...extra };
+      return { blob: content.blob, mime: content.mime, ...extra };
     },
   };
 }
