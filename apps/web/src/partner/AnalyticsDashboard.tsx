@@ -15,7 +15,7 @@ import {
   type RoomType,
 } from '../state/types';
 import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
-import { funnelStepPercent } from '../../../../packages/shared/funnel';
+import { funnelPercents } from '../../../../packages/shared/funnel';
 import { fetchAnalyticsDashboard, formatPeriodLabel, monthLabel, rangeFromYmd, ymdShift } from './analytics';
 import { JournalDownload } from './JournalDownload';
 import { CountUp, FadeRise } from './motionBits';
@@ -147,7 +147,7 @@ function FunnelBlock({
   title: string;
   steps: Array<{ label: string; value: number }>;
 }) {
-  const base = steps[0]?.value || 0;
+  const percents = funnelPercents(steps.map((step) => step.value));
   return (
     <div className={styles.funnelBlock}>
       <h4 className={styles.funnelTitle}>
@@ -156,15 +156,15 @@ function FunnelBlock({
           className={styles.funnelLabel}
           style={{ display: 'block', marginTop: 4, fontSize: '0.75rem', fontWeight: 650 }}
         >
-          Процент от открытий
+          % от всех открытий
         </span>
       </h4>
       <ol className={styles.funnelSteps}>
-        {steps.map((s) => (
-          <li key={s.label}>
-            <span className={styles.funnelLabel}>{s.label}</span>
-            <strong>{s.value}</strong>
-            <span className={styles.funnelPct}>{funnelStepPercent(s.value, base)}</span>
+        {steps.map((step, index) => (
+          <li key={step.label}>
+            <span className={styles.funnelLabel}>{step.label}</span>
+            <strong>{step.value}</strong>
+            <span className={styles.funnelPct}>{percents[index]}</span>
           </li>
         ))}
       </ol>

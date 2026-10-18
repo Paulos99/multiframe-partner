@@ -73,3 +73,16 @@ export function funnelStepPercent(part, whole) {
     const ratio = Math.min(1, Math.max(0, value / base));
     return `${Math.round(ratio * 100)}%`;
 }
+export function funnelPercents(counts) {
+    const numbers = counts.map((value)=>typeof value === 'number' && Number.isFinite(value) ? value : 0);
+    const openings = numbers[0] ?? 0;
+    let previous = 100;
+    return numbers.map((value, index)=>{
+        if (index === 0) return '100%';
+        if (openings <= 0) return '—';
+        const raw = Number(funnelStepPercent(Math.min(value, openings), openings).replace('%', ''));
+        const percent = Math.min(raw, previous);
+        previous = percent;
+        return `${percent}%`;
+    });
+}

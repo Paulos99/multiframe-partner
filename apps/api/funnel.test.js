@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import {
   computeAnalyticsFunnel,
   funnelPassKey,
+  funnelPercents,
   funnelStepPercent,
 } from '../../packages/shared/funnel.js';
 
@@ -29,18 +30,27 @@ function ev(partial) {
 function assertAtMost100(funnel) {
   for (const steps of [funnel.problemomer, funnel.calculator]) {
     const values = Object.values(steps);
-    const base = values[0];
-    for (const value of values) {
-      assert.ok(value <= base, `этап ${value} больше первого ${base}`);
-      const text = funnelStepPercent(value, base);
-      if (base === 0) {
+    const percents = funnelPercents(values);
+    assert.equal(percents[0], '100%');
+    let previousPercent = 100;
+    for (let index = 0; index < values.length; index += 1) {
+      if (index > 0) {
+        assert.ok(
+          values[index] <= values[index - 1],
+          `этап ${values[index]} больше предыдущего ${values[index - 1]}`,
+        );
+      }
+      const text = percents[index];
+      if (index === 0) continue;
+      if (values[0] === 0) {
         assert.equal(text, '—');
         continue;
       }
       const percent = Number(text.replace('%', ''));
       assert.equal(Number.isFinite(percent), true, text);
       assert.ok(percent <= 100, text);
-      assert.ok(percent >= 0, text);
+      assert.ok(percent <= previousPercent, `${text} больше предыдущих ${previousPercent}%`);
+      previousPercent = percent;
     }
   }
 }
@@ -58,6 +68,13 @@ function assertSameFunnel(events) {
     [1, 0],
   ]) {
     assert.equal(fromTypeScript.funnelStepPercent(part, whole), funnelStepPercent(part, whole));
+  }
+  for (const counts of [
+    [0, 0, 0, 0],
+    [10, 4, 2, 1],
+    [7, 6, 0, 0],
+  ]) {
+    assert.deepEqual(fromTypeScript.funnelPercents(counts), funnelPercents(counts));
   }
 }
 
@@ -135,9 +152,17 @@ test('пустые данные не делят на ноль', () => {
       problemomer: { open: 0, result: 0, pdf: 0, share: 0 },
       calculator: { open: 0, calcDone: 0, pdf: 0 },
     });
-    assert.equal(funnelStepPercent(funnel.problemomer.open, funnel.problemomer.open), '—');
-    assert.equal(funnelStepPercent(funnel.problemomer.pdf, funnel.problemomer.open), '—');
+    assert.deepEqual(
+      funnelPercents([
+        funnel.problemomer.open,
+        funnel.problemomer.result,
+        funnel.problemomer.pdf,
+        funnel.problemomer.share,
+      ]),
+      ['100%', '—', '—', '—'],
+    );
     assert.equal(funnelStepPercent(1, 0), '—');
+    assert.equal(funnelStepPercent(0, 0), '—');
     assertAtMost100(funnel);
     assertSameFunnel(events);
   }
@@ -213,6 +238,51 @@ test('поздний этап тянет за собой предыдущие, �
   assert.deepEqual(funnel.calculator, { open: 0, calcDone: 0, pdf: 0 });
   assert.equal(funnelStepPercent(10, 7), '100%');
   assertAtMost100(funnel);
+  assertSameFunnel(events);
+});
+
+test('каждый этап — доля от всех открытий, первый всегда 100%', () => {
+  const events = [];
+  for (let i = 0; i < 10; i += 1) {
+    const id = `open-${i}`;
+    events.push(ev({ sessionId: id, tool: 'problemomer', action: 'open', id: `${id}-open` }));
+    if (i < 4) {
+      events.push(ev({ sessionId: id, tool: 'problemomer', action: 'result', id: `${id}-result` }));
+    }
+    if (i < 2) {
+      events.push(ev({ sessionId: id, tool: 'problemomer', action: 'pdf', id: `${id}-pdf` }));
+    }
+    if (i < 1) {
+      events.push(ev({ sessionId: id, tool: 'problemomer', action: 'share', id: `${id}-share` }));
+    }
+  }
+  const funnel = computeAnalyticsFunnel(events);
+  assert.deepEqual(funnel.problemomer, { open: 10, result: 4, pdf: 2, share: 1 });
+  const counts = [
+    funnel.problemomer.open,
+    funnel.problemomer.result,
+    funnel.problemomer.pdf,
+    funnel.problemomer.share,
+  ];
+  const percents = funnelPercents(counts);
+  // От предыдущего этапа PDF был бы 2/4 = 50%, шаринг 1/2 = 50%.
+  // От всех открытий: 4/10, 2/10 и 1/10.
+  assert.deepEqual(percents, ['100%', '40%', '20%', '10%']);
+  assert.notEqual(percents[2], `${Math.round((2 / 4) * 100)}%`);
+  assert.equal(percents[0], '100%');
+  for (let index = 1; index < counts.length; index += 1) {
+    assert.ok(counts[index] <= counts[index - 1]);
+    assert.ok(Number(percents[index].replace('%', '')) <= Number(percents[index - 1].replace('%', '')));
+    assert.ok(Number(percents[index].replace('%', '')) <= 100);
+  }
+  assert.equal(funnelPercents([0, 0, 0, 0])[0], '100%');
+  const ui = readFileSync(
+    new URL('../web/src/partner/AnalyticsDashboard.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(ui, /% от всех открытий/);
+  assert.equal(ui.includes('Процент от открытий'), false);
+  assert.match(ui, /funnelPercents\(/);
   assertSameFunnel(events);
 });
 
