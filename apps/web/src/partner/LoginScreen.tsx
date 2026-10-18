@@ -3,7 +3,7 @@ import { Button } from '../ui/Button';
 import { DemoLoginPicker, isDemoModeEnabled } from './DemoSwitcher';
 import { FadeRise, ShakeBox } from './motionBits';
 import { usePartner } from './PartnerContext';
-import styles from './partner.module.css';
+import styles from './LoginScreen.module.css';
 
 export function LoginScreen() {
   const { login, loading, error } = usePartner();
@@ -19,8 +19,8 @@ export function LoginScreen() {
     if (shownError) setShake((n) => n + 1);
   }, [shownError]);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     setLocalError(null);
     try {
       await login(loginName.trim(), password);
@@ -29,19 +29,13 @@ export function LoginScreen() {
     }
   }
 
-  const form = (
-    <form className={styles.card} onSubmit={(e) => void onSubmit(e)}>
-      <h1>Кабинет партнёра MultiFrame</h1>
-      <p className={styles.lead}>
-        {demo
-          ? 'Логин и пароль, если роли сверху не подходят.'
-          : 'Проблемомер, калькулятор и объекты компании. На общем планшете после работы нажмите «Выйти».'}
-      </p>
+  const fields = (
+    <>
       <label className={styles.field}>
         Логин
         <input
           value={loginName}
-          onChange={(e) => setLoginName(e.target.value)}
+          onChange={(event) => setLoginName(event.target.value)}
           autoComplete="username"
           required
         />
@@ -51,7 +45,7 @@ export function LoginScreen() {
         <input
           type="password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(event) => setPassword(event.target.value)}
           autoComplete="current-password"
           required
         />
@@ -64,41 +58,55 @@ export function LoginScreen() {
       <Button type="submit" fullWidth loading={loading} disabled={loading}>
         {loading ? 'Входим…' : 'Войти'}
       </Button>
-      {!demo ? (
-        <p className={styles.hint}>
-          Демо: <code>admin</code>/<code>admin1234</code> · владелец <code>partner1</code>/
-          <code>demo1234</code> · менеджер <code>sales1</code> · замерщик <code>exec1</code> ·
-          монтажник <code>crew1</code> (пароль сотрудников <code>exec1234</code>)
-        </p>
-      ) : null}
-    </form>
+    </>
   );
 
   return (
     <div className={styles.shell}>
-      <FadeRise className={styles.loginStack} blur>
-        {demo ? <DemoLoginPicker /> : null}
-        {demo ? (
-          <>
-            <button
-              type="button"
-              className={styles.ghost}
-              aria-expanded={manualOpen}
-              onClick={() => setManualOpen((v) => !v)}
-            >
-              {manualOpen ? 'Скрыть ручной вход' : 'Войти по логину'}
-            </button>
-            {manualOpen ? (
-              <ShakeBox signal={shake} className={styles.loginStack}>
-                {form}
-              </ShakeBox>
-            ) : null}
-          </>
-        ) : (
-          <ShakeBox signal={shake} className={styles.loginStack}>
-            {form}
-          </ShakeBox>
-        )}
+      <FadeRise className={styles.stack} blur>
+        <ShakeBox signal={shake} className={styles.stack}>
+          <section className={styles.card}>
+            <header className={styles.brand}>
+              <img
+                className={styles.logo}
+                src={`${import.meta.env.BASE_URL}logo-stp.png`}
+                alt="StP MultiFrame"
+              />
+              <h1>Кабинет партнёра</h1>
+              <p className={styles.lead}>
+                {demo ? 'Выберите роль, чтобы открыть кабинет.' : 'Проблемомер, калькулятор и объекты компании.'}
+              </p>
+            </header>
+            {demo ? <DemoLoginPicker /> : null}
+            {demo ? (
+              <>
+                <button
+                  type="button"
+                  className={styles.manual}
+                  aria-expanded={manualOpen}
+                  onClick={() => setManualOpen((value) => !value)}
+                >
+                  {manualOpen ? 'Скрыть форму' : 'Войти по логину'}
+                </button>
+                {manualOpen ? (
+                  <form className={styles.form} onSubmit={(event) => void onSubmit(event)}>
+                    <h2>Вход по логину</h2>
+                    {fields}
+                  </form>
+                ) : null}
+              </>
+            ) : (
+              <form className={styles.form} onSubmit={(event) => void onSubmit(event)}>
+                {fields}
+                <p className={styles.hint}>
+                  Демо: <code>admin</code>/<code>admin1234</code> · владелец <code>partner1</code>/
+                  <code>demo1234</code> · менеджер <code>sales1</code> · замерщик <code>exec1</code> ·
+                  монтажник <code>crew1</code> (пароль сотрудников <code>exec1234</code>)
+                </p>
+              </form>
+            )}
+          </section>
+        </ShakeBox>
       </FadeRise>
     </div>
   );
