@@ -21,7 +21,6 @@ import type {
 import { loadCities, resolveCity } from './cityCatalog';
 import {
   canCreateObjects,
-  canSeePrices,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
   OFFICIAL_PANEL_PRICE_RUB,
@@ -204,9 +203,20 @@ type PartnerApi = {
   openObject: (id: string) => void;
   openedObjectId: string | null;
   attachCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
+  /** «Профиль» — PDF проблемомера в карточку объекта. */
+  attachProfile: (saved: JobObject, pdfBase64: string) => Promise<JobObject | null>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
   refresh: () => void;
   apiBase: string;
+};
+
+type AttachFile = {
+  kind: 'estimate' | 'profile';
+  filename: string;
+  pdfBase64: string;
+  hasScheme: boolean;
+  panels: number | null;
+  areaM2: number | null;
 };
 
 const Ctx = createContext<PartnerApi | null>(null);
@@ -260,7 +270,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     const stamp = objectsEpoch.current;
     if (!silent) setObjectsLoading(true);
     try {
-      const list = withDemoDocuments(await loadVisibleObjects(session, remote), session.role);
+      const list = withDemoDocuments(await loadVisibleObjects(session, remote));
       if (stamp !== objectsEpoch.current) return;
       setObjects(list);
       cacheObjects(list);
@@ -488,10 +498,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     (window as Window & { __MF_PARTNER_COMPANY__?: string }).__MF_PARTNER_COMPANY__ = company;
     (window as Window & { __MF_PARTNER_ORG__?: OrgSettings | null }).__MF_PARTNER_ORG__ =
       user?.org || null;
-    (window as Window & { __MF_HIDE_PRICES__?: boolean }).__MF_HIDE_PRICES__ = user
-      ? !canSeePrices(user.role)
-      : false;
-    if (user?.org && canSeePrices(user.role)) {
+    if (user?.org) {
       persistPartnerCalcParams(partnerCalcParamsFromOrg(user.org));
     }
   }, [user]);
@@ -774,37 +781,16 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     setCalcRequest({ objectId, nonce: Date.now(), areaM2 });
   }, [objects]);
 
-  const attachCalculation = useCallback(
-    async (message: CabinetCalcMessage, objectId: string | null) => {
-      if (!user || !canCreateObjects(user.role)) return null;
-      if (!calcMessageHasScheme(message)) return null;
-      const existing = objectId ? objects.find((o) => o.id === objectId) : undefined;
-      const patch = objectPatchFromCalc(message, existing, user.org, objectId);
-      const saved = await saveObject(patch);
+  /** Прикладывает PDF к объекту: сразу в облако или в очередь, если сети нет. */
+  const attachDocuments = useCallback(
+    async (saved: JobObject, files: AttachFile[]): Promise<JobObject> => {
+      if (!user) throw new Error('Нет сессии');
+      const ready = files.filter((d) => d.pdfBase64.length > 32);
+      if (!ready.length) return saved;
       const versionId = `ver_${Date.now().toString(36)}`;
-      const namedAt = new Date().toISOString();
-      const files = [
-        {
-          kind: 'estimate' as const,
-          filename: readablePdfName(saved.clientName, 'estimate', namedAt),
-          pdfBase64: message.pdfBase64 || '',
-          hasScheme: true,
-          panels: saved.estimate?.panels ?? null,
-          areaM2: saved.room?.areaM2 ?? null,
-        },
-        {
-          kind: 'spec' as const,
-          filename: readablePdfName(saved.clientName, 'spec', namedAt),
-          pdfBase64: message.specPdfBase64 || '',
-          hasScheme: true,
-          panels: saved.estimate?.panels ?? null,
-          areaM2: saved.room?.areaM2 ?? null,
-        },
-      ].filter((d) => d.pdfBase64.length > 32);
-      if (!files.length) return saved;
       if (remote && loadToken() && navigator.onLine) {
         try {
-          const updated = await apiUploadObjectDocuments(saved.id, files, versionId);
+          const updated = await apiUploadObjectDocuments(saved.id, ready, versionId);
           await refreshObjects();
           return updated;
         } catch {
@@ -812,7 +798,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         }
       }
       const now = new Date().toISOString();
-      const localDocs: JobObjectDocument[] = files.map((d) => ({
+      const localDocs: JobObjectDocument[] = ready.map((d) => ({
         id: `doc_${Math.random().toString(36).slice(2, 10)}`,
         versionId,
         createdAt: now,
@@ -826,7 +812,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       }));
       enqueueObjectDocuments(
         saved.id,
-        files.map((d) => ({
+        ready.map((d) => ({
           objectId: saved.id,
           versionId,
           kind: d.kind,
@@ -841,7 +827,47 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       await refreshObjects();
       return withDocs;
     },
-    [user, objects, remote, saveObject, refreshObjects],
+    [user, remote, refreshObjects],
+  );
+
+  const attachCalculation = useCallback(
+    async (message: CabinetCalcMessage, objectId: string | null) => {
+      if (!user || !canCreateObjects(user.role)) return null;
+      if (!calcMessageHasScheme(message)) return null;
+      const existing = objectId ? objects.find((o) => o.id === objectId) : undefined;
+      const patch = objectPatchFromCalc(message, existing, user.org, objectId);
+      const saved = await saveObject(patch);
+      const namedAt = new Date().toISOString();
+      // Одна «Смета»: цены, количество и схема раскладки. PDF без цен больше не делаем.
+      return attachDocuments(saved, [
+        {
+          kind: 'estimate',
+          filename: readablePdfName(saved.clientName, 'estimate', namedAt),
+          pdfBase64: message.pdfBase64 || '',
+          hasScheme: true,
+          panels: saved.estimate?.panels ?? null,
+          areaM2: saved.room?.areaM2 ?? null,
+        },
+      ]);
+    },
+    [user, objects, saveObject, attachDocuments],
+  );
+
+  const attachProfile = useCallback(
+    async (saved: JobObject, pdfBase64: string) => {
+      if (!user || !canCreateObjects(user.role)) return null;
+      return attachDocuments(saved, [
+        {
+          kind: 'profile',
+          filename: readablePdfName(saved.clientName, 'profile', new Date().toISOString()),
+          pdfBase64,
+          hasScheme: false,
+          panels: null,
+          areaM2: saved.room?.areaM2 ?? null,
+        },
+      ]);
+    },
+    [user, attachDocuments],
   );
 
   const noteTool = useCallback(
@@ -926,6 +952,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       openObject,
       openedObjectId,
       attachCalculation,
+      attachProfile,
       noteTool,
       refresh,
       apiBase: remote ? (import.meta.env.VITE_API_URL as string) || '' : '',
@@ -975,6 +1002,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       openObject,
       openedObjectId,
       attachCalculation,
+      attachProfile,
       noteTool,
       refresh,
       tick,
@@ -1001,7 +1029,6 @@ export type PartnerCalcParams = {
   dowelsPerPanel: number;
   dowelPrice: number | null;
   company: string;
-  hidePrices?: boolean;
 };
 
 export function partnerCalcParamsFromOrg(
@@ -1040,27 +1067,15 @@ export function persistPartnerCalcParams(params: PartnerCalcParams): void {
 export function calcUrlFromOrg(
   org: OrgSettings | null | undefined,
   companyName?: string,
-  opts?: { hidePrices?: boolean; objectId?: string | null; clientName?: string | null; areaM2?: number | null },
+  opts?: { objectId?: string | null; clientName?: string | null; areaM2?: number | null },
 ): string {
   const params = partnerCalcParamsFromOrg(org, companyName);
-  if (opts?.hidePrices) {
-    params.hidePrices = true;
-    params.panelPrice = 0;
-    params.pricePerM2 = 0;
-    params.installPerM2 = null;
-    params.dowelPrice = null;
-  } else {
-    persistPartnerCalcParams(params);
-  }
+  persistPartnerCalcParams(params);
   const q = new URLSearchParams();
-  if (!opts?.hidePrices) {
-    q.set('panelPrice', String(params.panelPrice));
-    q.set('pricePerM2', String(params.pricePerM2));
-    q.set('installPerM2', String(params.installPerM2 ?? DEFAULT_INSTALL_PRICE_PER_M2));
-    q.set('dowelPrice', String(params.dowelPrice ?? DEFAULT_DOWEL_PRICE_RUB));
-  } else {
-    q.set('hidePrices', '1');
-  }
+  q.set('panelPrice', String(params.panelPrice));
+  q.set('pricePerM2', String(params.pricePerM2));
+  q.set('installPerM2', String(params.installPerM2 ?? DEFAULT_INSTALL_PRICE_PER_M2));
+  q.set('dowelPrice', String(params.dowelPrice ?? DEFAULT_DOWEL_PRICE_RUB));
   q.set('dowelsPerPanel', String(params.dowelsPerPanel));
   if (params.company) q.set('company', params.company);
   if (opts?.objectId) q.set('objectId', opts.objectId);

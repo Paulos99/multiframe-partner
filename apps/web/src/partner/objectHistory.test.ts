@@ -12,7 +12,8 @@ equal(describeHistory({ ...base, action: 'assign', detail: 'u1' }, people), 'Н�
 equal(describeHistory({ ...base, action: 'assign', detail: '—' }, people), 'Назначение исполнителя снято');
 equal(describeHistory({ ...base, action: 'assign', detail: 'unknown-id' }, people), 'Назначен исполнитель');
 equal(describeHistory({ ...base, action: 'new-event', detail: '{"price":12345}' }, people), 'Объект обновлён');
-equal(describeHistory({ ...base, action: 'calc_pdf', detail: 'private-estimate.pdf' }, people), 'Документы расчёта сохранены');
+equal(describeHistory({ ...base, action: 'calc_pdf', detail: 'private-estimate.pdf' }, people), 'Смета сохранена');
+equal(describeHistory({ ...base, action: 'profile_pdf', detail: 'profile.pdf' }, people), 'Профиль сохранён');
 equal(historyAuthor(base, people), 'Анна');
 equal(historyAuthor({ ...base, userId: null, login: 'system' }, people), 'Система');
 equal(historyAuthor({ ...base, userId: null, login: '' }, people), 'Сотрудник');

@@ -66,7 +66,7 @@ export function demoRoleHint(account: DemoAccount): string {
     case 'measurer':
       return 'Замер на объекте';
     case 'crew':
-      return demoRoleLabel(account).includes('2') ? 'Вторая бригада' : 'Задания без цен';
+      return demoRoleLabel(account).includes('2') ? 'Вторая бригада' : 'Задания на монтаж';
     default:
       return '';
   }

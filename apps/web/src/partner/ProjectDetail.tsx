@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { canSeePrices, JOB_OBJECT_STATUS_LABELS, type JobObject, type UserRole } from '../../../../packages/shared/partner';
+import { JOB_OBJECT_STATUS_LABELS, type JobObject, type UserRole } from '../../../../packages/shared/partner';
 import { formatRub } from './estimate';
 import listStyles from './ProjectList.module.css';
 import { preliminaryRoomTotal } from './projectSummary';
@@ -23,7 +23,6 @@ export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenR
   const [newRoom, setNewRoom] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const priced = canSeePrices(role);
   const summary = preliminaryRoomTotal(rooms);
   const eligible = ungrouped.filter(room => room.orgId === project.orgId && !room.projectId);
   async function attach() {
@@ -45,7 +44,7 @@ export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenR
     <div className={styles.header}><div><p className={styles.caption}>Проект</p><h2>{project.name}</h2>
       <p className={styles.muted}>{[project.clientName, project.address, project.city].filter(Boolean).join(' · ') || 'Контакт и адрес пока не заполнены'}</p>
     </div><span className={styles.badge}>Помещений: {rooms.length}</span></div>
-    {priced && rooms.length > 0 ? <div className={styles.summary}>
+    {rooms.length > 0 ? <div className={styles.summary}>
       <div><span>Предварительный итог</span><strong>{summary.calculated ? formatRub(summary.total) : 'Расчётов пока нет'}</strong></div>
       <p>Рассчитано {summary.calculated} из {summary.rooms} помещений. {summary.calculated < summary.rooms ? 'Сумма неполная. ' : ''}Итог обновляется при пересчёте комнат; это ещё не зафиксированное предложение.</p>
     </div> : null}
