@@ -73,15 +73,18 @@ export function funnelStepPercent(part, whole) {
     const ratio = Math.min(1, Math.max(0, value / base));
     return `${Math.round(ratio * 100)}%`;
 }
-export function funnelStopPercents(counts) {
+export function funnelStopCounts(counts) {
     const clamped = [];
     for (const raw of counts){
         const value = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, raw) : 0;
         clamped.push(clamped.length ? Math.min(value, clamped[clamped.length - 1]) : value);
     }
-    const total = clamped[0] ?? 0;
-    if (total <= 0) return clamped.map(()=>'—');
-    const stopped = clamped.map((value, index)=>index + 1 < clamped.length ? value - clamped[index + 1] : value);
+    return clamped.map((value, index)=>index + 1 < clamped.length ? value - clamped[index + 1] : value);
+}
+export function funnelStopPercents(counts) {
+    const stopped = funnelStopCounts(counts);
+    const total = stopped.reduce((sum, value)=>sum + value, 0);
+    if (total <= 0) return stopped.map(()=>'—');
     const exact = stopped.map((value)=>value * 100 / total);
     const percents = exact.map((value)=>Math.floor(value));
     let rest = 100 - percents.reduce((sum, value)=>sum + value, 0);

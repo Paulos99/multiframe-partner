@@ -109,17 +109,25 @@ export function funnelStepPercent(part: unknown, whole: unknown): string {
  * Округление методом наибольшего остатка (при равенстве остатка выигрывает более ранний этап).
  * Ноль открытий: везде «—».
  */
-export function funnelStopPercents(counts: readonly unknown[]): string[] {
+/**
+ * Сколько проходов остановилось на каждом этапе: дошли до i − дошли до i+1; на последнем = дошли до него.
+ * Счётчики сначала выравниваются по невозрастанию, чтобы не было отрицательных значений.
+ */
+export function funnelStopCounts(counts: readonly unknown[]): number[] {
   const clamped: number[] = [];
   for (const raw of counts) {
     const value = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, raw) : 0;
     clamped.push(clamped.length ? Math.min(value, clamped[clamped.length - 1]) : value);
   }
-  const total = clamped[0] ?? 0;
-  if (total <= 0) return clamped.map(() => '—');
-  const stopped = clamped.map((value, index) =>
+  return clamped.map((value, index) =>
     index + 1 < clamped.length ? value - clamped[index + 1] : value,
   );
+}
+
+export function funnelStopPercents(counts: readonly unknown[]): string[] {
+  const stopped = funnelStopCounts(counts);
+  const total = stopped.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return stopped.map(() => '—');
   const exact = stopped.map((value) => (value * 100) / total);
   const percents = exact.map((value) => Math.floor(value));
   let rest = 100 - percents.reduce((sum, value) => sum + value, 0);
