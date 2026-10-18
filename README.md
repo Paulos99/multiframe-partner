@@ -77,8 +77,13 @@ npm run dev
 
 ## Передеплой API
 
+Архив функции собирает общий модуль `infra/function_bundle.py` (его вызывают и `infra/deploy_yc.py`, и `infra/mf_doh_patch_deploy.py`). В архив входят все `apps/api/**/*.js` и `*.mjs`, кроме тестов `*.test.*` и каталога `scripts/`, плюс `package.json` и lock. Если сервер относительно импортирует код снаружи `apps/api`, этот файл кладётся в архив с тем же путём. `projectClient.ts` — клиент кабинета, сервер его не импортирует, в архив он не входит.
+
+Перед выкладкой проверка распаковывает архив во временную папку и импортирует точку входа без облачных ключей. Тот же шаг стоит в GitHub Actions до загрузки в Yandex Cloud.
+
 ```bash
-cd apps/api && npm install
+npm install --prefix apps/api
+python infra/verify_function_bundle.py
 py -3 infra/deploy_yc.py
 ```
 

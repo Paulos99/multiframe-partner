@@ -9,8 +9,9 @@ import os
 import time
 import urllib.error
 import urllib.request
-import zipfile
 from pathlib import Path
+
+from function_bundle import build_function_zip
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -214,29 +215,21 @@ def ensure_function(token: str) -> str:
     return fid
 
 
-def make_zip() -> Path:
+def make_zip():
     zip_path = API_DIR / "function.zip"
-    if zip_path.exists():
-        zip_path.unlink()
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for rel in (
-            "index.js",
-            "demoSeed.js",
-            "cityCatalog.js",
-            "materialsLib.js",
-            "materialsRoutes.js",
-            "package.json",
-            "data/ru-cities.js",
-        ):
-            zf.write(API_DIR / rel, rel)
-        nm = API_DIR / "node_modules"
-        if not nm.is_dir():
-            raise SystemExit("Run npm install in apps/api first")
-        for path in nm.rglob("*"):
-            if path.is_file():
-                zf.write(path, path.relative_to(API_DIR).as_posix())
-    print("zip", zip_path, "bytes", zip_path.stat().st_size)
-    return zip_path
+    bundle = build_function_zip(zip_path, include_node_modules=True)
+    print(
+        "zip",
+        zip_path,
+        "bytes",
+        zip_path.stat().st_size,
+        "entrypoint",
+        bundle.entrypoint,
+    )
+    print("bundle:", ", ".join(bundle.api_files))
+    if bundle.outside_api:
+        print("outside apps/api:", ", ".join(bundle.outside_api))
+    return bundle
 
 
 def load_storage_env() -> dict[str, str]:
@@ -366,7 +359,9 @@ def try_ensure_bucket_and_keys(token: str) -> dict[str, str]:
     return {}
 
 
-def create_version(token: str, function_id: str, zip_path: Path, storage_env: dict[str, str]) -> str:
+def create_version(
+    token: str, function_id: str, zip_path: Path, storage_env: dict[str, str], entrypoint: str
+) -> str:
     content = base64.b64encode(zip_path.read_bytes()).decode()
     jwt_secret = hashlib.sha256(f"mf-partner-{FOLDER_ID}-{SA_ID}".encode()).hexdigest()
     environment = {
@@ -386,7 +381,7 @@ def create_version(token: str, function_id: str, zip_path: Path, storage_env: di
         {
             "functionId": function_id,
             "runtime": "nodejs22",
-            "entrypoint": "index.handler",
+            "entrypoint": entrypoint,
             "resources": {"memory": 268435456},
             "executionTimeout": "15s",
             "serviceAccountId": SA_ID,
@@ -533,9 +528,9 @@ def main():
     token = iam_token(key)
     print("IAM ok")
     fid = ensure_function(token)
-    zip_path = make_zip()
+    bundle = make_zip()
     storage_env = try_ensure_bucket_and_keys(token)
-    create_version(token, fid, zip_path, storage_env)
+    create_version(token, fid, bundle.zip_path, storage_env, bundle.entrypoint)
     try:
         api(
             "POST",
