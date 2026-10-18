@@ -1,4 +1,5 @@
 import { Skeleton } from './Skeleton';
+import { roomRank } from './kanban';
 import { KanbanBoard } from './KanbanBoard';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
@@ -26,7 +27,13 @@ import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
 import { preliminaryRoomTotal } from './projectSummary';
 import styles from './partner.module.css';
 
-const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
+const STATUSES: JobObjectStatus[] = [
+  'draft',
+  'measured',
+  'quote_sent',
+  'install',
+  'closed',
+];
 
 function telHref(phone: string): string {
   return `tel:${phone.replace(/[^\d+]/g, '')}`;
@@ -35,7 +42,12 @@ function telHref(phone: string): string {
 function formatDocWhen(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function ObjectDocuments({
@@ -68,10 +80,18 @@ function ObjectDocuments({
           {docs.map((doc, index) => (
             <li key={doc.id} className={styles.docRow}>
               <div className={styles.docMeta}>
-                <strong>{doc.kind === 'spec' ? 'Спецификация без цен' : 'Смета с ценами'}</strong>
+                <strong>
+                  {doc.kind === 'spec'
+                    ? 'Спецификация без цен'
+                    : 'Смета с ценами'}
+                </strong>
                 <span className={styles.hint}>
-                  {docs.findIndex(item => item.kind === doc.kind) === index ? 'Последняя версия' : 'Предыдущая версия'}
-                  {formatDocWhen(doc.createdAt) ? ` · ${formatDocWhen(doc.createdAt)}` : ''}
+                  {docs.findIndex((item) => item.kind === doc.kind) === index
+                    ? 'Последняя версия'
+                    : 'Предыдущая версия'}
+                  {formatDocWhen(doc.createdAt)
+                    ? ` · ${formatDocWhen(doc.createdAt)}`
+                    : ''}
                   {doc.areaM2 ? ` · ${doc.areaM2} м²` : ''}
                   {doc.panels ? ` · ${doc.panels} пан.` : ''}
                   {doc.hasScheme ? ' · схема раскладки' : ' · без схемы'}
@@ -111,7 +131,13 @@ function StatusBadge({ status }: { status: JobObjectStatus }) {
   );
 }
 
-type RoomDraft = { clientName: string; clientPhone: string; address: string; city: string; roomName: string };
+type RoomDraft = {
+  clientName: string;
+  clientPhone: string;
+  address: string;
+  city: string;
+  roomName: string;
+};
 
 const emptyDraft = (city = ''): RoomDraft => ({
   clientName: '',
@@ -136,19 +162,21 @@ export function ObjectsPanel({
   const canDelete = canDeleteObjects(user.role);
   const canCreate = canCreateObjects(user.role);
   const staff = api.partnerListStaff();
-  const [view,setView]=useState<'list'|'kanban'>('list');
+  const [createStage, setCreateStage] = useState<JobObjectStatus>('draft');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<JobObjectStatus | 'all'>(
-    user.role === 'crew' ? 'install' : 'all',
+    'all',
   );
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [docBusy, setDocBusy] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState<RoomDraft>(() => emptyDraft(user.org?.city || ''));
+  const [draft, setDraft] = useState<RoomDraft>(() =>
+    emptyDraft(user.org?.city || ''),
+  );
   const [saving, setSaving] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [adding, setAdding] = useState(false);
@@ -165,17 +193,26 @@ export function ObjectsPanel({
   }, [api.openedObjectId, api.objects]);
 
   const counts = useMemo(() => {
-    const map = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<JobObjectStatus, number>;
+    const map = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<
+      JobObjectStatus,
+      number
+    >;
     for (const obj of api.objects) map[obj.status] += 1;
     return map;
   }, [api.objects]);
 
   const cards = useMemo(
-    () => buildProjectCards(api.projects, api.objects).filter((card) => cardMatches(card, query, statusFilter)),
+    () =>
+      buildProjectCards(api.projects, api.objects).filter((card) =>
+        cardMatches(card, query, statusFilter),
+      ),
     [api.projects, api.objects, query, statusFilter],
   );
   const selectedCard = useMemo(
-    () => buildProjectCards(api.projects, api.objects).find((card) => card.key === selectedKey) || null,
+    () =>
+      buildProjectCards(api.projects, api.objects).find(
+        (card) => card.key === selectedKey,
+      ) || null,
     [api.projects, api.objects, selectedKey],
   );
   const selectedRooms = useMemo(
@@ -186,7 +223,10 @@ export function ObjectsPanel({
     () => api.objects.find((o) => o.id === selectedId) || null,
     [api.objects, selectedId],
   );
-  const summary = useMemo(() => preliminaryRoomTotal(selectedRooms), [selectedRooms]);
+  const summary = useMemo(
+    () => preliminaryRoomTotal(selectedRooms),
+    [selectedRooms],
+  );
 
   useEffect(() => {
     if (!selectedId || !detailRef.current) return;
@@ -221,14 +261,54 @@ export function ObjectsPanel({
     }
   }
 
-  async function moveRoom(room:JobObject,status:JobObjectStatus) {
-    setErr(null);setPendingId(room.id);
-    try {const saved=await api.saveObject({id:room.id,status});setMsg(saved.pendingSync?'Стадия сохранена на устройстве, ожидает синхронизации':'Стадия сохранена');}
-    catch(e){setErr(e instanceof Error?e.message:'Стадия не сохранена');}
-    finally {setPendingId(null);}
+  async function moveRoom(changes: JobObject[]) {
+    setErr(null);
+    setMsg(null);
+    setPendingId(changes[changes.length - 1].id);
+    const originals = new Map(api.objects.map((room) => [room.id, room]));
+    const savedIds: string[] = [];
+    let pendingSync = false;
+    try {
+      for (const room of changes) {
+        const saved = await api.saveObject({
+          id: room.id,
+          status: room.status,
+          stageOrder: room.stageOrder,
+        });
+        savedIds.push(room.id);
+        pendingSync ||= !!saved.pendingSync;
+      }
+      setMsg(
+        pendingSync
+          ? 'Стадия сохранена на устройстве, ожидает синхронизации'
+          : 'Стадия сохранена',
+      );
+    } catch (error) {
+      let incomplete = false;
+      for (const id of savedIds.reverse()) {
+        const room = originals.get(id)!;
+        try {
+          await api.saveObject({id, status:room.status, stageOrder:roomRank(room)});
+        } catch { incomplete = true; }
+      }
+      setErr(
+        incomplete
+          ? 'Не удалось восстановить весь порядок. Обновите страницу.'
+          : error instanceof Error
+            ? error.message
+            : 'Порядок не сохранён',
+      );
+      throw error;
+    } finally {
+      setPendingId(null);
+    }
   }
 
-  async function openDocument(obj: JobObject, doc: JobObjectDocument, download: boolean) {
+  async function openDocument(
+    obj: JobObject,
+    doc: JobObjectDocument,
+    download: boolean,
+  ) {
     setDocBusy(doc.id);
     setErr(null);
     try {
@@ -242,7 +322,9 @@ export function ObjectsPanel({
           blob = new Blob([bin], { type: 'application/pdf' });
         } else {
           const file = await apiFetchObjectDocument(obj.id, doc.id);
-          const bin = Uint8Array.from(atob(file.pdfBase64), (c) => c.charCodeAt(0));
+          const bin = Uint8Array.from(atob(file.pdfBase64), (c) =>
+            c.charCodeAt(0),
+          );
           blob = new Blob([bin], { type: 'application/pdf' });
         }
       }
@@ -256,7 +338,8 @@ export function ObjectsPanel({
 
   async function remove(obj: JobObject) {
     const label = obj.roomName || obj.clientName || obj.address || 'комнату';
-    if (!window.confirm(`Удалить «${label}»? Это действие нельзя отменить.`)) return;
+    if (!window.confirm(`Удалить «${label}»? Это действие нельзя отменить.`))
+      return;
     setMsg(null);
     setErr(null);
     try {
@@ -275,7 +358,7 @@ export function ObjectsPanel({
     setErr(null);
     const roomLabel = draft.roomName.trim() || 'Комната';
     const fields = {
-      status: 'draft' as const,
+      status: createStage,
       clientName: draft.clientName.trim(),
       clientPhone: draft.clientPhone.trim(),
       address: draft.address.trim(),
@@ -350,12 +433,10 @@ export function ObjectsPanel({
 
   const allowedStatuses = (current: JobObjectStatus) =>
     STATUSES.filter((s) => {
-      if (user.role === 'crew') return s === 'install' || s === 'closed' || s === current;
+      if (user.role === 'crew')
+        return s === 'install' || s === 'closed' || s === current;
       return true;
     });
-
-  const filters: Array<JobObjectStatus | 'all'> =
-    user.role === 'crew' ? ['install', 'closed', 'all'] : ['all', ...STATUSES];
 
   function openCard(key: string, rooms: JobObject[]) {
     setSelectedKey(key);
@@ -374,8 +455,16 @@ export function ObjectsPanel({
           </p>
         </div>
         {canCreate ? (
-          <button type="button" className={styles.primary} onClick={() => setCreating((value) => !value)} aria-expanded={creating}>
-            {creating ? 'Закрыть' : 'Создать'}
+          <button
+            type="button"
+            className={styles.primary}
+            onClick={() => {
+              setCreateStage('draft');
+              setCreating((value) => !value);
+            }}
+            aria-expanded={creating}
+          >
+            {creating ? 'Закрыть' : '+ Новый объект'}
           </button>
         ) : null}
       </div>
@@ -395,7 +484,9 @@ export function ObjectsPanel({
           <ul>
             {api.calculations.map((calc) => (
               <li key={calc.id}>
-                <strong>{calc.tool === 'calculator' ? 'Калькулятор' : 'Проблемомер'}</strong>
+                <strong>
+                  {calc.tool === 'calculator' ? 'Калькулятор' : 'Проблемомер'}
+                </strong>
                 <span>
                   {calc.label ? `${calc.label} · ` : ''}
                   {calc.areaM2 != null ? `${calc.areaM2} м² · ` : ''}
@@ -409,29 +500,64 @@ export function ObjectsPanel({
       ) : null}
 
       {creating && canCreate ? (
-        <form className={listStyles.form} onSubmit={(event) => void createProjectWithRoom(event)}>
+        <form
+          className={listStyles.form}
+          onSubmit={(event) => void createProjectWithRoom(event)}
+        >
           <label className={styles.field}>
             Клиент
-            <input value={draft.clientName} onChange={(event) => setDraft((value) => ({ ...value, clientName: event.target.value }))} />
+            <input
+              value={draft.clientName}
+              onChange={(event) =>
+                setDraft((value) => ({
+                  ...value,
+                  clientName: event.target.value,
+                }))
+              }
+            />
           </label>
           <label className={styles.field}>
             Телефон
-            <input value={draft.clientPhone} inputMode="tel" onChange={(event) => setDraft((value) => ({ ...value, clientPhone: event.target.value }))} />
+            <input
+              value={draft.clientPhone}
+              inputMode="tel"
+              onChange={(event) =>
+                setDraft((value) => ({
+                  ...value,
+                  clientPhone: event.target.value,
+                }))
+              }
+            />
           </label>
           <label className={styles.field}>
             Адрес
-            <input value={draft.address} onChange={(event) => setDraft((value) => ({ ...value, address: event.target.value }))} />
+            <input
+              value={draft.address}
+              onChange={(event) =>
+                setDraft((value) => ({ ...value, address: event.target.value }))
+              }
+            />
           </label>
           <label className={styles.field}>
             Город
-            <input value={draft.city} onChange={(event) => setDraft((value) => ({ ...value, city: event.target.value }))} />
+            <input
+              value={draft.city}
+              onChange={(event) =>
+                setDraft((value) => ({ ...value, city: event.target.value }))
+              }
+            />
           </label>
           <label className={styles.field}>
             Первая комната
             <input
               value={draft.roomName}
               placeholder="Кухня"
-              onChange={(event) => setDraft((value) => ({ ...value, roomName: event.target.value }))}
+              onChange={(event) =>
+                setDraft((value) => ({
+                  ...value,
+                  roomName: event.target.value,
+                }))
+              }
             />
           </label>
           <div className={styles.field}>
@@ -445,14 +571,26 @@ export function ObjectsPanel({
 
       {selectedCard ? (
         <div>
-          <button type="button" className={listStyles.back} onClick={() => { setSelectedKey(null); setSelectedId(null); }}>
-            ← К списку
+          <button
+            type="button"
+            className={listStyles.back}
+            onClick={() => {
+              setSelectedKey(null);
+              setSelectedId(null);
+            }}
+          >
+            ← {compact ? 'К списку' : 'К доске'}
           </button>
           <h3>{selectedCard.title}</h3>
           <p className={styles.lead}>{selectedCard.subtitle}</p>
           {seePrices && selectedRooms.length ? (
             <p className={styles.hint}>
-              Предварительный итог: {summary.calculated ? formatRub(summary.total) : 'расчётов пока нет'}. Рассчитано {summary.calculated} из {summary.rooms}. Это ещё не зафиксированное предложение.
+              Предварительный итог:{' '}
+              {summary.calculated
+                ? formatRub(summary.total)
+                : 'расчётов пока нет'}
+              . Рассчитано {summary.calculated} из {summary.rooms}. Это ещё не
+              зафиксированное предложение.
             </p>
           ) : null}
           <div className={listStyles.rooms}>
@@ -464,23 +602,41 @@ export function ObjectsPanel({
                 onClick={() => setSelectedId(room.id)}
               >
                 <span>
-                  <strong>{room.roomName || room.clientName || 'Комната'}</strong>
+                  <strong>
+                    {room.roomName || room.clientName || 'Комната'}
+                  </strong>
                   <span className={listStyles.meta}>
-                    {room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'Площадь не указана'} · {JOB_OBJECT_STATUS_LABELS[room.status]}
+                    {room.room.areaM2 != null
+                      ? `${room.room.areaM2} м²`
+                      : 'Площадь не указана'}{' '}
+                    · {JOB_OBJECT_STATUS_LABELS[room.status]}
                   </span>
                 </span>
                 <StatusBadge status={room.status} />
               </button>
             ))}
-            {!selectedRooms.length ? <p className={styles.hint}>В проекте пока нет комнат с этим статусом.</p> : null}
+            {!selectedRooms.length ? (
+              <p className={styles.hint}>
+                В проекте пока нет комнат с этим статусом.
+              </p>
+            ) : null}
           </div>
           {canCreate && selectedCard.project ? (
             <div className={listStyles.add}>
               <label className={styles.field}>
                 Новая комната
-                <input value={roomName} placeholder="Спальня" onChange={(event) => setRoomName(event.target.value)} />
+                <input
+                  value={roomName}
+                  placeholder="Спальня"
+                  onChange={(event) => setRoomName(event.target.value)}
+                />
               </label>
-              <button type="button" className={styles.primary} disabled={adding || !roomName.trim()} onClick={() => void addRoom()}>
+              <button
+                type="button"
+                className={styles.primary}
+                disabled={adding || !roomName.trim()}
+                onClick={() => void addRoom()}
+              >
                 {adding ? 'Сохраняем…' : 'Добавить комнату'}
               </button>
             </div>
@@ -498,42 +654,49 @@ export function ObjectsPanel({
               enterKeyHint="search"
             />
           </label>
-          <div className={styles.chipRow} role="toolbar" aria-label="Фильтр по статусу">
-            {filters.map((id) => {
-              const on = statusFilter === id;
-              const label = id === 'all' ? 'Все' : JOB_OBJECT_STATUS_LABELS[id];
-              const n = id === 'all' ? api.objects.length : counts[id];
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={on ? styles.chipOn : styles.chip}
-                  aria-pressed={on}
-                  onClick={() => setStatusFilter(id)}
-                >
-                  {label} · {n}
-                </button>
-              );
-            })}
-          </div>
-          <div className={styles.chipRow} role="group" aria-label="Вид объектов">
-            <button type="button" className={view==='list'?styles.chipOn:styles.chip} aria-pressed={view==='list'} onClick={()=>setView('list')}>Список</button>
-            <button type="button" className={view==='kanban'?styles.chipOn:styles.chip} aria-pressed={view==='kanban'} onClick={()=>setView('kanban')}>Канбан</button>
-          </div>
-          {api.objectsLoading && !api.objects.length ? (
-            <Skeleton kind="cards" count={3} label="Загрузка объектов"/>
-          ) : view==='kanban' ? (
-            <KanbanBoard rooms={cards.flatMap(card=>visibleRooms(card.rooms,statusFilter))} projects={api.projects} role={user.role} pendingId={pendingId}
-              onMove={moveRoom} onOpen={room=>{setSelectedKey(room.projectId||`room:${room.id}`);setSelectedId(room.id);}} />
+          {!compact ? (
+            <KanbanBoard
+              rooms={cards.flatMap((card) =>
+                visibleRooms(card.rooms, statusFilter),
+              )}
+              projects={api.projects}
+              role={user.role}
+              pendingId={pendingId}
+              loading={api.objectsLoading && !api.objects.length}
+              staff={staff}
+              onCreate={
+                canCreate
+                  ? (stage) => {
+                      setCreateStage(stage);
+                      setCreating(true);
+                    }
+                  : undefined
+              }
+              onMove={moveRoom}
+              onOpen={(room) => {
+                setSelectedKey(room.projectId || `room:${room.id}`);
+                setSelectedId(room.id);
+              }}
+            />
+          ) : api.objectsLoading && !api.objects.length ? (
+            <Skeleton kind="cards" count={3} label="Загрузка проектов" />
           ) : (
             <div className={listStyles.grid}>
               {cards.map((card, index) => (
                 <RiseItem key={card.key} index={index}>
-                  <button type="button" className={listStyles.card} onClick={() => openCard(card.key, card.rooms)}>
-                    <span className={listStyles.meta}>Комнат: {visibleRooms(card.rooms, statusFilter).length}</span>
+                  <button
+                    type="button"
+                    className={listStyles.card}
+                    onClick={() => openCard(card.key, card.rooms)}
+                  >
+                    <span className={listStyles.meta}>
+                      Комнат: {visibleRooms(card.rooms, statusFilter).length}
+                    </span>
                     <strong>
                       {card.title}
-                      {card.rooms.some((room) => room.pendingSync) ? ' · ↻' : ''}
+                      {card.rooms.some((room) => room.pendingSync)
+                        ? ' · ↻'
+                        : ''}
                     </strong>
                     <span className={listStyles.meta}>{card.subtitle}</span>
                   </button>
@@ -556,18 +719,28 @@ export function ObjectsPanel({
                       className={styles.ghost}
                       onClick={() => {
                         setQuery('');
-                        setStatusFilter(user.role === 'crew' ? 'install' : 'all');
+                        setStatusFilter(
+                          user.role === 'crew' ? 'install' : 'all',
+                        );
                       }}
                     >
                       Сбросить фильтр
                     </button>
                   ) : canCreate ? (
-                    <button type="button" className={styles.primary} onClick={() => setCreating(true)}>
+                    <button
+                      type="button"
+                      className={styles.primary}
+                      onClick={() => setCreating(true)}
+                    >
                       Создать
                     </button>
                   ) : null}
                   {!cards.length && onCreate && canCreate ? (
-                    <button type="button" className={styles.ghost} onClick={onCreate}>
+                    <button
+                      type="button"
+                      className={styles.ghost}
+                      onClick={onCreate}
+                    >
                       Открыть проблемомер
                     </button>
                   ) : null}
@@ -581,10 +754,12 @@ export function ObjectsPanel({
       {selected && selectedCard ? (
         <div className={styles.objectDetail} ref={detailRef}>
           <h3>
-            {selected.roomName || selected.clientName || 'Комната'} · {JOB_OBJECT_STATUS_LABELS[selected.status]}
+            {selected.roomName || selected.clientName || 'Комната'} ·{' '}
+            {JOB_OBJECT_STATUS_LABELS[selected.status]}
           </h3>
           <p className={styles.lead}>
-            {[selected.address, selected.city].filter(Boolean).join(' · ') || 'Адрес не заполнен'}
+            {[selected.address, selected.city].filter(Boolean).join(' · ') ||
+              'Адрес не заполнен'}
           </p>
           {selected.clientPhone ? (
             <a className={styles.callLink} href={telHref(selected.clientPhone)}>
@@ -618,15 +793,25 @@ export function ObjectsPanel({
             obj={selected}
             role={user.role}
             busyId={docBusy}
-            onOpen={(doc, download) => void openDocument(selected, doc, download)}
+            onOpen={(doc, download) =>
+              void openDocument(selected, doc, download)
+            }
           />
 
           {canCreate ? (
             <div className={styles.navRow}>
-              <button type="button" className={styles.ghost} onClick={() => api.requestDiagnosis(selected.id)}>
+              <button
+                type="button"
+                className={styles.ghost}
+                onClick={() => api.requestDiagnosis(selected.id)}
+              >
                 Диагностика
               </button>
-              <button type="button" className={styles.ghost} onClick={() => api.requestCalculator(selected.id)}>
+              <button
+                type="button"
+                className={styles.ghost}
+                onClick={() => api.requestCalculator(selected.id)}
+              >
                 Рассчитать
               </button>
             </div>
@@ -635,15 +820,20 @@ export function ObjectsPanel({
           {canCreate && api.projects.length ? (
             <label className={styles.field}>
               Проект
-              <span className={styles.hint}>Комнату можно перенести в другой проект своей компании.</span>
+              <span className={styles.hint}>
+                Комнату можно перенести в другой проект своей компании.
+              </span>
               <select
                 value={selected.projectId || ''}
                 disabled={pendingId === selected.id}
                 onChange={(event) => {
-                  if (event.target.value) void patch(selected, { projectId: event.target.value });
+                  if (event.target.value)
+                    void patch(selected, { projectId: event.target.value });
                 }}
               >
-                {!selected.projectId ? <option value="">Выберите проект</option> : null}
+                {!selected.projectId ? (
+                  <option value="">Выберите проект</option>
+                ) : null}
                 {api.projects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {project.name}
@@ -655,16 +845,23 @@ export function ObjectsPanel({
 
           <div className={styles.field}>
             Статус
-            <div className={styles.chipRow} role="group" aria-label="Сменить статус">
+            <div
+              className={styles.chipRow}
+              role="group"
+              aria-label="Сменить статус"
+            >
               {allowedStatuses(selected.status).map((s) => (
                 <button
                   key={s}
                   type="button"
-                  className={selected.status === s ? styles.chipOn : styles.chip}
+                  className={
+                    selected.status === s ? styles.chipOn : styles.chip
+                  }
                   aria-pressed={selected.status === s}
                   disabled={pendingId === selected.id}
                   onClick={() => {
-                    if (s !== selected.status) void patch(selected, { status: s });
+                    if (s !== selected.status)
+                      void patch(selected, { status: s });
                   }}
                 >
                   {JOB_OBJECT_STATUS_LABELS[s]}
@@ -682,12 +879,15 @@ export function ObjectsPanel({
               <select
                 value={selected.assignedTo || ''}
                 disabled={pendingId === selected.id}
-                onChange={(e) => void patch(selected, { assignedTo: e.target.value || null })}
+                onChange={(e) =>
+                  void patch(selected, { assignedTo: e.target.value || null })
+                }
               >
                 <option value="">Не назначен</option>
                 {staff.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.displayName} · {ROLE_LABELS[s.role as UserRole] || s.role}
+                    {s.displayName} ·{' '}
+                    {ROLE_LABELS[s.role as UserRole] || s.role}
                   </option>
                 ))}
               </select>
@@ -718,11 +918,19 @@ export function ObjectsPanel({
             </div>
           ) : null}
 
-          <ObjectHistory key={selected.id} entries={selected.history || []} people={[user, ...staff]} />
+          <ObjectHistory
+            key={selected.id}
+            entries={selected.history || []}
+            people={[user, ...staff]}
+          />
 
           {canDelete ? (
             <div className={styles.navRow}>
-              <button type="button" className={styles.danger} onClick={() => void remove(selected)}>
+              <button
+                type="button"
+                className={styles.danger}
+                onClick={() => void remove(selected)}
+              >
                 Удалить комнату
               </button>
             </div>

@@ -1,19 +1,133 @@
-import { useRef, useState } from 'react';
-import type {
-  JobObject,
-  Project,
-  UserRole,
-  JobObjectStatus,
+import { useRef, useState, type ReactNode } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  pointerWithin,
+  closestCorners,
+  type DragOverEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  JOB_OBJECT_STATUS_LABELS,
+  documentsForRole,
+  type JobObject,
+  type Project,
+  type UserRole,
+  type JobObjectStatus,
 } from '../../../../packages/shared/partner';
-import { JOB_OBJECT_STATUS_LABELS } from '../../../../packages/shared/partner';
 import {
   m,
   AnimatePresence,
   motionPresets,
   usePrefersReducedMotion,
 } from './motionBits';
-import { canMoveRoom, KANBAN_STAGES } from './kanban';
+import {
+  canMoveRoom,
+  KANBAN_STAGES,
+  sortRooms,
+  rankMovedColumn,
+  type BoardSort,
+} from './kanban';
 import styles from './KanbanBoard.module.css';
+
+function Column({
+  stage,
+  children,
+}: {
+  stage: JobObjectStatus;
+  children: ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({ id: stage });
+  return (
+    <section
+      ref={setNodeRef}
+      className={styles.column}
+      data-kanban-stage={stage}
+      aria-label={JOB_OBJECT_STATUS_LABELS[stage]}
+    >
+      {children}
+    </section>
+  );
+}
+function Card({
+  room,
+  disabled,
+  children,
+  onOpen,
+  onHover,
+  related,
+  onStep,
+}: {
+  room: JobObject;
+  disabled: boolean;
+  children: ReactNode;
+  onOpen: () => void;
+  onHover: (id: string | null) => void;
+  related: boolean;
+  onStep: (direction: number) => void;
+}) {
+  const reduce = usePrefersReducedMotion();
+  const {
+    setNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: room.id,
+    disabled,
+    transition: reduce ? null : undefined,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        type="button"
+        data-room-id={room.id}
+        className={`${styles.card} ${related ? styles.related : ''} ${isDragging ? styles.source : ''}`}
+        aria-label={`${room.roomName || 'Комната'} · ${room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[room.status]}`}
+        onPointerDown={(e) => {
+          if (e.pointerType !== 'touch') listeners?.onPointerDown?.(e);
+        }}
+        onKeyDown={(e) => {
+          if (e.altKey && ['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
+            onStep(e.key === 'ArrowRight' ? 1 : -1);
+          } else listeners?.onKeyDown?.(e);
+        }}
+        onMouseEnter={() => onHover(room.projectId || null)}
+        onMouseLeave={() => onHover(null)}
+        onFocus={() => onHover(room.projectId || null)}
+        onBlur={() => onHover(null)}
+        onClick={() => {
+          if (!isDragging) onOpen();
+        }}
+      >
+        {children}
+      </button>
+    </div>
+  );
+}
+const icons = ['◇', '◷', '↗', '⬡', '✓'];
 export function KanbanBoard({
   rooms,
   projects,
@@ -21,144 +135,422 @@ export function KanbanBoard({
   pendingId,
   onOpen,
   onMove,
+  onCreate,
+  loading,
+  staff,
 }: {
   rooms: JobObject[];
   projects: Project[];
   role: UserRole;
   pendingId: string | null;
   onOpen: (room: JobObject) => void;
-  onMove: (room: JobObject, status: JobObjectStatus) => Promise<void>;
+  onMove: (changes: JobObject[]) => Promise<void>;
+  onCreate?: (status: JobObjectStatus) => void;
+  loading?: boolean;
+  staff: { id: string; displayName: string }[];
 }) {
   const reduce = usePrefersReducedMotion();
-  const dragged = useRef(false);
-  const [active, setActive] = useState<string | null>(null);
+  const board = useRef<HTMLDivElement>(null);
+  const [sort, setSort] = useState<BoardSort>('manual');
+  const [local, setLocal] = useState<JobObject[] | null>(null);
+  const [active, setActive] = useState<JobObject | null>(null);
+  const [hover, setHover] = useState<string | null>(null);
+  const [tab, setTab] = useState<JobObjectStatus>('draft');
+  const [assigned, setAssigned] = useState('all');
+  const [filters, setFilters] = useState(false);
+  const busy = useRef(false);
+  const snapshot = useRef<JobObject[]>([]);
+  const draft = useRef<JobObject[]>([]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+  const visible =
+    local ??
+    sortRooms(
+      rooms.filter(
+        (r) =>
+          assigned === 'all' ||
+          (assigned === 'none' ? !r.assignedTo : r.assignedTo === assigned),
+      ),
+      sort,
+      [],
+      projects,
+    );
+  function preview(next: JobObject[]) {
+    draft.current = next;
+    setLocal(next);
+  }
+  async function commit(room: JobObject, next: JobObject[]) {
+    const previousSort = sort;
+    const list = next.filter((r) => r.status === room.status);
+    const ranked = rankMovedColumn(list, room.id);
+    const changes = ranked.filter(
+      (r) =>
+        r.id === room.id ||
+        r.stageOrder !== list.find((old) => old.id === r.id)?.stageOrder,
+    );
+    // Save the dragged card last; companion rank changes are compensated on failure.
+    changes.sort((a, b) => Number(a.id === room.id) - Number(b.id === room.id));
+    preview(
+      next.map((r) => ranked.find((updated) => updated.id === r.id) ?? r),
+    );
+    busy.current = true;
+    setSort('manual');
+    try {
+      await onMove(changes);
+    } catch {
+      setSort(previousSort);
+      setLocal(snapshot.current);
+    } finally {
+      busy.current = false;
+      setLocal(null);
+    }
+  }
+  function over({ active: drag, over }: DragOverEvent) {
+    if (!over) return;
+    const current = draft.current;
+    const room = current.find((r) => r.id === drag.id);
+    const stage = KANBAN_STAGES.includes(over.id as JobObjectStatus)
+      ? (over.id as JobObjectStatus)
+      : current.find((r) => r.id === over.id)?.status;
+    if (!room || !stage || room.status === stage || !canMoveRoom(role, stage))
+      return;
+    const next = current.filter((r) => r.id !== room.id);
+    const index = next.findIndex((r) => r.id === over.id);
+    next.splice(index < 0 ? 0 : index, 0, { ...room, status: stage });
+    preview(next);
+  }
+  function end({ active: drag, over }: DragEndEvent) {
+    setActive(null);
+    if (!over) {
+      setLocal(null);
+      return;
+    }
+    let next = draft.current;
+    const room = next.find((r) => r.id === drag.id);
+    const target = next.find((r) => r.id === over.id);
+    const destination = target?.status ?? (over.id as JobObjectStatus);
+    if (!canMoveRoom(role, destination)) {
+      setLocal(null);
+      return;
+    }
+    if (KANBAN_STAGES.includes(over.id as JobObjectStatus) && room) {
+      next = [room, ...next.filter((r) => r.id !== room.id)];
+    }
+    if (!room || !canMoveRoom(role, room.status)) {
+      setLocal(null);
+      return;
+    }
+    if (target && target.status === room.status && target.id !== room.id)
+      next = arrayMove(next, next.indexOf(room), next.indexOf(target));
+    void commit(room, next);
+  }
+  function content(room: JobObject) {
+    const project = projects.find((p) => p.id === room.projectId);
+    const person = staff.find((s) => s.id === room.assignedTo)?.displayName;
+    return (
+      <>
+        <strong>
+          {project?.clientName || room.clientName || 'Клиент'} ·{' '}
+          {room.roomName || 'Комната'}
+        </strong>
+        <small>
+          {project?.address ||
+            room.address ||
+            project?.name ||
+            'Адрес не указан'}
+        </small>
+        <div className={styles.metadata}>
+          <span title="Обновлено">
+            {new Date(room.updatedAt).toLocaleDateString('ru-RU', {
+              day: '2-digit',
+              month: 'short',
+            })}
+          </span>
+          <span>{documentsForRole(room.documents, role).length} PDF</span>
+          <span>{room.room.areaM2 ?? '—'} м²</span>
+          <span
+            className={styles.avatar}
+            title={person || 'Ответственный не назначен'}
+          >
+            {person
+              ? person
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((n) => n[0])
+                  .join('')
+              : '—'}
+          </span>
+        </div>
+        {room.pendingSync && <small>↻ Ожидает синхронизации</small>}
+      </>
+    );
+  }
   return (
     <>
-      <p className={styles.help} id="kanban-help">
-        Перетащите комнату в нужную стадию. С клавиатуры: Alt + ← или →. Нажмите
-        карточку, чтобы открыть.
-      </p>
-      <div className={styles.board} aria-label="Канбан объектов">
-        {KANBAN_STAGES.map((stage) => (
-          <section
-            key={stage}
-            className={styles.column}
-            data-kanban-stage={stage}
-            aria-label={JOB_OBJECT_STATUS_LABELS[stage]}
+      <div className={styles.toolbar}>
+        <strong>{visible.length} объектов</strong>
+        <button
+          type="button"
+          aria-expanded={filters}
+          onClick={() => setFilters(!filters)}
+        >
+          Фильтры{assigned !== 'all' ? ' · 1' : ''}
+        </button>
+        <label>
+          Сортировка{' '}
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as BoardSort)}
           >
-            <h3>
-              {JOB_OBJECT_STATUS_LABELS[stage]}{' '}
-              <span>{rooms.filter((r) => r.status === stage).length}</span>
-            </h3>
-            <AnimatePresence initial={false}>
-              {rooms
-                .filter((r) => r.status === stage)
-                .map((room) => {
-                  const project = projects.find((p) => p.id === room.projectId);
-                  return (
-                    <m.button
-                      type="button"
-                      key={room.id}
-                      layout={!reduce}
-                      layoutId={reduce ? undefined : `room-${room.id}`}
-                      className={styles.card}
-                      style={{
-                        pointerEvents: active === room.id ? 'none' : undefined,
-                      }}
-                      data-room-id={room.id}
-                      aria-describedby="kanban-help"
-                      aria-label={`${room.roomName || 'Комната'} · ${project?.clientName || room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[stage]}`}
-                      disabled={pendingId === room.id}
-                      drag={!pendingId}
-                      dragSnapToOrigin
-                      dragMomentum={false}
-                      initial={reduce ? false : { opacity: 0, scale: 0.98 }}
-                      animate={{
-                        opacity: pendingId === room.id ? 0.5 : 1,
-                        scale: 1,
-                      }}
-                      exit={reduce ? undefined : { opacity: 0, scale: 0.98 }}
-                      transition={
-                        reduce ? { duration: 0 } : motionPresets.layout
-                      }
-                      whileDrag={
-                        reduce
-                          ? undefined
-                          : {
-                              scale: 1.03,
-                              zIndex: 20,
-                              boxShadow: '0 16px 40px #0003',
-                            }
-                      }
-                      onDragStart={() => {
-                        dragged.current = true;
-                        setActive(room.id);
-                      }}
-                      onDragEnd={(_, info) => {
-                        setActive(null);
-                        const target = document
-                          .elementFromPoint(
-                            info.point.x - window.scrollX,
-                            info.point.y - window.scrollY,
-                          )
-                          ?.closest('[data-kanban-stage]')
-                          ?.getAttribute(
-                            'data-kanban-stage',
-                          ) as JobObjectStatus | null;
-                        if (
-                          target &&
-                          target !== stage &&
-                          canMoveRoom(role, target)
-                        )
-                          void onMove(room, target);
-                        window.setTimeout(() => {
-                          dragged.current = false;
-                        }, 0);
-                      }}
-                      onKeyDown={(e) => {
-                        if (
-                          !e.altKey ||
-                          !['ArrowRight', 'ArrowLeft'].includes(e.key)
-                        )
-                          return;
-                        e.preventDefault();
-                        const next =
-                          KANBAN_STAGES[
-                            KANBAN_STAGES.indexOf(stage) +
-                              (e.key === 'ArrowRight' ? 1 : -1)
-                          ];
-                        if (next && canMoveRoom(role, next) && !pendingId)
-                          void onMove(room, next);
-                      }}
-                      onClick={() => {
-                        if (!dragged.current) onOpen(room);
-                      }}
-                    >
-                      <strong>{room.roomName || 'Комната'}</strong>
-                      <span>
-                        {project?.clientName || room.clientName || 'Клиент'}
-                      </span>
-                      <small>
-                        {project?.address || room.address || 'Адрес не указан'}
-                      </small>
-                      <span>
-                        {room.room.areaM2 ?? '—'} м²
-                        {room.pendingSync ? ' · ждёт синхронизации' : ''}
-                      </span>
-                    </m.button>
-                  );
-                })}
-            </AnimatePresence>
-            {!rooms.some((r) => r.status === stage) ? (
-              <p className={styles.empty}>
-                {active && canMoveRoom(role, stage)
-                  ? 'Перенесите сюда'
-                  : 'Нет комнат'}
-              </p>
-            ) : null}
-          </section>
+            <option value="updatedAt">По обновлению</option>
+            <option value="createdAt">По созданию</option>
+            <option value="client">По клиенту</option>
+            <option value="manual">Вручную</option>
+          </select>
+        </label>
+        {filters && (
+          <label>
+            Ответственный{' '}
+            <select
+              value={assigned}
+              onChange={(e) => setAssigned(e.target.value)}
+            >
+              <option value="all">Все</option>
+              <option value="none">Не назначен</option>
+              {staff.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      <p className={styles.help} id="kanban-help">
+        Перетащите карточку в стадию или измените порядок. Alt + ←/→ — стадия,
+        Пробел — поднять, стрелки — переместить, Escape — отменить. На телефоне
+        удерживайте карточку.
+      </p>
+      <div className={styles.tabs} aria-label="Стадии">
+        {KANBAN_STAGES.map((s) => (
+          <button
+            key={s}
+            type="button"
+            aria-pressed={tab === s}
+            onClick={() => {
+              setTab(s);
+              board.current
+                ?.querySelector(`[data-kanban-stage="${s}"]`)
+                ?.scrollIntoView({
+                  behavior: reduce ? 'instant' : 'smooth',
+                  block: 'nearest',
+                  inline: 'start',
+                });
+            }}
+          >
+            {JOB_OBJECT_STATUS_LABELS[s]}
+          </button>
         ))}
       </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={(args) => {
+          const hits = pointerWithin(args);
+          return hits.length
+            ? hits.some((h) => !KANBAN_STAGES.includes(h.id as JobObjectStatus))
+              ? hits.filter(
+                  (h) => !KANBAN_STAGES.includes(h.id as JobObjectStatus),
+                )
+              : hits
+            : args.pointerCoordinates
+              ? []
+              : closestCorners(args);
+        }}
+        onDragStart={({ active: drag }) => {
+          if (busy.current) return;
+          const room = visible.find((r) => r.id === drag.id);
+          if (room) {
+            snapshot.current = visible;
+            preview(visible);
+            setActive(room);
+          }
+        }}
+        onDragOver={over}
+        onDragEnd={end}
+        onDragCancel={() => {
+          setActive(null);
+          setLocal(null);
+        }}
+      >
+        <div
+          ref={board}
+          className={styles.board}
+          aria-label="Канбан объектов"
+          aria-busy={loading}
+          onScroll={() => {
+            const el = board.current;
+            if (el) {
+              const cols = [...el.children] as HTMLElement[];
+              const nearest = cols.reduce((a, b) =>
+                Math.abs(b.offsetLeft - el.offsetLeft - el.scrollLeft) <
+                Math.abs(a.offsetLeft - el.offsetLeft - el.scrollLeft)
+                  ? b
+                  : a,
+              );
+              setTab(nearest.dataset.kanbanStage as JobObjectStatus);
+            }
+          }}
+        >
+          {KANBAN_STAGES.map((stage, index) => {
+            const list = visible.filter((r) => r.status === stage);
+            const displayList: (JobObject | null)[] = [...list];
+            if (
+              active?.status === stage &&
+              !list.some((r) => r.id === active.id)
+            ) {
+              const sourceIndex = snapshot.current
+                .filter((r) => r.status === stage)
+                .findIndex((r) => r.id === active.id);
+              displayList.splice(Math.max(0, sourceIndex), 0, null);
+            }
+            return (
+              <Column key={stage} stage={stage}>
+                <header>
+                  <span className={styles.icon}>{icons[index]}</span>
+                  <h3>{JOB_OBJECT_STATUS_LABELS[stage]}</h3>
+                  <span className={styles.count}>{list.length}</span>
+                  <details>
+                    <summary
+                      aria-label={`Действия: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
+                    >
+                      …
+                    </summary>
+                    <button type="button" onClick={() => setSort('updatedAt')}>
+                      По обновлению
+                    </button>
+                    <button type="button" onClick={() => setSort('client')}>
+                      По клиенту
+                    </button>
+                  </details>
+                  {onCreate && (
+                    <button
+                      type="button"
+                      aria-label={`Новый объект: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
+                      onClick={() => onCreate(stage)}
+                    >
+                      +
+                    </button>
+                  )}
+                </header>
+                <div className={styles.cards} data-column-scroll>
+                  <SortableContext
+                    items={list.map((r) => r.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {loading ? (
+                      [0, 1, 2].map((n) => (
+                        <div key={n} className={styles.skeleton}>
+                          <i />
+                          <i />
+                          <i />
+                        </div>
+                      ))
+                    ) : (
+                      <AnimatePresence initial={false}>
+                        {displayList.map((room) =>
+                          room ? (
+                            <m.div
+                              key={room.id}
+                              layout={!reduce && !active}
+                              initial={
+                                reduce || active
+                                  ? false
+                                  : { opacity: 0, scale: 0.97 }
+                              }
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={
+                                reduce || active
+                                  ? undefined
+                                  : { opacity: 0, scale: 0.97 }
+                              }
+                              transition={
+                                reduce ? { duration: 0 } : motionPresets.layout
+                              }
+                            >
+                              <Card
+                                room={room}
+                                disabled={
+                                  !!pendingId ||
+                                  busy.current ||
+                                  !canMoveRoom(role, room.status)
+                                }
+                                related={!!hover && hover === room.projectId}
+                                onHover={setHover}
+                                onOpen={() => onOpen(room)}
+                                onStep={(direction) => {
+                                  const stage =
+                                    KANBAN_STAGES[
+                                      KANBAN_STAGES.indexOf(room.status) +
+                                        direction
+                                    ];
+                                  if (
+                                    !stage ||
+                                    busy.current ||
+                                    pendingId ||
+                                    !canMoveRoom(role, stage)
+                                  )
+                                    return;
+                                  snapshot.current = visible;
+                                  void commit({ ...room, status: stage }, [
+                                    { ...room, status: stage },
+                                    ...visible.filter((r) => r.id !== room.id),
+                                  ]);
+                                }}
+                              >
+                                {content(room)}
+                              </Card>
+                            </m.div>
+                          ) : (
+                            <div
+                              key="source-ghost"
+                              className={styles.ghost}
+                              aria-hidden="true"
+                            />
+                          ),
+                        )}
+                      </AnimatePresence>
+                    )}
+                  </SortableContext>
+                  {!loading && !displayList.length && (
+                    <p className={styles.empty}>Пока нет объектов</p>
+                  )}
+                </div>
+              </Column>
+            );
+          })}
+        </div>
+        <DragOverlay
+          dropAnimation={reduce ? null : { duration: 160, easing: 'ease-out' }}
+        >
+          {active ? (
+            <m.div
+              className={`${styles.card} ${styles.overlay}`}
+              initial={false}
+              animate={{ rotate: reduce ? 0 : 3, scale: reduce ? 1 : 1.04 }}
+              transition={motionPresets.layout}
+            >
+              {content(active)}
+            </m.div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </>
   );
 }

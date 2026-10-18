@@ -39,7 +39,22 @@ test('kanban drag persists stage after reload, opens existing room editor', asyn
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await enter(page);
-  await page.getByRole('button', { name: 'Канбан', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
+    0,
+  );
+  let releasePatch!: () => void;
+  const patchGate = new Promise<void>((resolve) => {
+    releasePatch = resolve;
+  });
+  await page.route('**/objects/ui_room', async (route) => {
+    if (route.request().method() === 'PATCH') {
+      expect(Number.isFinite(route.request().postDataJSON().stageOrder)).toBe(
+        true,
+      );
+      await patchGate;
+    }
+    await route.continue();
+  });
   const card = page.locator('[data-room-id="ui_room"]');
   await card.scrollIntoViewIfNeeded();
   const from = await card.boundingBox();
@@ -48,11 +63,28 @@ test('kanban drag persists stage after reload, opens existing room editor', asyn
   if (!from || !to) throw new Error('Missing drag geometry');
   await page.mouse.move(from.x + from.width / 2, from.y + 40);
   await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + 130, { steps: 20 });
+  await page.mouse.move(to.x + to.width / 2, to.y + 25, { steps: 20 });
   await page.mouse.up();
+  await expect(target.locator('[data-room-id]').first()).toHaveAttribute(
+    'data-room-id',
+    'ui_room',
+  );
   await expect(target.locator('[data-room-id="ui_room"]')).toBeVisible();
+  await expect(
+    page.locator('[data-kanban-stage="draft"] [data-room-id="ui_room"]'),
+  ).toHaveCount(0);
+  releasePatch();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
+  ).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Канбан', exact: true }).click();
+  await expect(target.locator('[data-room-id]').first()).toHaveAttribute(
+    'data-room-id',
+    'ui_room',
+  );
+  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
+    0,
+  );
   await expect(
     page.locator('[data-kanban-stage="measured"] [data-room-id="ui_room"]'),
   ).toBeVisible();
@@ -62,10 +94,44 @@ test('kanban drag persists stage after reload, opens existing room editor', asyn
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+test('reorder within a column persists after reload', async ({ page }) => {
+  await enter(page);
+  const card = page.locator('[data-room-id="ui_room"]');
+  await card.focus();
+  await card.press('Alt+ArrowRight');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
+  ).toBeVisible();
+  await expect(card).toHaveCount(1);
+  const target = page.locator('[data-room-id="ui_measured"]');
+  const from = await card.boundingBox(),
+    to = await target.boundingBox();
+  if (!from || !to) throw new Error('Missing card geometry');
+  await page.mouse.move(from.x + 30, from.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(to.x + 30, to.y + to.height - 15, { steps: 20 });
+  await page.mouse.up();
+  const column = page.locator('[data-kanban-stage="measured"]');
+  await expect(column.locator('[data-room-id]').first()).toHaveAttribute(
+    'data-room-id',
+    'ui_measured',
+  );
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(column.locator('[data-room-id]').first()).toHaveAttribute(
+    'data-room-id',
+    'ui_measured',
+  );
+});
+
 test('crew cannot drag a room into a forbidden stage', async ({ page }) => {
   await enter(page, 'crew');
-  await page.getByRole('button', { name: 'Канбан', exact: true }).click();
-  await page.getByRole('button', { name: /Все ·/ }).click();
+  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
+    0,
+  );
+
   const card = page.locator('[data-room-id="ui_crew_room"]');
   await card.focus();
   await card.press('Alt+ArrowLeft');
@@ -109,13 +175,11 @@ test('profile validates current password, changes password and uploads compresse
   const upload = page.waitForRequest(
     (r) => r.url().endsWith('/me/avatar') && r.method() === 'PUT',
   );
-  await dialog
-    .getByLabel('Фото', { exact: true })
-    .setInputFiles({
-      name: 'test.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(png, 'base64'),
-    });
+  await dialog.getByLabel('Фото', { exact: true }).setInputFiles({
+    name: 'test.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(png, 'base64'),
+  });
   const request = await upload;
   expect(request.postDataJSON().mime).toBe('image/webp');
   expect(
@@ -124,7 +188,11 @@ test('profile validates current password, changes password and uploads compresse
   await expect(dialog.getByRole('status')).toHaveText('Фото обновлено');
   await expect(dialog.getByRole('img', { name: 'Фото профиля' })).toBeVisible();
   await expect
-    .poll(() => dialog.getByRole('img', { name: 'Фото профиля' }).evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .poll(() =>
+      dialog
+        .getByRole('img', { name: 'Фото профиля' })
+        .evaluate((img: HTMLImageElement) => img.naturalWidth),
+    )
     .toBe(256);
   await dialog
     .getByLabel('Текущий пароль', { exact: true })
@@ -154,7 +222,9 @@ test('mobile and reduced motion: profile and board stay within viewport', async 
     ),
   ).toBe(true);
   await page.getByRole('button', { name: 'Закрыть профиль' }).click();
-  await page.getByRole('button', { name: 'Канбан', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
+    0,
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -166,7 +236,9 @@ test('failed stage save keeps the original card and shows the error', async ({
   page,
 }) => {
   await enter(page);
-  await page.getByRole('button', { name: 'Канбан', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
+    0,
+  );
   await page.route('**/objects/ui_room', async (route) => {
     if (route.request().method() === 'PATCH')
       await route.fulfill({
@@ -187,15 +259,30 @@ test('failed stage save keeps the original card and shows the error', async ({
 test('admin uses the same board and editor in projects', async ({ page }) => {
   await enter(page, 'admin');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.getByRole('button', { name: 'Канбан', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
+    0,
+  );
   await page.locator('[data-room-id="ui_room"]').click();
   await expect(
     page.getByRole('heading', { name: /Спальня.*Черновик/ }),
   ).toBeVisible();
 });
 
-test('diagnostic and calculator open without runtime regressions', async ({page}) => {
- const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await enter(page);
- await page.getByRole('button',{name:'Проблемомер',exact:true}).click();await expect(page.getByRole('button',{name:'Начать',exact:true})).toBeVisible();
- await page.getByRole('tab',{name:'Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
+test('diagnostic and calculator open without runtime regressions', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await enter(page);
+  await page.getByRole('button', { name: 'Проблемомер', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Начать', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: 'Калькулятор', exact: true }).click();
+  await expect(
+    page
+      .frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]')
+      .getByRole('heading', { name: 'Что вы знаете о помещении?' }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
 });
