@@ -15,6 +15,11 @@ export type MaterialNode = {
 
 export const MATERIAL_BUCKET_MARKER: 'materials';
 export const MATERIAL_DIRECT_MAX_BYTES: number;
+export const MATERIAL_SINGLE_PUT_MAX_BYTES: number;
+export const MATERIAL_PART_MIN_BYTES: number;
+export const MATERIAL_PART_MAX_BYTES: number;
+export const MATERIAL_MAX_PARTS: number;
+export function materialPartSize(size: number): number;
 
 export type PublicMaterial = {
   id: string;

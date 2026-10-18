@@ -254,3 +254,99 @@ export async function signPutObject({ bucket, key, expiresIn }) {
   const command = new PutObjectCommand({ Bucket: bucket, Key: key });
   return getSignedUrl(client, command, { expiresIn: expiresIn || SIGNED_PUT_TTL_SECONDS });
 }
+
+function multipartClientConfig() {
+  return {
+    ...s3ClientConfig(),
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+  };
+}
+
+/** Начать multipart-загрузку. @returns {Promise<string>} uploadId */
+export async function createMultipartUpload({ bucket, key, contentType }) {
+  if (transportForTests) {
+    const out = await transportForTests({ action: 'mpu-create', bucket, key, contentType });
+    return String(out?.uploadId || out || '');
+  }
+  const { S3Client, CreateMultipartUploadCommand } = await import('@aws-sdk/client-s3');
+  const client = new S3Client(multipartClientConfig());
+  const res = await client.send(
+    new CreateMultipartUploadCommand({
+      Bucket: bucket,
+      Key: key,
+      ...(contentType ? { ContentType: contentType } : {}),
+    }),
+  );
+  return String(res.UploadId || '');
+}
+
+/** Подписанный PUT одной части. */
+export async function signUploadPart({ bucket, key, uploadId, partNumber, expiresIn }) {
+  if (transportForTests) {
+    const out = await transportForTests({ action: 'mpu-sign-part', bucket, key, uploadId, partNumber });
+    return out == null ? '' : String(out);
+  }
+  const { S3Client, UploadPartCommand } = await import('@aws-sdk/client-s3');
+  const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+  const client = new S3Client(multipartClientConfig());
+  const command = new UploadPartCommand({
+    Bucket: bucket,
+    Key: key,
+    UploadId: uploadId,
+    PartNumber: partNumber,
+  });
+  return getSignedUrl(client, command, { expiresIn: expiresIn || SIGNED_PUT_TTL_SECONDS });
+}
+
+/** Уже загруженные части (для докачки). */
+export async function listUploadedParts({ bucket, key, uploadId }) {
+  if (transportForTests) {
+    const out = await transportForTests({ action: 'mpu-list', bucket, key, uploadId });
+    return Array.isArray(out) ? out : [];
+  }
+  const { S3Client, ListPartsCommand } = await import('@aws-sdk/client-s3');
+  const client = new S3Client(multipartClientConfig());
+  const parts = [];
+  let marker;
+  for (;;) {
+    const res = await client.send(
+      new ListPartsCommand({ Bucket: bucket, Key: key, UploadId: uploadId, PartNumberMarker: marker }),
+    );
+    for (const part of res.Parts || []) {
+      parts.push({ partNumber: part.PartNumber, etag: part.ETag, size: part.Size });
+    }
+    if (!res.IsTruncated) break;
+    marker = res.NextPartNumberMarker;
+  }
+  return parts;
+}
+
+export async function completeMultipartUpload({ bucket, key, uploadId, parts }) {
+  if (transportForTests) {
+    await transportForTests({ action: 'mpu-complete', bucket, key, uploadId, parts });
+    return;
+  }
+  const { S3Client, CompleteMultipartUploadCommand } = await import('@aws-sdk/client-s3');
+  const client = new S3Client(multipartClientConfig());
+  await client.send(
+    new CompleteMultipartUploadCommand({
+      Bucket: bucket,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: {
+        Parts: parts.map((part) => ({ PartNumber: part.partNumber, ETag: part.etag })),
+      },
+    }),
+  );
+}
+
+export async function abortMultipartUpload({ bucket, key, uploadId }) {
+  if (transportForTests) {
+    await transportForTests({ action: 'mpu-abort', bucket, key, uploadId });
+    return;
+  }
+  const { S3Client, AbortMultipartUploadCommand } = await import('@aws-sdk/client-s3');
+  const client = new S3Client(multipartClientConfig());
+  await client.send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: key, UploadId: uploadId }));
+}
