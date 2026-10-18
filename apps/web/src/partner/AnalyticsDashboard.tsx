@@ -29,7 +29,9 @@ import {
   subscribeAnalyticsFocusOrg,
   subscribeAnalyticsPeriod,
 } from './analytics';
+import { calcModeLabel } from './calcModeLabel';
 import { JournalDownload } from './JournalDownload';
+import { spansMoreThanTwoMonths } from './periodSpan';
 import { CountUp, FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
@@ -42,12 +44,6 @@ const HOUSE_LABELS = Object.fromEntries(
 const STAGE_LABELS = Object.fromEntries(
   OBJECT_STAGE_OPTIONS.map((o) => [o.id, o.label]),
 ) as Record<ObjectStageOption, string>;
-
-const MODE_LABELS: Record<string, string> = {
-  area: 'Только площадь',
-  dims: 'Размеры',
-  polygon: 'Полигон',
-};
 
 function formatWhen(iso: string | null): string {
   if (!iso) return '—';
@@ -97,7 +93,7 @@ function labelKey(
     return STAGE_LABELS[key as ObjectStageOption] || key;
   }
   if (kind === 'mode') {
-    return MODE_LABELS[key] || key;
+    return calcModeLabel(key);
   }
   if (kind === 'comfort') {
     const parts = key.split('→');
@@ -186,27 +182,17 @@ function FunnelBlock({
 
 type SliceRow = { label: string; total: number };
 
-function slicesFromSeries(series: AnalyticsSeriesPoint[]): {
-  months: SliceRow[];
-  days: Array<{ day: number; total: number }>;
-} {
+function monthsFromSeries(series: AnalyticsSeriesPoint[]): SliceRow[] {
   const months = new Map<string, number>();
-  const days = Array.from({ length: 31 }, () => 0);
   for (const p of series) {
     const [y, m, d] = p.day.split('-');
     if (!y || !m || !d) continue;
-    const total = p.problemomer + p.calculator + p.pdf + p.logins;
     const key = `${y}-${m}`;
-    months.set(key, (months.get(key) || 0) + total);
-    const day = Number(d);
-    if (day >= 1 && day <= 31) days[day - 1] += total;
+    months.set(key, (months.get(key) || 0) + p.problemomer + p.calculator + p.pdf + p.logins);
   }
-  return {
-    months: [...months.entries()]
-      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-      .map(([key, total]) => ({ label: monthLabel(key), total })),
-    days: days.map((total, i) => ({ day: i + 1, total })),
-  };
+  return [...months.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([key, total]) => ({ label: monthLabel(key), total }));
 }
 
 function MonthSlice({ rows }: { rows: SliceRow[] }) {
@@ -224,25 +210,6 @@ function MonthSlice({ rows }: { rows: SliceRow[] }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-function DaySlice({ days }: { days: Array<{ day: number; total: number }> }) {
-  const max = Math.max(1, ...days.map((d) => d.total));
-  return (
-    <div className={styles.seriesChart} role="img" aria-label="Срез по дням месяца">
-      {days.map((d) => (
-        <div key={d.day} className={styles.seriesDay} title={`${d.day}: ${d.total}`}>
-          <div className={styles.seriesBars}>
-            <div
-              className={`${styles.seriesBar} ${styles.barPm}`}
-              style={{ height: `${(d.total / max) * 100}%` }}
-            />
-          </div>
-          <span className={styles.seriesTick}>{d.day % 2 === 1 ? d.day : ''}</span>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -521,18 +488,6 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             />
             <KpiCard label="PDF" value={dash.kpi.pdf} prev={prev?.pdf} showDelta={showDelta} />
             <KpiCard
-              label="Отправки"
-              value={dash.kpi.shares}
-              prev={prev?.shares}
-              showDelta={showDelta}
-            />
-            <KpiCard
-              label="Входы"
-              value={dash.kpi.logins}
-              prev={prev?.logins}
-              showDelta={showDelta}
-            />
-            <KpiCard
               label="Площадь, м²"
               value={dash.kpi.areaM2}
               prev={prev?.areaM2}
@@ -544,6 +499,8 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
               prev={prev?.panels}
               showDelta={showDelta}
             />
+            <KpiCard label="Средняя м²" value={dash.volume.areaM2Avg} showDelta={false} />
+            <KpiCard label="Готовых расчётов" value={dash.volume.completedCount} showDelta={false} />
           </FadeRise>
 
           <h3 className={styles.dashSub}>Воронка</h3>
@@ -559,30 +516,12 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             <p className={styles.lead}>Пока нет точек для графика</p>
           )}
 
-          <h3 className={styles.dashSub}>По месяцам</h3>
-          <MonthSlice rows={slicesFromSeries(dash.series).months} />
-          <h3 className={styles.dashSub}>По дням месяца</h3>
-          <DaySlice days={slicesFromSeries(dash.series).days} />
-
-          <h3 className={styles.dashSub}>Объём</h3>
-          <div className={styles.volumeRow}>
-            <div className={styles.volumeItem}>
-              <span className={styles.kpiLabel}>Сумма м²</span>
-              <strong>{formatNum(dash.volume.areaM2Sum)}</strong>
-            </div>
-            <div className={styles.volumeItem}>
-              <span className={styles.kpiLabel}>Средняя м²</span>
-              <strong>{formatNum(dash.volume.areaM2Avg)}</strong>
-            </div>
-            <div className={styles.volumeItem}>
-              <span className={styles.kpiLabel}>Панели</span>
-              <strong>{formatNum(dash.volume.panelsSum)}</strong>
-            </div>
-            <div className={styles.volumeItem}>
-              <span className={styles.kpiLabel}>Готовых расчётов</span>
-              <strong>{formatNum(dash.volume.completedCount)}</strong>
-            </div>
-          </div>
+          {spansMoreThanTwoMonths(fromYmd, toYmd, dash.series) ? (
+            <>
+              <h3 className={styles.dashSub}>По месяцам</h3>
+              <MonthSlice rows={monthsFromSeries(dash.series)} />
+            </>
+          ) : null}
         </div>
       ) : null}
 
