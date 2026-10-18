@@ -7,6 +7,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
 import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
+import { documentsForRole, findVisibleDocument } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
 
 ensureIndexFromTsv(ruCitiesTsv);
@@ -391,30 +392,6 @@ function objectVisibleTo(user, obj) {
     return obj.assignedTo === user.id;
   }
   return false;
-}
-
-function publicDocument(doc) {
-  if (!doc) return null;
-  return {
-    id: doc.id,
-    versionId: doc.versionId || doc.id,
-    createdAt: doc.createdAt,
-    createdBy: doc.createdBy || null,
-    kind: doc.kind === 'spec' ? 'spec' : 'estimate',
-    filename: doc.filename || 'MultiFrame.pdf',
-    hasScheme: Boolean(doc.hasScheme),
-    panels: doc.panels ?? null,
-    areaM2: doc.areaM2 ?? null,
-  };
-}
-
-/** Монтажник получает только спецификации без цен, даже если смета — единственный файл. */
-function documentsForRole(docs, role) {
-  const list = [...(docs || [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  const estimates = list.filter((d) => d.kind === 'estimate');
-  const specs = list.filter((d) => d.kind === 'spec');
-  const picked = canSeePrices(role) ? (estimates.length ? estimates : specs) : specs;
-  return picked.map(publicDocument);
 }
 
 function publicObject(obj, role) {
@@ -1242,8 +1219,7 @@ export async function handler(event = {}) {
       const docId = decodeURIComponent(docFileMatch[2]);
       const obj = (platform.objects || []).find((o) => o.id === objectId);
       if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Объект не найден' });
-      const visible = documentsForRole(obj.documents, user.role);
-      const meta = visible.find((d) => d.id === docId);
+      const meta = findVisibleDocument(obj.documents, user.role, docId);
       if (!meta) return json(404, { message: 'Документ не найден' });
       const stored = (obj.documents || []).find((d) => d.id === meta.id);
       const key = stored?.storageKey;

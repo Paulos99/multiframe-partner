@@ -222,18 +222,17 @@ export type JobObjectDocument = {
 };
 
 /**
- * Для ролей с ценами — смета. Для монтажника — спецификация без цен.
- * Если спецификации нет, монтажнику не выдаём смету с ценами.
+ * Владелец, менеджер, замерщик и STP видят смету и спецификацию вместе.
+ * Монтажник — только спецификацию без цен. Смета не подставляется, если спецификации нет.
+ * То же правило, что в apps/api/documentAccess.js.
  */
 export function documentsForRole(
   docs: JobObjectDocument[] | null | undefined,
   role: UserRole,
 ): JobObjectDocument[] {
   const list = [...(docs || [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  const estimates = list.filter((d) => d.kind === 'estimate');
-  const specs = list.filter((d) => d.kind === 'spec');
-  if (canSeePrices(role)) return estimates.length ? estimates : specs;
-  return specs;
+  if (canSeePrices(role)) return list.filter((d) => d.kind === 'estimate' || d.kind === 'spec');
+  return list.filter((d) => d.kind === 'spec');
 }
 
 export type JobObjectHistoryEntry = {
