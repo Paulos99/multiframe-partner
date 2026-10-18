@@ -2,9 +2,12 @@ import type { ReactNode } from 'react';
 
 /** Источник содержимого: ссылка (подписанная или blob:), Blob или готовый узел (заглушка материала). */
 export type PreviewSource =
-  | { url: string; mime?: string | null; size?: number | null }
-  | { blob: Blob; mime?: string | null }
+  | { url: string; mime?: string | null; size?: number | null; pdfCopy?: PdfCopySource }
+  | { blob: Blob; mime?: string | null; pdfCopy?: PdfCopySource }
   | { node: ReactNode };
+
+/** PDF-копия документа для просмотра (например, для .doc). Скачивается при этом оригинал. */
+export type PdfCopySource = { url: string } | { blob: Blob };
 
 export type PreviewItem = {
   id: string;

@@ -10,6 +10,7 @@ import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
 import { findVisibleDocument, incomingDocumentKind, visibleDocuments } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
+import { handleMaterialPreview } from './materialsPreview.js';
 import {
   loadStoredDocument,
   mergeEventList,
@@ -815,6 +816,16 @@ export async function handler(event = {}) {
   try {
     const profileResponse = await handleProfile({path,method,requireAuth:()=>requireAuth(event),json,getBody:()=>getBody(event),savePlatform,publicUser,signToken});
     if(profileResponse) return profileResponse;
+    const materialPreviewResponse = await handleMaterialPreview({
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      assertRole,
+      json,
+      getBody: () => getBody(event),
+      savePlatform,
+    });
+    if (materialPreviewResponse) return materialPreviewResponse;
     const materialsResponse = await handleMaterials({
       path,
       method,

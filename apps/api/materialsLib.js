@@ -115,6 +115,8 @@ export function toPublicMaterial(node) {
     size: node.size ?? null,
     stub: node.stub || null,
     hasFile: Boolean(node.storageKey || node.contentBase64),
+    /** Есть PDF-копия для предпросмотра (GET /materials/:id/preview). */
+    hasPreview: Boolean(node.previewKey),
     updatedAt: node.updatedAt || DEMO_AT,
   };
 }
@@ -234,6 +236,10 @@ export function replaceFile(
     storageKey: storageKey || null,
     bucket: storageKey ? bucket || null : null,
     contentBase64: contentBase64 || null,
+    // Новое содержимое — старая PDF-копия больше не соответствует файлу.
+    previewKey: null,
+    previewSize: null,
+    previewUpdatedAt: null,
     updatedAt: now,
   };
   return {
@@ -268,10 +274,16 @@ export function deleteMaterial(stored, { id }) {
     ok: true,
     nodes: nodes.filter((node) => !ids.has(node.id)),
     storageKeys: removed.map((node) => node.storageKey),
-    storageObjects: removed.map((node) => ({
-      key: node.storageKey,
-      bucket: node.bucket || null,
-    })),
+    storageObjects: [
+      ...removed.map((node) => ({
+        key: node.storageKey,
+        bucket: node.bucket || null,
+      })),
+      // PDF-копии для предпросмотра всегда лежат в бакете материалов.
+      ...nodes
+        .filter((node) => ids.has(node.id) && node.previewKey)
+        .map((node) => ({ key: node.previewKey, bucket: MATERIAL_BUCKET_MARKER })),
+    ],
   };
 }
 
