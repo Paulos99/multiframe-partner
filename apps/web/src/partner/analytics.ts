@@ -312,3 +312,51 @@ export function rangeForMonthDay(
   const end = new Date(y, m, 0, 23, 59, 59, 999);
   return { from: start.toISOString(), to: end.toISOString() };
 }
+
+/**
+ * One period for the STP home and the analytics screen.
+ * Both read it, and only one PeriodCalendar writes it.
+ */
+export type AnalyticsPeriod = { fromYmd: string | null; toYmd: string | null };
+
+let periodSnapshot: AnalyticsPeriod = { fromYmd: ymdShift(-6), toYmd: ymdShift(0) };
+const periodListeners = new Set<() => void>();
+
+export function getAnalyticsPeriod(): AnalyticsPeriod {
+  return periodSnapshot;
+}
+
+export function setAnalyticsPeriod(fromYmd: string | null, toYmd: string | null): void {
+  if (periodSnapshot.fromYmd === fromYmd && periodSnapshot.toYmd === toYmd) return;
+  periodSnapshot = { fromYmd, toYmd };
+  periodListeners.forEach((listener) => listener());
+}
+
+export function subscribeAnalyticsPeriod(listener: () => void): () => void {
+  periodListeners.add(listener);
+  return () => {
+    periodListeners.delete(listener);
+  };
+}
+
+/** Org selected from an STP company card. Empty string means the whole network. */
+let focusOrgSnapshot = '';
+const focusListeners = new Set<() => void>();
+
+export function getAnalyticsFocusOrg(): string {
+  return focusOrgSnapshot;
+}
+
+export function setAnalyticsFocusOrg(orgId: string | null): void {
+  const next = orgId || '';
+  if (focusOrgSnapshot === next) return;
+  focusOrgSnapshot = next;
+  focusListeners.forEach((listener) => listener());
+}
+
+export function subscribeAnalyticsFocusOrg(listener: () => void): () => void {
+  focusListeners.add(listener);
+  return () => {
+    focusListeners.delete(listener);
+  };
+}
