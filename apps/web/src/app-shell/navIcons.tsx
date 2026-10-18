@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react';
 import {
   BarChartIcon,
   BuildingIcon,
+  ChecklistIcon,
   FolderIcon,
   GraduationCapIcon,
   HouseIcon,
@@ -15,6 +16,7 @@ import {
 /** Иконки разделов кабинета: на планшете меню сворачивается в рельс с иконками, на телефоне — нижняя панель. */
 const ICONS: Record<string, ComponentType<Omit<SVGProps<SVGSVGElement>, 'ref'> & { size?: number | string }>> = {
   objects: HouseIcon,
+  tasks: ChecklistIcon,
   deals: KanbanIcon,
   projects: FolderIcon,
   company: BuildingIcon,

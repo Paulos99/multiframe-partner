@@ -43,7 +43,7 @@ import {
   rankMovedColumn,
   type BoardSort,
 } from './kanban';
-import { CheckCircleIcon, DraftIcon, HardHatIcon, MoreIcon, SendIcon, TapeMeasureIcon } from '../icons';
+import { CheckCircleIcon, DraftIcon, DrillIcon, MoreIcon, SendIcon, TapeMeasureIcon } from '../icons';
 import styles from './KanbanBoard.module.css';
 
 function Column({
@@ -164,7 +164,7 @@ const STAGE_ICONS: Record<JobObjectStatus, ComponentType<{ size?: number }>> = {
   draft: DraftIcon,
   measured: TapeMeasureIcon,
   quote_sent: SendIcon,
-  install: HardHatIcon,
+  install: DrillIcon,
   closed: CheckCircleIcon,
 };
 export function KanbanBoard({
