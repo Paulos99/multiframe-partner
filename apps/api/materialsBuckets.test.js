@@ -19,7 +19,7 @@ function storedObject(bucket, key) {
   return `${bucket}::${key}`;
 }
 
-const { setObjectStoreTransportForTests } = await import('./objectStore.js');
+const { documentEtag, setObjectStoreTransportForTests } = await import('./objectStore.js');
 setObjectStoreTransportForTests(async (op) => {
   calls.push({
     action: op.action,
@@ -29,7 +29,18 @@ setObjectStoreTransportForTests(async (op) => {
   });
   if (op.action === 'put') {
     objects.set(storedObject(op.bucket, op.key), op.body);
-    return null;
+    return { etag: documentEtag(op.body) };
+  }
+  if (op.action === 'head') {
+    const body = objects.get(storedObject(op.bucket, op.key));
+    if (body == null) return { missing: true, etag: null, contentLength: null, contentType: null };
+    const buf = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
+    return {
+      missing: false,
+      etag: documentEtag(body),
+      contentLength: buf.length,
+      contentType: String(op.key).endsWith('.json') ? 'application/json' : 'application/octet-stream',
+    };
   }
   if (op.action === 'get') {
     return objects.has(storedObject(op.bucket, op.key))
@@ -210,7 +221,17 @@ test('платформа, аналитика и документы пишутс�
   assert.equal(payload.base64, undefined);
   assert.match(payload.url, new RegExp(`https://${MATERIALS}\\.storage\\.yandexcloud\\.net/materials/`));
   assert.equal(calls.some((call) => call.action === 'sign-get' && call.bucket === MATERIALS), true);
-  assert.equal(calls.some((call) => call.bucket === PARTNERS && call.action !== 'put'), false);
+  assert.equal(
+    calls.some(
+      (call) =>
+        call.bucket === PARTNERS &&
+        !(
+          (call.action === 'head' || call.action === 'get') &&
+          (call.key === 'platform-v2.json' || call.key === 'analytics-events.json')
+        ),
+    ),
+    false,
+  );
 
   const beforeDenied = calls.length;
   const anonymous = await handler({ httpMethod: 'GET', path: `/materials/${materialId}/content` });

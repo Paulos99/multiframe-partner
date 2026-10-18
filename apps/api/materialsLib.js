@@ -5,6 +5,8 @@
  */
 
 export const MATERIAL_BUCKET_MARKER = 'materials';
+/** Прямой PUT в бакет. Шлюз API по-прежнему принимает только до 2 МБ base64. */
+export const MATERIAL_DIRECT_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 
 export const MATERIAL_STUBS = [
   'video-install',
