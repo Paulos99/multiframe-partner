@@ -12,6 +12,27 @@ async function enter(page: Page, role = 'owner', pw = password) {
     page.getByRole('button', { name: 'Мой профиль', exact: true }),
   ).toBeVisible();
 }
+test('admin keeps one shared period control without the duplicate overview', async ({ page }) => {
+  await enter(page, 'admin');
+  const controls = page.getByRole('region', { name: 'Управление партнёрской сетью' });
+  await expect(page.getByText('Партнёры и поддержка команды', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Последнее событие', { exact: false })).toHaveCount(0);
+  const calendar = controls.locator('button[aria-controls]');
+  await expect(page.locator('button[aria-controls]')).toHaveCount(1);
+  await calendar.click();
+  const updated = page.waitForRequest((r) => new URL(r.url()).pathname === '/analytics/dashboard' && !new URL(r.url()).searchParams.has('from'));
+  await page.getByRole('button', { name: 'Всё время', exact: true }).click();
+  await updated;
+  await expect(calendar).toHaveText('Всё время');
+  await controls.getByRole('button', { name: 'Новый партнёр', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Новый партнёр', exact: true })).toBeVisible();
+  await expect(calendar).toHaveText('Всё время');
+  await controls.getByRole('button', { name: /^Партнёры ·/ }).click();
+  await expect(page.getByRole('heading', { name: /Партнёры/ })).toBeVisible();
+  await controls.getByRole('button', { name: 'Обучение и материалы', exact: true }).click();
+  await expect(calendar).toHaveText('Всё время');
+});
+
 test('kanban drag persists stage after reload, opens existing room editor', async ({
   page,
 }) => {

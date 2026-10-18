@@ -16,7 +16,7 @@ export type RoleCase = {
   /** Заголовок h1 кабинета. */
   title: RegExp;
   /**
-   * Своя главная. У админа это обзор сети.
+   * Своя главная. У админа это управление партнёрами.
    * У остальных ролей дублирующая сводка убрана: остаётся подзаголовок кабинета.
    */
   homeText: string;
@@ -32,7 +32,7 @@ export const ROLES: RoleCase[] = [
     loginEnv: 'E2E_ADMIN_LOGIN',
     passwordEnv: 'E2E_ADMIN_PASSWORD',
     title: /^Сеть STP MultiFrame партнёра$/,
-    homeText: 'Партнёры и поддержка команды',
+    homeText: 'Обучение и материалы',
     objectsHeading: null,
     trainingTitle: 'Ваша работа · Админ StP',
   },
