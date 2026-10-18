@@ -62,7 +62,8 @@ export async function expectHome(page: Page, role: RoleCase): Promise<void> {
   if (role.id === 'admin') {
     const summary = page.getByRole('region', { name: 'Управление партнёрской сетью' });
     await expect(summary).toBeVisible();
-    await expect(summary).toContainText(role.homeText);
+    await expect(page.getByRole('tab', { name: role.homeText, exact: true })).toBeVisible();
+    await expect(summary.getByRole('button')).toHaveCount(1);
     await expect(page.getByText('Партнёры и поддержка команды', { exact: true })).toHaveCount(0);
     await expect(summary.locator('button[aria-controls]')).toHaveCount(1);
     await expect(page.getByText('облако', { exact: false }).first()).toBeVisible();

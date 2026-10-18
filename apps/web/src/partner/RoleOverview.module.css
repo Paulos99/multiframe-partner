@@ -9,51 +9,8 @@
   text-align: left;
 }
 
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
 .period {
   display: flex;
   justify-content: flex-end;
   min-width: 0;
-}
-
-.action {
-  flex: 1 1 180px;
-  min-height: 44px;
-  padding: 10px 14px;
-  border: 1px solid var(--cab-border-strong);
-  border-radius: var(--cab-radius-sm);
-  background: var(--cab-card);
-  color: var(--cab-accent-text);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  text-align: left;
-  cursor: pointer;
-}
-
-.action:hover {
-  border-color: var(--cab-accent);
-}
-
-.action:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--cab-accent) 55%, transparent);
-  outline-offset: 3px;
-}
-
-@media (max-width: 640px) {
-  .action {
-    flex-basis: 100%;
-  }
-}
-
-:global(body.theme-dark) .action {
-  background: var(--cab-card);
-  color: var(--cab-ink);
-  border-color: var(--cab-border);
 }
