@@ -454,3 +454,66 @@ test('деплой не подставляет имя бакета и проки
   assert.match(cors, /не выбирает бакет по умолчанию/);
   assert.equal(cors.includes("|| 'multiframe-partner"), false);
 });
+
+function folderNode(id, name, parentId = null) {
+  return { id, parentId, kind: 'folder', name, updatedAt: '2026-10-01T00:00:00.000Z' };
+}
+
+test('материалы общие для всех партнёров: любые изменения — только админ StP (403 остальным)', async () => {
+  const tree = () => [
+    folderNode('mat_dir', 'Монтаж'),
+    fileNode({ id: 'mat_f1', name: 'Схема.pdf', mime: 'application/pdf', storageKey: 'materials/mat_f1', bucket: 'materials' }),
+  ].map((node, i) => (i === 1 ? { ...node, parentId: 'mat_dir' } : node));
+  const writes = [
+    { method: 'POST', path: '/materials/folders', body: { name: 'Новая' } },
+    { method: 'POST', path: '/materials/files', body: { name: 'a.pdf', mime: 'application/pdf', contentBase64: pdfBase64 } },
+    { method: 'POST', path: '/materials/files/upload-url', body: { name: 'a.pdf', mime: 'application/pdf' } },
+    { method: 'PUT', path: '/materials/mat_f1/content', body: { name: 'b.pdf', mime: 'application/pdf', contentBase64: pdfBase64 } },
+    { method: 'PATCH', path: '/materials/mat_dir', body: { name: 'Чужое' } },
+    { method: 'DELETE', path: '/materials/mat_dir' },
+    { method: 'DELETE', path: '/materials/mat_f1' },
+  ];
+  for (const role of ['owner', 'sales', 'measurer', 'crew']) {
+    for (const write of writes) {
+      resetCalls();
+      const materials = tree();
+      const before = JSON.stringify(materials);
+      const response = await callMaterials({ ...write, materials, user: { id: 'u', login: role, role, orgId: 'org_1' } });
+      assert.equal(response.statusCode, 403, `${role} ${write.method} ${write.path}: ${response.body}`);
+      assert.equal(JSON.stringify(materials), before, `${role}: дерево не меняется`);
+      assert.equal(calls.length, 0, `${role} ${write.method} ${write.path}: хранилище не трогаем`);
+    }
+  }
+});
+
+test('админ удаляет папку целиком: вложенные папки, записи и объекты в бакете материалов', async () => {
+  const materials = [
+    folderNode('mat_root', 'Обучение монтажу'),
+    folderNode('mat_sub', 'Видео', 'mat_root'),
+    { ...fileNode({ id: 'mat_a', name: 'А.pdf', mime: 'application/pdf', storageKey: 'materials/mat_a', bucket: 'materials' }), parentId: 'mat_root' },
+    { ...fileNode({ id: 'mat_b', name: 'Б.mp4', mime: 'video/mp4', storageKey: 'materials/mat_b', bucket: 'materials' }), parentId: 'mat_sub' },
+    // Старый узел из бакета кабинета: запись удаляется, объект в multiframe-partner-data не трогаем.
+    { ...fileNode({ id: 'mat_old', name: 'Старое.pdf', mime: 'application/pdf', storageKey: 'materials/mat_old' }), parentId: 'mat_sub' },
+    folderNode('mat_keep', 'Другая папка'),
+  ];
+  await putMaterialBytes('materials/mat_a', Buffer.from('a'), 'application/pdf');
+  await putMaterialBytes('materials/mat_b', Buffer.from('b'), 'video/mp4');
+  resetCalls();
+  const response = await callMaterials({
+    materials,
+    user: { id: 'u', login: 'admin', role: 'admin' },
+    method: 'DELETE',
+    path: '/materials/mat_root',
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  const left = JSON.parse(response.body).materials.map((node) => node.id);
+  assert.deepEqual(left, ['mat_keep']);
+  const deleted = calls.filter((call) => call.action === 'delete');
+  assert.deepEqual(
+    deleted.map((call) => `${call.bucket}/${call.key}`).sort(),
+    [`${MATERIALS}/materials/mat_a`, `${MATERIALS}/materials/mat_b`],
+  );
+  assert.equal(calls.some((call) => call.bucket === PARTNERS), false);
+  assert.equal(objects.has(storedObject(MATERIALS, 'materials/mat_a')), false);
+  assert.equal(objects.has(storedObject(MATERIALS, 'materials/mat_b')), false);
+});

@@ -1,6 +1,6 @@
 import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { Skeleton } from './Skeleton';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import type { PublicMaterial } from '../../../api/materialsLib.js';
 import { MaterialStubView, PREPARING_LABEL } from './MaterialStubView';
 import {
@@ -14,6 +14,7 @@ import {
   uploadMaterialFile,
 } from './materialsClient';
 import styles from './MaterialsPanel.module.css';
+import { ContextMenu, DeleteFolderDialog, folderContents } from './MaterialsContextMenu';
 import { openFilePreview, type PreviewItem, type PreviewSource } from '../ui/filePreview/previewStore';
 
 export { PREPARING_LABEL };
@@ -73,6 +74,11 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
   const [renameDraft, setRenameDraft] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const replaceId = useRef<string | null>(null);
+  // Правый клик — только мышью: долгое нажатие на телефоне/планшете остаётся системным.
+  const lastPointer = useRef<string>('mouse');
+  const [menu, setMenu] = useState<{ x: number; y: number; folder: PublicMaterial | null } | null>(null);
+  const [doomed, setDoomed] = useState<PublicMaterial | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   async function reload() {
     setLoading(true);
@@ -154,6 +160,37 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
     else await run(() => uploadMaterialFile(file, folderId));
   }
 
+  /**
+   * Меню по правому клику (только админ StP — сервер всё равно проверяет роль):
+   * папка → «Удалить», пустое место списка → «Создать папку». Файлы, поля и
+   * кнопки — системное меню браузера.
+   */
+  function onListContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!canManage || loading || lastPointer.current !== 'mouse') return;
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, [contenteditable="true"]')) return;
+    const card = target.closest<HTMLElement>('[data-material-id]');
+    if (card) {
+      const folder = folders.find((item) => item.id === card.dataset.materialId);
+      if (!folder || renamingId === folder.id) return;
+      event.preventDefault();
+      setMenu({ x: event.clientX, y: event.clientY, folder });
+      return;
+    }
+    event.preventDefault();
+    setMenu({ x: event.clientX, y: event.clientY, folder: null });
+  }
+
+  async function deleteFolder(folder: PublicMaterial): Promise<boolean> {
+    const ok = await run(() => deleteMaterialItem(folder.id));
+    if (ok) {
+      // Если удалили папку из текущего пути — поднимаемся к её родителю.
+      if (folderId && crumbs.some((crumb) => crumb.id === folder.id)) setFolderId(folder.parentId ?? null);
+      setStatus(null);
+    }
+    return ok;
+  }
+
   function saveRename(item: PublicMaterial) {
     void run(() => renameMaterialItem(item.id, renameDraft)).then((ok) => {
       if (ok) setRenamingId(null);
@@ -161,7 +198,12 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
   }
 
   return (
-    <div className={styles.panel}>
+    <div
+      className={styles.panel}
+      onPointerDownCapture={(event) => {
+        lastPointer.current = event.pointerType || 'mouse';
+      }}
+    >
       <p className={styles.lead}>Инструкции и презентации по продукту.</p>
       <nav className={styles.crumbs} aria-label="Папки">
         <button type="button" className={folderId ? styles.crumbBtn : styles.crumbCurrent} onClick={() => setFolderId(null)}>
@@ -201,6 +243,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
               }}
             >
               <input
+                autoFocus
                 value={folderDraft}
                 onChange={(event) => setFolderDraft(event.target.value)}
                 placeholder="Название папки"
@@ -264,11 +307,11 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
       ) : null}
 
       {!loading ? (
-        <>
+        <div className={styles.list} onContextMenu={onListContextMenu} data-testid="materials-list">
           {folders.length ? (
             <div className={styles.folders}>
               {folders.map((item) => (
-                <m.article layout={!reduce} initial={reduce?false:motionPresets.page.initial} animate={motionPresets.page.animate} key={item.id} className={styles.folder}>
+                <m.article layout={!reduce} initial={reduce?false:motionPresets.page.initial} animate={motionPresets.page.animate} key={item.id} className={styles.folder} data-material-id={item.id}>
                   {renamingId === item.id ? (
                     <input
                       className={styles.rename}
@@ -307,11 +350,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
                         setRenameDraft(item.name);
                       }}
                       onSave={() => saveRename(item)}
-                      onDelete={() => {
-                        if (!confirm(`Удалить «${item.name}»? Папка удалится вместе с файлами.`)) return;
-                        if (folderId === item.id) setFolderId(item.parentId);
-                        void run(() => deleteMaterialItem(item.id));
-                      }}
+                      onDelete={() => setDoomed(item)}
                     />
                   ) : null}
                 </m.article>
@@ -323,7 +362,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
               {files.map((item) => {
                 const preparing = !item.hasFile && Boolean(item.stub);
                 return (
-                  <m.article layout={!reduce} initial={reduce?false:motionPresets.page.initial} animate={motionPresets.page.animate} key={item.id} className={preparing ? styles.stub : styles.file}>
+                  <m.article layout={!reduce} initial={reduce?false:motionPresets.page.initial} animate={motionPresets.page.animate} key={item.id} className={preparing ? styles.stub : styles.file} data-material-id={item.id}>
                     {renamingId === item.id ? (
                       <input
                         className={styles.rename}
@@ -381,7 +420,37 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
               <span>В этой папке нет материалов.</span>
             </div>
           ) : null}
-        </>
+        </div>
+      ) : null}
+
+      {menu ? (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label={menu.folder ? `Папка «${menu.folder.name}»` : 'Материалы'}
+          onClose={closeMenu}
+          items={
+            menu.folder
+              ? [{ label: 'Удалить', danger: true, onSelect: () => setDoomed(menu.folder) }]
+              : [
+                  {
+                    label: 'Создать папку',
+                    onSelect: () => {
+                      setRenamingId(null);
+                      setMakingFolder(true);
+                    },
+                  },
+                ]
+          }
+        />
+      ) : null}
+      {doomed ? (
+        <DeleteFolderDialog
+          folder={doomed}
+          contents={folderContents(items, doomed.id)}
+          onConfirm={() => deleteFolder(doomed)}
+          onClose={() => setDoomed(null)}
+        />
       ) : null}
 
     </div>

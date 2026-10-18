@@ -1,0 +1,87 @@
+/* Контекстное меню материалов и подтверждение удаления. Токены кабинета: светлая/тёмная тема. */
+.menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 200px;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--cab-border-strong);
+  border-radius: var(--cab-radius-sm);
+  background: var(--cab-raised, var(--cab-card));
+  box-shadow: var(--cab-shadow-md);
+  transform-origin: top left;
+}
+
+.item,
+.dangerItem {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cab-ink);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--cab-accent-soft);
+  color: var(--cab-accent-text);
+  outline: none;
+}
+
+.dangerItem {
+  color: var(--cab-danger);
+}
+
+.dangerItem:hover,
+.dangerItem:focus-visible {
+  background: var(--cab-danger-soft);
+  outline: none;
+}
+
+.dialog {
+  width: min(440px, calc(100vw - 32px));
+  box-sizing: border-box;
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-lg);
+  background: var(--cab-card);
+  color: var(--cab-ink);
+  padding: 24px;
+  box-shadow: var(--cab-shadow-md);
+}
+
+.dialog::backdrop {
+  background: color-mix(in srgb, var(--cab-ink) 40%, transparent);
+}
+
+.dialog h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  margin: 10px 0 0;
+  color: var(--cab-muted);
+  line-height: 1.45;
+}
+
+.actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.actions > button {
+  min-height: var(--touch-min);
+}
