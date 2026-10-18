@@ -2372,7 +2372,7 @@ body.sketch-modal-open {
 }
 
 .sketch-add-btn--door { background: #e67e22; }
-.sketch-add-btn--window { background: #2196F3; }
+.sketch-add-btn--window { background: var(--accent-color); }
 
 .sketch-elevation-wrap {
     flex: 1;
@@ -3314,13 +3314,13 @@ body.theme-dark .tour-btn--ghost {
 }
 
 .btn-quick-opening--window {
-    background: rgba(33, 150, 243, 0.1);
-    color: #1565c0;
-    border-color: rgba(33, 150, 243, 0.4);
+    background: rgba(1, 100, 79, 0.1);
+    color: var(--accent-color);
+    border-color: rgba(1, 100, 79, 0.4);
 }
 
 .btn-quick-opening--window:hover {
-    background: rgba(33, 150, 243, 0.18);
+    background: rgba(1, 100, 79, 0.18);
 }
 
 .elevation-canvas-wrap {
