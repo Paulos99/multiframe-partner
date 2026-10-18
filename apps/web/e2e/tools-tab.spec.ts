@@ -106,3 +106,54 @@ for (const vp of [
     ).toBe(true);
   });
 }
+
+/** Относительная яркость по WCAG для `rgb(r, g, b)`. */
+function luminance(rgb: string) {
+  // Chromium отдаёт color-mix() как `color(srgb 0.1 0.3 0.2)` — каналы 0..1.
+  const scale = rgb.startsWith('color(') ? 1 : 255;
+  const [r, g, b] = (rgb.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map((v) => {
+    const c = Number(v) / scale;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+}
+const contrast = (a: string, b: string) => {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x! + 0.05) / (y! + 0.05);
+};
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme}: карточки инструментов зелёные, текст и маркеры белые, AA`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await enter(page, 'owner');
+    if (theme === 'dark') await page.evaluate(() => document.body.classList.add('theme-dark'));
+    await toolsItem(page, 'owner').click();
+    for (const id of ['problemomer', 'calculator']) {
+      const card = page.locator(`article[data-tool="${id}"]`);
+      await expect(card).toBeVisible();
+      const c = await card.evaluate((el) => {
+        const li = el.querySelector('li')!;
+        const cs = getComputedStyle(el);
+        return {
+          bg: cs.backgroundColor,
+          color: cs.color,
+          title: getComputedStyle(el.querySelector('h3')!).color,
+          tagline: getComputedStyle(el.querySelector('h3 + p')!).color,
+          li: getComputedStyle(li).color,
+          dot: getComputedStyle(li, '::before').backgroundColor,
+        };
+      });
+      expect(c.bg).toBe('rgb(1, 100, 79)'); // --cab-accent, никакого синего
+      for (const white of [c.color, c.title, c.li, c.dot]) expect(white).toBe('rgb(255, 255, 255)');
+      expect(contrast(c.tagline, c.bg)).toBeGreaterThanOrEqual(4.5);
+      // Наведение заметно: фон меняется и остаётся контрастным.
+      await card.locator('h3').hover();
+      await expect
+        .poll(() => card.evaluate((el) => getComputedStyle(el).backgroundColor))
+        .not.toBe('rgb(1, 100, 79)');
+      const hovered = await card.evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(contrast('rgb(255, 255, 255)', hovered)).toBeGreaterThanOrEqual(4.5);
+      await page.mouse.move(0, 0);
+    }
+  });
+}

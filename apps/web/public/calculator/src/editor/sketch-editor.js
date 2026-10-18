@@ -3083,7 +3083,7 @@ export class SketchEditor {
     this.ctx.restore();
     if (this.bgAdjustMode && !this._bgCalibrate) {
       this.ctx.save();
-      this.ctx.strokeStyle = '#2196F3';
+      this.ctx.strokeStyle = ACCENT;
       this.ctx.lineWidth = 2;
       this.ctx.setLineDash([6, 4]);
       this.ctx.strokeRect(r.x, r.y, r.w, r.h);
@@ -3574,7 +3574,7 @@ export class SketchEditor {
       const x2 = p1.x + (p2.x - p1.x) * t2;
       const y2 = p1.y + (p2.y - p1.y) * t2;
       const active = opening.id === this.selectedOpeningId;
-      this.ctx.strokeStyle = active ? '#2196F3' : '#e67e22';
+      this.ctx.strokeStyle = active ? ACCENT : '#e67e22';
       this.ctx.lineWidth = active ? 5 : 4;
       this.ctx.beginPath();
       this.ctx.moveTo(x1, y1);

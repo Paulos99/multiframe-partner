@@ -26,6 +26,12 @@
   gap: var(--cab-space-5);
 }
 
+/*
+ * Карточки инструментов — фирменный зелёный фон (--cab-accent) и белый текст
+ * (--cab-on-accent). Белый на #01644f ≈ 7.4:1, приглушённый текст (88%) > 5.5:1 — WCAG AA.
+ * Маркеры списков — белые (решение Павла). Наведение: светлее/темнее фон + подъём (Motion),
+ * нажатие: ещё темнее + scale (Motion whileTap).
+ */
 .card {
   position: relative;
   display: flex;
@@ -33,27 +39,39 @@
   gap: var(--cab-space-5);
   min-width: 0;
   padding: var(--cab-space-6);
-  border: 1px solid var(--cab-border);
+  border: 1px solid color-mix(in srgb, var(--cab-on-accent) 14%, var(--cab-accent));
   border-radius: var(--cab-radius-xl);
   background:
-    radial-gradient(420px 220px at 100% 0%, color-mix(in srgb, var(--tool-accent) 10%, transparent), transparent 70%),
-    var(--cab-card);
+    radial-gradient(420px 220px at 100% 0%, color-mix(in srgb, var(--cab-on-accent) 12%, transparent), transparent 70%),
+    var(--cab-accent);
   box-shadow: var(--cab-shadow);
-  color: var(--cab-ink);
+  color: var(--cab-on-accent);
   cursor: pointer;
   transition:
+    background-color var(--duration-normal) var(--ease-out),
     box-shadow var(--duration-normal) var(--ease-out),
     border-color var(--duration-normal) var(--ease-out);
-  --tool-accent: var(--cab-accent);
-}
-
-.card[data-tool='calculator'] {
-  --tool-accent: var(--cab-info);
+  --tool-on: var(--cab-on-accent);
+  --tool-on-muted: color-mix(in srgb, var(--cab-on-accent) 88%, var(--cab-accent));
 }
 
 .card:hover {
-  border-color: color-mix(in srgb, var(--tool-accent) 40%, var(--cab-border));
-  box-shadow: var(--cab-shadow-md);
+  /* Затемняем в обеих темах: --cab-accent-hover в тёмной светлее и ломает контраст белого. */
+  background-color: color-mix(in srgb, var(--cab-accent) 88%, black);
+  background-image: radial-gradient(420px 220px at 100% 0%, color-mix(in srgb, var(--cab-on-accent) 16%, transparent), transparent 70%);
+  border-color: color-mix(in srgb, var(--cab-on-accent) 30%, var(--cab-accent));
+  box-shadow: var(--shadow-accent), var(--cab-shadow-md);
+}
+
+.card:active {
+  background-color: color-mix(in srgb, var(--cab-accent) 76%, black);
+  background-image: none;
+  box-shadow: var(--cab-shadow-sm);
+}
+
+.card:focus-within {
+  outline: 3px solid color-mix(in srgb, var(--cab-accent) 55%, transparent);
+  outline-offset: 3px;
 }
 
 .top {
@@ -69,12 +87,8 @@
   height: 64px;
   flex: 0 0 auto;
   border-radius: var(--cab-radius-lg);
-  background: color-mix(in srgb, var(--tool-accent) 12%, var(--cab-card));
-  color: var(--tool-accent);
-}
-
-:global(body.theme-dark) .icon {
-  color: var(--cab-accent-text);
+  background: color-mix(in srgb, var(--cab-on-accent) 16%, transparent);
+  color: var(--tool-on);
 }
 
 .icon svg {
@@ -92,11 +106,12 @@
   font-weight: 780;
   letter-spacing: var(--cab-track);
   line-height: 1.15;
+  color: var(--tool-on);
 }
 
 .titles p {
   margin: 4px 0 0;
-  color: var(--cab-muted);
+  color: var(--tool-on-muted);
   font-size: 0.92rem;
   font-weight: 600;
 }
@@ -118,7 +133,7 @@
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--cab-muted);
+  color: var(--tool-on-muted);
 }
 
 .list {
@@ -134,9 +149,10 @@
   padding-left: 18px;
   font-size: 0.95rem;
   line-height: 1.4;
-  color: var(--cab-ink-soft);
+  color: var(--tool-on);
 }
 
+/* Маркеры — белые, как текст карточки. */
 .list li::before {
   content: '';
   position: absolute;
@@ -145,13 +161,10 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--tool-accent);
+  background: var(--tool-on);
 }
 
-:global(body.theme-dark) .list li::before {
-  background: var(--cab-accent-text);
-}
-
+/* Кнопка на зелёной карточке — инверсная: белая с зелёным текстом. */
 .open {
   align-self: flex-start;
   display: inline-flex;
@@ -161,19 +174,30 @@
   padding: 0 20px;
   border: 0;
   border-radius: var(--cab-radius-md);
-  background: var(--cab-accent);
-  color: var(--cab-on-accent);
+  background: var(--cab-on-accent);
+  color: var(--cab-accent);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
 }
 
 .open:hover {
-  background: var(--cab-accent-hover);
+  background: var(--cab-accent-soft);
+}
+
+:global(body.theme-dark) .open:hover {
+  background: color-mix(in srgb, var(--cab-on-accent) 88%, var(--cab-accent));
+}
+
+.open:active {
+  transform: scale(0.97);
 }
 
 .open:focus-visible {
-  outline: 2px solid var(--cab-accent);
+  outline: 3px solid var(--cab-on-accent);
   outline-offset: 3px;
 }
 

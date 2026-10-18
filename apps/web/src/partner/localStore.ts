@@ -20,6 +20,7 @@ import type {
 } from '../../../../packages/shared/partner';
 import {
   aggregateAnalyticsDashboard,
+  networkAdminScope,
   canEditOrg,
   canManageStaff,
   visibleDocuments,
@@ -1055,6 +1056,7 @@ export function buildLocalDashboard(
       : executorDirectory.length,
     executorDirectory,
     journalAll: opts.journalAll,
+    ...networkAdminScope(db.users),
   });
 }
 

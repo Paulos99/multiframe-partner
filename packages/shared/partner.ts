@@ -467,9 +467,29 @@ function dayKey(iso: string): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Админ сети STP и его организация — не партнёры. Определяем по роли, данные не удаляем. */
+export type NetworkAdminScope = { adminUserIds?: string[]; adminOrgIds?: string[] };
+
+export function networkAdminScope(
+  users: ReadonlyArray<{ id: string; role: string; orgId?: string | null }>,
+): Required<NetworkAdminScope> {
+  const admins = users.filter((u) => u.role === 'admin');
+  return {
+    adminUserIds: admins.map((u) => u.id).filter(Boolean),
+    adminOrgIds: admins.map((u) => u.orgId).filter((id): id is string => Boolean(id)),
+  };
+}
+
+export function isNetworkAdminEvent(e: AnalyticsEvent, scope: NetworkAdminScope = {}): boolean {
+  if (String(e.role || '') === 'admin') return true;
+  if (e.userId && (scope.adminUserIds || []).includes(e.userId)) return true;
+  if (e.orgId && (scope.adminOrgIds || []).includes(e.orgId)) return true;
+  return false;
+}
+
 function filterAnalyticsEvents(
   allEvents: AnalyticsEvent[],
-  opts: { from?: string | null; to?: string | null; orgId?: string | null },
+  opts: { from?: string | null; to?: string | null; orgId?: string | null } & NetworkAdminScope,
 ): AnalyticsEvent[] {
   const fromMs = opts.from ? Date.parse(opts.from) : null;
   const toMs = opts.to ? Date.parse(opts.to) : null;
@@ -477,6 +497,7 @@ function filterAnalyticsEvents(
     .filter((e) => {
       const t = Date.parse(e.at);
       if (Number.isNaN(t)) return false;
+      if (isNetworkAdminEvent(e, opts)) return false;
       if (fromMs != null && t < fromMs) return false;
       if (toMs != null && t > toMs) return false;
       if (opts.orgId && e.orgId !== opts.orgId) return false;
@@ -698,7 +719,7 @@ export function aggregateAnalyticsDashboard(
     }>;
     /** When true, the journal arrays are not clipped to the on-screen page. */
     journalAll?: boolean;
-  },
+  } & NetworkAdminScope,
 ): AnalyticsDashboard {
   const events = filterAnalyticsEvents(allEvents, opts);
 
