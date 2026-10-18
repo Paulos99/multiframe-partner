@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { UserIcon } from '../icons';
+import { apiProfile, hasRemoteApi } from '../partner/apiClient';
 import { ProfilePanel } from '../partner/ProfilePanel';
 import { usePartner } from '../partner/PartnerContext';
 import { AnimatePresence } from '../partner/motionBits';
@@ -14,25 +16,34 @@ function initialsOf(name: string): string {
   return (letters.join('') || '•').toUpperCase();
 }
 
-/** Сплошная иконка пользователя для вкладки «Профиль», если фото не загружено. */
-function UserGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" data-nav-icon="profile">
-      <path
-        fill="currentColor"
-        d="M12 12.2a4.6 4.6 0 1 0 0-9.2 4.6 4.6 0 0 0 0 9.2Zm0 1.9c-4.4 0-8 2.6-8 5.8 0 .6.5 1.1 1.1 1.1h13.8c.6 0 1.1-.5 1.1-1.1 0-3.2-3.6-5.8-8-5.8Z"
-      />
-    </svg>
-  );
+/**
+ * Фото пользователя. Ссылка подписана на ограниченный срок: если она истекла,
+ * один раз берём свежую из /me (как в шапке), а пока её нет — запасной вариант.
+ */
+function useAvatar() {
+  const { user, acceptProfile } = usePartner();
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const url = user?.avatarUrl && user.avatarUrl !== brokenUrl ? user.avatarUrl : null;
+  function onError() {
+    const failed = user?.avatarUrl || null;
+    setBrokenUrl(failed);
+    if (!failed || !hasRemoteApi()) return;
+    void apiProfile()
+      .then((p) => {
+        if (p.avatarUrl && p.avatarUrl !== failed) acceptProfile(p);
+      })
+      .catch(() => {});
+  }
+  return { url, onError };
 }
 
-/** Иконка вкладки «Профиль» на телефоне: фото пользователя или сплошной силуэт. */
+/** Иконка вкладки «Профиль» на телефоне: фото пользователя или сплошной силуэт из общего набора иконок. */
 export function ProfileTabIcon() {
-  const { user } = usePartner();
-  if (user?.avatarUrl) {
-    return <img className={styles.tabAvatar} src={user.avatarUrl} alt="" aria-hidden="true" data-nav-icon="avatar" />;
+  const { url, onError } = useAvatar();
+  if (url) {
+    return <img className={styles.tabAvatar} src={url} alt="" aria-hidden="true" data-nav-icon="avatar" onError={onError} />;
   }
-  return <UserGlyph />;
+  return <UserIcon size={20} data-nav-icon="profile" />;
 }
 
 /** Экран «Профиль» на телефоне: кто вошёл, настройки профиля и «Выйти». */
@@ -48,6 +59,7 @@ export function MobileProfileScreen({
   onLogout: () => void;
 }) {
   const { user } = usePartner();
+  const avatar = useAvatar();
   const [editing, setEditing] = useState(false);
   const meta = company ? `${role} · ${company}` : role;
   const subtitle = meta === name ? role : meta;
@@ -56,7 +68,7 @@ export function MobileProfileScreen({
       <div className={styles.card}>
         <div className={styles.who}>
           <span className={styles.avatar} aria-hidden="true">
-            {user?.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initialsOf(name)}
+            {avatar.url ? <img src={avatar.url} alt="" onError={avatar.onError} /> : initialsOf(name)}
           </span>
           <span className={styles.text}>
             <strong>{name}</strong>
