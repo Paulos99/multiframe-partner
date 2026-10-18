@@ -45,12 +45,6 @@ export function SaveObjectCard() {
     if (typeof obj.room?.areaM2 === 'number') setCeilingArea(obj.room.areaM2);
   }, [diagnosisRequest, objects, patchRoom, setCeilingArea, user?.org?.city]);
 
-  if (!user || !canCreateObjects(user.role)) return null;
-
-  const room = session.answers.room;
-  const area = room.ceilingAreaM2 ?? null;
-  const summary = buildClientSummary(session);
-  const est = partner && area ? buildEstimateFromOrg(area, partner) : null;
   useEffect(() => {
     if (!savedFlash && !sentFlash) return;
     const t = window.setTimeout(() => {
@@ -59,6 +53,14 @@ export function SaveObjectCard() {
     }, 1600);
     return () => window.clearTimeout(t);
   }, [savedFlash, sentFlash]);
+
+  if (!user || !canCreateObjects(user.role)) return null;
+
+  const room = session.answers.room;
+  const area = room.ceilingAreaM2 ?? null;
+  const summary = buildClientSummary(session);
+  const est = partner && area ? buildEstimateFromOrg(area, partner) : null;
+
 
   const seePrices = canSeePrices(user.role);
   const sim = session.derived?.simulation;

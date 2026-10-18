@@ -56,7 +56,7 @@ function localList(): PublicMaterial[] {
   return publicMaterials(loadDb().materials);
 }
 
-function useRemote(): boolean {
+function remoteEnabled(): boolean {
   return hasRemoteApi() && Boolean(loadToken());
 }
 
@@ -66,7 +66,7 @@ function missingApi(error: unknown): boolean {
 }
 
 export async function listMaterials(): Promise<PublicMaterial[]> {
-  if (useRemote()) {
+  if (remoteEnabled()) {
     try {
       return await apiListMaterials();
     } catch (error) {
@@ -81,7 +81,7 @@ export async function createMaterialFolder(
   name: string,
   parentId: string | null,
 ): Promise<PublicMaterial[]> {
-  if (useRemote()) return apiCreateMaterialFolder(name, parentId);
+  if (remoteEnabled()) return apiCreateMaterialFolder(name, parentId);
   const result = createFolder(loadDb().materials, {
     name,
     parentId,
@@ -125,9 +125,9 @@ export async function uploadMaterialFile(
   file: File,
   parentId: string | null,
 ): Promise<PublicMaterial[]> {
-  if (useRemote() && file.size > MAX_FILE_BYTES) return uploadMaterialDirect(file, parentId);
+  if (remoteEnabled() && file.size > MAX_FILE_BYTES) return uploadMaterialDirect(file, parentId);
   const payload = await filePayload(file);
-  if (useRemote()) {
+  if (remoteEnabled()) {
     return apiUploadMaterial({
       name: file.name,
       parentId,
@@ -150,7 +150,7 @@ export async function uploadMaterialFile(
 }
 
 export async function renameMaterialItem(id: string, name: string): Promise<PublicMaterial[]> {
-  if (useRemote()) return apiRenameMaterial(id, name);
+  if (remoteEnabled()) return apiRenameMaterial(id, name);
   const result = renameMaterial(loadDb().materials, {
     id,
     name,
@@ -163,7 +163,7 @@ export async function renameMaterialItem(id: string, name: string): Promise<Publ
 
 export async function replaceMaterialFile(id: string, file: File): Promise<PublicMaterial[]> {
   const payload = await filePayload(file);
-  if (useRemote()) {
+  if (remoteEnabled()) {
     return apiReplaceMaterial(id, {
       name: file.name,
       mime: payload.mime,
@@ -184,7 +184,7 @@ export async function replaceMaterialFile(id: string, file: File): Promise<Publi
 }
 
 export async function deleteMaterialItem(id: string): Promise<PublicMaterial[]> {
-  if (useRemote()) return apiDeleteMaterial(id);
+  if (remoteEnabled()) return apiDeleteMaterial(id);
   const result = deleteMaterial(loadDb().materials, { id });
   if (!result.ok) throw new Error(result.message);
   persistLocal(result.nodes);
@@ -208,7 +208,7 @@ export async function openMaterial(item: PublicMaterial): Promise<MaterialConten
   if (!item.hasFile && item.stub) {
     return { kind: 'stub', stub: item.stub, name: item.name };
   }
-  if (useRemote()) {
+  if (remoteEnabled()) {
     const data: MaterialPayload = await apiMaterialContent(item.id);
     if (data.url) {
       return {

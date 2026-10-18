@@ -1,3 +1,4 @@
+import { ModalSurface } from '../partner/motionBits';
 import {
   createContext,
   useCallback,
@@ -346,7 +347,7 @@ export function InstallPromptHost({
       ) : null}
       {!hidden && open ? createPortal(
         <div className={styles.backdrop} role="presentation" onClick={() => setOpen(false)}>
-          <div
+          <ModalSurface
             className={styles.sheet}
             role="dialog"
             aria-modal="true"
@@ -368,7 +369,7 @@ export function InstallPromptHost({
                 </li>
               ))}
             </ol>
-          </div>
+          </ModalSurface>
         </div>,
         document.body,
       ) : null}
