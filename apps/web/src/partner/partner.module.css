@@ -761,6 +761,26 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+/* Телефон: период переносится под заголовок и занимает всю ширину. */
+@media (max-width: 640px) {
+  .dashFilters {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .dashFilters > div,
+  .dashFilters button.dashPeriodTrigger {
+    width: 100%;
+  }
+
+  .dashFilters button.dashPeriodTrigger {
+    min-height: 44px;
+    text-align: left;
+  }
 }
 
 .dashSub {

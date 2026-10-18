@@ -60,12 +60,13 @@ export async function login(page: Page, role: RoleCase): Promise<void> {
 export async function expectHome(page: Page, role: RoleCase): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: role.title })).toBeVisible();
   if (role.id === 'admin') {
-    const summary = page.getByRole('region', { name: 'Управление партнёрской сетью' });
-    await expect(summary).toBeVisible();
+    const period = page.getByRole('group', { name: 'Период аналитики' });
+    await expect(period).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Управление партнёрской сетью' })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: role.homeText, exact: true })).toBeVisible();
-    await expect(summary.getByRole('button')).toHaveCount(1);
+    await expect(period.getByRole('button')).toHaveCount(1);
     await expect(page.getByText('Партнёры и поддержка команды', { exact: true })).toHaveCount(0);
-    await expect(summary.locator('button[aria-controls]')).toHaveCount(1);
+    await expect(page.locator('button[aria-controls]')).toHaveCount(1);
     await expect(page.getByText('облако', { exact: false }).first()).toBeVisible();
     return;
   }
