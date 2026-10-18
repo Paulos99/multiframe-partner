@@ -3,7 +3,7 @@
 
 verify_function_zip читает переданный zip (тот, который скрипт деплоя
 отправит в Yandex Cloud), распаковывает его во временную папку, ставит
-зависимости командой npm ci по lock из этого архива и импортирует точку
+зависимости командой npm ci --omit=dev по lock из этого архива и импортирует точку
 входа. Облачные ключи не читаются. Сетевые вызовы на время импорта
 заблокированы.
 
@@ -90,7 +90,7 @@ def verify_function_zip(zip_path: Path, *, entry_file: str) -> str:
     print("function bundle ok")
     print(f"zip: {zip_path.resolve()}")
     print(f"entry file: {entry_file}")
-    print("dependencies: npm ci --ignore-scripts (lock from this zip)")
+    print("dependencies: npm ci --omit=dev --ignore-scripts (lock from this zip)")
     print(import_result)
     return import_result
 
@@ -180,7 +180,7 @@ def _npm_ci(package_dir: Path) -> None:
         shutil.rmtree(node_modules)
     print(f"npm ci по lock из архива в {package_dir}…", flush=True)
     proc = subprocess.run(
-        ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+        ["npm", "ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"],
         cwd=package_dir,
         text=True,
     )

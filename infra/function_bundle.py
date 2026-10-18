@@ -8,12 +8,16 @@
   (относительный путь импорта сохраняется).
 
 node_modules в архив деплоя добавляется отдельно и в это правило не входит.
+Берутся только production-зависимости: каталоги, которые lock помечает
+"dev": true (в том числе playwright), в архив не попадают. Симлинки и
+каталог .bin не пишутся — иначе cli.js и bin/bcrypt попадают в zip дважды.
 Точка входа остаётся index.handler, пока все файлы лежат внутри apps/api.
 Если сервер импортирует код выше apps/api, корень архива поднимается до корня
 репозитория, а точка входа становится apps/api/index.handler.
 """
 from __future__ import annotations
 
+import json
 import re
 import zipfile
 from dataclasses import dataclass
@@ -76,7 +80,7 @@ def build_function_zip(
             else:
                 outside.append(path.resolve().relative_to(repo).as_posix())
         if include_node_modules:
-            _add_node_modules(zf, api, zip_root)
+            _add_node_modules(zf, api, zip_root, seen)
 
     entry_file = archive_name(entry, zip_root)
     package_dir = "." if zip_root == api else api.relative_to(zip_root).as_posix()
@@ -247,13 +251,61 @@ def _entrypoint_name(entry_file: str) -> str:
     raise SystemExit(f"неподдерживаемая точка входа: {entry_file}")
 
 
-def _add_node_modules(zf: zipfile.ZipFile, api: Path, zip_root: Path) -> None:
+def _add_node_modules(
+    zf: zipfile.ZipFile,
+    api: Path,
+    zip_root: Path,
+    seen: set[str],
+) -> None:
     node_modules = api / "node_modules"
     if not node_modules.is_dir():
         raise SystemExit("Run npm install in apps/api first")
+    dev_roots = _dev_package_roots(api)
     for path in node_modules.rglob("*"):
-        if path.is_file():
-            zf.write(path, archive_name(path, zip_root))
+        # .bin/playwright и .bin/bcrypt — симлинки на cli.js и bin/bcrypt.
+        # resolve() склеивает их в одно имя, и ZipFile пишет его второй раз.
+        if path.is_symlink() or not path.is_file():
+            continue
+        rel_in_modules = path.relative_to(node_modules)
+        if ".bin" in rel_in_modules.parts:
+            continue
+        rel = path.resolve().relative_to(api.resolve()).as_posix()
+        if _under_any(rel, dev_roots):
+            continue
+        name = archive_name(path, zip_root)
+        if name in seen:
+            continue
+        seen.add(name)
+        zf.write(path, name)
+
+
+def _dev_package_roots(api: Path) -> set[str]:
+    """Пути lock-файла вроде node_modules/playwright с пометкой dev."""
+    lock = next((api / name for name in LOCK_NAMES if (api / name).is_file()), None)
+    if lock is None:
+        raise SystemExit("нет lock-файла, нельзя отделить devDependencies")
+    try:
+        data = json.loads(lock.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"не читается {lock.name}: {exc}") from exc
+    packages = data.get("packages")
+    if not isinstance(packages, dict):
+        raise SystemExit(f"{lock.name}: нет объекта packages, архив функции не собирается")
+    roots: set[str] = set()
+    for rel, meta in packages.items():
+        if not isinstance(meta, dict) or meta.get("dev") is not True:
+            continue
+        norm = str(rel).strip("/")
+        if norm == "node_modules" or norm.startswith("node_modules/"):
+            roots.add(norm)
+    return roots
+
+
+def _under_any(rel: str, roots: set[str]) -> bool:
+    for root in roots:
+        if rel == root or rel.startswith(root + "/"):
+            return True
+    return False
 
 
 def _is_relative_to(path: Path, parent: Path) -> bool:

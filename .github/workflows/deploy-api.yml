@@ -8,6 +8,7 @@ on:
       - 'apps/api/**'
       - 'infra/deploy_yc.py'
       - 'infra/function_bundle.py'
+      - 'infra/function_package.py'
       - 'infra/verify_function_bundle.py'
       - 'infra/deploy_verify_guard_test.py'
       - '.github/workflows/deploy-api.yml'
@@ -30,7 +31,7 @@ jobs:
 
       - name: Install API deps
         working-directory: apps/api
-        run: npm ci || npm install
+        run: npm ci --omit=dev || npm install --omit=dev
 
       - name: Install Python crypto
         run: pip install cryptography

@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 from function_bundle import build_function_zip
+from function_package import assert_function_zip_allowed, build_version_source
 from verify_function_bundle import verify_function_zip
 
 FOLDER_ID = "b1gibd821or94p6f9v1q"
@@ -209,9 +210,13 @@ def find_function_id(token: str) -> str:
 
 
 def create_version(
-    token: str, function_id: str, zip_path: Path, storage_env: dict[str, str], entrypoint: str
+    token: str,
+    function_id: str,
+    zip_path: Path,
+    storage_env: dict[str, str],
+    entrypoint: str,
+    source: dict,
 ) -> str:
-    content = base64.b64encode(zip_path.read_bytes()).decode()
     jwt_secret = hashlib.sha256(f"mf-partner-{FOLDER_ID}-{SA_ID}".encode()).hexdigest()
     environment = {
         "JWT_SECRET": jwt_secret,
@@ -234,8 +239,8 @@ def create_version(
             "resources": {"memory": 268435456},
             "executionTimeout": "15s",
             "serviceAccountId": SA_ID,
-            "content": content,
             "environment": environment,
+            **source,
         },
     )
     if "id" not in op and not op.get("metadata"):
@@ -248,8 +253,9 @@ def create_version(
 
 def main() -> None:
     bundle = make_zip()
-    # Тот же файл, который create_version отправит в облако. Ошибка проверки
-    # завершает процесс до IAM и загрузки версии.
+    # Размер и playwright проверяются до сети. IMPORT_OK — по тому же файлу,
+    # который уйдёт в облако. Ошибка завершает процесс до IAM и загрузки.
+    mode = assert_function_zip_allowed(bundle.zip_path)
     verify_function_zip(bundle.zip_path, entry_file=bundle.entry_file)
     keydata = json.loads(KEY_PATH.read_text(encoding="utf-8"))
     token = iam_token(keydata)
@@ -258,7 +264,8 @@ def main() -> None:
     print("function", fid)
     storage_env = load_storage_env()
     print("storage bucket", storage_env.get("PARTNERS_BUCKET", "(none)"))
-    vid = create_version(token, fid, bundle.zip_path, storage_env, bundle.entrypoint)
+    source = build_version_source(bundle.zip_path, storage_env, mode)
+    vid = create_version(token, fid, bundle.zip_path, storage_env, bundle.entrypoint, source)
     print(json.dumps({"ok": True, "functionId": fid, "versionId": vid}))
 
 
