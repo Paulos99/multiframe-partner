@@ -1519,7 +1519,8 @@ export async function handler(event = {}) {
 
     if (method === 'DELETE' && /\/objects\/[^/]+$/.test(path)) {
       const { platform, user } = await requireAuth(event);
-      if (!['owner', 'sales', 'measurer'].includes(user.role)) {
+      // Only admin and the company owner delete objects; sales, measurer and crew get 403.
+      if (!['admin', 'owner'].includes(user.role)) {
         return json(403, { message: 'Недостаточно прав' });
       }
       const objectId = path.split('/').pop();

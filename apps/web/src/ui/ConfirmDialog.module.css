@@ -1,0 +1,51 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.42);
+}
+.dialog {
+  width: min(420px, 100%);
+  padding: 22px;
+  border: 1px solid var(--cab-border, #0001);
+  border-radius: 16px;
+  background: var(--cab-card, #fff);
+  color: var(--cab-ink, inherit);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 0.28);
+}
+.dialog h2 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.dialog p {
+  margin: 0;
+  color: var(--cab-muted, #666);
+  font-size: 0.9rem;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+.cancel {
+  min-height: var(--touch-min, 44px);
+  padding: 10px 18px;
+  border: 1px solid var(--cab-border, #0002);
+  border-radius: var(--radius-md, 10px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cancel:focus-visible {
+  outline: 3px solid var(--cab-accent, currentColor);
+  outline-offset: 2px;
+}

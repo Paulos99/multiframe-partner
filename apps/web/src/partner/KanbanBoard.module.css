@@ -284,3 +284,97 @@
 :global(body.theme-dark) .column .card {
   background: color-mix(in srgb, var(--stage-accent) 12%, var(--cab-card));
 }
+
+/* Card actions («…» and context menu). */
+.cardWrap {
+  position: relative;
+}
+.cardWrap:has(.cardMenu) .card {
+  padding-right: 40px;
+}
+.cardMenu {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cab-muted);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.45;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
+}
+.cardWrap:hover .cardMenu,
+.cardMenu:focus-visible,
+.cardMenu[aria-expanded='true'] {
+  opacity: 1;
+}
+.cardMenu:hover {
+  background: var(--cab-subtle);
+}
+.cardMenu:focus-visible {
+  outline: 3px solid var(--cab-accent);
+  outline-offset: 1px;
+}
+@media (pointer: coarse) {
+  .cardMenu {
+    top: 0;
+    right: 0;
+    width: 44px;
+    height: 44px;
+    opacity: 0.8;
+  }
+}
+.menuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+}
+.menu {
+  position: fixed;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--cab-border);
+  border-radius: 10px;
+  background: var(--cab-card);
+  box-shadow: 0 14px 40px #0003;
+}
+.menuDanger {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--cab-danger, #c0392b);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.menuDanger:hover,
+.menuDanger:focus-visible {
+  background: color-mix(in srgb, #c0392b 10%, transparent);
+  outline: none;
+}
+@media (pointer: coarse) {
+  .menuDanger {
+    min-height: 44px;
+  }
+}
+/* The overlay keeps the source card's box: no margin so the grab point stays under the pointer. */
+.overlay {
+  margin: 0;
+}

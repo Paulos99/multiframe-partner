@@ -72,8 +72,9 @@ export function canCreateObjects(role: UserRole): boolean {
   return role === 'owner' || role === 'sales' || role === 'measurer';
 }
 
+/** Only the platform admin and the company owner may delete objects (enforced by the API too). */
 export function canDeleteObjects(role: UserRole): boolean {
-  return role === 'owner' || role === 'sales' || role === 'measurer';
+  return role === 'admin' || role === 'owner';
 }
 
 export function canAssignObjects(role: UserRole): boolean {
