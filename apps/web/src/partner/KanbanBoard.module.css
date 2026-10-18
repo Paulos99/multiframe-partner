@@ -284,3 +284,38 @@
 :global(body.theme-dark) .column .card {
   background: color-mix(in srgb, var(--stage-accent) 12%, var(--cab-card));
 }
+
+/* Light theme only: soft brand-green columns so white cards stand out on them and on the panel. */
+:global(body:not(.theme-dark)) .column {
+  border-color: color-mix(in srgb, var(--cab-accent) 20%, #ffffff);
+  background: color-mix(in srgb, var(--cab-accent) 9%, #ffffff);
+}
+:global(body:not(.theme-dark)) .column h3 {
+  color: var(--cab-ink);
+}
+:global(body:not(.theme-dark)) .count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--cab-accent-text);
+  font-weight: 650;
+  text-align: center;
+}
+:global(body:not(.theme-dark)) .column .card {
+  border-color: color-mix(in srgb, var(--cab-accent) 14%, var(--cab-border));
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgb(1 100 79 / 0.08),
+    0 4px 14px rgb(20 28 36 / 0.06);
+}
+:global(body:not(.theme-dark)) .column .metadata span:not(.avatar) {
+  background: color-mix(in srgb, var(--cab-accent) 7%, #ffffff);
+}
+:global(body:not(.theme-dark)) .column .source {
+  border-color: var(--cab-accent);
+  background: color-mix(in srgb, var(--cab-accent) 5%, #ffffff);
+}
+:global(body:not(.theme-dark)) .column .skeleton i {
+  background: color-mix(in srgb, var(--cab-accent) 8%, #ffffff);
+}
