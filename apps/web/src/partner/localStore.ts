@@ -525,12 +525,17 @@ export function createStaffAccount(input: {
   owner: SessionUser;
 }): { user: StoredUser; password: string } {
   if (!canManageStaff(input.owner.role) || !input.owner.orgId) {
-    throw new Error('Только владелец может создавать сотрудников');
+    throw new Error('Недостаточно прав');
   }
-  const role = normalizeRole(input.role);
-  if (!STAFF_ROLES.includes(role)) {
+  const requested = String(input.role || '').trim();
+  const allowed =
+    requested === '' ||
+    requested === 'executor' ||
+    STAFF_ROLES.includes(requested as UserRole);
+  if (!allowed) {
     throw new Error('Роль: менеджер, замерщик или монтажник');
   }
+  const role: UserRole = requested === '' || requested === 'executor' ? 'measurer' : (requested as UserRole);
   const db = loadDb();
   const login = input.login.trim();
   const password = input.password.trim() || generatePassword();
@@ -578,13 +583,19 @@ export function resetStaffPassword(
   owner: SessionUser,
 ): string {
   if (!canManageStaff(owner.role) || !owner.orgId) {
-    throw new Error('Только владелец');
+    throw new Error('Недостаточно прав');
   }
   const password = newPassword.trim() || generatePassword();
   const db = loadDb();
-  const idx = db.users.findIndex(
-    (u) => u.id === staffUserId && isStaffRole(u.role) && u.orgId === owner.orgId,
-  );
+  const target = db.users.find((u) => u.id === staffUserId);
+  if (!target) throw new Error('Сотрудник не найден');
+  const targetRole = normalizeRole(target.role);
+  if (target.orgId !== owner.orgId) throw new Error('Недостаточно прав');
+  if (targetRole === 'owner' || targetRole === 'admin') {
+    throw new Error('Нельзя изменить владельца');
+  }
+  if (!isStaffRole(targetRole)) throw new Error('Сотрудник не найден');
+  const idx = db.users.findIndex((u) => u.id === staffUserId);
   if (idx < 0) throw new Error('Сотрудник не найден');
   const users = [...db.users];
   users[idx] = { ...users[idx]!, password };
@@ -614,13 +625,21 @@ export function resetExecutorPassword(
 
 export function deleteStaffAccount(staffUserId: string, owner: SessionUser): void {
   if (!canManageStaff(owner.role) || !owner.orgId) {
-    throw new Error('Только владелец');
+    throw new Error('Недостаточно прав');
+  }
+  if (staffUserId === owner.id) {
+    throw new Error('Нельзя удалить свою учётную запись');
   }
   const db = loadDb();
-  const staff = db.users.find(
-    (u) => u.id === staffUserId && isStaffRole(u.role) && u.orgId === owner.orgId,
-  );
-  if (!staff) throw new Error('Сотрудник не найден');
+  const target = db.users.find((u) => u.id === staffUserId);
+  if (!target) throw new Error('Сотрудник не найден');
+  const targetRole = normalizeRole(target.role);
+  if (target.orgId !== owner.orgId) throw new Error('Недостаточно прав');
+  if (targetRole === 'owner' || targetRole === 'admin') {
+    throw new Error('Нельзя удалить владельца');
+  }
+  if (!isStaffRole(targetRole)) throw new Error('Недостаточно прав');
+  const staff = target;
   const users = db.users.filter((u) => u.id !== staffUserId);
   let next: PartnerDb = { ...db, users };
   next = pushActivity(next, {

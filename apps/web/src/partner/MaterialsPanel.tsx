@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PublicMaterial } from '../../../api/materialsLib.js';
-import { MaterialStubView } from './MaterialStubView';
+import { MaterialStubView, PREPARING_LABEL } from './MaterialStubView';
 import {
   createMaterialFolder,
   deleteMaterialItem,
@@ -11,11 +11,54 @@ import {
   replaceMaterialFile,
   uploadMaterialFile,
 } from './materialsClient';
-import styles from './partner.module.css';
+import styles from './MaterialsPanel.module.css';
 
 type Preview =
   | { mode: 'stub'; name: string; stub: string }
   | { mode: 'file'; name: string; mime: string; url: string; revoke: boolean };
+
+export { PREPARING_LABEL };
+
+type NotedMaterial = {
+  kind: string;
+  hasFile: boolean;
+  stub: string | null;
+  size: number | null;
+};
+
+export function materialNote(item: NotedMaterial): string {
+  if (item.kind === 'folder') return '';
+  if (!item.hasFile && item.stub) return PREPARING_LABEL;
+  if (item.hasFile && item.size) return `${Math.ceil(item.size / 1024)} КБ`;
+  if (!item.hasFile) return 'Файл пока недоступен';
+  return '';
+}
+
+export function folderCountLabel(count: number): string {
+  if (count === 0) return 'Пока пусто';
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11
+      ? 'материал'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'материала'
+        : 'материалов';
+  return `${count} ${word}`;
+}
+
+function FolderIcon() {
+  return (
+    <span className={styles.folderIcon} aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <path
+          fill="currentColor"
+          d="M3.5 6.75A2.25 2.25 0 0 1 5.75 4.5h3.1c.5 0 .97.2 1.32.55l1.2 1.2h6.88a2.25 2.25 0 0 1 2.25 2.25v8.25a2.25 2.25 0 0 1-2.25 2.25h-12.5a2.25 2.25 0 0 1-2.25-2.25V6.75Z"
+        />
+      </svg>
+    </span>
+  );
+}
 
 export function MaterialsPanel({ canManage }: { canManage: boolean }) {
   const [items, setItems] = useState<PublicMaterial[]>([]);
@@ -23,6 +66,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [folderDraft, setFolderDraft] = useState('');
   const [makingFolder, setMakingFolder] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -55,8 +99,8 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
 
   useEffect(() => {
     if (!preview) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setPreview(null);
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setPreview(null);
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -86,8 +130,12 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
       });
   }, [items, folderId]);
 
+  const folders = visible.filter((item) => item.kind === 'folder');
+  const files = visible.filter((item) => item.kind !== 'folder');
+
   async function run(task: () => Promise<PublicMaterial[]>): Promise<boolean> {
     setBusy(true);
+    setStatus('Сохраняем…');
     setError(null);
     try {
       setItems(await task());
@@ -97,6 +145,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
       return false;
     } finally {
       setBusy(false);
+      setStatus(null);
     }
   }
 
@@ -107,6 +156,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
       return;
     }
     setBusy(true);
+    setStatus('Открываем…');
     setError(null);
     try {
       const content = await openMaterial(item);
@@ -133,6 +183,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
       setError(ex instanceof Error ? ex.message : 'Не удалось открыть файл');
     } finally {
       setBusy(false);
+      setStatus(null);
     }
   }
 
@@ -144,33 +195,43 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
     else await run(() => uploadMaterialFile(file, folderId));
   }
 
+  function saveRename(item: PublicMaterial) {
+    void run(() => renameMaterialItem(item.id, renameDraft)).then((ok) => {
+      if (ok) setRenamingId(null);
+    });
+  }
+
   return (
-    <div className={styles.materials}>
-      <p className={styles.lead}>
-        Инструкции, презентации и видео по продукту STP MultiFrame. Открываются у владельца,
-        менеджера, замерщика и монтажника.
-      </p>
+    <div className={styles.panel}>
+      <p className={styles.lead}>Инструкции и презентации по продукту.</p>
       <nav className={styles.crumbs} aria-label="Папки">
-        <button type="button" className={styles.linkish} onClick={() => setFolderId(null)}>
+        <button type="button" className={folderId ? styles.crumbBtn : styles.crumbCurrent} onClick={() => setFolderId(null)}>
           Все материалы
         </button>
-        {crumbs.map((crumb) => (
-          <span key={crumb.id} className={styles.crumb}>
-            <span aria-hidden="true">/</span>
-            <button type="button" className={styles.linkish} onClick={() => setFolderId(crumb.id)}>
-              {crumb.name}
-            </button>
-          </span>
-        ))}
+        {crumbs.map((crumb, index) => {
+          const last = index === crumbs.length - 1;
+          return (
+            <span key={crumb.id} className={styles.crumb}>
+              <span aria-hidden="true">/</span>
+              <button
+                type="button"
+                className={last ? styles.crumbCurrent : styles.crumbBtn}
+                onClick={() => setFolderId(crumb.id)}
+              >
+                {crumb.name}
+              </button>
+            </span>
+          );
+        })}
       </nav>
 
       {canManage ? (
-        <div className={styles.matAdmin}>
+        <div className={styles.admin}>
           {makingFolder ? (
             <form
-              className={styles.matCreate}
-              onSubmit={(e) => {
-                e.preventDefault();
+              className={styles.create}
+              onSubmit={(event) => {
+                event.preventDefault();
                 const name = folderDraft.trim();
                 if (!name) return;
                 void run(() => createMaterialFolder(name, folderId)).then((ok) => {
@@ -182,7 +243,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
             >
               <input
                 value={folderDraft}
-                onChange={(e) => setFolderDraft(e.target.value)}
+                onChange={(event) => setFolderDraft(event.target.value)}
                 placeholder="Название папки"
                 aria-label="Название папки"
                 required
@@ -195,7 +256,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
               </button>
             </form>
           ) : (
-            <div className={styles.rowActions}>
+            <div className={styles.actions}>
               <button type="button" className={styles.ghost} onClick={() => setMakingFolder(true)}>
                 Новая папка
               </button>
@@ -217,9 +278,9 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
             className={styles.filePick}
             type="file"
             accept=".pdf,.mp4,.webm,.mov,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.doc,.docx,.txt,video/*,image/*,application/pdf"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = '';
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
               void onFilePick(file);
             }}
           />
@@ -227,142 +288,174 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
       ) : null}
 
       {error ? (
-        <p className={styles.error} role="alert">
-          {error}
+        <div className={styles.error} role="alert">
+          <span>{error}</span>
+          <button type="button" className={styles.ghost} onClick={() => void reload()}>
+            Обновить
+          </button>
+        </div>
+      ) : null}
+      {status && !loading ? (
+        <p className={styles.status} role="status">
+          {status}
         </p>
       ) : null}
-      {loading ? <div className={`${styles.skeleton} ${styles.skeletonRow}`} /> : null}
+      {loading ? (
+        <div className={styles.loading} aria-busy="true">
+          <p>Загружаем материалы</p>
+          <div className={styles.skeleton} />
+          <div className={styles.skeleton} />
+        </div>
+      ) : null}
 
       {!loading ? (
-        <div className={styles.matList}>
-          {visible.map((item) => (
-            <article key={item.id} className={styles.matItem}>
-              <div className={styles.matMain}>
-                <span className={item.kind === 'folder' ? styles.matFolder : styles.matFile} aria-hidden="true">
-                  {item.kind === 'folder' ? 'Папка' : materialKindLabel(item)}
-                </span>
-                <span className={styles.matText}>
+        <>
+          {folders.length ? (
+            <div className={styles.folders}>
+              {folders.map((item) => (
+                <article key={item.id} className={styles.folder}>
                   {renamingId === item.id ? (
                     <input
+                      className={styles.rename}
                       value={renameDraft}
                       aria-label="Новое название"
-                      onChange={(e) => setRenameDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          void run(() => renameMaterialItem(item.id, renameDraft)).then((ok) => {
-                            if (ok) setRenamingId(null);
-                          });
+                      onChange={(event) => setRenameDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          saveRename(item);
                         }
                       }}
                     />
                   ) : (
-                    <button type="button" className={styles.matOpen} onClick={() => void openItem(item)}>
-                      {item.name}
+                    <button type="button" className={styles.open} onClick={() => void openItem(item)}>
+                      <FolderIcon />
+                      <span className={styles.srOnly}>Папка</span>
+                      <span className={styles.copy}>
+                        <span className={styles.name}>{item.name}</span>
+                        <span className={styles.meta}>
+                          {folderCountLabel(items.filter((child) => child.parentId === item.id).length)}
+                        </span>
+                      </span>
+                      <span className={styles.chevron} aria-hidden="true">
+                        ›
+                      </span>
                     </button>
                   )}
-                  <span className={styles.hint}>
-                    {materialKindLabel(item)}
-                    {item.hasFile && item.size ? ` · ${Math.ceil(item.size / 1024)} КБ` : ''}
-                    {!item.hasFile && item.stub ? ' · демо' : ''}
-                  </span>
-                </span>
-              </div>
-              {canManage ? (
-                <div className={styles.rowActions}>
-                  {renamingId === item.id ? (
-                    <button
-                      type="button"
-                      className={styles.primary}
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() => renameMaterialItem(item.id, renameDraft)).then((ok) => {
-                          if (ok) setRenamingId(null);
-                        })
-                      }
-                    >
-                      Сохранить
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.ghost}
-                      onClick={() => {
+                  {canManage ? (
+                    <ItemActions
+                      item={item}
+                      busy={busy}
+                      renaming={renamingId === item.id}
+                      onRename={() => {
                         setRenamingId(item.id);
                         setRenameDraft(item.name);
                       }}
-                    >
-                      Переименовать
-                    </button>
-                  )}
-                  {item.kind === 'file' ? (
-                    <button
-                      type="button"
-                      className={styles.ghost}
-                      disabled={busy}
-                      onClick={() => {
-                        replaceId.current = item.id;
-                        fileRef.current?.click();
+                      onSave={() => saveRename(item)}
+                      onDelete={() => {
+                        if (!confirm(`Удалить «${item.name}»? Папка удалится вместе с файлами.`)) return;
+                        if (folderId === item.id) setFolderId(item.parentId);
+                        void run(() => deleteMaterialItem(item.id));
                       }}
-                    >
-                      Заменить
-                    </button>
+                    />
                   ) : null}
-                  <button
-                    type="button"
-                    className={styles.danger}
-                    disabled={busy}
-                    onClick={() => {
-                      const extra = item.kind === 'folder' ? ' Папка удалится вместе с файлами.' : '';
-                      if (!confirm(`Удалить «${item.name}»?${extra}`)) return;
-                      if (folderId === item.id) setFolderId(item.parentId);
-                      void run(() => deleteMaterialItem(item.id));
-                    }}
-                  >
-                    Удалить
-                  </button>
-                </div>
-              ) : null}
-            </article>
-          ))}
-          {!visible.length ? (
-            <p className={styles.lead}>В этой папке пока пусто.</p>
+                </article>
+              ))}
+            </div>
           ) : null}
-        </div>
+          {files.length ? (
+            <div className={styles.files}>
+              {files.map((item) => {
+                const preparing = !item.hasFile && Boolean(item.stub);
+                return (
+                  <article key={item.id} className={preparing ? styles.stub : styles.file}>
+                    {renamingId === item.id ? (
+                      <input
+                        className={styles.rename}
+                        value={renameDraft}
+                        aria-label="Новое название"
+                        onChange={(event) => setRenameDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            saveRename(item);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <button type="button" className={styles.open} onClick={() => void openItem(item)}>
+                        <span className={styles.copy}>
+                          <span className={styles.kind}>{materialKindLabel(item)}</span>
+                          <span className={styles.name}>{item.name}</span>
+                          {materialNote(item) === PREPARING_LABEL ? (
+                            <span className={styles.pending}>{PREPARING_LABEL}</span>
+                          ) : materialNote(item) ? (
+                            <span className={styles.meta}>{materialNote(item)}</span>
+                          ) : null}
+                        </span>
+                      </button>
+                    )}
+                    {canManage ? (
+                      <ItemActions
+                        item={item}
+                        busy={busy}
+                        renaming={renamingId === item.id}
+                        onRename={() => {
+                          setRenamingId(item.id);
+                          setRenameDraft(item.name);
+                        }}
+                        onSave={() => saveRename(item)}
+                        onReplace={() => {
+                          replaceId.current = item.id;
+                          fileRef.current?.click();
+                        }}
+                        onDelete={() => {
+                          if (!confirm(`Удалить «${item.name}»?`)) return;
+                          void run(() => deleteMaterialItem(item.id));
+                        }}
+                      />
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+          {!visible.length ? (
+            <div className={styles.empty}>
+              <strong>Пока пусто</strong>
+              <span>В этой папке нет материалов.</span>
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       {preview ? (
         <div className={styles.viewer} role="dialog" aria-modal="true" aria-label={preview.name}>
-          <div className={styles.viewerSheet}>
-            <header className={styles.viewerHead}>
+          <div className={styles.sheet}>
+            <header className={styles.head}>
               <h3>{preview.name}</h3>
               <button type="button" className={styles.ghost} onClick={() => setPreview(null)} autoFocus>
                 Закрыть
               </button>
             </header>
-            <div className={styles.viewerBody}>
+            <div className={styles.body}>
               {preview.mode === 'stub' ? (
                 <MaterialStubView stub={preview.stub} />
               ) : preview.mime.startsWith('video/') ? (
-                <video className={styles.viewerMedia} controls src={preview.url} />
+                <video className={styles.media} controls src={preview.url} />
               ) : preview.mime.startsWith('image/') ? (
-                <img className={styles.viewerMedia} src={preview.url} alt={preview.name} />
+                <img className={styles.media} src={preview.url} alt={preview.name} />
               ) : preview.mime === 'application/pdf' ? (
-                <iframe className={styles.viewerFrame} title={preview.name} src={preview.url} />
+                <iframe className={styles.frame} title={preview.name} src={preview.url} />
               ) : (
                 <p className={styles.lead}>
-                  Файл загружен.{' '}
+                  Файл можно скачать.{' '}
                   {preview.revoke ? (
-                    <a className={styles.callLink} href={preview.url} download={preview.name}>
+                    <a className={styles.download} href={preview.url} download={preview.name}>
                       Скачать
                     </a>
                   ) : (
-                    <a
-                      className={styles.callLink}
-                      href={preview.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a className={styles.download} href={preview.url} target="_blank" rel="noopener noreferrer">
                       Скачать
                     </a>
                   )}
@@ -372,6 +465,46 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function ItemActions({
+  item,
+  busy,
+  renaming,
+  onRename,
+  onSave,
+  onReplace,
+  onDelete,
+}: {
+  item: PublicMaterial;
+  busy: boolean;
+  renaming: boolean;
+  onRename: () => void;
+  onSave: () => void;
+  onReplace?: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className={styles.rowActions}>
+      {renaming ? (
+        <button type="button" className={styles.primary} disabled={busy} onClick={onSave}>
+          Сохранить
+        </button>
+      ) : (
+        <button type="button" className={styles.ghost} onClick={onRename}>
+          Переименовать
+        </button>
+      )}
+      {item.kind === 'file' && onReplace ? (
+        <button type="button" className={styles.ghost} disabled={busy} onClick={onReplace}>
+          Заменить
+        </button>
+      ) : null}
+      <button type="button" className={styles.danger} disabled={busy} onClick={onDelete}>
+        Удалить
+      </button>
     </div>
   );
 }

@@ -76,9 +76,19 @@ const salesLogin = await call('POST', '/auth/login', {
 });
 const salesReset = await call('POST', '/org/staff/reset-password', {
   token: salesLogin.data.token,
-  body: { staffUserId: 'u_crew1', password: 'nope-nope' },
+  body: { staffUserId: 'u_crew1', password: 'crew-pass-2' },
 });
-assert(salesReset.status === 403, `sales cannot reset, got ${salesReset.status}`);
+assert(salesReset.status === 200, `sales resets own company staff, got ${salesReset.status}`);
+const salesOwner = await call('POST', '/org/staff/reset-password', {
+  token: salesLogin.data.token,
+  body: { staffUserId: 'u_partner1', password: 'owner-nope' },
+});
+assert(salesOwner.status === 403, `sales cannot change owner, got ${salesOwner.status}`);
+const salesForeign = await call('POST', '/org/staff/reset-password', {
+  token: salesLogin.data.token,
+  body: { staffUserId: 'u_crew2', password: 'foreign-nope' },
+});
+assert(salesForeign.status === 404, `sales foreign staff expected 404, got ${salesForeign.status}`);
 
 const id = 'obj_lww_test';
 const newer = new Date(Date.now() - 1000).toISOString();

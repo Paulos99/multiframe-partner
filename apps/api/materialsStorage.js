@@ -7,15 +7,18 @@
 import { MATERIAL_BUCKET_MARKER } from './materialsLib.js';
 import {
   deleteObject,
+  headObject,
   materialsBucket,
   materialsConfigError,
   partnerBucket,
   putObject,
   signGetObject,
+  signPutObject,
   SIGNED_GET_TTL_SECONDS,
+  SIGNED_PUT_TTL_SECONDS,
 } from './objectStore.js';
 
-export { MATERIAL_BUCKET_MARKER, SIGNED_GET_TTL_SECONDS, materialsConfigError };
+export { MATERIAL_BUCKET_MARKER, SIGNED_GET_TTL_SECONDS, SIGNED_PUT_TTL_SECONDS, materialsConfigError };
 
 const MATERIAL_KEY = /^materials\/mat_[a-z0-9_]+$/i;
 
@@ -48,6 +51,26 @@ export async function deleteMaterialBytes(key) {
   assertMaterialKey(key);
   const bucket = writableMaterialsBucket();
   await deleteObject({ bucket, key });
+}
+
+/**
+ * Подписанный PUT в MATERIALS_BUCKET под ключом materials/mat_*.
+ * Content-Type в подпись не входит.
+ * Браузерный PUT с другого origin требует CORS на бакете материалов
+ * (AllowedMethod PUT, AllowedHeader Content-Type). Бакет этот модуль не меняет.
+ */
+export async function signMaterialUpload(key) {
+  assertMaterialKey(key);
+  const bucket = writableMaterialsBucket();
+  const url = await signPutObject({ bucket, key, expiresIn: SIGNED_PUT_TTL_SECONDS });
+  return { url, bucket, key, expiresIn: SIGNED_PUT_TTL_SECONDS };
+}
+
+/** Фактический размер и Content-Type уже загруженного объекта. */
+export async function statMaterialObject(key) {
+  assertMaterialKey(key);
+  const bucket = writableMaterialsBucket();
+  return headObject({ bucket, key });
 }
 
 function isInlineMime(mime) {

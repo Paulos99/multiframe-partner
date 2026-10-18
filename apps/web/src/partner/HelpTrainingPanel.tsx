@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
 import { MaterialsPanel } from './MaterialsPanel';
-import styles from './partner.module.css';
+import styles from './HelpTrainingPanel.module.css';
 
 type HelpSection = {
   id: string;
@@ -14,7 +14,7 @@ type HelpSection = {
 const COMMON: HelpSection = {
   id: 'common',
   title: 'С чего начать',
-  lead: 'Кабинет, инструменты и смена сотрудника на общем планшете.',
+  lead: 'Вход, инструменты и общий планшет.',
   steps: [
     'Войдите под своим логином. После входа откроется кабинет вашей роли.',
     'Кнопки «Проблемомер» и «Калькулятор» всегда вверху.',
@@ -33,7 +33,7 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
   admin: {
     id: 'admin',
     title: 'Ваша работа · Админ StP',
-    lead: 'Сеть STP MultiFrame партнёра: компании по городам РФ и обзор регионов.',
+    lead: 'Компании сети и обзор регионов.',
     steps: [
       'Вкладка «Добавить» — логин владельца, пароль, компания и город из справочника, например «Шуя — Ивановская область».',
       'Произвольный текст вроде «ГГ» не сохранится. Старый город не из справочника виден в списке и подсвечен, пока не выберете замену.',
@@ -49,7 +49,7 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
   owner: {
     id: 'owner',
     title: 'Ваша работа · Владелец',
-    lead: 'Прайс компании, команда, все объекты и воронка.',
+    lead: 'Прайс, команда и все объекты.',
     steps: [
       'Вкладка «Компания» — название, город, РРЦ панели и м², монтаж, дюбели. Сохраните перед замерами команды.',
       '«Сотрудники» — создайте менеджера, замерщика и монтажников. У каждого монтажника свой логин.',
@@ -65,7 +65,7 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
   sales: {
     id: 'sales',
     title: 'Ваша работа · Менеджер',
-    lead: 'Сделки, КП с ценами и отправка клиенту.',
+    lead: 'Сделки, КП и отправка клиенту.',
     steps: [
       'Вкладка «Сделки» — ваши и переданные объекты.',
       'Откройте «Проблемомер», пройдите комнату с клиентом, на итоге заполните клиента и адрес.',
@@ -81,7 +81,7 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
   measurer: {
     id: 'measurer',
     title: 'Ваша работа · Замерщик',
-    lead: 'Быстрый замер на объекте за 5–10 минут.',
+    lead: 'Замер на объекте за несколько минут.',
     steps: [
       'Нажмите «Проблемомер» → заполните комнату (тип и площадь обязательны) → дождитесь итога.',
       'На экране результата: «Сохранить объект» — имя, телефон, адрес, город.',
@@ -97,7 +97,7 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
   crew: {
     id: 'crew',
     title: 'Ваша работа · Монтажник',
-    lead: 'Личный кабинет: только ваши задания, спецификация без цен.',
+    lead: 'Только ваши задания, без цен.',
     steps: [
       'В кабинете откройте задания на монтаж — видны только объекты, назначенные вам.',
       'Откройте PDF: панели, крепёж и схема раскладки. Суммы КП и РРЦ скрыты.',
@@ -115,32 +115,29 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
 function SectionBlock({ section, highlight }: { section: HelpSection; highlight?: boolean }) {
   return (
     <section
-      className={`${styles.helpSection} ${highlight ? styles.helpSectionMine : ''}`}
+      className={highlight ? `${styles.section} ${styles.mine}` : styles.section}
       aria-labelledby={`help-title-${section.id}`}
     >
-      <div className={styles.helpSectionHeadStatic}>
+      <div className={styles.sectionHead}>
         <h3 id={`help-title-${section.id}`}>{section.title}</h3>
+        {highlight ? <span className={styles.badge}>Ваша роль</span> : null}
       </div>
-      <div className={styles.helpSectionBody}>
-        <p className={styles.lead}>{section.lead}</p>
-        <ol className={styles.helpSteps}>
-          {section.steps.map((step) => (
-            <li key={step} className={styles.helpStep}>
-              {step}
-            </li>
-          ))}
-        </ol>
-        {section.cannot.length ? (
-          <div className={styles.helpCannot}>
-            <strong>Нельзя / важно</strong>
-            <ul>
-              {section.cannot.map((c) => (
-                <li key={c}>{c}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
+      <p className={styles.lead}>{section.lead}</p>
+      <ol className={styles.steps}>
+        {section.steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      {section.cannot.length ? (
+        <div className={styles.note}>
+          <strong>Важно</strong>
+          <ul>
+            {section.cannot.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -151,39 +148,42 @@ export function HelpTrainingPanel({ role }: { role: UserRole }) {
   const [section, setSection] = useState<'materials' | 'cabinet'>('materials');
 
   return (
-    <div className={`${styles.card} ${styles.panelCard} ${styles.helpPanel}`}>
+    <div className={styles.panel}>
       <h2>Обучение</h2>
       <div className={styles.tabs} role="tablist" aria-label="Разделы обучения">
         <button
           type="button"
           role="tab"
+          id="help-tab-materials"
           aria-selected={section === 'materials'}
-          className={section === 'materials' ? styles.tabActive : styles.tab}
+          aria-controls="help-panel-materials"
+          className={section === 'materials' ? styles.tabOn : styles.tab}
           onClick={() => setSection('materials')}
         >
-          Методические материалы
+          Материалы
         </button>
         <button
           type="button"
           role="tab"
+          id="help-tab-cabinet"
           aria-selected={section === 'cabinet'}
-          className={section === 'cabinet' ? styles.tabActive : styles.tab}
+          aria-controls="help-panel-cabinet"
+          className={section === 'cabinet' ? styles.tabOn : styles.tab}
           onClick={() => setSection('cabinet')}
         >
-          Работа с кабинетом
+          Кабинет
         </button>
       </div>
       {section === 'materials' ? (
-        <MaterialsPanel canManage={role === 'admin'} />
+        <div id="help-panel-materials" role="tabpanel" aria-labelledby="help-tab-materials">
+          <MaterialsPanel canManage={role === 'admin'} />
+        </div>
       ) : (
-        <>
-          <p className={styles.lead}>
-            Личная инструкция для роли «{ROLE_LABELS[role]}». Другие уровни полномочий здесь не
-            показываются.
-          </p>
+        <div id="help-panel-cabinet" role="tabpanel" aria-labelledby="help-tab-cabinet">
+          <p className={styles.lead}>Для роли «{ROLE_LABELS[role]}».</p>
           <SectionBlock section={COMMON} />
           <SectionBlock section={personal} highlight />
-        </>
+        </div>
       )}
     </div>
   );

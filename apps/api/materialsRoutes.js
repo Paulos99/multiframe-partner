@@ -8,10 +8,12 @@
 
 import {
   MATERIAL_BUCKET_MARKER,
+  MATERIAL_DIRECT_MAX_BYTES,
   addFile,
   createFolder,
   deleteMaterial,
   findMaterial,
+  materialBase,
   publicMaterials,
   renameMaterial,
   replaceFile,
@@ -20,7 +22,9 @@ import {
   deleteMaterialBytes,
   materialsConfigError,
   putMaterialBytes,
+  signMaterialUpload,
   signedMaterialGetUrl,
+  statMaterialObject,
 } from './materialsStorage.js';
 
 const MAX_FILE_BYTES = 2_000_000;
@@ -92,6 +96,56 @@ function storageUnavailable(ctx) {
   return ctx.json(503, { message });
 }
 
+/** Реальный Content-Type с объекта. application/octet-stream уточняем по имени файла. */
+function mimeFromStored(contentType, filename) {
+  const raw = String(contentType || '')
+    .toLowerCase()
+    .split(';')[0]
+    .trim();
+  if (raw && raw !== 'application/octet-stream' && raw !== 'binary/octet-stream') {
+    return ALLOWED_MIME.has(raw) ? raw : '';
+  }
+  return mimeOf('', filename);
+}
+
+async function registerUploadedMaterial(ctx, platform, body) {
+  let head;
+  try {
+    head = await statMaterialObject(body.storageKey);
+  } catch (error) {
+    const status = error.status || 500;
+    return ctx.json(status, { message: error.message || 'Некорректный ключ материала' });
+  }
+  if (head.missing) return ctx.json(404, { message: 'Файл не найден в хранилище' });
+  if (head.contentLength == null) return ctx.json(502, { message: 'Не удалось прочитать размер файла' });
+  if (head.contentLength < 1) return ctx.json(400, { message: 'Файл пустой' });
+  if (head.contentLength > MATERIAL_DIRECT_MAX_BYTES) {
+    return ctx.json(413, { message: 'Файл больше 2 ГБ' });
+  }
+  const mime = mimeFromStored(head.contentType, body.name);
+  if (!mime) return ctx.json(400, { message: 'Нужен PDF, презентация, видео, картинка или документ' });
+  const key = String(body.storageKey);
+  const id = key.slice('materials/'.length);
+  if (!safeId(id)) return ctx.json(400, { message: 'Некорректный ключ материала' });
+  if (materialBase(platform.materials).some((node) => node.storageKey === key)) {
+    return ctx.json(409, { message: 'Файл уже зарегистрирован' });
+  }
+  const result = addFile(platform.materials, {
+    name: body.name,
+    parentId: body.parentId || null,
+    id,
+    mime,
+    size: head.contentLength,
+    storageKey: key,
+    bucket: MATERIAL_BUCKET_MARKER,
+    now: new Date().toISOString(),
+  });
+  if (!result.ok) return ctx.json(400, { message: result.message });
+  platform.materials = result.nodes;
+  await ctx.savePlatform(platform);
+  return ctx.json(200, { materials: publicMaterials(platform.materials) });
+}
+
 async function signedContent(ctx, node) {
   try {
     const url = await signedMaterialGetUrl(node, { filename: node.name, mime: node.mime });
@@ -111,6 +165,7 @@ export async function handleMaterials(ctx) {
   const isMaterials =
     path === '/materials' ||
     path.endsWith('/materials') ||
+    /\/materials\/files\/upload-url$/.test(path) ||
     /\/materials\/(folders|files)$/.test(path) ||
     /\/materials\/[^/]+$/.test(path) ||
     /\/materials\/[^/]+\/content$/.test(path);
@@ -139,12 +194,35 @@ export async function handleMaterials(ctx) {
     return ctx.json(200, { materials: publicMaterials(platform.materials) });
   }
 
+  if (method === 'POST' && /\/materials\/files\/upload-url$/.test(path)) {
+    const { user } = await ctx.requireAuth();
+    ctx.assertRole(user, ['admin']);
+    const unavailable = storageUnavailable(ctx);
+    if (unavailable) return unavailable;
+    const body = ctx.getBody() || {};
+    const id = ctx.uid('mat');
+    const key = `materials/${id}`;
+    const signed = await signMaterialUpload(key);
+    const hinted = mimeOf(body.mime, body.name);
+    return ctx.json(200, {
+      url: signed.url,
+      method: 'PUT',
+      storageKey: key,
+      expiresIn: signed.expiresIn,
+      headers: hinted ? { 'Content-Type': hinted } : {},
+    });
+  }
+
   if (method === 'POST' && /\/materials\/files$/.test(path)) {
     const { platform, user } = await ctx.requireAuth();
     ctx.assertRole(user, ['admin']);
     const unavailable = storageUnavailable(ctx);
     if (unavailable) return unavailable;
     const body = ctx.getBody();
+    if (body.storageKey && body.contentBase64) {
+      return ctx.json(400, { message: 'Передайте либо файл, либо уже загруженный ключ' });
+    }
+    if (body.storageKey) return registerUploadedMaterial(ctx, platform, body);
     const decoded = decodeFile(body);
     if (decoded.error) return ctx.json(400, { message: decoded.error });
     const id = ctx.uid('mat');
