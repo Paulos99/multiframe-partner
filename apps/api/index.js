@@ -884,7 +884,13 @@ export async function handler(event = {}) {
       const { login, password } = getBody(event);
       const platform = await loadPlatform();
       const user = findUser(platform, String(login || '').trim());
-      if (!user || !bcrypt.compareSync(String(password || ''), user.passwordHash)) {
+      if (
+        !user ||
+        user.loginDisabled === true ||
+        typeof user.passwordHash !== 'string' ||
+        !user.passwordHash ||
+        !bcrypt.compareSync(String(password || ''), user.passwordHash)
+      ) {
         return json(401, { message: 'Неверный логин или пароль' });
       }
       const org = user.orgId ? findOrg(platform, user.orgId) : null;
