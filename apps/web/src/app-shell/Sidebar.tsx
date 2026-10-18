@@ -8,6 +8,8 @@ export type SideItem = {
   label: string;
   active: boolean;
   onSelect: () => void;
+  /** Своя иконка вместо стандартной (например, фото во вкладке «Профиль»). */
+  icon?: ReactNode;
 };
 
 export function Sidebar({
@@ -30,7 +32,8 @@ export function Sidebar({
             role="tab"
             id={`cab-tab-${item.id}`}
             aria-selected={item.active}
-            className={item.active ? styles.itemOn : styles.item}
+            className={itemClass(item)}
+            data-nav-id={item.id}
             onClick={item.onSelect}
           >
             <NavLabel item={item} />
@@ -44,7 +47,8 @@ export function Sidebar({
             key={item.id}
             type="button"
             aria-pressed={item.active}
-            className={item.active ? styles.itemOn : styles.item}
+            className={itemClass(item)}
+            data-nav-id={item.id}
             onClick={item.onSelect}
           >
             <NavLabel item={item} />
@@ -66,13 +70,18 @@ export function Sidebar({
   );
 }
 
+function itemClass(item: SideItem): string {
+  const base = item.active ? styles.itemOn : styles.item;
+  return item.id === 'profile' ? `${base} ${styles.profileItem}` : base;
+}
+
 /** Полная подпись остаётся доступным именем; на планшете и телефоне видна короткая подпись с иконкой и счётчиком. */
 function NavLabel({ item }: { item: SideItem }) {
   const { base, count } = splitNavLabel(item.label);
   return (
     <>
       <span className={styles.icon}>
-        <NavIcon id={item.id} label={item.label} />
+        {item.icon ?? <NavIcon id={item.id} label={item.label} />}
         {count ? (
           <span className={styles.badge} aria-hidden="true">
             {count}

@@ -95,7 +95,7 @@ async function enter(page: Page, files: Mat[], content: Record<string, string>, 
   await page.getByLabel('Логин', { exact: true }).fill('ui.owner');
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Мой профиль', exact: true })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
   await page.getByRole('tab', { name: 'Обучение', exact: true }).first().click();
 }
 
