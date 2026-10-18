@@ -450,7 +450,7 @@ test('деплой не подставляет имя бакета и проки
   }
   assert.match(workflow, /MATERIALS_BUCKET: \$\{\{ secrets\.MATERIALS_BUCKET \}\}/);
   assert.match(cors, /https:\/\/paulos99\.github\.io/);
-  assert.match(cors, /const METHODS = \['GET', 'HEAD'\]/);
+  assert.match(cors, /const METHODS = \['GET', 'HEAD', 'PUT'\]/);
   assert.match(cors, /не выбирает бакет по умолчанию/);
   assert.equal(cors.includes("|| 'multiframe-partner"), false);
 });

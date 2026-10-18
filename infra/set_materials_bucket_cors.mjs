@@ -2,10 +2,13 @@
 /**
  * Идемпотентно разрешает браузеру читать бакет материалов.
  *
- * Правило: GET и HEAD с origin https://paulos99.github.io.
- * HEAD нужен проигрывателю видео. PUT не открывается.
+ * Правило: GET, HEAD и PUT с origin https://paulos99.github.io.
+ * HEAD нужен проигрывателю видео. PUT — только по подписанной ссылке,
+ * которую API выдаёт админу StP (прямая и multipart-загрузка). ETag
+ * открыт, чтобы браузер видел ответ на загрузку части. Бакет остаётся
+ * приватным: без подписи ни чтение, ни запись не работают.
  *
- * Запуск вручную, не из деплоя и не против продакшена без явного решения:
+ * Запускается из infra/deploy_yc.py при каждом деплое API или вручную:
  *   MATERIALS_BUCKET=multiframe-partner-materials \
  *   YC_ACCESS_KEY_ID=... YC_SECRET_ACCESS_KEY=... \
  *   node infra/set_materials_bucket_cors.mjs
@@ -23,7 +26,7 @@ const {
 } = require('@aws-sdk/client-s3');
 
 const ORIGIN = 'https://paulos99.github.io';
-const METHODS = ['GET', 'HEAD'];
+const METHODS = ['GET', 'HEAD', 'PUT'];
 const EXPOSE = ['Accept-Ranges', 'Content-Disposition', 'Content-Length', 'Content-Type', 'ETag'];
 
 function fail(message) {
@@ -78,13 +81,14 @@ try {
   }
 }
 
-if (existing.some(ruleAllowsRead)) {
+if (existing.some(ruleAllowsRead) && existing.some((rule) => (rule.ExposeHeaders || []).includes('ETag'))) {
   console.log(`CORS уже разрешает ${METHODS.join(',')} с ${ORIGIN} для ${bucket}. Изменений нет.`);
   process.exit(0);
 }
 
+// Старое правило нашего origin (только чтение) заменяем, чужие правила не трогаем.
 const next = [
-  ...existing,
+  ...existing.filter((rule) => !(originsOf(rule).length === 1 && originsOf(rule)[0] === ORIGIN)),
   {
     AllowedOrigins: [ORIGIN],
     AllowedMethods: METHODS,
@@ -100,4 +104,4 @@ await client.send(
     CORSConfiguration: { CORSRules: next },
   }),
 );
-console.log(`CORS бакета ${bucket}: добавлено чтение с ${ORIGIN}. Правил теперь ${next.length}.`);
+console.log(`CORS бакета ${bucket}: разрешены ${METHODS.join(',')} с ${ORIGIN}. Правил теперь ${next.length}.`);

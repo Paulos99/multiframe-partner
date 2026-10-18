@@ -60,6 +60,11 @@ GATEWAY_PATHS = (
     "/materials",
     "/materials/folders",
     "/materials/files",
+    "/materials/files/upload-url",
+    "/materials/files/multipart",
+    "/materials/files/multipart/parts",
+    "/materials/files/multipart/complete",
+    "/materials/files/multipart/abort",
     "/materials/{materialId}",
     "/materials/{materialId}/content",
 )
@@ -548,6 +553,37 @@ def smoke(domain: str) -> None:
     )
 
 
+def ensure_materials_cors(storage_env: dict[str, str]) -> None:
+    """CORS бакета материалов (GET/HEAD/PUT с сайта) через infra/set_materials_bucket_cors.mjs.
+
+    Бакет остаётся приватным: PUT и GET работают только по подписанным ссылкам API.
+    Бакет кабинета скрипт не меняет. Ошибка не валит деплой, только предупреждение.
+    """
+    materials = storage_env.get("MATERIALS_BUCKET")
+    if not materials:
+        print("materials CORS: MATERIALS_BUCKET не задан, пропуск")
+        return
+    import subprocess
+
+    env = {
+        **os.environ,
+        "MATERIALS_BUCKET": materials,
+        "PARTNERS_BUCKET": storage_env.get("PARTNERS_BUCKET", ""),
+        "YC_ACCESS_KEY_ID": storage_env.get("YC_ACCESS_KEY_ID", ""),
+        "YC_SECRET_ACCESS_KEY": storage_env.get("YC_SECRET_ACCESS_KEY", ""),
+        "YC_REGION": storage_env.get("YC_REGION", "ru-central1"),
+    }
+    try:
+        subprocess.run(
+            ["node", str(ROOT / "infra" / "set_materials_bucket_cors.mjs")],
+            env=env,
+            check=True,
+            timeout=120,
+        )
+    except Exception as e:  # noqa: BLE001
+        print("WARN materials CORS:", type(e).__name__)
+
+
 def main():
     bundle = make_zip()
     # Размер и playwright проверяются до сети. IMPORT_OK — по тому же файлу,
@@ -561,6 +597,7 @@ def main():
     storage_env = try_ensure_bucket_and_keys(token)
     source = build_version_source(bundle.zip_path, storage_env, mode)
     create_version(token, fid, bundle.zip_path, storage_env, bundle.entrypoint, source)
+    ensure_materials_cors(storage_env)
     try:
         api(
             "POST",

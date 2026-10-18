@@ -9,7 +9,9 @@
 import {
   MATERIAL_BUCKET_MARKER,
   MATERIAL_DIRECT_MAX_BYTES,
+  MATERIAL_MAX_PARTS,
   addFile,
+  materialPartSize,
   createFolder,
   deleteMaterial,
   findMaterial,
@@ -19,7 +21,12 @@ import {
   replaceFile,
 } from './materialsLib.js';
 import {
+  abortMaterialMultipart,
+  completeMaterialMultipart,
   deleteMaterialBytes,
+  listMaterialParts,
+  signMaterialParts,
+  startMaterialMultipart,
   materialsConfigError,
   putMaterialBytes,
   signMaterialUpload,
@@ -30,22 +37,36 @@ import {
 const MAX_FILE_BYTES = 2_000_000;
 const MAX_BASE64 = 2_800_000;
 
-const ALLOWED_MIME = new Set([
-  'application/pdf',
-  'application/msword',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'video/mp4',
-  'video/webm',
-  'video/quicktime',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'text/plain',
-]);
-
 const READ_ROLES = ['admin', 'owner', 'sales', 'measurer', 'crew'];
+
+/** Белого списка типов нет: загрузить можно любой файл. Тип только для показа. */
+const EXT_MIME = {
+  pdf: 'application/pdf',
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  heic: 'image/heic',
+  svg: 'image/svg+xml',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  ppt: 'application/vnd.ms-powerpoint',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc: 'application/msword',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xls: 'application/vnd.ms-excel',
+  txt: 'text/plain',
+  zip: 'application/zip',
+};
 
 function safeId(id) {
   return /^mat_[a-z0-9_]+$/i.test(String(id || ''));
@@ -53,25 +74,11 @@ function safeId(id) {
 
 function mimeOf(value, filename) {
   const raw = String(value || '').toLowerCase().split(';')[0].trim();
-  if (ALLOWED_MIME.has(raw)) return raw;
-  const lower = String(filename || '').toLowerCase();
-  if (lower.endsWith('.pdf')) return 'application/pdf';
-  if (lower.endsWith('.mp4')) return 'video/mp4';
-  if (lower.endsWith('.webm')) return 'video/webm';
-  if (lower.endsWith('.mov')) return 'video/quicktime';
-  if (lower.endsWith('.png')) return 'image/png';
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
-  if (lower.endsWith('.webp')) return 'image/webp';
-  if (lower.endsWith('.pptx')) {
-    return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+  if (/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(raw) && raw !== 'application/octet-stream' && raw !== 'binary/octet-stream') {
+    return raw;
   }
-  if (lower.endsWith('.ppt')) return 'application/vnd.ms-powerpoint';
-  if (lower.endsWith('.docx')) {
-    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  }
-  if (lower.endsWith('.doc')) return 'application/msword';
-  if (lower.endsWith('.txt')) return 'text/plain';
-  return '';
+  const ext = String(filename || '').toLowerCase().match(/\.([a-z0-9]{1,8})$/);
+  return (ext && EXT_MIME[ext[1]]) || 'application/octet-stream';
 }
 
 function decodeFile(body) {
@@ -85,9 +92,7 @@ function decodeFile(body) {
   if (buf.length > MAX_FILE_BYTES) {
     return { error: 'Файл больше 2 МБ. Крупнее текущий шлюз API не примет.' };
   }
-  const mime = mimeOf(body.mime, body.name);
-  if (!mime) return { error: 'Нужен PDF, презентация, видео, картинка или документ' };
-  return { buf, mime };
+  return { buf, mime: mimeOf(body.mime, body.name) };
 }
 
 function storageUnavailable(ctx) {
@@ -96,16 +101,9 @@ function storageUnavailable(ctx) {
   return ctx.json(503, { message });
 }
 
-/** Реальный Content-Type с объекта. application/octet-stream уточняем по имени файла. */
+/** Реальный Content-Type с объекта; octet-stream уточняем по имени файла. */
 function mimeFromStored(contentType, filename) {
-  const raw = String(contentType || '')
-    .toLowerCase()
-    .split(';')[0]
-    .trim();
-  if (raw && raw !== 'application/octet-stream' && raw !== 'binary/octet-stream') {
-    return ALLOWED_MIME.has(raw) ? raw : '';
-  }
-  return mimeOf('', filename);
+  return mimeOf(contentType, filename);
 }
 
 async function registerUploadedMaterial(ctx, platform, body) {
@@ -120,10 +118,9 @@ async function registerUploadedMaterial(ctx, platform, body) {
   if (head.contentLength == null) return ctx.json(502, { message: 'Не удалось прочитать размер файла' });
   if (head.contentLength < 1) return ctx.json(400, { message: 'Файл пустой' });
   if (head.contentLength > MATERIAL_DIRECT_MAX_BYTES) {
-    return ctx.json(413, { message: 'Файл больше 2 ГБ' });
+    return ctx.json(413, { message: 'Файл больше 5 ТБ' });
   }
   const mime = mimeFromStored(head.contentType, body.name);
-  if (!mime) return ctx.json(400, { message: 'Нужен PDF, презентация, видео, картинка или документ' });
   const key = String(body.storageKey);
   const id = key.slice('materials/'.length);
   if (!safeId(id)) return ctx.json(400, { message: 'Некорректный ключ материала' });
@@ -166,6 +163,7 @@ export async function handleMaterials(ctx) {
     path === '/materials' ||
     path.endsWith('/materials') ||
     /\/materials\/files\/upload-url$/.test(path) ||
+    /\/materials\/files\/multipart(\/(parts|complete|abort))?$/.test(path) ||
     /\/materials\/(folders|files)$/.test(path) ||
     /\/materials\/[^/]+$/.test(path) ||
     /\/materials\/[^/]+\/content$/.test(path);
@@ -211,6 +209,67 @@ export async function handleMaterials(ctx) {
       expiresIn: signed.expiresIn,
       headers: hinted ? { 'Content-Type': hinted } : {},
     });
+  }
+
+
+  const multipart = path.match(/\/materials\/files\/multipart(?:\/(parts|complete|abort))?$/);
+  if (method === 'POST' && multipart) {
+    const { platform, user } = await ctx.requireAuth();
+    ctx.assertRole(user, ['admin']);
+    const unavailable = storageUnavailable(ctx);
+    if (unavailable) return unavailable;
+    const body = ctx.getBody() || {};
+    const step = multipart[1] || 'start';
+    if (step === 'start') {
+      const size = Number(body.size);
+      if (!Number.isFinite(size) || size < 1) return ctx.json(400, { message: 'Файл пустой' });
+      if (size > MATERIAL_DIRECT_MAX_BYTES) return ctx.json(413, { message: 'Файл больше 5 ТБ' });
+      const id = ctx.uid('mat');
+      const key = `materials/${id}`;
+      const mime = mimeOf(body.mime, body.name);
+      const uploadId = await startMaterialMultipart(key, mime);
+      const partSize = materialPartSize(size);
+      return ctx.json(200, {
+        storageKey: key,
+        uploadId,
+        partSize,
+        partCount: Math.ceil(size / partSize),
+        mime,
+      });
+    }
+    const key = String(body.storageKey || '');
+    const uploadId = String(body.uploadId || '');
+    if (!safeId(key.slice('materials/'.length)) || !key.startsWith('materials/')) {
+      return ctx.json(400, { message: 'Некорректный ключ материала' });
+    }
+    if (!uploadId || uploadId.length > 1024) return ctx.json(400, { message: 'Нет uploadId' });
+    if (step === 'parts') {
+      const numbers = [...new Set((Array.isArray(body.partNumbers) ? body.partNumbers : []).map(Number))];
+      if (!numbers.length || numbers.length > 100) {
+        return ctx.json(400, { message: 'Нужно от 1 до 100 номеров частей' });
+      }
+      if (numbers.some((n) => !Number.isInteger(n) || n < 1 || n > MATERIAL_MAX_PARTS)) {
+        return ctx.json(400, { message: 'Некорректный номер части' });
+      }
+      const signed = await signMaterialParts(key, uploadId, numbers);
+      const uploaded = body.withUploaded ? await listMaterialParts(key, uploadId) : undefined;
+      return ctx.json(200, { ...signed, ...(uploaded ? { uploaded } : {}) });
+    }
+    if (step === 'abort') {
+      await abortMaterialMultipart(key, uploadId);
+      return ctx.json(200, { ok: true });
+    }
+    // complete: части берём у S3 (ListParts), клиентским ETag не доверяем.
+    const parts = (await listMaterialParts(key, uploadId))
+      .filter((part) => part && part.partNumber && part.etag)
+      .sort((a, b) => a.partNumber - b.partNumber);
+    if (!parts.length) return ctx.json(400, { message: 'Ни одна часть не загружена' });
+    const expected = Number(body.partCount) || parts.length;
+    if (parts.length !== expected || parts.some((part, index) => part.partNumber !== index + 1)) {
+      return ctx.json(409, { message: 'Загружены не все части', uploaded: parts.map((p) => p.partNumber) });
+    }
+    await completeMaterialMultipart(key, uploadId, parts);
+    return registerUploadedMaterial(ctx, platform, { ...body, storageKey: key });
   }
 
   if (method === 'POST' && /\/materials\/files$/.test(path)) {

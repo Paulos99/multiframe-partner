@@ -14,8 +14,10 @@ import {
   apiDeleteMaterial,
   apiListMaterials,
   apiMaterialContent,
-  apiMaterialUploadUrl,
-  apiRegisterMaterialFile,
+  apiMaterialMultipartAbort,
+  apiMaterialMultipartComplete,
+  apiMaterialMultipartParts,
+  apiMaterialMultipartStart,
   apiRenameMaterial,
   apiReplaceMaterial,
   apiUploadMaterial,
@@ -110,22 +112,106 @@ async function filePayload(file: File): Promise<{ mime: string; contentBase64: s
   return { mime: file.type || 'application/octet-stream', contentBase64 };
 }
 
-async function uploadMaterialDirect(file: File, parentId: string | null): Promise<PublicMaterial[]> {
-  if (file.size > MATERIAL_DIRECT_MAX_BYTES) throw new Error('Файл больше 2 ГБ');
-  const mime = file.type || 'application/octet-stream';
-  const ticket = await apiMaterialUploadUrl({ name: file.name, parentId, mime });
-  const headers = new Headers(ticket.headers || {});
-  if (!headers.has('Content-Type')) headers.set('Content-Type', mime);
-  const put = await fetch(ticket.url, { method: ticket.method || 'PUT', body: file, headers });
-  if (!put.ok) throw new Error('Не удалось загрузить файл в хранилище');
-  return apiRegisterMaterialFile({ name: file.name, parentId, storageKey: ticket.storageKey });
+export type UploadProgress = (loaded: number, total: number) => void;
+
+const PART_CONCURRENCY = 4;
+const PART_RETRIES = 4;
+
+/** PUT одной части по подписанной ссылке с прогрессом. Резолвится при 2xx. */
+function putPart(url: string, blob: Blob, onBytes: (loaded: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.upload.onprogress = (event) => onBytes(event.loaded);
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`Хранилище ответило ${xhr.status}`));
+    xhr.onerror = () => reject(new Error('Сеть оборвалась при загрузке части'));
+    xhr.send(blob);
+  });
+}
+
+/**
+ * Загрузка любого файла любого размера (до 5 ТБ) напрямую в приватный бакет
+ * материалов: multipart, части по 8–100 МБ, 4 параллельно, каждая с повторами.
+ * Ссылки подписывает API только для админа StP; метаданные пишет complete.
+ */
+async function uploadMaterialMultipart(
+  file: File,
+  parentId: string | null,
+  onProgress?: UploadProgress,
+): Promise<PublicMaterial[]> {
+  if (file.size > MATERIAL_DIRECT_MAX_BYTES) throw new Error('Файл больше 5 ТБ');
+  const ticket = await apiMaterialMultipartStart({
+    name: file.name,
+    size: file.size,
+    mime: file.type || undefined,
+  });
+  const loaded = new Map<number, number>();
+  const report = () => {
+    let sum = 0;
+    loaded.forEach((value) => (sum += value));
+    onProgress?.(Math.min(sum, file.size), file.size);
+  };
+  const queue = Array.from({ length: ticket.partCount }, (_, i) => i + 1);
+  const sendPart = async (n: number) => {
+    const start = (n - 1) * ticket.partSize;
+    const blob = file.slice(start, Math.min(start + ticket.partSize, file.size));
+    let lastError: unknown;
+    for (let attempt = 0; attempt < PART_RETRIES; attempt += 1) {
+      try {
+        // Свежая подпись на каждую попытку: долгие загрузки переживают истечение ссылки.
+        const { urls } = await apiMaterialMultipartParts({
+          storageKey: ticket.storageKey,
+          uploadId: ticket.uploadId,
+          partNumbers: [n],
+        });
+        await putPart(urls[n], blob, (bytes) => {
+          loaded.set(n, bytes);
+          report();
+        });
+        loaded.set(n, blob.size);
+        report();
+        return;
+      } catch (error) {
+        lastError = error;
+        loaded.set(n, 0);
+        report();
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error('Не удалось загрузить часть файла');
+  };
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(PART_CONCURRENCY, queue.length) }, async () => {
+        for (let n = queue.shift(); n !== undefined; n = queue.shift()) await sendPart(n);
+      }),
+    );
+    return await apiMaterialMultipartComplete({
+      storageKey: ticket.storageKey,
+      uploadId: ticket.uploadId,
+      partCount: ticket.partCount,
+      name: file.name,
+      parentId,
+    });
+  } catch (error) {
+    await apiMaterialMultipartAbort({ storageKey: ticket.storageKey, uploadId: ticket.uploadId }).catch(
+      () => undefined,
+    );
+    throw error;
+  }
 }
 
 export async function uploadMaterialFile(
   file: File,
   parentId: string | null,
+  onProgress?: UploadProgress,
 ): Promise<PublicMaterial[]> {
-  if (remoteEnabled() && file.size > MAX_FILE_BYTES) return uploadMaterialDirect(file, parentId);
+  if (remoteEnabled() && file.size > MAX_FILE_BYTES) {
+    return uploadMaterialMultipart(file, parentId, onProgress);
+  }
   const payload = await filePayload(file);
   if (remoteEnabled()) {
     return apiUploadMaterial({
