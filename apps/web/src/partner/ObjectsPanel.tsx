@@ -108,9 +108,11 @@ function StatusBadge({ status }: { status: JobObjectStatus }) {
 export function ObjectsPanel({
   compact,
   onCreate,
+  filterRequest,
 }: {
   compact?: boolean;
   onCreate?: () => void;
+  filterRequest?: { status: JobObjectStatus | 'all'; nonce: number };
 }) {
   const api = usePartner();
   const user = api.user!;
@@ -130,6 +132,13 @@ export function ObjectsPanel({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [docBusy, setDocBusy] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!filterRequest) return;
+    setStatusFilter(filterRequest.status);
+    setQuery('');
+    setSelectedId(null);
+  }, [filterRequest]);
 
   const counts = useMemo(() => {
     const map = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<JobObjectStatus, number>;

@@ -2314,7 +2314,7 @@ function loadFromUrl() {
 function applyQueryHandoff() {
   const params = new URLSearchParams(window.location.search);
   const area = parseFloat(params.get('area') || '');
-  if (!(area > 0) || Number.isNaN(area)) return;
+  if (!(area > 0) || !Number.isFinite(area)) return;
 
   const rawMode = params.get('mode');
   const mode = rawMode === 'dims' || rawMode === 'draw' ? rawMode : 'area';
@@ -2341,7 +2341,9 @@ function applyQueryHandoff() {
   const banner =
     source === 'problemomer'
       ? `Площадь потолка ${area.toFixed(1)} м² из Проблемомера`
-      : `Площадь ${area.toFixed(1)} м² из ссылки`;
+      : source === 'cabinet'
+        ? `Площадь помещения ${area.toFixed(1)} м² из карточки. Можно уточнить перед расчётом.`
+        : `Площадь ${area.toFixed(1)} м² из ссылки`;
   showProjectLoadedBanner(banner);
 
   window.setTimeout(() => {
