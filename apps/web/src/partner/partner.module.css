@@ -898,6 +898,14 @@
   color: var(--cab-ink-soft);
 }
 
+.funnelStop {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--cab-muted);
+}
+
 .funnelPct {
   min-width: 3.2rem;
   text-align: right;
