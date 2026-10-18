@@ -29,6 +29,7 @@ import {
   subscribeAnalyticsFocusOrg,
   subscribeAnalyticsPeriod,
 } from './analytics';
+import { calcModeLabel } from './calcModeLabel';
 import { JournalDownload } from './JournalDownload';
 import { CountUp, FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
@@ -42,12 +43,6 @@ const HOUSE_LABELS = Object.fromEntries(
 const STAGE_LABELS = Object.fromEntries(
   OBJECT_STAGE_OPTIONS.map((o) => [o.id, o.label]),
 ) as Record<ObjectStageOption, string>;
-
-const MODE_LABELS: Record<string, string> = {
-  area: 'Только площадь',
-  dims: 'Размеры',
-  polygon: 'Полигон',
-};
 
 function formatWhen(iso: string | null): string {
   if (!iso) return '—';
@@ -97,7 +92,7 @@ function labelKey(
     return STAGE_LABELS[key as ObjectStageOption] || key;
   }
   if (kind === 'mode') {
-    return MODE_LABELS[key] || key;
+    return calcModeLabel(key);
   }
   if (kind === 'comfort') {
     const parts = key.split('→');
