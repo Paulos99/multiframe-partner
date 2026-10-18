@@ -24,11 +24,15 @@ test('admin keeps one shared period control without the duplicate overview', asy
   await page.getByRole('button', { name: 'Всё время', exact: true }).click();
   await updated;
   await expect(calendar).toHaveText('Всё время');
-  await controls.getByRole('button', { name: 'Новый партнёр', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Новый партнёр', exact: true })).toBeVisible();
-  await expect(calendar).toHaveText('Всё время');
   await controls.getByRole('button', { name: /^Партнёры ·/ }).click();
   await expect(page.getByRole('heading', { name: /Партнёры/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Добавить', exact: true })).toHaveCount(0);
+  const add = page.getByRole('button', { name: 'Добавить', exact: true });
+  await expect(add).toHaveAttribute('aria-expanded', 'false');
+  await add.click();
+  await expect(page.getByRole('heading', { name: 'Новый партнёр', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Свернуть', exact: true })).toHaveAttribute('aria-expanded', 'true');
+  await expect(calendar).toHaveText('Всё время');
   await controls.getByRole('button', { name: 'Обучение и материалы', exact: true }).click();
   await expect(calendar).toHaveText('Всё время');
 });
