@@ -5,6 +5,7 @@
  */
 
 export const OBJECT_NAME = 'ТЕСТ доступ монтажника';
+export const OBJECT_ADDRESS = 'Проверка доступа монтажника';
 export const COMPANY = 'Потолки Столицы';
 export const ROOM_LENGTH_M = 4;
 export const ROOM_WIDTH_M = 3.5;
@@ -149,6 +150,45 @@ function requirePdfPair(pdf) {
   }
 }
 
+export function isCrewTestObject(obj) {
+  return obj?.clientName === OBJECT_NAME || obj?.address === OBJECT_ADDRESS;
+}
+
+function describeMatch(obj) {
+  const name = obj?.clientName ? `имя «${obj.clientName}»` : 'без имени';
+  const address = obj?.address ? `адрес «${obj.address}»` : 'без адреса';
+  const assigned = obj?.assignedTo ? `назначен ${obj.assignedTo}` : 'не назначен';
+  return `${obj?.id || 'без id'}: ${name}, ${address}, ${assigned}`;
+}
+
+function stoppedOnMatchReport({ matches, requests, pdf, files }) {
+  const matchedIds = matches.map((obj) => obj?.id).filter(Boolean);
+  const error =
+    `Уже есть объект с именем «${OBJECT_NAME}» или адресом «${OBJECT_ADDRESS}». ` +
+    'Ничего не меняю: без переназначения и без загрузки PDF. ' +
+    `Совпадения (${matches.length}): ${matchedIds.join(', ') || 'без id'}.`;
+  return {
+    ok: false,
+    dryRun: false,
+    objectName: OBJECT_NAME,
+    error,
+    matchedIds,
+    matches: matches.map(describeMatch),
+    created: false,
+    assigned: false,
+    uploaded: false,
+    pdf: pdfSummary(pdf, files),
+    requests,
+  };
+}
+
+/** POST /documents только в объект, чей id вернул POST /objects этого запуска. */
+export function assertCreatedObjectDocumentTarget(objectId, createdObjectId) {
+  if (!createdObjectId || objectId !== createdObjectId) {
+    throw new Error('PDF можно загрузить только в объект, созданный этим запуском');
+  }
+}
+
 export function buildEstimate(pdf, org) {
   const panels = Math.max(0, Math.round(Number(pdf.panels) || 0));
   const dowels = Math.max(0, Math.round(Number(pdf.dowels) || 0));
@@ -257,6 +297,15 @@ export async function runCrewTest({ config, fetchImpl, renderPdfs, writeFiles, l
     throw new Error('Монтажник с таким логином не найден в компании');
   }
 
+  const ownerList = await http.request('GET', '/objects', { token: staffToken });
+  if (ownerList.status !== 200) throw new Error(`Список объектов: ${ownerList.status}`);
+  const matches = (ownerList.data.objects || []).filter(isCrewTestObject);
+  if (matches.length > 0) {
+    const stopped = stoppedOnMatchReport({ matches, requests: http.requests, pdf, files });
+    log(stopped.error);
+    return stopped;
+  }
+
   const crewSession = await login(http, config.crewLogin, config.crewPassword, 'Монтажник');
   assertCompanyUser(crewSession.user, ['crew'], 'Монтажник');
   if (crewSession.user.id !== crewStaff.id) {
@@ -264,53 +313,31 @@ export async function runCrewTest({ config, fetchImpl, renderPdfs, writeFiles, l
   }
   const crewToken = crewSession.token;
 
-  const ownerList = await http.request('GET', '/objects', { token: staffToken });
-  if (ownerList.status !== 200) throw new Error(`Список объектов: ${ownerList.status}`);
-  const matches = (ownerList.data.objects || []).filter((obj) => obj.clientName === OBJECT_NAME);
-  if (matches.length > 1) {
-    throw new Error('Уже несколько объектов с этим именем, новый не создаю');
-  }
-
   let created = false;
-  let assigned = false;
+  const assigned = false;
   let uploaded = false;
-  let obj = matches[0] || null;
-
-  if (!obj) {
-    const estimate = buildEstimate(pdf, org);
-    const createdRes = await http.request('POST', '/objects', {
-      token: staffToken,
-      body: {
-        clientName: OBJECT_NAME,
-        clientPhone: '',
-        address: 'Проверка доступа монтажника',
-        city: org.city || 'Москва',
-        status: 'install',
-        assignedTo: crewStaff.id,
-        room: { areaM2: pdf.areaM2 },
-        estimate,
-        clientSummary: `Калькулятор · ${pdf.areaM2} м² · ${estimate.panels} пан. · ${estimate.dowels} дюб.`,
-        updatedAt: new Date().toISOString(),
-      },
-    });
-    if (createdRes.status !== 200 || !createdRes.data?.object?.id) {
-      throw new Error(`Создание объекта: ${createdRes.status}`);
-    }
-    obj = createdRes.data.object;
-    created = true;
-  } else if (obj.assignedTo && obj.assignedTo !== crewStaff.id) {
-    throw new Error('Объект с этим именем назначен другому сотруднику, не меняю его');
-  } else if (obj.assignedTo !== crewStaff.id) {
-    const patched = await http.request('PATCH', `/objects/${encodeURIComponent(obj.id)}`, {
-      token: staffToken,
-      body: { assignedTo: crewStaff.id, updatedAt: new Date().toISOString() },
-    });
-    if (patched.status !== 200 || !patched.data?.object) {
-      throw new Error(`Назначение монтажника: ${patched.status}`);
-    }
-    obj = patched.data.object;
-    assigned = true;
+  const estimate = buildEstimate(pdf, org);
+  const createdRes = await http.request('POST', '/objects', {
+    token: staffToken,
+    body: {
+      clientName: OBJECT_NAME,
+      clientPhone: '',
+      address: OBJECT_ADDRESS,
+      city: org.city || 'Москва',
+      status: 'install',
+      assignedTo: crewStaff.id,
+      room: { areaM2: pdf.areaM2 },
+      estimate,
+      clientSummary: `Калькулятор · ${pdf.areaM2} м² · ${estimate.panels} пан. · ${estimate.dowels} дюб.`,
+      updatedAt: new Date().toISOString(),
+    },
+  });
+  if (createdRes.status !== 200 || !createdRes.data?.object?.id) {
+    throw new Error(`Создание объекта: ${createdRes.status}`);
   }
+  let obj = createdRes.data.object;
+  const createdObjectId = obj.id;
+  created = true;
 
   let crewObjects = await http.request('GET', '/objects', { token: crewToken });
   if (crewObjects.status !== 200) throw new Error(`Объекты монтажника: ${crewObjects.status}`);
@@ -341,6 +368,7 @@ export async function runCrewTest({ config, fetchImpl, renderPdfs, writeFiles, l
         areaM2: pdf.areaM2,
       });
     }
+    assertCreatedObjectDocumentTarget(obj.id, createdObjectId);
     const uploadedRes = await http.request('POST', `/objects/${encodeURIComponent(obj.id)}/documents`, {
       token: staffToken,
       body: { versionId: `ver_${Date.now().toString(36)}`, documents },

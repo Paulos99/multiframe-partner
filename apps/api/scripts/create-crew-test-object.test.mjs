@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   OBJECT_NAME,
+  assertCreatedObjectDocumentTarget,
   assertReportSafe,
   buildEstimate,
   calculatorModuleBase,
@@ -204,6 +205,48 @@ function createMockApi({ ownerSeesSpec = true, objects = [] } = {}) {
   return { fetchImpl, calls, state };
 }
 
+function objectSnapshot(objects) {
+  return objects.map((obj) => ({
+    id: obj.id,
+    clientName: obj.clientName ?? null,
+    address: obj.address ?? null,
+    assignedTo: obj.assignedTo ?? null,
+    documentIds: (obj.documents || []).map((doc) => doc.id),
+  }));
+}
+
+function assertNoObjectWrites(calls) {
+  const posts = calls.filter((call) => call.method === 'POST');
+  assert.ok(posts.every((call) => call.pathname === '/auth/login'));
+  assert.equal(calls.filter((call) => call.method === 'PATCH').length, 0);
+  assert.equal(calls.filter((call) => call.method === 'POST' && call.pathname === '/objects').length, 0);
+  assert.equal(
+    calls.filter((call) => call.method === 'POST' && call.pathname.endsWith('/documents')).length,
+    0,
+  );
+  assert.equal(calls.filter((call) => call.method === 'DELETE').length, 0);
+}
+
+async function expectExistingMatchStops(objects, matchedIds) {
+  const mock = createMockApi({ objects });
+  const before = objectSnapshot(mock.state.objects);
+  const report = await runCrewTest({
+    config: staffConfig(),
+    renderPdfs: async () => samplePdf(),
+    fetchImpl: mock.fetchImpl,
+  });
+  assert.equal(report.ok, false);
+  assert.match(report.error, /Ничего не меняю/);
+  assert.deepEqual(report.matchedIds, matchedIds);
+  assert.equal(report.created, false);
+  assert.equal(report.uploaded, false);
+  assert.equal(report.assigned, false);
+  assertNoObjectWrites(mock.calls);
+  assert.deepEqual(objectSnapshot(mock.state.objects), before);
+  assertReportSafe(report, ['secret-owner', 'secret-crew', 'staff-token', 'crew-token']);
+  return report;
+}
+
 test('readConfig понимает dry-run и не подставляет пароли', () => {
   const config = readConfig({ API_BASE: 'https://example.test/' }, ['--dry-run', '--out', 'out']);
   assert.equal(config.dryRun, true);
@@ -229,6 +272,12 @@ test('в ответе монтажника цены и storageKey считают
   assert.deepEqual(priceHits({ estimate: { panels: 1, panelsCost: null, totalCost: 0 } }), []);
   assert.deepEqual(priceHits({ estimate: { panelsCost: 10 } }), ['panelsCost']);
   assert.deepEqual(priceHits({ documents: [{ storageKey: 'docs/a' }] }), ['storageKey']);
+});
+
+test('загрузка PDF разрешена только в объект этого запуска', () => {
+  assert.doesNotThrow(() => assertCreatedObjectDocumentTarget('obj_new', 'obj_new'));
+  assert.throws(() => assertCreatedObjectDocumentTarget('obj_old', ''), /созданный этим запуском/);
+  assert.throws(() => assertCreatedObjectDocumentTarget('obj_old', 'obj_new'), /созданный этим запуском/);
 });
 
 test('смета объекта складывается как в калькуляторе кабинета', () => {
@@ -376,9 +425,16 @@ test('создаёт объект, назначает crew1 и проверяе�
   assert.equal(mock.state.objects[0].clientName, OBJECT_NAME);
   assert.equal(mock.state.objects[0].assignedTo, 'u_crew1');
   assert.equal(mock.state.objects[0].estimate.panelsCost, 100632);
-  const upload = mock.calls.find((call) => call.pathname.endsWith('/documents') && call.method === 'POST');
+  const objectPosts = mock.calls.filter((call) => call.method === 'POST' && call.pathname === '/objects');
+  const docPosts = mock.calls.filter((call) => call.method === 'POST' && call.pathname.endsWith('/documents'));
+  assert.equal(objectPosts.length, 1);
+  assert.equal(docPosts.length, 1);
+  assert.equal(objectPosts[0].body.assignedTo, 'u_crew1');
+  assert.equal(objectPosts[0].body.address, 'Проверка доступа монтажника');
+  assert.equal(docPosts[0].pathname, `/objects/${report.objectId}/documents`);
+  assert.equal(mock.calls.filter((call) => call.method === 'PATCH').length, 0);
   assert.deepEqual(
-    upload.body.documents.map((doc) => doc.kind),
+    docPosts[0].body.documents.map((doc) => doc.kind),
     ['estimate', 'spec'],
   );
   assert.equal(
@@ -388,64 +444,110 @@ test('создаёт объект, назначает crew1 и проверяе�
   assertReportSafe(report, ['secret-owner', 'secret-crew', 'staff-token', 'crew-token']);
 });
 
-test('повторный запуск не создаёт второй объект и не заливает PDF заново', async () => {
+test('повторный запуск останавливается на созданном объекте и ничего не пишет', async () => {
   const mock = createMockApi({ ownerSeesSpec: true });
-  await runCrewTest({
+  const first = await runCrewTest({
     config: staffConfig(),
     renderPdfs: async () => samplePdf(),
     fetchImpl: mock.fetchImpl,
   });
+  assert.equal(first.ok, true);
   mock.calls.length = 0;
+  const before = objectSnapshot(mock.state.objects);
   const second = await runCrewTest({
     config: staffConfig(),
     renderPdfs: async () => samplePdf(),
     fetchImpl: mock.fetchImpl,
   });
-  assert.equal(second.ok, true);
-  assert.equal(second.created, false);
-  assert.equal(second.uploaded, false);
+  assert.equal(second.ok, false);
+  assert.deepEqual(second.matchedIds, [first.objectId]);
+  assert.match(second.error, /Ничего не меняю/);
   assert.equal(mock.state.objects.length, 1);
-  assert.equal(
-    mock.calls.some((call) => call.method === 'POST' && call.pathname === '/objects'),
-    false,
-  );
-  assert.equal(
-    mock.calls.some((call) => call.method === 'POST' && call.pathname.endsWith('/documents')),
-    false,
-  );
-  assert.equal(
-    mock.calls.some((call) => call.method === 'DELETE'),
-    false,
+  assertNoObjectWrites(mock.calls);
+  assert.deepEqual(objectSnapshot(mock.state.objects), before);
+});
+
+test('совпадение по имени без назначения не пишет в API', async () => {
+  await expectExistingMatchStops(
+    [
+      {
+        id: 'obj_free',
+        clientName: OBJECT_NAME,
+        address: 'ул. Ленина',
+        assignedTo: null,
+        documents: [],
+      },
+    ],
+    ['obj_free'],
   );
 });
 
-test('существующий объект другого сотрудника не меняется', async () => {
-  const mock = createMockApi({
-    objects: [
+test('совпадение по имени, уже назначенное этому монтажнику, не пишет в API', async () => {
+  await expectExistingMatchStops(
+    [
       {
-        id: 'obj_foreign',
+        id: 'obj_mine',
         clientName: OBJECT_NAME,
-        assignedTo: 'u_other',
+        address: 'другой адрес',
+        assignedTo: 'u_crew1',
         documents: [],
-        estimate: null,
       },
     ],
-  });
-  await assert.rejects(
-    () =>
-      runCrewTest({
-        config: staffConfig(),
-        renderPdfs: async () => samplePdf(),
-        fetchImpl: mock.fetchImpl,
-      }),
-    /другому сотруднику/,
+    ['obj_mine'],
   );
-  assert.equal(mock.state.objects.length, 1);
-  assert.equal(mock.state.objects[0].assignedTo, 'u_other');
-  assert.equal(
-    mock.calls.some((call) => call.method === 'PATCH' || call.method === 'DELETE'),
-    false,
+});
+
+test('совпадение по имени, назначенное другому, не пишет в API', async () => {
+  await expectExistingMatchStops(
+    [
+      {
+        id: 'obj_other',
+        clientName: OBJECT_NAME,
+        address: 'ул. Садовая',
+        assignedTo: 'u_other',
+        documents: [],
+      },
+    ],
+    ['obj_other'],
   );
+});
+
+test('совпадение только по адресу не пишет в API', async () => {
+  await expectExistingMatchStops(
+    [
+      {
+        id: 'obj_addr',
+        clientName: 'Иванов',
+        address: 'Проверка доступа монтажника',
+        assignedTo: null,
+        documents: [],
+      },
+    ],
+    ['obj_addr'],
+  );
+});
+
+test('несколько совпадений останавливают скрипт без записей', async () => {
+  const report = await expectExistingMatchStops(
+    [
+      {
+        id: 'obj_name',
+        clientName: OBJECT_NAME,
+        address: 'ул. Ленина',
+        assignedTo: 'u_crew1',
+        documents: [],
+      },
+      {
+        id: 'obj_addr',
+        clientName: 'Петров',
+        address: 'Проверка доступа монтажника',
+        assignedTo: 'u_other',
+        documents: [],
+      },
+    ],
+    ['obj_name', 'obj_addr'],
+  );
+  assert.equal(report.matches.length, 2);
 });
 
 test('если API прячет спецификацию от владельца, проверка это показывает и ничего не удаляет', async () => {

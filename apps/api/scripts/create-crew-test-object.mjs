@@ -3,6 +3,7 @@
  *
  * PDF — из встроенного калькулятора в headless Chrome (тот же exportCalculationPDF).
  * Дальше только HTTP API. platform-v2.json не читается и не пишется.
+ * Если объект с этим именем или адресом уже есть, скрипт останавливается и ничего не меняет.
  * Учётные данные только из env. Ничего не удаляет.
  *
  *   node apps/api/scripts/create-crew-test-object.mjs --dry-run --out ./crew-test-pdfs
