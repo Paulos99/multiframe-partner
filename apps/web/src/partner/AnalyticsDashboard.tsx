@@ -646,16 +646,16 @@ export function AnalyticsDashboard({
               <tbody>
                 {dash.partners.map((p) => (
                   <tr key={p.orgId || p.companyName}>
-                    <td>{p.companyName}</td>
-                    <td>{p.city || '—'}</td>
-                    <td>{p.logins}</td>
-                    <td>{p.problemomer}</td>
-                    <td>{p.calculator}</td>
-                    <td>{p.pdf}</td>
-                    <td>{p.shares}</td>
-                    <td>{formatNum(p.areaM2)}</td>
-                    <td>{formatNum(p.panels)}</td>
-                    <td>{formatWhen(p.lastActiveAt)}</td>
+                    <td data-label="Компания">{p.companyName}</td>
+                    <td data-label="Город">{p.city || '—'}</td>
+                    <td data-label="Входы">{p.logins}</td>
+                    <td data-label="PM">{p.problemomer}</td>
+                    <td data-label="Кальк.">{p.calculator}</td>
+                    <td data-label="PDF">{p.pdf}</td>
+                    <td data-label="Шаринг">{p.shares}</td>
+                    <td data-label="м²">{formatNum(p.areaM2)}</td>
+                    <td data-label="Пан.">{formatNum(p.panels)}</td>
+                    <td data-label="Активность">{formatWhen(p.lastActiveAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -740,16 +740,16 @@ export function AnalyticsDashboard({
                     const cls = comfortTransitionLabel(o?.classBefore, o?.classAfter) || '—';
                     return (
                       <tr key={ev.id}>
-                        <td>{formatWhen(ev.at)}</td>
-                        <td>{ev.companyName || '—'}</td>
-                        <td>{ev.login}</td>
-                        <td>
+                        <td data-label="Дата">{formatWhen(ev.at)}</td>
+                        <td data-label="Компания">{ev.companyName || '—'}</td>
+                        <td data-label="Логин">{ev.login}</td>
+                        <td data-label="Инструмент">
                           {toolLabel(ev.tool)} · {actionLabel(ev.action)}
                         </td>
-                        <td>{room}</td>
-                        <td>{o?.areaM2 != null ? formatNum(Number(o.areaM2)) : '—'}</td>
-                        <td>{cls}</td>
-                        <td>{o?.panels != null ? formatNum(Number(o.panels)) : '—'}</td>
+                        <td data-label="Комната">{room}</td>
+                        <td data-label="м²">{o?.areaM2 != null ? formatNum(Number(o.areaM2)) : '—'}</td>
+                        <td data-label="Класс">{cls}</td>
+                        <td data-label="Пан.">{o?.panels != null ? formatNum(Number(o.panels)) : '—'}</td>
                       </tr>
                     );
                   })}

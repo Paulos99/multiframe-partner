@@ -69,6 +69,10 @@ const base = {
   activity: [],
   toolUsage: {},
 };
+// Роли продажника и замерщика — для проверок вёрстки по ролям.
+for (const role of ['sales', 'measurer']) {
+  base.users.push({ ...base.users[0], id: `ui_${role}`, login: `ui.${role}`, displayName: `UI ${role}`, role });
+}
 base.objects.push({
   ...base.objects[0],
   id: 'ui_crew_room',
