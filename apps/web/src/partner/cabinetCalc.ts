@@ -11,15 +11,16 @@ export type CabinetCalcMessage = {
   areaM2?: number | null;
   panelsCost?: number | null;
   filename?: string;
-  specFilename?: string;
   pdfBase64?: string;
+  /** Старый калькулятор слал ещё PDF без цен. Больше не используется. */
+  specFilename?: string;
   specPdfBase64?: string;
 };
 
-/** «Козлов Д. — спецификация — 2026-10-17.pdf» */
+/** «Козлов Д. — смета — 2026-10-17.pdf», «Козлов Д. — профиль — 2026-10-17.pdf» */
 export function readablePdfName(
   clientName: string | null | undefined,
-  kind: 'estimate' | 'spec',
+  kind: 'estimate' | 'profile',
   at?: string | null,
 ): string {
   const who =
@@ -28,7 +29,7 @@ export function readablePdfName(
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 80) || 'Расчёт';
-  const label = kind === 'spec' ? 'спецификация' : 'смета';
+  const label = kind === 'profile' ? 'профиль' : 'смета';
   const day = at && /^\d{4}-\d{2}-\d{2}/.test(at) ? at.slice(0, 10) : new Date().toISOString().slice(0, 10);
   return `${who} — ${label} — ${day}.pdf`;
 }
@@ -36,7 +37,7 @@ export function readablePdfName(
 /** PDF в объект — только расчёт со схемой: «по размерам» или «начертить схему». */
 export function calcMessageHasScheme(message: CabinetCalcMessage): boolean {
   if (message.areaEstimate || message.inputMode === 'area') return false;
-  return message.hasScheme !== false && Boolean(message.pdfBase64 || message.specPdfBase64);
+  return message.hasScheme !== false && Boolean(message.pdfBase64);
 }
 
 export function isCabinetCalcMessage(data: unknown): data is CabinetCalcMessage {

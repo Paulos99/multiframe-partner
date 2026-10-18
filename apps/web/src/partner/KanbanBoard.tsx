@@ -23,7 +23,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   JOB_OBJECT_STATUS_LABELS,
-  documentsForRole,
+  documentKindsSummary,
   type JobObject,
   type Project,
   type UserRole,
@@ -287,7 +287,7 @@ export function KanbanBoard({
               month: 'short',
             })}
           </span>
-          <span>{documentsForRole(room.documents, role).length} PDF</span>
+          <span title="Документы">{documentKindsSummary(room.documents) || 'Без PDF'}</span>
           <span>{room.room.areaM2 ?? '—'} м²</span>
           <span
             className={styles.avatar}

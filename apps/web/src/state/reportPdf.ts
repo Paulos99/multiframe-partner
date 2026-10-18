@@ -1038,8 +1038,11 @@ function triggerDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-/** Render report as one A4 page image each → PDF download. */
-export async function downloadAcousticProfilePdf(session: SessionState): Promise<void> {
+/** Render report as one A4 page image each → PDF blob («Профиль» объекта). */
+export async function renderAcousticProfilePdf(
+  session: SessionState,
+  opts: { compact?: boolean } = {},
+): Promise<{ blob: Blob; filename: string }> {
   const full = session.derived ? session : withDerived(session);
   if (!full.derived) {
     throw new Error('Нет расчёта для отчёта');
@@ -1106,7 +1109,8 @@ export async function downloadAcousticProfilePdf(session: SessionState): Promise
 
       const pageEl = pages[i]!;
       const canvas = await html2canvas(pageEl, {
-        scale: 2,
+        // Компактный вариант уходит в объект: JPEG и меньше масштаб, чтобы влезть в лимит API.
+        scale: opts.compact ? 1.5 : 2,
         backgroundColor: '#f4f7f6',
         useCORS: true,
         logging: false,
@@ -1115,19 +1119,25 @@ export async function downloadAcousticProfilePdf(session: SessionState): Promise
         windowHeight: PAGE_H,
       });
 
-      const imgData = canvas.toDataURL('image/png', 1);
+      const imgData = opts.compact ? canvas.toDataURL('image/jpeg', 0.82) : canvas.toDataURL('image/png', 1);
       if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, 0, pageW, pageH, undefined, 'FAST');
+      pdf.addImage(imgData, opts.compact ? 'JPEG' : 'PNG', 0, 0, pageW, pageH, undefined, 'FAST');
     }
 
     const room = full.answers.room;
     const roomName = roomTypeLabel(room, 'komnata');
     const safe = roomName.replace(/[^\wа-яА-ЯёЁ\-]+/gi, '_').slice(0, 24);
     const filename = `MultiFrame_результаты_${safe}_${room.ceilingAreaM2 ?? 'area'}.pdf`;
-    triggerDownload(pdf.output('blob'), filename);
+    return { blob: pdf.output('blob'), filename };
   } finally {
     iframe.remove();
   }
+}
+
+/** Render report → PDF download. */
+export async function downloadAcousticProfilePdf(session: SessionState): Promise<void> {
+  const { blob, filename } = await renderAcousticProfilePdf(session);
+  triggerDownload(blob, filename);
 }
 
 /** Copy deep-link (answer chain). Web Share when available. */

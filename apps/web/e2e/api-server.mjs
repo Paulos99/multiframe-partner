@@ -78,6 +78,13 @@ base.objects.push({
   id: 'ui_crew_room',
   roomName: 'Гостиная',
   status: 'install',
+  // Смета с ценами и старые документы: пара «смета + спецификация» и одиночная спецификация.
+  estimate: { panels: 16, dowels: 37, panelsCost: 38336, installCost: 36000, dowelsCost: 925, totalCost: 75261 },
+  documents: [
+    { id: 'legacy_est', versionId: 'legacy_v2', kind: 'estimate', filename: 'UI Client — смета — 2026-10-17.pdf', createdAt: '2026-10-17T10:00:00Z', createdBy: 'ui_owner', hasScheme: true, panels: 16, areaM2: 24, storageKey: 'docs/ui_org/ui_crew_room/legacy_est.pdf' },
+    { id: 'legacy_spec_pair', versionId: 'legacy_v2', kind: 'spec', filename: 'UI Client — спецификация — 2026-10-17.pdf', createdAt: '2026-10-17T10:00:00Z', createdBy: 'ui_owner', hasScheme: true, panels: 16, areaM2: 24, storageKey: 'docs/ui_org/ui_crew_room/legacy_spec_pair.pdf' },
+    { id: 'legacy_spec_alone', versionId: 'legacy_v1', kind: 'spec', filename: 'UI Client — спецификация — 2026-10-16.pdf', createdAt: '2026-10-16T10:00:00Z', createdBy: 'ui_owner', hasScheme: true, panels: 15, areaM2: 22, storageKey: 'docs/ui_org/ui_crew_room/legacy_spec_alone.pdf' },
+  ],
 });
 base.objects.push({...base.objects[0], id:'ui_measured', roomName:'Кухня', status:'measured', stageOrder:100});
 writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(base));
