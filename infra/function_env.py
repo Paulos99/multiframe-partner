@@ -1,9 +1,18 @@
 """Preserve deployed configuration; never derive credentials from public IDs."""
+import hashlib
 import os
 from urllib.parse import urlencode
 
+SECRET_NAMES = ("JWT_SECRET", "JWT_SECRET_PREVIOUS", "ANALYTICS_ADMIN_KEY")
+MIN_SECRET_LENGTH = 32
 
-def version_environment(token, function_id, request, storage_env):
+
+def legacy_derived_key(folder_id, sa_id):
+    """The old JWT key was computable from public IDs; it must never be deployed again."""
+    return hashlib.sha256(f"mf-partner-{folder_id}-{sa_id}".encode()).hexdigest()
+
+
+def version_environment(token, function_id, request, storage_env, compromised=()):
     query = urlencode({"functionId": function_id, "tag": "$latest"})
     status, version = request(
         "GET",
@@ -17,7 +26,7 @@ def version_environment(token, function_id, request, storage_env):
     environment.setdefault("PLATFORM_KEY", "platform-v2.json")
     environment.update(storage_env)
     environment["CORS_ORIGIN"] = os.environ.get("CORS_ORIGIN") or "https://paulos99.github.io"
-    for name in ("JWT_SECRET", "JWT_SECRET_PREVIOUS", "ANALYTICS_ADMIN_KEY"):
+    for name in SECRET_NAMES:
         value = os.environ.get(name)
         if value:
             environment[name] = value
@@ -28,4 +37,9 @@ def version_environment(token, function_id, request, storage_env):
         if os.environ.get("JWT_SECRET_PREVIOUS"):
             raise SystemExit("Remove JWT_SECRET_PREVIOUS before setting JWT_SECRET_PREVIOUS_CLEAR=true")
         environment.pop("JWT_SECRET_PREVIOUS", None)
+    # Preserved function env may still hold the old public values: refuse to redeploy them.
+    for name in SECRET_NAMES:
+        value = environment.get(name)
+        if value and (len(value) < MIN_SECRET_LENGTH or value in compromised):
+            raise SystemExit(f"{name} is too short or a known compromised value; set a new random GitHub Secret")
     return environment

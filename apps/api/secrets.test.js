@@ -20,3 +20,12 @@ test('infra and API contain no literal or public-ID-derived deployment secrets',
     }
   }
 });
+
+test('web client sends no hardcoded analytics admin key', () => {
+  const root = fileURLToPath(new URL('../../apps/web/src/', import.meta.url));
+  for (const entry of readdirSync(root, { recursive: true })) {
+    if (!/\.(?:ts|tsx|js|mjs)$/.test(entry)) continue;
+    const content = readFileSync(path.join(root, entry), 'utf8');
+    assert.equal(/X-Analytics-Key['"]\]?\s*[:=]\s*['"]/.test(content), false, `Hardcoded analytics key in apps/web/src/${entry}`);
+  }
+});
