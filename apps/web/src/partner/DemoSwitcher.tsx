@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import type { DemoAccount } from './demoSeed';
 import { DEMO_ACCOUNTS } from './demoSeed';
 import { ShakeBox } from './motionBits';
 import { usePartner } from './PartnerContext';
-import styles from './partner.module.css';
+import styles from './DemoSwitcher.module.css';
 
 export function isDemoModeEnabled(): boolean {
   try {
@@ -18,6 +19,135 @@ export function isDemoModeEnabled(): boolean {
   return false;
 }
 
+export type DemoGroup = {
+  id: 'stp' | 'capital' | 'north';
+  title: string;
+  place: string;
+  accounts: DemoAccount[];
+};
+
+export function demoGroups(accounts: DemoAccount[] = DEMO_ACCOUNTS): DemoGroup[] {
+  return [
+    {
+      id: 'stp',
+      title: 'StP',
+      place: 'Сеть',
+      accounts: accounts.filter((account) => account.role === 'admin'),
+    },
+    {
+      id: 'capital',
+      title: 'Потолки Столицы',
+      place: 'Москва',
+      accounts: accounts.filter((account) => account.company === 'Потолки Столицы'),
+    },
+    {
+      id: 'north',
+      title: 'Северный Потолок',
+      place: 'Санкт-Петербург',
+      accounts: accounts.filter((account) => account.company === 'Северный Потолок'),
+    },
+  ];
+}
+
+export function demoRoleLabel(account: DemoAccount): string {
+  if (account.role === 'admin') return 'Админ StP';
+  return account.label.replace(/ · (Потолки Столицы|Северный Потолок)$/u, '');
+}
+
+export function demoRoleHint(account: DemoAccount): string {
+  switch (account.role) {
+    case 'admin':
+      return 'Сеть и компании';
+    case 'owner':
+      return 'Прайс и команда';
+    case 'sales':
+      return 'Сделки и КП';
+    case 'measurer':
+      return 'Замер на объекте';
+    case 'crew':
+      return demoRoleLabel(account).includes('2') ? 'Вторая бригада' : 'Задания без цен';
+    default:
+      return '';
+  }
+}
+
+function RoleButton({
+  account,
+  active,
+  pending,
+  disabled,
+  compact,
+  onPick,
+}: {
+  account: DemoAccount;
+  active: boolean;
+  pending: boolean;
+  disabled: boolean;
+  compact: boolean;
+  onPick: (account: DemoAccount) => void;
+}) {
+  const label = demoRoleLabel(account);
+  return (
+    <button
+      type="button"
+      className={compact ? styles.roleCompact : styles.role}
+      data-active={active ? '1' : undefined}
+      data-busy={pending ? '1' : undefined}
+      aria-busy={pending || undefined}
+      disabled={disabled || active}
+      onClick={() => onPick(account)}
+    >
+      <span className={styles.roleName}>
+        {pending ? <span className={styles.spinner} aria-hidden="true" /> : null}
+        {label}
+        {active ? <span className={styles.now}>Сейчас</span> : null}
+      </span>
+      <span className={styles.roleHint}>{pending ? 'Входим…' : demoRoleHint(account)}</span>
+    </button>
+  );
+}
+
+export function DemoRoleGroups({
+  activeLogin,
+  busyLogin,
+  disabled,
+  compact = false,
+  onPick,
+}: {
+  activeLogin?: string | null;
+  busyLogin: string | null;
+  disabled: boolean;
+  compact?: boolean;
+  onPick: (account: DemoAccount) => void;
+}) {
+  const prefix = useId();
+  return (
+    <div className={styles.groups}>
+      {demoGroups().map((group) => (
+        <section key={group.id} className={styles.group} aria-labelledby={`${prefix}-${group.id}`}>
+          <div className={styles.groupHead}>
+            <h3 id={`${prefix}-${group.id}`}>{group.title}</h3>
+            <span className={styles.place}>{group.place}</span>
+          </div>
+          <div className={group.accounts.length > 1 && !compact ? styles.roles : styles.rolesSingle}>
+            {group.accounts.map((account) => (
+              <RoleButton
+                key={account.login}
+                account={account}
+                active={activeLogin === account.login}
+                pending={busyLogin === account.login}
+                disabled={disabled}
+                compact={compact}
+                onPick={onPick}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function DemoLoginPicker() {
   const { login, loading } = usePartner();
   const [busy, setBusy] = useState<string | null>(null);
@@ -30,11 +160,11 @@ export function DemoLoginPicker() {
 
   if (!isDemoModeEnabled()) return null;
 
-  async function enter(loginName: string, password: string) {
+  async function enter(account: DemoAccount) {
     setErr(null);
-    setBusy(loginName);
+    setBusy(account.login);
     try {
-      await login(loginName, password);
+      await login(account.login, account.password);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось войти');
     } finally {
@@ -42,69 +172,21 @@ export function DemoLoginPicker() {
     }
   }
 
-  const stp = DEMO_ACCOUNTS.filter((a) => a.role === 'admin');
-  const companyA = DEMO_ACCOUNTS.filter((a) => a.company === 'Потолки Столицы');
-  const companyB = DEMO_ACCOUNTS.filter((a) => a.company === 'Северный Потолок');
-
   return (
-    <ShakeBox signal={shake} className={styles.demoPicker}>
-      <h2>Демо-режим</h2>
-      <p className={styles.lead}>
-        Один клик — вход в кабинет роли. Для показа руководству.
-      </p>
+    <ShakeBox signal={shake} className={styles.picker}>
+      <h2 className="srOnly">Роли для входа</h2>
+      {busy ? (
+        <p className={styles.status} role="status">
+          <span className={styles.spinner} aria-hidden="true" />
+          Входим…
+        </p>
+      ) : null}
       {err ? (
         <p className={styles.error} role="alert">
           {err}
         </p>
       ) : null}
-      <div className={styles.demoGroup}>
-        <span className={styles.demoGroupTitle}>StP</span>
-        <div className={styles.demoButtons}>
-          {stp.map((a) => (
-            <button
-              key={a.login}
-              type="button"
-              className={styles.demoBtn}
-              disabled={loading || busy != null}
-              onClick={() => void enter(a.login, a.password)}
-            >
-              {busy === a.login ? '…' : a.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className={styles.demoGroup}>
-        <span className={styles.demoGroupTitle}>Потолки Столицы · Москва</span>
-        <div className={styles.demoButtons}>
-          {companyA.map((a) => (
-            <button
-              key={a.login}
-              type="button"
-              className={styles.demoBtn}
-              disabled={loading || busy != null}
-              onClick={() => void enter(a.login, a.password)}
-            >
-              {busy === a.login ? '…' : a.label.replace(' · Потолки Столицы', '')}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className={styles.demoGroup}>
-        <span className={styles.demoGroupTitle}>Северный Потолок · СПб</span>
-        <div className={styles.demoButtons}>
-          {companyB.map((a) => (
-            <button
-              key={a.login}
-              type="button"
-              className={styles.demoBtn}
-              disabled={loading || busy != null}
-              onClick={() => void enter(a.login, a.password)}
-            >
-              {busy === a.login ? '…' : a.label.replace(' · Северный Потолок', '')}
-            </button>
-          ))}
-        </div>
-      </div>
+      <DemoRoleGroups busyLogin={busy} disabled={loading || busy != null} onPick={(account) => void enter(account)} />
     </ShakeBox>
   );
 }
@@ -112,53 +194,59 @@ export function DemoLoginPicker() {
 export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
   const { user, login, loading } = usePartner();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   if (!isDemoModeEnabled() || !user) return null;
 
-  async function switchTo(loginName: string, password: string) {
-    setBusy(true);
+  async function switchTo(account: DemoAccount) {
+    setErr(null);
+    setBusy(account.login);
     try {
-      await login(loginName, password);
+      await login(account.login, account.password);
       setOpen(false);
-    } catch {
-      /* keep open */
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Не удалось войти');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
-    <div className={inline ? styles.toolDemoWrap : styles.demoFabWrap}>
+    <div className={inline ? styles.inlineWrap : styles.fabWrap}>
       {open ? (
-        <div className={styles.demoFabPanel} role="dialog" aria-label="Демо-режим">
-          <div className={styles.demoFabHead}>
-            <strong>Демо · сменить роль</strong>
-            <button type="button" className={styles.ghost} onClick={() => setOpen(false)}>
-              ✕
+        <div className={styles.panel} role="dialog" aria-label="Сменить роль">
+          <div className={styles.panelHead}>
+            <h2>Сменить роль</h2>
+            <button type="button" className={styles.close} onClick={() => setOpen(false)} aria-label="Закрыть">
+              ×
             </button>
           </div>
-          <div className={styles.demoFabList}>
-            {DEMO_ACCOUNTS.map((a) => (
-              <button
-                key={a.login}
-                type="button"
-                className={styles.demoBtn}
-                data-active={user.login === a.login ? '1' : undefined}
-                disabled={busy || loading || user.login === a.login}
-                onClick={() => void switchTo(a.login, a.password)}
-              >
-                {a.label}
-              </button>
-            ))}
-          </div>
+          {busy ? (
+            <p className={styles.status} role="status">
+              <span className={styles.spinner} aria-hidden="true" />
+              Входим…
+            </p>
+          ) : null}
+          {err ? (
+            <p className={styles.error} role="alert">
+              {err}
+            </p>
+          ) : null}
+          <DemoRoleGroups
+            compact
+            activeLogin={user.login}
+            busyLogin={busy}
+            disabled={loading || busy != null}
+            onPick={(account) => void switchTo(account)}
+          />
         </div>
       ) : null}
       <button
         type="button"
-        className={inline ? styles.toolDemoBtn : styles.demoFab}
-        onClick={() => setOpen((v) => !v)}
-        title="Демо-режим"
+        className={inline ? styles.inlineBtn : styles.fab}
+        onClick={() => setOpen((value) => !value)}
+        title="Сменить роль"
         aria-expanded={open}
       >
         Демо

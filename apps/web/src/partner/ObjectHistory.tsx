@@ -3,6 +3,18 @@ import type { JobObjectHistoryEntry } from '../../../../packages/shared/partner'
 import { describeHistory, historyAuthor, sortedHistory, type HistoryPerson } from './historyFormatting';
 import styles from './ObjectHistory.module.css';
 
+export function recordsLabel(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11
+      ? 'запись'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'записи'
+        : 'записей';
+  return `${count} ${word}`;
+}
+
 export function ObjectHistory({ entries, people }: {
   entries: JobObjectHistoryEntry[];
   people: HistoryPerson[];
@@ -15,8 +27,8 @@ export function ObjectHistory({ entries, people }: {
   return (
     <section className={styles.history} aria-label="История объекта">
       <div className={styles.heading}>
-        <h4>История объекта</h4>
-        <span>Записей: {entries.length}</span>
+        <h3>История объекта</h3>
+        <span>{recordsLabel(entries.length)}</span>
       </div>
       <ol className={styles.list} id={listId}>
         {visible.map((entry, index) => {
@@ -27,7 +39,7 @@ export function ObjectHistory({ entries, people }: {
               <div>
                 <p className={styles.title}>{describeHistory(entry, people)}</p>
                 <div className={styles.meta}>
-                  <span>{historyAuthor(entry, people)}</span>
+                  <span className={styles.author}>{historyAuthor(entry, people)}</span>
                   {validDate ? <time dateTime={entry.at}>{new Date(entry.at).toLocaleString('ru-RU', {
                     day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
                   })}</time> : <span>Дата не указана</span>}

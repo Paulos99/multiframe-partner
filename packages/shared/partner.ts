@@ -56,8 +56,12 @@ export function canEditOrg(role: UserRole): boolean {
   return role === 'admin' || role === 'owner';
 }
 
+/**
+ * Создание, удаление и смена пароля сотрудников своей компании.
+ * Менеджер (`sales`) — как владелец, но не owner и не админ StP.
+ */
 export function canManageStaff(role: UserRole): boolean {
-  return role === 'owner';
+  return role === 'owner' || role === 'sales';
 }
 
 export function canSeeOrgAnalytics(role: UserRole): boolean {
