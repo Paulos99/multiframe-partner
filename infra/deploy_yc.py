@@ -11,10 +11,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from function_bundle import build_function_zip
-
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
+
+from function_bundle import build_function_zip
 
 FOLDER_ID = "b1gibd821or94p6f9v1q"
 SA_ID = "aje4r8khao2t9nl9dp8e"
