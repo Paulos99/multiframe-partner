@@ -1005,34 +1005,6 @@
   min-height: 0.75rem;
 }
 
-.volumeRow {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 10px;
-}
-
-.volumeItem {
-  display: grid;
-  grid-template-rows: 2.4em auto;
-  gap: 6px;
-  padding: 16px;
-  border-radius: var(--cab-radius-lg);
-  background: var(--cab-card);
-  border: 1px solid var(--cab-border);
-  box-shadow: var(--cab-shadow-sm);
-  min-height: 100%;
-}
-
-.volumeItem strong {
-  font-size: 1.45rem;
-  font-weight: 750;
-  letter-spacing: var(--cab-track);
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  color: var(--cab-ink);
-  align-self: start;
-}
-
 .breakdownGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -2978,13 +2950,11 @@
     font-size: 1.35rem;
   }
 
-  .kpiRow,
-  .volumeRow {
+  .kpiRow {
     grid-template-columns: 1fr 1fr;
   }
 
-  .kpi,
-  .volumeItem {
+  .kpi {
     padding: 14px 12px;
   }
 
