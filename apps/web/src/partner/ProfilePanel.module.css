@@ -5,14 +5,55 @@
 .fields { margin: 20px 0 0; padding: 0; border: 0; display: grid; gap: 18px; min-width: 0; }
 .fields form { display: grid; gap: 12px; border-top: 1px solid var(--cab-border); padding-top: 16px; }
 .fields label { display: grid; gap: 7px; font-size: .9rem; min-width: 0; }
-.fields input { box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid var(--cab-border); border-radius: 10px; padding: 10px; background: var(--cab-subtle); color: inherit; font: inherit; }
-.dialog button { min-height: 44px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--cab-border); color: var(--cab-accent-text); background: var(--cab-accent-soft); font: inherit; cursor: pointer; }
-.dialog button:disabled { opacity: .5; cursor: default; }
+.fields input,
+.confirm input { box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid var(--cab-border); border-radius: 10px; padding: 10px; background: var(--cab-subtle); color: inherit; font: inherit; font-size: max(16px, 1rem); }
+.fields input:focus-visible,
+.confirm input:focus-visible { outline: 2px solid var(--cab-accent); outline-offset: 1px; }
+.close,
+.action { min-height: 44px; min-width: 44px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--cab-border); color: var(--cab-accent-text); background: var(--cab-accent-soft); font: inherit; cursor: pointer; }
+.close { padding: 0; font-size: 1.4rem; line-height: 1; }
+.close:disabled,
+.action:disabled { opacity: .5; cursor: default; }
+.close:focus-visible,
+.action:focus-visible,
+.eye:focus-visible { outline: 2px solid var(--cab-accent); outline-offset: 2px; }
+
 .photo { display: flex; gap: 16px; align-items: center; }
-.photo img,.photo>span { width: 64px; height: 64px; object-fit: cover; border-radius: 50%; background: var(--cab-subtle); display: grid; place-items: center; flex: 0 0 auto; }
-.photo small { color: var(--cab-muted); }
-.error { color: #b93636; }
-@media(max-width:480px) { .dialog { padding: 18px; } .photo { flex-direction: column; align-items: stretch; } }
+.avatar { position: relative; width: 72px; height: 72px; flex: 0 0 auto; border-radius: 50%; transition: box-shadow var(--duration-fast) var(--ease-out); }
+.avatar img,
+.avatar > span { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; background: var(--cab-subtle); display: grid; place-items: center; font-size: 1.5rem; font-weight: 750; color: var(--cab-accent-text); }
+.avatar[data-drag='true'] { box-shadow: 0 0 0 3px var(--cab-accent), 0 0 0 7px var(--cab-accent-soft); }
+.photoSide { display: grid; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.fileRow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.fileRow > button { min-height: 44px; }
+.fileName { min-width: 0; flex: 1 1 120px; color: var(--cab-muted); font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.photoSide small { color: var(--cab-muted); line-height: 1.4; }
+/* Нативное поле файла скрыто — открывается кнопкой «Загрузить фото». */
+.fileInput { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0; opacity: 0; }
+
+.error { margin: 0; color: var(--cab-danger); font-size: .9rem; }
+
+/* Окно подтверждения текущим паролем. */
+.confirm { width: min(400px, calc(100vw - 32px)); box-sizing: border-box; border: 1px solid var(--cab-border); border-radius: 18px; background: var(--cab-card); color: var(--cab-ink); padding: 22px; box-shadow: var(--cab-shadow-md); }
+.confirm::backdrop { background: rgba(10, 14, 18, .45); }
+.confirmForm { display: grid; gap: 14px; }
+.confirmForm h3 { margin: 0; font-size: 1.1rem; }
+.confirmNote { margin: 0; color: var(--cab-muted); font-size: .9rem; line-height: 1.45; overflow-wrap: anywhere; }
+.confirmLabel { display: grid; gap: 7px; font-size: .9rem; }
+.secret { position: relative; display: block; }
+.secret input { padding-right: 52px; }
+.secret input[aria-invalid='true'] { border-color: var(--cab-danger); }
+.eye { position: absolute; top: 0; right: 0; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: var(--cab-muted); border-radius: 10px; cursor: pointer; }
+.eye svg { width: 20px; height: 20px; }
+.eye:hover { color: var(--cab-ink); }
+.confirmActions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.confirmActions > button { min-height: 44px; }
+
+@media (max-width: 480px) {
+  .dialog { padding: 18px; }
+  .photo { align-items: flex-start; }
+  .confirmActions > button { flex: 1 1 0; }
+}
 
 /* Телефон: профиль — полноэкранный лист с учётом safe-area. */
 @media (max-width: 640px) {
@@ -26,4 +67,8 @@
     border-radius: 0;
     padding: calc(16px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar { transition: none; }
 }

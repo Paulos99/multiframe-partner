@@ -169,69 +169,7 @@ test('crew cannot drag a room into a forbidden stage', async ({ page }) => {
     page.locator('[data-kanban-stage="closed"] [data-room-id="ui_crew_room"]'),
   ).toBeVisible();
 });
-test('profile validates current password, changes password and uploads compressed avatar', async ({
-  page,
-}) => {
-  await enter(page);
-  await page.getByRole('button', { name: 'Мой профиль', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Мой профиль' });
-  await dialog.getByLabel('Текущий пароль', { exact: true }).fill('incorrect');
-  await dialog
-    .getByLabel('Новый пароль', { exact: true })
-    .fill('ui-updated-password-only');
-  await dialog.getByLabel('Повторите пароль').fill('ui-updated-password-only');
-  await dialog
-    .getByRole('button', { name: 'Сменить пароль', exact: true })
-    .click();
-  await expect(dialog.getByRole('alert')).toHaveText('Текущий пароль неверен');
-  await dialog.getByLabel('Текущий пароль', { exact: true }).fill(password);
-  await dialog
-    .getByRole('button', { name: 'Сменить пароль', exact: true })
-    .click();
-  await expect(dialog.getByRole('status')).toContainText('Пароль обновлён');
-  const png = await page.evaluate(() => {
-    const c = document.createElement('canvas');
-    c.width = 1024;
-    c.height = 512;
-    const ctx = c.getContext('2d')!;
-    ctx.fillStyle = '#16816a';
-    ctx.fillRect(0, 0, 1024, 512);
-    return c.toDataURL('image/png').split(',')[1];
-  });
-  const upload = page.waitForRequest(
-    (r) => r.url().endsWith('/me/avatar') && r.method() === 'PUT',
-  );
-  await dialog
-    .getByLabel('Фото', { exact: true })
-    .setInputFiles({
-      name: 'test.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(png, 'base64'),
-    });
-  const request = await upload;
-  expect(request.postDataJSON().mime).toBe('image/webp');
-  expect(
-    Buffer.from(request.postDataJSON().base64, 'base64').length,
-  ).toBeLessThanOrEqual(200 * 1024);
-  await expect(dialog.getByRole('status')).toHaveText('Фото обновлено');
-  await expect(dialog.getByRole('img', { name: 'Фото профиля' })).toBeVisible();
-  await expect
-    .poll(() => dialog.getByRole('img', { name: 'Фото профиля' }).evaluate((img: HTMLImageElement) => img.naturalWidth))
-    .toBe(256);
-  await dialog
-    .getByLabel('Текущий пароль', { exact: true })
-    .fill('ui-updated-password-only');
-  await dialog.getByLabel('Логин', { exact: true }).fill('ui.owner.renamed');
-  await dialog
-    .getByRole('button', { name: 'Сохранить логин', exact: true })
-    .click();
-  await expect(dialog.getByRole('status')).toHaveText('Логин обновлён');
-  await dialog.getByRole('button', { name: 'Закрыть профиль' }).click();
-  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
-  await enter(page, 'owner.renamed', 'ui-updated-password-only');
-  await page.getByRole('button', { name: 'Мой профиль', exact: true }).click();
-  await expect(page.getByRole('img', { name: 'Фото профиля' })).toBeVisible();
-});
+// Профиль: см. e2e/profile.spec.ts.
 test('mobile and reduced motion: profile and board stay within viewport', async ({
   page,
 }) => {
