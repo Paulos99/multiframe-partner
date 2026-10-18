@@ -5,6 +5,7 @@ import { DEMO_ACCOUNTS } from './demoSeed';
 import { ShakeBox } from './motionBits';
 import { usePartner } from './PartnerContext';
 import styles from './DemoSwitcher.module.css';
+import { CloseIcon } from '../icons';
 
 export function isDemoModeEnabled(): boolean {
   try {
@@ -221,7 +222,7 @@ export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
           <div className={styles.panelHead}>
             <h2>Сменить роль</h2>
             <button type="button" className={styles.close} onClick={() => setOpen(false)} aria-label="Закрыть">
-              ×
+              <CloseIcon size="1em" />
             </button>
           </div>
           {busy ? (

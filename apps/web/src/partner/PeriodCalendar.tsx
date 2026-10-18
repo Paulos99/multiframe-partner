@@ -2,6 +2,7 @@ import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { useEffect, useId, useRef, useState } from 'react';
 import { formatPeriodLabel, ymdLocal, ymdShift } from './analytics';
 import styles from './partner.module.css';
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from '../icons';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS = [
@@ -106,6 +107,7 @@ export function PeriodCalendar({ fromYmd, toYmd, onChange, triggerClassName }: P
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
       >
+        <CalendarIcon size={16} style={{ flex: '0 0 auto', marginRight: 8, verticalAlign: '-3px' }} />
         <span className={styles.calTriggerLabel}>{formatPeriodLabel(fromYmd, toYmd)}</span>
       </button>
       {open ? (
@@ -142,13 +144,13 @@ export function PeriodCalendar({ fromYmd, toYmd, onChange, triggerClassName }: P
           </div>
           <div className={styles.calNav}>
             <button type="button" className={styles.calNavBtn} onClick={() => shiftMonth(-1)} aria-label="Предыдущий месяц">
-              ‹
+              <ChevronLeftIcon size={16} />
             </button>
             <strong>
               {MONTHS[cursor.month]} {cursor.year}
             </strong>
             <button type="button" className={styles.calNavBtn} onClick={() => shiftMonth(1)} aria-label="Следующий месяц">
-              ›
+              <ChevronRightIcon size={16} />
             </button>
           </div>
           <div className={styles.calWeek}>

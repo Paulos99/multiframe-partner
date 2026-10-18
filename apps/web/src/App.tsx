@@ -15,6 +15,7 @@ import { DemoSwitcherFab } from './partner/DemoSwitcher';
 import { SyncStatus } from './partner/SyncStatus';
 import { applyStoredTheme } from './app-shell/theme';
 import styles from './partner/partner.module.css';
+import { ChevronLeftIcon, MoreIcon } from './icons';
 
 type Route = 'cabinet' | 'problemomer' | 'calculator';
 
@@ -81,16 +82,7 @@ function ToolChrome({
   return (
     <div className={styles.toolBar}>
       <button type="button" className={styles.toolIconBtn} onClick={onCabinet} aria-label="Кабинет">
-        <svg viewBox="0 0 24 24" aria-hidden>
-          <path
-            d="M14.5 5.5 8 12l6.5 6.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <ChevronLeftIcon />
       </button>
       {/* Переключатель инструментов убран: оба открываются из вкладки «Инструменты». */}
       <span className={styles.toolTitle}>{route === 'calculator' ? 'Калькулятор' : 'Проблемомер'}</span>
@@ -105,7 +97,7 @@ function ToolChrome({
           aria-haspopup="menu"
           onClick={() => setMenu((v) => !v)}
         >
-          ⋯
+          <MoreIcon />
         </button>
         {menu ? (
           <div className={styles.toolMenu} role="menu">

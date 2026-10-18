@@ -16,6 +16,7 @@ import {
 import styles from './MaterialsPanel.module.css';
 import { ContextMenu, DeleteFolderDialog, folderContents } from './MaterialsContextMenu';
 import { openFilePreview, type PreviewItem, type PreviewSource } from '../ui/filePreview/previewStore';
+import { FolderIcon as FolderGlyph } from '../icons';
 
 export { PREPARING_LABEL };
 
@@ -50,12 +51,7 @@ export function folderCountLabel(count: number): string {
 function FolderIcon() {
   return (
     <span className={styles.folderIcon} aria-hidden="true">
-      <svg viewBox="0 0 24 24">
-        <path
-          fill="currentColor"
-          d="M3.5 6.75A2.25 2.25 0 0 1 5.75 4.5h3.1c.5 0 .97.2 1.32.55l1.2 1.2h6.88a2.25 2.25 0 0 1 2.25 2.25v8.25a2.25 2.25 0 0 1-2.25 2.25h-12.5a2.25 2.25 0 0 1-2.25-2.25V6.75Z"
-        />
-      </svg>
+      <FolderGlyph />
     </span>
   );
 }

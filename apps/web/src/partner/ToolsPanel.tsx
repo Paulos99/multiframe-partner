@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { EASE, m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { markReturnToTools } from './toolsReturn';
 import styles from './ToolsPanel.module.css';
+import { ArrowRightIcon, CalculatorIcon as CalculatorGlyph, GaugeIcon } from '../icons';
 
 export type ToolCopy = {
   id: 'problemomer' | 'calculator';
@@ -35,26 +36,11 @@ export function toolCards(): ToolCopy[] {
 }
 
 function ProblemomerIcon() {
-  return (
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <circle cx="24" cy="24" r="20" fill="currentColor" opacity=".12" />
-      <path d="M12 28a12 12 0 0 1 24 0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      <path d="M24 28l7-9" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      <circle cx="24" cy="28" r="3" fill="currentColor" />
-      <path d="M15 34h18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" opacity=".5" />
-    </svg>
-  );
+  return <GaugeIcon />;
 }
 
 function CalculatorIcon() {
-  return (
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <rect x="6" y="6" width="36" height="36" rx="10" fill="currentColor" opacity=".12" />
-      <rect x="14" y="12" width="20" height="24" rx="4" fill="none" stroke="currentColor" strokeWidth="3" />
-      <path d="M18 18h12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      <path d="M19 25h.01M24 25h.01M29 25h.01M19 30h.01M24 30h.01M29 30h.01" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />
-    </svg>
-  );
+  return <CalculatorGlyph />;
 }
 
 function Bullets({ title, items }: { title: string; items: string[] }) {
@@ -129,9 +115,7 @@ export function ToolsPanel({
               onClick={() => open(tool.id)}
             >
               {tool.action}
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 12h13m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <ArrowRightIcon />
             </button>
           </m.article>
         ))}
