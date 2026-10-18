@@ -1,28 +1,29 @@
+import { useSyncExternalStore } from 'react';
 import { usePartner } from './PartnerContext';
-import { PartnerNetworkOverview } from './network/PartnerNetwork';
 import { ObjectsPanel } from './ObjectsPanel';
+import { PeriodCalendar } from './PeriodCalendar';
+import { getAnalyticsPeriod, setAnalyticsPeriod, subscribeAnalyticsPeriod } from './analytics';
+import styles from './RoleOverview.module.css';
 
-export function NetworkOverview({
-  count,
-  onPartners,
-  onAdd,
-  onLearning,
-  onOpenCompany,
-}: {
+export function NetworkOverview({ count, onPartners, onAdd, onLearning }: {
   count: number;
   onPartners: () => void;
   onAdd: () => void;
   onLearning: () => void;
-  onOpenCompany?: (company: { orgId: string | null; userId: string; companyName: string }) => void;
 }) {
+  const period = useSyncExternalStore(subscribeAnalyticsPeriod, getAnalyticsPeriod, getAnalyticsPeriod);
   return (
-    <PartnerNetworkOverview
-      count={count}
-      onPartners={onPartners}
-      onAdd={onAdd}
-      onLearning={onLearning}
-      onOpenCompany={onOpenCompany}
-    />
+    <section className={styles.board} aria-label="Управление партнёрской сетью">
+      <div className={styles.period}>
+        <PeriodCalendar fromYmd={period.fromYmd} toYmd={period.toYmd}
+          onChange={setAnalyticsPeriod} triggerClassName={styles.periodTrigger} />
+      </div>
+      <div className={styles.actions}>
+        <button type="button" className={styles.action} onClick={onPartners}>Партнёры · {count}</button>
+        <button type="button" className={styles.action} onClick={onAdd}>Новый партнёр</button>
+        <button type="button" className={styles.action} onClick={onLearning}>Обучение и материалы</button>
+      </div>
+    </section>
   );
 }
 
