@@ -33,8 +33,12 @@ async function expectGrabPointStays(page: Page, id: string) {
     expect(Math.abs(start.x + dx - wrapper.x - 20)).toBeLessThanOrEqual(3);
     expect(Math.abs(start.y + dy - wrapper.y - 15)).toBeLessThanOrEqual(3);
     expect(Math.abs(wrapper.width - box.width)).toBeLessThanOrEqual(1);
-    const origin = await overlay.evaluate((el) => getComputedStyle(el).transformOrigin);
-    expect(origin).toBe('20px 15px');
+    // The card inside rotates/scales around the grab point, so that point stays under the pointer.
+    const origin = await overlay.evaluate((el) =>
+      getComputedStyle(el).transformOrigin.split(' ').map(parseFloat),
+    );
+    expect(Math.abs(origin[0] - 20)).toBeLessThanOrEqual(1);
+    expect(Math.abs(origin[1] - 15)).toBeLessThanOrEqual(1);
   }
   await page.keyboard.press('Escape');
   await page.mouse.up();

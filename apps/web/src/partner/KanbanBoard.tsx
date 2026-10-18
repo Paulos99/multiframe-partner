@@ -195,7 +195,7 @@ export function KanbanBoard({
   const [filters, setFilters] = useState(false);
   const [menu, setMenu] = useState<{ room: JobObject; x: number; y: number } | null>(null);
   // Where the pointer grabbed the card, relative to its top-left; the overlay rotates/scales around it.
-  const [grab, setGrab] = useState<{ x: number; y: number; width: number } | null>(null);
+  const [grab, setGrab] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const busy = useRef(false);
   useEffect(() => {
     if (!menu) return;
@@ -444,7 +444,11 @@ export function KanbanBoard({
           if (busy.current) return;
           setMenu(null);
           const room = visible.find((r) => r.id === drag.id);
-          const rect = drag.rect.current.initial;
+          // dnd-kit has not measured the active rect yet at drag start, so read the card node itself.
+          const node = (activatorEvent?.target as Element | null)?.closest(
+            `.${styles.cardWrap}`,
+          );
+          const rect = node?.getBoundingClientRect() ?? drag.rect.current.initial;
           const point =
             activatorEvent && 'touches' in activatorEvent
               ? (activatorEvent as TouchEvent).touches[0]
@@ -455,9 +459,10 @@ export function KanbanBoard({
                   x: point.clientX - rect.left,
                   y: point.clientY - rect.top,
                   width: rect.width,
+                  height: rect.height,
                 }
               : rect
-                ? { x: rect.width / 2, y: rect.height / 2, width: rect.width }
+                ? { x: rect.width / 2, y: rect.height / 2, width: rect.width, height: rect.height }
                 : null,
           );
           if (room) {
@@ -638,7 +643,9 @@ export function KanbanBoard({
                 initial={false}
                 style={{
                   width: grab?.width,
-                  transformOrigin: grab ? `${grab.x}px ${grab.y}px` : undefined,
+                  // Motion owns transform-origin; rotate/scale around the grab point so it stays put.
+                  originX: grab ? grab.x / grab.width : 0.5,
+                  originY: grab ? grab.y / grab.height : 0.5,
                 }}
                 animate={{ rotate: reduce ? 0 : 3, scale: reduce ? 1 : 1.04 }}
                 transition={motionPresets.layout}

@@ -289,8 +289,8 @@
 .cardWrap {
   position: relative;
 }
-.cardWrap:has(.cardMenu) .card {
-  padding-right: 40px;
+.cardWrap:has(.cardMenu) .card > strong {
+  padding-right: 26px;
 }
 .cardMenu {
   position: absolute;
