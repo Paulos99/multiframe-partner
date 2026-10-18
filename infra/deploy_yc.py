@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import os
 import time
@@ -14,6 +13,7 @@ from pathlib import Path
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
+from function_env import version_environment
 from function_bundle import build_function_zip
 from function_package import assert_function_zip_allowed, build_version_source
 from verify_function_bundle import verify_function_zip
@@ -395,15 +395,7 @@ def create_version(
     entrypoint: str,
     source: dict,
 ) -> str:
-    jwt_secret = hashlib.sha256(f"mf-partner-{FOLDER_ID}-{SA_ID}".encode()).hexdigest()
-    environment = {
-        "JWT_SECRET": jwt_secret,
-        "CORS_ORIGIN": "*",
-        "ANALYTICS_KEY": "analytics-events.json",
-        "ANALYTICS_ADMIN_KEY": "admin1234",
-        "PLATFORM_KEY": "platform-v2.json",
-        **storage_env,
-    }
+    environment = version_environment(token, function_id, api_soft, storage_env)
     # AWS SDK is optional — only needed with PARTNERS_BUCKET. Bundle already has jose/bcryptjs.
     print("creating version… env keys:", sorted(environment.keys()))
     _, op = api(
@@ -526,7 +518,7 @@ def smoke(domain: str) -> None:
         print("WARN: expected version 2 — function may still be old or path wrong")
 
     st, login = http("POST", "/auth/login", {"login": "partner1", "password": "demo1234"})
-    print("POST /auth/login partner1", st, {k: login.get(k) for k in ("token", "user", "message") if k in login or k == "message"})
+    print("POST /auth/login partner1", st, {k: login.get(k) for k in ("user", "message") if k in login or k == "message"})
     token = login.get("token")
     if not token:
         print("FAIL login")
