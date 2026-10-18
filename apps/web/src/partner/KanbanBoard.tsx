@@ -407,7 +407,8 @@ export function KanbanBoard({
           </label>
         )}
       </div>
-      <p className={styles.help} id="kanban-help">
+      {/* Visible hint removed at Pavel's request; the instructions stay for screen readers. */}
+      <p className={styles.srOnly} id="kanban-help">
         Перетащите карточку в стадию или измените порядок. Alt + ←/→ — стадия,
         Пробел — поднять, стрелки — переместить, Escape — отменить. На телефоне
         удерживайте карточку.
