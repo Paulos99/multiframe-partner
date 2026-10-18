@@ -467,6 +467,26 @@ function dayKey(iso) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/**
+ * Сам админ сети STP (и его организация, если она есть) — не партнёр.
+ * Его входы и расчёты не попадают в партнёрскую аналитику. Определяем по роли, не по названию.
+ * Данные не удаляются: события просто не участвуют в агрегации.
+ */
+export function networkAdminScope(platform) {
+  const admins = (platform?.users || []).filter((u) => u && u.role === 'admin');
+  return {
+    adminUserIds: admins.map((u) => u.id).filter(Boolean),
+    adminOrgIds: admins.map((u) => u.orgId).filter(Boolean),
+  };
+}
+
+function isNetworkAdminEvent(e, opts) {
+  if (String(e?.role || '') === 'admin') return true;
+  if (e?.userId && (opts.adminUserIds || []).includes(e.userId)) return true;
+  if (e?.orgId && (opts.adminOrgIds || []).includes(e.orgId)) return true;
+  return false;
+}
+
 function filterAnalyticsEvents(allEvents, opts) {
   const fromMs = opts.from ? Date.parse(opts.from) : null;
   const toMs = opts.to ? Date.parse(opts.to) : null;
@@ -474,6 +494,7 @@ function filterAnalyticsEvents(allEvents, opts) {
     .filter((e) => {
       const t = Date.parse(e.at);
       if (Number.isNaN(t)) return false;
+      if (isNetworkAdminEvent(e, opts)) return false;
       if (fromMs != null && t < fromMs) return false;
       if (toMs != null && t > toMs) return false;
       if (opts.orgId && e.orgId !== opts.orgId) return false;
@@ -498,7 +519,7 @@ function toBreakdown(counts) {
     .sort((a, b) => b.count - a.count);
 }
 
-function aggregateAnalyticsDashboard(allEvents, opts) {
+export function aggregateAnalyticsDashboard(allEvents, opts) {
   const events = filterAnalyticsEvents(allEvents, opts);
   const partnerMap = new Map();
   const executorMap = new Map();
@@ -1646,6 +1667,7 @@ export async function handler(event = {}) {
           executorCount: staffDir.filter((e) => !orgId || e.orgId === orgId).length,
           executorDirectory: staffDir,
           journalAll: query.journal === '1',
+          ...networkAdminScope(platform),
         });
         return json(200, dash);
       } catch {
