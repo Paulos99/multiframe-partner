@@ -79,7 +79,28 @@
   padding: 20px 24px calc(156px + env(safe-area-inset-bottom));
 }
 
-@media (max-width: 900px) {
+/* Планшет: рельс 88 px слева (см. Sidebar.module.css), логотип — в шапке. */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .frame {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .mobileBrand {
+    display: block;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .topbar {
+    padding: 14px 20px 12px;
+  }
+
+  .work {
+    padding: 18px 20px calc(156px + var(--safe-bottom));
+  }
+}
+
+@media (max-width: 640px) {
   .frame {
     grid-template-columns: 1fr;
   }
@@ -109,7 +130,8 @@
   }
 
   .work {
-    padding: 16px 12px calc(188px + env(safe-area-inset-bottom));
+    /* Нижняя панель + плавающие кнопки + safe-area. */
+    padding: 16px 12px calc(188px + var(--safe-bottom));
   }
 }
 

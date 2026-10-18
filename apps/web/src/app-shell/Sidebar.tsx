@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { CabinetBrand } from '../partner/CabinetBrand';
+import { NavIcon, splitNavLabel } from './navIcons';
 import styles from './Sidebar.module.css';
 
 export type SideItem = {
@@ -32,7 +33,7 @@ export function Sidebar({
             className={item.active ? styles.itemOn : styles.item}
             onClick={item.onSelect}
           >
-            {item.label}
+            <NavLabel item={item} />
           </button>
         ))}
       </div>
@@ -46,7 +47,7 @@ export function Sidebar({
             className={item.active ? styles.itemOn : styles.item}
             onClick={item.onSelect}
           >
-            {item.label}
+            <NavLabel item={item} />
           </button>
         ))}
       </div>
@@ -62,5 +63,26 @@ export function Sidebar({
         {tools ? <div className={styles.tools}>{tools}</div> : null}
       </div>
     </aside>
+  );
+}
+
+/** Полная подпись остаётся доступным именем; на планшете и телефоне видна короткая подпись с иконкой и счётчиком. */
+function NavLabel({ item }: { item: SideItem }) {
+  const { base, count } = splitNavLabel(item.label);
+  return (
+    <>
+      <span className={styles.icon}>
+        <NavIcon id={item.id} label={item.label} />
+        {count ? (
+          <span className={styles.badge} aria-hidden="true">
+            {count}
+          </span>
+        ) : null}
+      </span>
+      <span className={styles.full}>{item.label}</span>
+      <span className={styles.short} aria-hidden="true">
+        {base}
+      </span>
+    </>
   );
 }

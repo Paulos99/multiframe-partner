@@ -75,3 +75,10 @@
     padding: 4px;
   }
 }
+
+@media (max-width: 1024px), (pointer: coarse) {
+  .toggle,
+  .toggleOn {
+    min-height: var(--touch-min);
+  }
+}

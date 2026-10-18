@@ -183,3 +183,12 @@ body.theme-dark::-webkit-scrollbar-thumb:hover {
 html { scrollbar-gutter: stable; }
 
 [data-reveal] { transition: none; }
+
+/* Телефоны и планшеты: шрифт в полях не меньше 16 px — иначе iOS увеличивает страницу при фокусе. */
+@media (max-width: 1024px), (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
+  select,
+  textarea {
+    font-size: max(16px, 1rem) !important;
+  }
+}
