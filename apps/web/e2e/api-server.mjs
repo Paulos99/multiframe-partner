@@ -79,6 +79,7 @@ base.objects.push({
   roomName: 'Гостиная',
   status: 'install',
 });
+base.objects.push({...base.objects[0], id:'ui_measured', roomName:'Кухня', status:'measured', stageOrder:100});
 writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(base));
 const { setObjectStoreTransportForTests } =
   await import('../../api/objectStore.js');

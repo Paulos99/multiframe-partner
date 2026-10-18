@@ -419,6 +419,13 @@ function skippedHistory(existing, body, actor) {
   ].slice(0, 50);
 }
 
+function stageOrderInput(body, existing) {
+  if (body.stageOrder !== undefined && (typeof body.stageOrder !== 'number' || !Number.isFinite(body.stageOrder))) {
+    throw Object.assign(new Error('stageOrder должен быть конечным числом'), { status: 400 });
+  }
+  return body.stageOrder ?? (body.status && body.status !== existing?.status ? -Date.now() : existing?.stageOrder);
+}
+
 function normalizeObjectInput(body, existing, actor, org, platform) {
   const now = clampClientTime(body?.updatedAt);
   const status = body.status || existing?.status || 'draft';
@@ -437,6 +444,7 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     createdBy: existing?.createdBy || actor.id,
     assignedTo: body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null,
     status: allowed.includes(status) ? status : 'draft',
+    stageOrder: stageOrderInput(body, existing),
     clientName: String(body.clientName ?? existing?.clientName ?? '').trim(),
     clientPhone: String(body.clientPhone ?? existing?.clientPhone ?? '').trim(),
     address: String(body.address ?? existing?.address ?? '').trim(),
@@ -1465,6 +1473,7 @@ export async function handler(event = {}) {
         const next = {
           ...existing,
           status: nextStatus || existing.status,
+          stageOrder: stageOrderInput(body, existing),
           updatedAt: clampClientTime(body.updatedAt),
           history: [
             {

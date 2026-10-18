@@ -1,4 +1,5 @@
 import { Skeleton } from './Skeleton';
+import { roomRank } from './kanban';
 import { KanbanBoard } from './KanbanBoard';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
@@ -136,7 +137,7 @@ export function ObjectsPanel({
   const canDelete = canDeleteObjects(user.role);
   const canCreate = canCreateObjects(user.role);
   const staff = api.partnerListStaff();
-  const [view,setView]=useState<'list'|'kanban'>('list');
+  const [createStage, setCreateStage] = useState<JobObjectStatus>('draft');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -145,6 +146,8 @@ export function ObjectsPanel({
   const [statusFilter, setStatusFilter] = useState<JobObjectStatus | 'all'>(
     user.role === 'crew' ? 'install' : 'all',
   );
+  // On the board stages are columns, so the status filter applies only to the compact list.
+  const roomFilter = compact ? statusFilter : 'all';
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [docBusy, setDocBusy] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -171,16 +174,16 @@ export function ObjectsPanel({
   }, [api.objects]);
 
   const cards = useMemo(
-    () => buildProjectCards(api.projects, api.objects).filter((card) => cardMatches(card, query, statusFilter)),
-    [api.projects, api.objects, query, statusFilter],
+    () => buildProjectCards(api.projects, api.objects).filter((card) => cardMatches(card, query, roomFilter)),
+    [api.projects, api.objects, query, roomFilter],
   );
   const selectedCard = useMemo(
     () => buildProjectCards(api.projects, api.objects).find((card) => card.key === selectedKey) || null,
     [api.projects, api.objects, selectedKey],
   );
   const selectedRooms = useMemo(
-    () => (selectedCard ? visibleRooms(selectedCard.rooms, statusFilter) : []),
-    [selectedCard, statusFilter],
+    () => (selectedCard ? visibleRooms(selectedCard.rooms, roomFilter) : []),
+    [selectedCard, roomFilter],
   );
   const selected = useMemo(
     () => api.objects.find((o) => o.id === selectedId) || null,
@@ -221,11 +224,43 @@ export function ObjectsPanel({
     }
   }
 
-  async function moveRoom(room:JobObject,status:JobObjectStatus) {
-    setErr(null);setPendingId(room.id);
-    try {const saved=await api.saveObject({id:room.id,status});setMsg(saved.pendingSync?'Стадия сохранена на устройстве, ожидает синхронизации':'Стадия сохранена');}
-    catch(e){setErr(e instanceof Error?e.message:'Стадия не сохранена');}
-    finally {setPendingId(null);}
+  // Optimistic order lives in KanbanBoard; here we persist and compensate on failure.
+  async function moveRoom(changes: JobObject[]) {
+    setErr(null);
+    setMsg(null);
+    setPendingId(changes[changes.length - 1].id);
+    const originals = new Map(api.objects.map((room) => [room.id, room]));
+    const savedIds: string[] = [];
+    let pendingSync = false;
+    try {
+      for (const room of changes) {
+        const saved = await api.saveObject({ id: room.id, status: room.status, stageOrder: room.stageOrder });
+        savedIds.push(room.id);
+        pendingSync ||= !!saved.pendingSync;
+      }
+      setMsg(pendingSync ? 'Стадия сохранена на устройстве, ожидает синхронизации' : 'Стадия сохранена');
+    } catch (error) {
+      let incomplete = false;
+      for (const id of savedIds.reverse()) {
+        const room = originals.get(id);
+        if (!room) continue;
+        try {
+          await api.saveObject({ id, status: room.status, stageOrder: roomRank(room) });
+        } catch {
+          incomplete = true;
+        }
+      }
+      setErr(
+        incomplete
+          ? 'Не удалось восстановить весь порядок. Обновите страницу.'
+          : error instanceof Error
+            ? error.message
+            : 'Порядок не сохранён',
+      );
+      throw error;
+    } finally {
+      setPendingId(null);
+    }
   }
 
   async function openDocument(obj: JobObject, doc: JobObjectDocument, download: boolean) {
@@ -275,7 +310,7 @@ export function ObjectsPanel({
     setErr(null);
     const roomLabel = draft.roomName.trim() || 'Комната';
     const fields = {
-      status: 'draft' as const,
+      status: createStage,
       clientName: draft.clientName.trim(),
       clientPhone: draft.clientPhone.trim(),
       address: draft.address.trim(),
@@ -374,8 +409,16 @@ export function ObjectsPanel({
           </p>
         </div>
         {canCreate ? (
-          <button type="button" className={styles.primary} onClick={() => setCreating((value) => !value)} aria-expanded={creating}>
-            {creating ? 'Закрыть' : 'Создать'}
+          <button
+            type="button"
+            className={styles.primary}
+            onClick={() => {
+              setCreateStage('draft');
+              setCreating((value) => !value);
+            }}
+            aria-expanded={creating}
+          >
+            {creating ? 'Закрыть' : compact ? 'Создать' : '+ Новый объект'}
           </button>
         ) : null}
       </div>
@@ -446,7 +489,7 @@ export function ObjectsPanel({
       {selectedCard ? (
         <div>
           <button type="button" className={listStyles.back} onClick={() => { setSelectedKey(null); setSelectedId(null); }}>
-            ← К списку
+            ← {compact ? 'К списку' : 'К доске'}
           </button>
           <h3>{selectedCard.title}</h3>
           <p className={styles.lead}>{selectedCard.subtitle}</p>
@@ -498,33 +541,50 @@ export function ObjectsPanel({
               enterKeyHint="search"
             />
           </label>
-          <div className={styles.chipRow} role="toolbar" aria-label="Фильтр по статусу">
-            {filters.map((id) => {
-              const on = statusFilter === id;
-              const label = id === 'all' ? 'Все' : JOB_OBJECT_STATUS_LABELS[id];
-              const n = id === 'all' ? api.objects.length : counts[id];
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={on ? styles.chipOn : styles.chip}
-                  aria-pressed={on}
-                  onClick={() => setStatusFilter(id)}
-                >
-                  {label} · {n}
-                </button>
-              );
-            })}
-          </div>
-          <div className={styles.chipRow} role="group" aria-label="Вид объектов">
-            <button type="button" className={view==='list'?styles.chipOn:styles.chip} aria-pressed={view==='list'} onClick={()=>setView('list')}>Список</button>
-            <button type="button" className={view==='kanban'?styles.chipOn:styles.chip} aria-pressed={view==='kanban'} onClick={()=>setView('kanban')}>Канбан</button>
-          </div>
-          {api.objectsLoading && !api.objects.length ? (
+          {compact ? (
+            <div className={styles.chipRow} role="toolbar" aria-label="Фильтр по статусу">
+              {filters.map((id) => {
+                const on = statusFilter === id;
+                const label = id === 'all' ? 'Все' : JOB_OBJECT_STATUS_LABELS[id];
+                const n = id === 'all' ? api.objects.length : counts[id];
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={on ? styles.chipOn : styles.chip}
+                    aria-pressed={on}
+                    onClick={() => setStatusFilter(id)}
+                  >
+                    {label} · {n}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          {!compact ? (
+            <KanbanBoard
+              rooms={cards.flatMap((card) => visibleRooms(card.rooms, 'all'))}
+              projects={api.projects}
+              role={user.role}
+              pendingId={pendingId}
+              loading={api.objectsLoading && !api.objects.length}
+              staff={staff}
+              onCreate={
+                canCreate
+                  ? (stage) => {
+                      setCreateStage(stage);
+                      setCreating(true);
+                    }
+                  : undefined
+              }
+              onMove={moveRoom}
+              onOpen={(room) => {
+                setSelectedKey(room.projectId || `room:${room.id}`);
+                setSelectedId(room.id);
+              }}
+            />
+          ) : api.objectsLoading && !api.objects.length ? (
             <Skeleton kind="cards" count={3} label="Загрузка объектов"/>
-          ) : view==='kanban' ? (
-            <KanbanBoard rooms={cards.flatMap(card=>visibleRooms(card.rooms,statusFilter))} projects={api.projects} role={user.role} pendingId={pendingId}
-              onMove={moveRoom} onOpen={room=>{setSelectedKey(room.projectId||`room:${room.id}`);setSelectedId(room.id);}} />
           ) : (
             <div className={listStyles.grid}>
               {cards.map((card, index) => (

@@ -258,6 +258,7 @@ export type JobObject = {
   createdBy: string;
   assignedTo: string | null;
   status: JobObjectStatus;
+  stageOrder?: number;
   clientName: string;
   clientPhone: string;
   address: string;

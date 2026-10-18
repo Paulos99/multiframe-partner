@@ -876,6 +876,7 @@ export function upsertLocalObject(
     assignedTo:
       input.assignedTo !== undefined ? input.assignedTo : existing?.assignedTo ?? null,
     status,
+    stageOrder: input.stageOrder ?? (input.status && input.status !== existing?.status ? -Date.now() : existing?.stageOrder),
     clientName: (input.clientName ?? existing?.clientName ?? '').trim(),
     clientPhone: (input.clientPhone ?? existing?.clientPhone ?? '').trim(),
     address: (input.address ?? existing?.address ?? '').trim(),
