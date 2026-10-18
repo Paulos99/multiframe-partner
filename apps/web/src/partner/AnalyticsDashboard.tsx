@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type {
   AnalyticsBreakdownItem,
   AnalyticsDashboard as DashData,
@@ -15,7 +15,18 @@ import {
   type RoomType,
 } from '../state/types';
 import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
-import { fetchAnalyticsDashboard, formatPeriodLabel, monthLabel, rangeFromYmd, ymdShift } from './analytics';
+import {
+  fetchAnalyticsDashboard,
+  formatPeriodLabel,
+  getAnalyticsFocusOrg,
+  getAnalyticsPeriod,
+  monthLabel,
+  rangeFromYmd,
+  setAnalyticsFocusOrg,
+  setAnalyticsPeriod,
+  subscribeAnalyticsFocusOrg,
+  subscribeAnalyticsPeriod,
+} from './analytics';
 import { JournalDownload } from './JournalDownload';
 import { CountUp, FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
@@ -341,12 +352,21 @@ function funnelStepsCalc(f: AnalyticsFunnel) {
 
 type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'objects';
 
-export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
+export function AnalyticsDashboard({
+  mode,
+  showPeriodControl,
+}: {
+  mode: 'admin' | 'partner';
+  /** На главной STP период уже стоит над карточками. Второй календарь не показываем. */
+  showPeriodControl?: boolean;
+}) {
   const api = usePartner();
   const user = api.user!;
-  const [fromYmd, setFromYmd] = useState<string | null>(() => ymdShift(-6));
-  const [toYmd, setToYmd] = useState<string | null>(() => ymdShift(0));
-  const [orgFilter, setOrgFilter] = useState<string>('');
+  const periodControl = showPeriodControl ?? mode !== 'admin';
+  const period = useSyncExternalStore(subscribeAnalyticsPeriod, getAnalyticsPeriod, getAnalyticsPeriod);
+  const focusOrg = useSyncExternalStore(subscribeAnalyticsFocusOrg, getAnalyticsFocusOrg, getAnalyticsFocusOrg);
+  const fromYmd = period.fromYmd;
+  const toYmd = period.toYmd;
   const [section, setSection] = useState<AnalyticsTab>('overview');
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -365,7 +385,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     let cancelled = false;
     setLoading(true);
     const { from, to } = rangeFromYmd(fromYmd, toYmd);
-    const orgId = mode === 'partner' ? user.orgId : orgFilter || null;
+    const orgId = mode === 'partner' ? user.orgId : focusOrg || null;
     void fetchAnalyticsDashboard({
       mode,
       from,
@@ -382,7 +402,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, fromYmd, toYmd, orgFilter, user.orgId, user.login, section]);
+  }, [mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section]);
 
   const inactivePartners = useMemo(() => {
     if (mode !== 'admin' || !data) return [];
@@ -439,22 +459,21 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             {` · ${formatPeriodLabel(fromYmd, toYmd)}`}
           </p>
         </div>
-        <div className={styles.dashFilters}>
-          <PeriodCalendar
-            fromYmd={fromYmd}
-            toYmd={toYmd}
-            onChange={(from, to) => {
-              setFromYmd(from);
-              setToYmd(to);
-            }}
-          />
-        </div>
+        {periodControl ? (
+          <div className={styles.dashFilters}>
+            <PeriodCalendar
+              fromYmd={fromYmd}
+              toYmd={toYmd}
+              onChange={(from, to) => setAnalyticsPeriod(from, to)}
+            />
+          </div>
+        ) : null}
       </div>
 
       {mode === 'admin' ? (
         <label className={styles.field}>
           Партнёр
-          <select value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)}>
+          <select value={focusOrg} onChange={(e) => setAnalyticsFocusOrg(e.target.value)}>
             <option value="">Все</option>
             {partnersList.map((p) => (
               <option key={p.user.id} value={p.user.orgId || ''}>
@@ -689,7 +708,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             mode={mode}
             fromYmd={fromYmd}
             toYmd={toYmd}
-            orgId={mode === 'partner' ? user.orgId : orgFilter || null}
+            orgId={mode === 'partner' ? user.orgId : focusOrg || null}
           />
           {loading ? (
             <p className={styles.lead}>Считаем журнал…</p>
