@@ -7,6 +7,7 @@ import {
   SOUND_PRESSURE_TABLE,
 } from '../state/acoustic/soundPressureTable';
 import styles from './SoundPressureHelp.module.css';
+import { CloseIcon } from '../icons';
 
 type ButtonProps = {
   /** Подсветить строку таблицы (округление до целого дБ). */
@@ -151,7 +152,7 @@ function SoundPressureHelpDialog({ highlightDb, onClose }: DialogProps) {
             aria-label="Закрыть"
             onClick={requestClose}
           >
-            <span aria-hidden>×</span>
+            <CloseIcon size="1em" />
           </button>
         </header>
 

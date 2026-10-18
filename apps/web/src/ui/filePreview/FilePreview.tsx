@@ -38,6 +38,13 @@ import {
   type PreviewSource,
 } from './previewStore';
 import styles from './FilePreview.module.css';
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon as CloseGlyph,
+  DownloadIcon as DownloadGlyph,
+  ExternalIcon as ExternalGlyph,
+} from '../../icons';
 
 type Resolved =
   | { status: 'loading' }
@@ -642,9 +649,8 @@ function FileGlyph({ kind }: { kind: FileKind }) {
   return (
     <span className={styles.glyph} data-kind={kind} aria-hidden="true">
       <svg viewBox="0 0 40 48">
-        <path d="M6 2h20l12 12v30a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" fill="currentColor" opacity=".14" />
-        <path d="M26 2v10a2 2 0 0 0 2 2h10" fill="none" stroke="currentColor" strokeWidth="2" />
-        <path d="M6 2h20l12 12v30a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" strokeWidth="2" />
+        <path d="M6 2h20l12 12v30a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" fill="currentColor" opacity=".16" />
+        <path d="M26 2l12 12H28a2 2 0 0 1-2-2V2Z" fill="currentColor" opacity=".45" />
       </svg>
       <span>{label}</span>
     </span>
@@ -652,30 +658,14 @@ function FileGlyph({ kind }: { kind: FileKind }) {
 }
 
 function DownloadIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.icon}>
-      <path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <DownloadGlyph className={styles.icon} />;
 }
 function ExternalIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.icon}>
-      <path d="M14 5h5v5m0-5-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <ExternalGlyph className={styles.icon} />;
 }
 function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.icon}>
-      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
+  return <CloseGlyph className={styles.icon} />;
 }
 function ChevronIcon({ dir }: { dir: 'left' | 'right' }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.icon}>
-      <path d={dir === 'left' ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return dir === 'left' ? <ChevronLeftIcon className={styles.icon} /> : <ChevronRightIcon className={styles.icon} />;
 }
