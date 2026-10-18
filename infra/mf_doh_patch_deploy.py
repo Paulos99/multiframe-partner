@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import os
 import subprocess
@@ -15,6 +14,7 @@ from urllib.parse import urlparse
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
+from function_env import legacy_derived_key, version_environment
 from function_bundle import build_function_zip
 from function_package import assert_function_zip_allowed, build_version_source
 from verify_function_bundle import verify_function_zip
@@ -217,16 +217,9 @@ def create_version(
     entrypoint: str,
     source: dict,
 ) -> str:
-    jwt_secret = hashlib.sha256(f"mf-partner-{FOLDER_ID}-{SA_ID}".encode()).hexdigest()
-    environment = {
-        "JWT_SECRET": jwt_secret,
-        "CORS_ORIGIN": "*",
-        "ANALYTICS_KEY": "analytics-events.json",
-        "ANALYTICS_ADMIN_KEY": "admin1234",
-        "PLATFORM_KEY": "platform-v2.json",
-        "DEPLOY_BUST": str(int(time.time())),
-        **storage_env,
-    }
+    environment = version_environment(token, function_id, curl_json, storage_env,
+        compromised=(legacy_derived_key(FOLDER_ID, SA_ID),))
+    environment["DEPLOY_BUST"] = str(int(time.time()))
     print("creating version, env keys:", sorted(environment.keys()))
     _, op = curl_json(
         "POST",

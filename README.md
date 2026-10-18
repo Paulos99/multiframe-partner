@@ -132,3 +132,5 @@ py -3 infra/deploy_yc.py
 ```
 
 Ключ SA: `%USERPROFILE%\.yc\agent-project-creator-key.json`
+
+Настройка секретов API и ротация JWT: [docs/security.md](docs/security.md).
