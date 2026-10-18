@@ -3,8 +3,8 @@
  * карточки документов. Файл собирается тем же рендером, что PDF калькулятора:
  * геометрия комнаты и реальная раскладка панелей, не сетка квадратов.
  */
-import type { JobObject, JobObjectDocument, UserRole } from '../../../../packages/shared/partner';
-import { documentsForRole } from '../../../../packages/shared/partner';
+import type { JobObject, JobObjectDocument } from '../../../../packages/shared/partner';
+import { visibleDocuments } from '../../../../packages/shared/partner';
 import { readablePdfName } from './cabinetCalc';
 import { isDemoModeEnabled } from './DemoSwitcher';
 import { openFilePreview } from '../ui/filePreview/previewStore';
@@ -34,27 +34,21 @@ function demoDocs(obj: JobObject): JobObjectDocument[] {
       kind: 'estimate',
       filename: readablePdfName(obj.clientName, 'estimate', createdAt),
     });
-    docs.push({
-      ...common,
-      id: `${versionId}_spec`,
-      kind: 'spec',
-      filename: readablePdfName(obj.clientName, 'spec', createdAt),
-    });
   }
   return docs;
 }
 
 /** Подмешивает демо-документы, не затирая уже приложенные файлы. */
-export function withDemoDocuments(objects: JobObject[], role: UserRole): JobObject[] {
+export function withDemoDocuments(objects: JobObject[]): JobObject[] {
   if (!isDemoModeEnabled()) return objects;
   const known = new Set(DEMO_IDS);
   let hits = 0;
   const mapped = objects.map((obj) => {
     const real = (obj.documents || []).filter((d) => !d.demo);
-    if (real.length) return { ...obj, documents: documentsForRole(real, role) };
+    if (real.length) return { ...obj, documents: visibleDocuments(real) };
     if (!known.has(obj.id)) return obj;
     hits += 1;
-    return { ...obj, documents: documentsForRole(demoDocs(obj), role) };
+    return { ...obj, documents: visibleDocuments(demoDocs(obj)) };
   });
   if (hits > 0) return mapped;
   let extra = 0;
@@ -62,7 +56,7 @@ export function withDemoDocuments(objects: JobObject[], role: UserRole): JobObje
     if (extra >= 4 || obj.status === 'draft') return obj;
     if ((obj.documents || []).length) return obj;
     extra += 1;
-    return { ...obj, documents: documentsForRole(demoDocs(obj), role) };
+    return { ...obj, documents: visibleDocuments(demoDocs(obj)) };
   });
 }
 
@@ -148,7 +142,7 @@ function loadCalculator(): Promise<CalcModules> {
 
 const demoPdfCache = new Map<string, Blob>();
 
-/** PDF калькулятора для демо-комнаты: план и раскладка панелей, смета или спецификация. */
+/** PDF калькулятора для демо-комнаты: план и раскладка панелей, «Смета» с ценами. */
 export async function buildDemoPdfBlob(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
   const cached = demoPdfCache.get(doc.id);
   if (cached) return cached;
@@ -189,7 +183,7 @@ export async function buildDemoPdfBlob(obj: JobObject, doc: JobObjectDocument): 
     wallSurfaces: images.wallSurfaces,
     planImage: images.planImage,
     areaEstimate: false,
-    hidePrices: doc.kind === 'spec',
+    hidePrices: false,
     download: false,
     fileLabel: obj.clientName || 'Объект',
     fileDate: doc.createdAt,

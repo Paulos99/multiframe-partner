@@ -22,7 +22,7 @@ import {
   aggregateAnalyticsDashboard,
   canEditOrg,
   canManageStaff,
-  documentsForRole,
+  visibleDocuments,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
   isStaffRole,
@@ -30,7 +30,6 @@ import {
   normalizeRole,
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
-  redactOrgPrices,
   STAFF_ROLES,
 } from '../../../../packages/shared/partner';
 import { carriedObjectLink } from './objectLink';
@@ -249,9 +248,7 @@ export function loadSession(): SessionUser | null {
       const db = loadDb();
       const org = db.orgs.find((o) => o.id === session.orgId);
       if (org) {
-        let settings = normalizeOrgSettings(org.settings);
-        if (session.role === 'crew') settings = redactOrgPrices(settings)!;
-        session.org = settings;
+        session.org = normalizeOrgSettings(org.settings);
         saveSession(session);
       }
     }
@@ -286,8 +283,7 @@ export function pushActivity(
 export function userToSession(u: StoredUser, db: PartnerDb): SessionUser {
   const org = u.orgId ? db.orgs.find((o) => o.id === u.orgId) : null;
   const role = normalizeRole(u.role);
-  let settings = org ? normalizeOrgSettings(org.settings) : null;
-  if (settings && role === 'crew') settings = redactOrgPrices(settings);
+  const settings = org ? normalizeOrgSettings(org.settings) : null;
   return {
     id: u.id,
     login: u.login,
@@ -510,9 +506,7 @@ export function updateOrgSettings(
   saveDb(next);
   const session = loadSession();
   if (session && session.orgId === orgId) {
-    const orgForSession =
-      session.role === 'crew' ? redactOrgPrices(settings)! : settings;
-    saveSession({ ...session, org: { ...orgForSession } });
+    saveSession({ ...session, org: { ...settings } });
   }
   return settings;
 }
@@ -719,7 +713,7 @@ export function presentCachedObject(user: SessionUser, obj: JobObject): JobObjec
     if (user.role === 'measurer' && obj.createdBy !== user.id && obj.assignedTo !== user.id) return null;
     if (user.role === 'crew' && obj.assignedTo !== user.id && obj.status !== 'install') return null;
   }
-  return redactObjectForRole(obj, user.role);
+  return presentObject(obj);
 }
 
 function objectVisible(user: SessionUser, obj: JobObject): boolean {
@@ -738,30 +732,16 @@ function objectVisible(user: SessionUser, obj: JobObject): boolean {
   return false;
 }
 
-function redactObjectForRole(obj: JobObject, role: UserRole): JobObject {
-  const documents = documentsForRole(obj.documents, role);
-  if (role !== 'crew') return { ...obj, documents };
-  return {
-    ...obj,
-    documents,
-    estimate: obj.estimate
-      ? {
-          panels: obj.estimate.panels,
-          dowels: obj.estimate.dowels,
-          panelsCost: null,
-          installCost: null,
-          dowelsCost: null,
-          totalCost: null,
-        }
-      : null,
-  };
+/** Цены видят все роли: меняется только список документов. */
+function presentObject(obj: JobObject): JobObject {
+  return { ...obj, documents: visibleDocuments(obj.documents) };
 }
 
 export function listLocalObjects(user: SessionUser): JobObject[] {
   const db = loadDb();
   return db.objects
     .filter((o) => objectVisible(user, o))
-    .map((o) => redactObjectForRole(o, user.role));
+    .map((o) => presentObject(o));
 }
 
 function projectVisibleLocal(user: SessionUser, project: Project, objects: JobObject[]): boolean {
@@ -947,7 +927,7 @@ export function upsertLocalObject(
   saveDb({ ...db, objects, projects });
   enqueueObjectSync(obj);
   cacheObjects(listLocalObjects(actor));
-  return redactObjectForRole(obj, actor.role);
+  return presentObject(obj);
 }
 
 export function cacheObjects(objects: JobObject[]): void {
@@ -1082,7 +1062,7 @@ const DOC_QUEUE_KEY = 'mf_partner_doc_queue_v1';
 export type QueuedObjectDocument = {
   objectId: string;
   versionId: string;
-  kind: 'estimate' | 'spec';
+  kind: 'estimate' | 'profile';
   filename: string;
   pdfBase64: string;
   hasScheme: boolean;
@@ -1148,7 +1128,7 @@ export function appendLocalObjectDocuments(
   actor: SessionUser,
 ): JobObject {
   if (!actor.orgId) throw new Error('Нет организации');
-  if (actor.role === 'crew') throw new Error('Монтажник не прикладывает смету');
+  if (actor.role === 'crew') throw new Error('Монтажник не прикладывает документы');
   const db = loadDb();
   const existing = db.objects.find((o) => o.id === objectId);
   if (!existing || !objectVisible(actor, existing)) throw new Error('Объект не найден');
@@ -1175,7 +1155,7 @@ export function appendLocalObjectDocuments(
         at: now,
         userId: actor.id,
         login: actor.login,
-        action: 'calc_pdf',
+        action: meta.every((d) => d.kind === 'profile') ? 'profile_pdf' : 'calc_pdf',
         detail: meta.map((d) => d.filename).join(', '),
       },
       ...(existing.history || []),
@@ -1183,5 +1163,5 @@ export function appendLocalObjectDocuments(
   };
   saveDb({ ...db, objects: db.objects.map((o) => (o.id === next.id ? next : o)) });
   cacheObjects(listLocalObjects(actor));
-  return redactObjectForRole(next, actor.role);
+  return presentObject(next);
 }
