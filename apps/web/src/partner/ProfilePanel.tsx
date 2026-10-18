@@ -28,7 +28,7 @@ export function ProfilePanel({onClose}: {onClose:()=>void}) {
     {!hasRemoteApi()?<p role="status">Редактирование профиля доступно при подключении к серверу.</p>:null}
     <fieldset disabled={busy||!hasRemoteApi()} className={styles.fields}>
       <div className={styles.photo}>{user?.avatarUrl?<img src={user.avatarUrl} alt="Фото профиля"/>:<span aria-hidden="true">{user?.displayName?.slice(0,1)||'•'}</span>}
-        <label>Фото<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void run(async()=>acceptProfile(await apiUploadAvatar(await compressAvatar(file))),'Фото обновлено');}}/><small>JPEG, PNG или WebP. Сожмём до 256 px и 200 КБ.</small></label>
+        <label>Фото<input type="file" aria-label="Фото" accept="image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void run(async()=>acceptProfile(await apiUploadAvatar(await compressAvatar(file))),'Фото обновлено');}}/><small>JPEG, PNG или WebP. Сожмём до 256 px и 200 КБ.</small></label>
       </div>
       <label>Текущий пароль<input type="password" autoComplete="current-password" value={current} onChange={e=>setCurrent(e.target.value)}/></label>
       <form onSubmit={saveLogin}><label>Логин<input value={login} autoComplete="username" pattern="[a-zA-Z0-9_.@-]{3,80}" required onChange={e=>setLogin(e.target.value)}/></label><button disabled={!current||login===user?.login}>Сохранить логин</button></form>

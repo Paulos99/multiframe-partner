@@ -73,7 +73,7 @@ export async function apiLogin(
 }
 
 export async function apiMe(): Promise<SessionUser> {
-  const data = await request<{ user: SessionUser }>('/auth/me');
+  const data = await request<{ user: SessionUser }>('/me');
   return data.user;
 }
 

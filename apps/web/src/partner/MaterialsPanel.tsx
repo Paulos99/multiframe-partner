@@ -304,7 +304,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
         </p>
       ) : null}
       {loading ? (
-        <Skeleton kind="rows" count={4} label="Загрузка материалов"/>
+        <Skeleton kind="rows" count={4} label="Загружаем материалы"/>
       ) : null}
 
       {!loading ? (

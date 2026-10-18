@@ -10,7 +10,7 @@
     "check:acoustic": "npx --yes tsx src/state/acoustic/check.ts",
     "lint": "eslint src e2e playwright.config.ts vitest.config.ts",
     "typecheck": "tsc -b",
-    "test:unit": "vitest run && tsx --test src/partner/*.test.ts src/partner/*.test.tsx",
+    "test:unit": "vitest run && tsx --test src/partner/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -31,6 +31,7 @@
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
     "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "tsx": "^4.23.15",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.71.2",

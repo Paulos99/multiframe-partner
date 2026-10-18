@@ -1,3 +1,5 @@
+import { Skeleton } from './Skeleton';
+import { m, AnimatePresence, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { useState, type FormEvent } from 'react';
 import {
   canManageStaff,
@@ -13,6 +15,7 @@ import styles from './partner.module.css';
 /** Один экран сотрудников для владельца и менеджера компании. */
 export function StaffPanel() {
   const api = usePartner();
+  const reduce=usePrefersReducedMotion();
   const user = api.user;
   const [execLogin, setExecLogin] = useState('');
   const [execPassword, setExecPassword] = useState(() => generatePassword());
@@ -118,9 +121,10 @@ export function StaffPanel() {
       <Button type="submit" loading={savingStaff} disabled={savingStaff}>
         {savingStaff ? 'Создаём…' : 'Создать сотрудника'}
       </Button>
-      <div className={styles.table}>
+      {api.staffLoading && !staff.length ? <Skeleton count={3} label="Загрузка сотрудников"/> : null}
+      <div className={styles.table}><AnimatePresence initial={false}>
         {staff.map((ex) => (
-          <div key={ex.id} className={styles.tableRow}>
+          <m.div layout={!reduce} initial={reduce?false:motionPresets.page.initial} animate={motionPresets.page.animate} exit={reduce?undefined:motionPresets.page.exit} key={ex.id} className={styles.tableRow}>
             <div>
               <strong>{ex.displayName}</strong>
               <div className={styles.hint}>
@@ -143,9 +147,9 @@ export function StaffPanel() {
                 </button>
               )}
             </div>
-          </div>
-        ))}
-        {!staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
+          </m.div>
+        ))}</AnimatePresence>
+        {!api.staffLoading && !staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
       </div>
     </form>
   );

@@ -223,7 +223,7 @@ export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
             <button type="button" className={styles.close} onClick={() => setOpen(false)} aria-label="Закрыть">
               ×
             </button>
-          </m.div>
+          </div>
           {busy ? (
             <p className={styles.status} role="status">
               <span className={styles.spinner} aria-hidden="true" />
@@ -242,7 +242,7 @@ export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
             disabled={loading || busy != null}
             onPick={(account) => void switchTo(account)}
           />
-        </div>
+        </m.div>
       ) : null}
       <button
         type="button"

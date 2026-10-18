@@ -1,3 +1,4 @@
+import { Skeleton } from './Skeleton';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   OFFICIAL_PANEL_PRICE_RUB,
@@ -227,6 +228,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         <TabPanel>
           <div className={`${styles.card} ${styles.panelCard}`}>
             <h2>Партнёры сети</h2>
+          {api.partnersLoading && !partners.length ? <Skeleton count={3} label="Загрузка партнёров"/> : null}
             {notice ? (
               <p className={styles.flash} role="status">
                 {notice}

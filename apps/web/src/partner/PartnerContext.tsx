@@ -134,6 +134,8 @@ type PartnerApi = {
   remote: boolean;
   objects: JobObject[];
   objectsLoading: boolean;
+  staffLoading: boolean;
+  partnersLoading: boolean;
   pendingSyncCount: number;
   online: boolean;
   syncStatus: SyncStatus;
@@ -216,6 +218,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [tick, setTick] = useState(0);
   const [objects, setObjects] = useState<JobObject[]>([]);
   const [objectsLoading, setObjectsLoading] = useState(false);
+  const [staffLoading,setStaffLoading]=useState(false);
+  const [partnersLoading,setPartnersLoading]=useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [projectsError, setProjectsError] = useState<string | null>(null);
@@ -687,35 +691,25 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    let cancelled=false;
+    setStaffLoading(false);setPartnersLoading(false);
     if (!user) return;
-    if (user.role === 'owner' || user.role === 'sales') {
-      if (remote && loadToken()) {
-        void apiListStaff()
-          .then(setStaffCache)
-          .catch(() => setStaffCache(listStaffForOrg(user.orgId || '')));
-      } else if (user.orgId) {
-        setStaffCache(listStaffForOrg(user.orgId));
-      }
+    if(user.role==='owner'||user.role==='sales') {
+      if(remote&&loadToken()) {
+        setStaffLoading(true);
+        void apiListStaff().then(list=>{if(!cancelled)setStaffCache(list);})
+          .catch(()=>{}).finally(()=>{if(!cancelled)setStaffLoading(false);});
+      } else if(user.orgId) setStaffCache(listStaffForOrg(user.orgId));
     }
-    if (user.role === 'admin') {
-      if (remote && loadToken()) {
-        void apiAdminListPartners()
-          .then((list) =>
-            setPartnersCache(
-              list.map((p) => ({
-                user: p.user,
-                org: p.org,
-                lastLogin: p.lastLogin,
-                executorCount: p.staffCount ?? p.executorCount,
-              })),
-            ),
-          )
-          .catch(() => setPartnersCache(listPartners()));
-      } else {
-        setPartnersCache(listPartners());
-      }
+    if(user.role==='admin') {
+      if(remote&&loadToken()) {
+        setPartnersLoading(true);
+        void apiAdminListPartners().then(list=>{if(!cancelled)setPartnersCache(list.map(p=>({user:p.user,org:p.org,lastLogin:p.lastLogin,executorCount:p.staffCount??p.executorCount})));})
+          .catch(()=>{}).finally(()=>{if(!cancelled)setPartnersLoading(false);});
+      } else setPartnersCache(listPartners());
     }
-  }, [user, remote, tick]);
+    return()=>{cancelled=true;};
+  },[user,remote,tick]);
 
   const saveObject = useCallback(
     async (input: Partial<JobObject> & { id?: string }) => {
@@ -872,6 +866,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       remote,
       objects,
       objectsLoading,
+      staffLoading,
+      partnersLoading,
       pendingSyncCount,
       online,
       syncStatus: (!online ? 'offline' : pendingSyncCount > 0 ? 'pending' : 'synced') as SyncStatus,
@@ -943,6 +939,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       remote,
       objects,
       objectsLoading,
+      staffLoading,
+      partnersLoading,
       pendingSyncCount,
       online,
       calculations,

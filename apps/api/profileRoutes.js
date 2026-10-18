@@ -46,7 +46,7 @@ export async function handleProfile(ctx) {
     if (!/^[a-zA-Z0-9_.@-]{3,80}$/.test(login)) fail('Логин: 3–80 латинских букв, цифр или символов _.@-');
     if (!await bcrypt.compare(String(body.currentPassword||''),user.passwordHash||'')) fail('Текущий пароль неверен',403);
     if (platform.users.some(u=>u.id!==user.id && u.login.toLowerCase()===login.toLowerCase())) fail('Логин уже занят',409);
-    const next={...platform.users[index],login,sessionVersion:(user.sessionVersion||0)+1};
+    const next={...platform.users[index],login,updatedAt:new Date().toISOString(),sessionVersion:(user.sessionVersion||0)+1};
     platform.users[index]=next;
     await ctx.savePlatform(platform);
     return ctx.json(200,{user:await profileWithAvatar(next,platform,ctx),token:await ctx.signToken(next)});
@@ -57,7 +57,7 @@ export async function handleProfile(ctx) {
     if (!await bcrypt.compare(current,user.passwordHash||'')) fail('Текущий пароль неверен',403);
     if (password.length<10 || Buffer.byteLength(password,'utf8')>72) fail('Новый пароль: от 10 символов, не более 72 байт');
     if (password===current) fail('Новый пароль должен отличаться');
-    const next={...platform.users[index],passwordHash:await bcrypt.hash(password,12),sessionVersion:(user.sessionVersion||0)+1};
+    const next={...platform.users[index],passwordHash:await bcrypt.hash(password,12),updatedAt:new Date().toISOString(),sessionVersion:(user.sessionVersion||0)+1};
     delete next.password;
     platform.users[index]=next; await ctx.savePlatform(platform);
     return ctx.json(200,{ok:true,token:await ctx.signToken(next)});
@@ -68,7 +68,7 @@ export async function handleProfile(ctx) {
     if(!/^[a-zA-Z0-9_-]+$/.test(user.id)) fail('Некорректный идентификатор пользователя');
     const key=`avatars/${user.id}.webp`;
     await putObject({bucket:materialsBucket(),key,body:buf,contentType:'image/webp'});
-    const next={...platform.users[index],avatarKey:key};
+    const next={...platform.users[index],avatarKey:key,updatedAt:new Date().toISOString()};
     platform.users[index]=next; await ctx.savePlatform(platform);
     return ctx.json(200,{user:await profileWithAvatar(next,platform,ctx)});
   }
