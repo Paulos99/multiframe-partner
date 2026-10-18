@@ -58,6 +58,44 @@ test('photo uploads without the current password, styled button shows file name'
     .toBe(256);
 });
 
+test('header avatar shows right after page load and login, without opening the profile', async ({ page }) => {
+  await enter(page, 'ui.admin');
+  const dialog = await openProfile(page);
+  const chooser = page.waitForEvent('filechooser');
+  await dialog.getByRole('button', { name: 'Загрузить фото', exact: true }).click();
+  await (await chooser).setFiles({ name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(await pngBase64(page), 'base64') });
+  await expect(dialog.getByRole('status')).toHaveText('Фото обновлено');
+  await dialog.getByRole('button', { name: 'Закрыть профиль' }).click();
+
+  // Окно профиля (GET /me) больше не открываем: фото должно прийти из /auth/me и входа.
+  const profileCalls: string[] = [];
+  page.on('request', (r) => {
+    if (new URL(r.url()).pathname === '/me' && r.method() === 'GET') profileCalls.push(r.url());
+  });
+  // Сессия в localStorage — как после старой версии: без ссылки на фото.
+  await page.evaluate(() => {
+    for (const key of Object.keys(localStorage)) {
+      try {
+        const v = JSON.parse(localStorage.getItem(key) || 'null');
+        if (v && typeof v === 'object' && 'avatarUrl' in v) localStorage.setItem(key, JSON.stringify({ ...v, avatarUrl: null }));
+      } catch {
+        /* not JSON */
+      }
+    }
+  });
+  const header = page.getByRole('button', { name: 'Мой профиль', exact: true });
+  const avatar = header.getByTestId('header-avatar');
+  await page.reload();
+  await expect(avatar).toBeVisible();
+  await expect.poll(() => avatar.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await enter(page, 'ui.admin');
+  await expect(avatar).toBeVisible();
+  await expect.poll(() => avatar.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  expect(profileCalls).toEqual([]);
+});
+
 test('password change asks the current password in a confirm dialog', async ({ page }) => {
   await enter(page);
   const dialog = await openProfile(page);

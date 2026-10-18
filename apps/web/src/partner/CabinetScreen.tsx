@@ -749,7 +749,7 @@ function CrewCabinet({
       lead="Личный кабинет монтажника · смета со схемой и профиль комнаты"
       mode="buttons"
       items={[
-        { id: 'objects', label: 'Задания', active: view === 'home', onSelect: () => setView('home') },
+        { id: 'tasks', label: 'Задания', active: view === 'home', onSelect: () => setView('home') },
         { id: 'tools', label: 'Инструменты', active: view === 'tools', onSelect: () => setView('tools') },
         { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => setView('help') },
       ]}

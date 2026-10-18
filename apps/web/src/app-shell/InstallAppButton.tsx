@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './InstallAppButton.module.css';
+import { CheckCircleIcon, CloseIcon, DownloadIcon, MoreIcon, PlusSquareIcon, ShareIcon } from '../icons';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -87,47 +88,19 @@ function hintDismissed(): boolean {
 }
 
 function IconShare() {
-  return (
-    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden>
-      <path
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-        d="M8 11.5V18a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-6.5"
-      />
-      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" d="M12 14V4" />
-      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M8.5 7.5 12 4l3.5 3.5" />
-    </svg>
-  );
+  return <ShareIcon className={styles.icon} />;
 }
 
 function IconPlus() {
-  return (
-    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden>
-      <rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" d="M12 8v8M8 12h8" />
-    </svg>
-  );
+  return <PlusSquareIcon className={styles.icon} />;
 }
 
 function IconMenu() {
-  return (
-    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden>
-      <circle cx="6" cy="12" r="1.4" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.4" fill="currentColor" />
-      <circle cx="18" cy="12" r="1.4" fill="currentColor" />
-    </svg>
-  );
+  return <MoreIcon className={styles.icon} />;
 }
 
 function IconCheck() {
-  return (
-    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden>
-      <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M8.5 12.2 11 14.7 15.8 9.5" />
-    </svg>
-  );
+  return <CheckCircleIcon className={styles.icon} />;
 }
 
 type Step = { icon: 'share' | 'plus' | 'menu' | 'check'; text: string };
@@ -225,20 +198,7 @@ function useInstall(): InstallApi {
 }
 
 function IconInstall() {
-  return (
-    <svg className={styles.btnIcon} viewBox="0 0 24 24" aria-hidden="true">
-      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M12 3.5v10" />
-      <path
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M7.5 10.5 12 15l4.5-4.5"
-      />
-      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M5 19.5h14" />
-    </svg>
-  );
+  return <DownloadIcon className={styles.btnIcon} />;
 }
 
 function CompactButton() {
@@ -341,7 +301,7 @@ export function InstallPromptHost({
         <aside className={styles.hint} role="note">
           <p>Установка — значок в шапке, рядом с «Выйти».</p>
           <button type="button" className={styles.hintClose} onClick={dismissHint} aria-label="Закрыть подсказку">
-            ✕
+            <CloseIcon size="1em" />
           </button>
         </aside>
       ) : null}

@@ -36,6 +36,7 @@ import { CountUp, FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
+import { FunnelIcon } from '../icons';
 
 const HOUSE_LABELS = Object.fromEntries(
   HOUSE_TYPE_OPTIONS.map((o) => [o.id, o.label]),
@@ -162,6 +163,7 @@ function FunnelBlock({
   return (
     <div className={styles.funnelBlock}>
       <h4 className={styles.funnelTitle}>
+        <FunnelIcon size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
         {title}
         <span
           className={styles.funnelLabel}

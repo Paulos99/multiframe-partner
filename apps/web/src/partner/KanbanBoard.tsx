@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createElement, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext,
@@ -43,6 +43,7 @@ import {
   rankMovedColumn,
   type BoardSort,
 } from './kanban';
+import { CheckCircleIcon, DraftIcon, DrillIcon, MoreIcon, SendIcon, TapeMeasureIcon } from '../icons';
 import styles from './KanbanBoard.module.css';
 
 function Column({
@@ -153,13 +154,19 @@ function Card({
             onMenu(r.right, r.bottom + 4);
           }}
         >
-          …
+          <MoreIcon size={18} />
         </button>
       ) : null}
     </div>
   );
 }
-const icons = ['◇', '◷', '↗', '⬡', '✓'];
+const STAGE_ICONS: Record<JobObjectStatus, ComponentType<{ size?: number }>> = {
+  draft: DraftIcon,
+  measured: TapeMeasureIcon,
+  quote_sent: SendIcon,
+  install: DrillIcon,
+  closed: CheckCircleIcon,
+};
 export function KanbanBoard({
   rooms,
   projects,
@@ -498,7 +505,7 @@ export function KanbanBoard({
             }
           }}
         >
-          {KANBAN_STAGES.map((stage, index) => {
+          {KANBAN_STAGES.map((stage) => {
             const list = visible.filter((r) => r.status === stage);
             const displayList: (JobObject | null)[] = [...list];
             if (
@@ -513,14 +520,16 @@ export function KanbanBoard({
             return (
               <Column key={stage} stage={stage}>
                 <header>
-                  <span className={styles.icon}>{icons[index]}</span>
+                  <span className={styles.icon} aria-hidden="true">
+                    {createElement(STAGE_ICONS[stage], { size: 18 })}
+                  </span>
                   <h3>{JOB_OBJECT_STATUS_LABELS[stage]}</h3>
                   <span className={styles.count}>{list.length}</span>
                   <details>
                     <summary
                       aria-label={`Действия: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
                     >
-                      …
+                      <MoreIcon size={18} />
                     </summary>
                     <button type="button" onClick={() => setSort('updatedAt')}>
                       По обновлению

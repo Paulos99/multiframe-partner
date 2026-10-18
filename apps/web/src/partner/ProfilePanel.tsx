@@ -11,6 +11,7 @@ import { compressAvatar } from './avatar';
 import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { Button } from '../ui/Button';
 import styles from './ProfilePanel.module.css';
+import { CloseIcon, EyeIcon as EyeGlyph, EyeOffIcon as EyeOffGlyph } from '../icons';
 
 type Pending = 'login' | 'password';
 
@@ -139,7 +140,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
           onClick={onClose}
           aria-label="Закрыть профиль"
         >
-          ×
+          <CloseIcon size="1em" />
         </button>
       </div>
       {!remote ? (
@@ -382,18 +383,9 @@ function ConfirmPassword({
 }
 
 function EyeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
+  return <EyeGlyph />;
 }
 
 function EyeOffIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 4l16 16M10.6 6A9.9 9.9 0 0 1 12 5.5C18 5.5 21.5 12 21.5 12a17 17 0 0 1-3 3.8M6.3 7.6C3.9 9.3 2.5 12 2.5 12S6 18.5 12 18.5c1.6 0 3-.4 4.2-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
+  return <EyeOffGlyph />;
 }
