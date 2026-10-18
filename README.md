@@ -99,8 +99,16 @@ node infra/set_materials_bucket_cors.mjs
 
 ## Передеплой API
 
+Архив функции собирает общий модуль `infra/function_bundle.py` (его вызывают и `infra/deploy_yc.py`, и `infra/mf_doh_patch_deploy.py`). В архив входят все `apps/api/**/*.js` и `*.mjs`, кроме тестов `*.test.*` и каталога `scripts/`, плюс `package.json` и lock. Если сервер относительно импортирует код снаружи `apps/api`, этот файл кладётся в архив с тем же путём. `projectClient.ts` — клиент кабинета, сервер его не импортирует, в архив он не входит.
+
+`infra/deploy_yc.py` и `infra/mf_doh_patch_deploy.py` после сборки и до любой загрузки в Yandex Cloud проверяют тот самый zip: распаковка во временную папку, `npm ci` по lock из архива, импорт точки входа без облачных ключей и без сети. Если импорт не удался, скрипт завершается с ненулевым кодом и версия не создаётся. Отдельной проверки в GitHub Actions нет, чтобы не прогонять её второй раз на другом архиве. Actions запускает `infra/deploy_verify_guard_test.py`: сломанный архив должен остановить скрипт до заглушки загрузки.
+
+Локально, без деплоя:
+
 ```bash
-cd apps/api && npm install
+npm install --prefix apps/api
+python infra/verify_function_bundle.py
+python infra/deploy_verify_guard_test.py
 py -3 infra/deploy_yc.py
 ```
 

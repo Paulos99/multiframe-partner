@@ -7,6 +7,9 @@ on:
     paths:
       - 'apps/api/**'
       - 'infra/deploy_yc.py'
+      - 'infra/function_bundle.py'
+      - 'infra/verify_function_bundle.py'
+      - 'infra/deploy_verify_guard_test.py'
       - '.github/workflows/deploy-api.yml'
 
 jobs:
@@ -31,6 +34,9 @@ jobs:
 
       - name: Install Python crypto
         run: pip install cryptography
+
+      - name: Test that deploy verifies the zip before upload
+        run: python infra/deploy_verify_guard_test.py
 
       - name: Write SA key
         env:

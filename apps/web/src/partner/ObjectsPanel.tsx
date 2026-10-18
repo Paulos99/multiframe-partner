@@ -49,11 +49,11 @@ function ObjectDocuments({
   return (
     <div className={styles.docBlock}>
       <div className={styles.field}>
-        {seePrices ? 'Смета и схемы' : 'Спецификация и схемы'}
+        {seePrices ? 'Сметы и спецификации' : 'Спецификации без цен'}
         <span className={styles.hint}>
           {docs.length
             ? seePrices
-              ? 'Последний расчёт сверху. Предыдущие версии остаются.'
+              ? 'Смета — с ценами, спецификация — без цен. Старые версии сохраняются.'
               : 'Без цен: панели, крепёж и схема раскладки, если её нарисовали.'
             : 'PDF появится после расчёта в калькуляторе.'}
         </span>
@@ -63,9 +63,10 @@ function ObjectDocuments({
           {docs.map((doc, index) => (
             <li key={doc.id} className={styles.docRow}>
               <div className={styles.docMeta}>
-                <strong>{index === 0 ? 'Последний расчёт' : 'Предыдущая версия'}</strong>
+                <strong>{doc.kind === 'spec' ? 'Спецификация без цен' : 'Смета с ценами'}</strong>
                 <span className={styles.hint}>
-                  {formatDocWhen(doc.createdAt)}
+                  {docs.findIndex(item => item.kind === doc.kind) === index ? 'Последняя версия' : 'Предыдущая версия'}
+                  {formatDocWhen(doc.createdAt) ? ` · ${formatDocWhen(doc.createdAt)}` : ''}
                   {doc.areaM2 ? ` · ${doc.areaM2} м²` : ''}
                   {doc.panels ? ` · ${doc.panels} пан.` : ''}
                   {doc.hasScheme ? ' · схема раскладки' : ' · без схемы'}
@@ -108,9 +109,11 @@ function StatusBadge({ status }: { status: JobObjectStatus }) {
 export function ObjectsPanel({
   compact,
   onCreate,
+  filterRequest,
 }: {
   compact?: boolean;
   onCreate?: () => void;
+  filterRequest?: { status: JobObjectStatus | 'all'; nonce: number };
 }) {
   const api = usePartner();
   const user = api.user!;
@@ -130,6 +133,13 @@ export function ObjectsPanel({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [docBusy, setDocBusy] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!filterRequest) return;
+    setStatusFilter(filterRequest.status);
+    setQuery('');
+    setSelectedId(null);
+  }, [filterRequest]);
 
   const counts = useMemo(() => {
     const map = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<JobObjectStatus, number>;
