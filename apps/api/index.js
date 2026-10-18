@@ -17,6 +17,7 @@ import {
   saveStoredDocument,
 } from './platformStore.js';
 import { applyObjectProjectFields, handleProjects } from './projects.js';
+import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -682,19 +683,7 @@ function aggregateAnalyticsDashboard(allEvents, opts) {
       panels: Math.round(panels),
     },
     kpiPrev: null,
-    funnel: {
-      problemomer: {
-        open: events.filter((e) => e.tool === 'problemomer' && e.action === 'open').length,
-        result: events.filter((e) => e.tool === 'problemomer' && e.action === 'result').length,
-        pdf: events.filter((e) => e.tool === 'problemomer' && e.action === 'pdf').length,
-        share: events.filter((e) => e.tool === 'problemomer' && e.action === 'share').length,
-      },
-      calculator: {
-        open: events.filter((e) => e.tool === 'calculator' && e.action === 'open').length,
-        calcDone: events.filter((e) => e.tool === 'calculator' && e.action === 'calc_done').length,
-        pdf: events.filter((e) => e.tool === 'calculator' && e.action === 'pdf').length,
-      },
-    },
+    funnel: computeAnalyticsFunnel(events),
     series: [...seriesMap.values()].sort((a, b) => (a.day < b.day ? -1 : 1)),
     breakdowns: {
       roomType: toBreakdown(roomType),
@@ -809,6 +798,10 @@ function normalizeIncomingEvent(raw) {
     city: String(raw.city || raw.object?.city || ''),
     tool,
     action,
+    sessionId:
+      raw.sessionId == null || String(raw.sessionId).trim() === ''
+        ? null
+        : String(raw.sessionId).trim().slice(0, 80),
     object: raw.object || null,
   };
 }
