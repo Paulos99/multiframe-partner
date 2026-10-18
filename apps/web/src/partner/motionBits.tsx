@@ -230,11 +230,24 @@ export function CountUp({ value }: { value: number }) {
   return <>{shown}</>;
 }
 
-/** Shared Motion reveal for the existing diagnostic sections. */
+/**
+ * Shared Motion reveal for the existing diagnostic sections.
+ *
+ * Pages are mounted by PageTransition (AnimatePresence mode="wait"), so the new
+ * step's [data-reveal] sections appear only after the old page's exit animation,
+ * i.e. after this effect has already run. A MutationObserver picks up sections
+ * mounted later; otherwise they stay at opacity 0 forever (Итог was empty except
+ * the cards without data-reveal).
+ */
 export function usePageReveal(key: string) {
   const reduce = usePrefersReducedMotion();
   useEffect(() => {
     const controls: Array<{ stop: () => void }> = [];
+    const revealNow = (element: HTMLElement) => element.classList.add('is-revealed');
+    if (typeof IntersectionObserver === 'undefined') {
+      document.querySelectorAll<HTMLElement>('[data-reveal]').forEach(revealNow);
+      return;
+    }
     const observer = new IntersectionObserver(
       (entries) => {
         entries
@@ -242,7 +255,7 @@ export function usePageReveal(key: string) {
           .forEach((entry, index) => {
             const element = entry.target as HTMLElement;
             observer.unobserve(element);
-            element.classList.add('is-revealed');
+            revealNow(element);
             if (!reduce)
               controls.push(
                 animate(
@@ -258,13 +271,26 @@ export function usePageReveal(key: string) {
       },
       { threshold: 0.05 },
     );
-    document
-      .querySelectorAll<HTMLElement>('[data-reveal]')
-      .forEach((element) => {
-        if (reduce) element.classList.add('is-revealed');
-        else observer.observe(element);
-      });
+    const track = (element: HTMLElement) => {
+      if (element.classList.contains('is-revealed')) return;
+      if (reduce) revealNow(element);
+      else observer.observe(element);
+    };
+    const scan = (root: ParentNode) => {
+      if (root instanceof HTMLElement && root.hasAttribute('data-reveal')) track(root);
+      root.querySelectorAll<HTMLElement>('[data-reveal]').forEach(track);
+    };
+    scan(document);
+    const mutations = new MutationObserver((records) => {
+      for (const record of records) {
+        record.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) scan(node);
+        });
+      }
+    });
+    mutations.observe(document.body, { childList: true, subtree: true });
     return () => {
+      mutations.disconnect();
       observer.disconnect();
       controls.forEach((c) => c.stop());
     };
