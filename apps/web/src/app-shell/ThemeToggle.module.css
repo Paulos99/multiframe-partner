@@ -43,6 +43,12 @@
   transition: transform 0.2s ease;
 }
 
+/* Светлая тема: бегунок фирменного зелёного, как активная дорожка в тёмной (контраст с дорожкой ≈ 6,7:1). */
+.toggle .thumb {
+  background: var(--cab-accent);
+  box-shadow: 0 1px 3px rgba(1, 100, 79, 0.35);
+}
+
 .toggleOn .track {
   background: var(--cab-accent);
   border-color: var(--cab-accent);

@@ -276,3 +276,14 @@ test('diagnostic and calculator open without runtime regressions', async ({page}
  await page.getByRole('tab',{name:'Инструменты',exact:true}).click();await page.getByRole('button',{name:'Открыть Проблемомер',exact:true}).click();await expect(page.getByRole('button',{name:'Начать',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Кабинет',exact:true}).click();await page.getByRole('button',{name:'Открыть Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
 });
+
+test('theme toggle: green knob in light theme, dark theme unchanged', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await enter(page, 'owner');
+  const light = page.getByRole('button', { name: 'Светлая тема', exact: true });
+  const knob = (b: typeof light) => b.locator('span[aria-hidden] > span').evaluate((el) => getComputedStyle(el).backgroundColor);
+  await expect.poll(() => knob(light)).toBe('rgb(1, 100, 79)');
+  await light.click();
+  const dark = page.getByRole('button', { name: 'Тёмная тема', exact: true });
+  await expect.poll(() => knob(dark)).toBe('rgb(255, 255, 255)');
+});
