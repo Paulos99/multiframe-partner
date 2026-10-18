@@ -2,8 +2,6 @@
  * Yandex Cloud Function HTTP handler — multi-role partner platform.
  * Storage: Object Storage JSON or in-memory seed.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
@@ -11,6 +9,13 @@ import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
 import { documentsForRole, findVisibleDocument } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
+import {
+  loadStoredDocument,
+  mergeEventList,
+  mergePlatformDocument,
+  resetStoredDocumentsForTests,
+  saveStoredDocument,
+} from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import {
   deleteObject,
@@ -31,6 +36,8 @@ const OBJECTS_CAP = 5000;
 
 const ORG_ROLES = ['owner', 'sales', 'measurer', 'crew'];
 const STAFF_ROLES = ['sales', 'measurer', 'crew'];
+/** Владелец и менеджер компании. Админ StP сотрудников компании здесь не ведёт. */
+const STAFF_MANAGER_ROLES = ['owner', 'sales'];
 const OFFICIAL_PANEL = 2396;
 const OFFICIAL_M2 = 5990;
 const DEFAULT_INSTALL = 1500;
@@ -42,11 +49,6 @@ const CORS = {
     'Content-Type, Authorization, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
 };
-
-/** @type {any | null} */
-let memoryPlatform = null;
-/** @type {any[] | null} */
-let memoryEvents = null;
 
 function uid(prefix) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
@@ -65,6 +67,18 @@ function normalizeRole(role) {
   if (role === 'executor') return 'measurer';
   if (['admin', 'owner', 'sales', 'measurer', 'crew'].includes(role)) return role;
   return 'measurer';
+}
+
+/**
+ * Роль нового сотрудника. Пустое значение — замерщик.
+ * owner, admin (StP) и прочие роли не назначаются.
+ */
+function assignableStaffRole(raw) {
+  const requested = String(raw ?? '').trim();
+  if (!requested) return 'measurer';
+  if (requested === 'executor') return 'measurer';
+  if (STAFF_ROLES.includes(requested)) return requested;
+  return null;
 }
 
 function canSeePrices(role) {
@@ -187,23 +201,6 @@ function migrateLegacyPartners(list) {
   return null;
 }
 
-async function s3Get(key) {
-  const bucket = partnerBucket();
-  if (!bucket) return null;
-  return getObjectText({ bucket, key });
-}
-
-async function s3Put(key, body) {
-  const bucket = partnerBucket();
-  if (!bucket) return;
-  await putObject({
-    bucket,
-    key,
-    body: typeof body === 'string' ? body : JSON.stringify(body),
-    contentType: 'application/json',
-  });
-}
-
 /** PDF смет и спецификаций. Без бакета байты остаются в памяти процесса (демо API). */
 const memoryDocs = new Map();
 
@@ -250,90 +247,64 @@ function platformFilePath() {
 }
 
 export function resetPlatformMemoryForTests() {
-  memoryPlatform = null;
-  memoryEvents = null;
+  resetStoredDocumentsForTests();
 }
 
-async function loadPlatform() {
-  if (memoryPlatform) return memoryPlatform;
-  const file = platformFilePath();
-  if (file) {
-    try {
-      const parsed = JSON.parse(readFileSync(file, 'utf8'));
-      if (parsed?.users && parsed?.orgs) {
-        memoryPlatform = parsed;
-        return memoryPlatform;
-      }
-    } catch (e) {
-      if (e?.code !== 'ENOENT') console.warn('platform file load failed', e?.message || e);
-    }
-  }
+function platformDocumentSpec() {
+  return {
+    key: () => PLATFORM_S3_KEY(),
+    filePath: () => platformFilePath(),
+    space: 2,
+    accept: (parsed) => Boolean(parsed?.users && parsed?.orgs),
+    fallback: loadPlatformFallback,
+    merge: mergePlatformDocument,
+  };
+}
+
+function eventsDocumentSpec() {
+  return {
+    key: () => ANALYTICS_S3_KEY(),
+    accept: (value) => Array.isArray(value),
+    normalize: (parsed) => (Array.isArray(parsed) ? parsed : parsed?.events || null),
+    fallback: () => [],
+    merge: mergeEventList,
+  };
+}
+
+async function loadPlatformFallback() {
   const bucket = partnerBucket();
   if (bucket) {
     try {
-      const body = await s3Get(PLATFORM_S3_KEY());
-      if (body) {
-        const parsed = JSON.parse(body);
-        if (parsed?.users && parsed?.orgs) {
-          memoryPlatform = parsed;
-          return memoryPlatform;
-        }
-      }
-    } catch (e) {
-      console.warn('platform load failed', e?.message || e);
-    }
-    try {
       const legacyKey = process.env.PARTNERS_KEY || 'partners.json';
-      const body = await s3Get(legacyKey);
+      const body = await getObjectText({ bucket, key: legacyKey });
       if (body) {
         const migrated = migrateLegacyPartners(JSON.parse(body));
         if (migrated) {
-          memoryPlatform = migrated;
           await savePlatform(migrated);
-          return memoryPlatform;
+          return migrated;
         }
       }
     } catch (e) {
       console.warn('legacy partners migrate failed', e?.message || e);
     }
   }
-  memoryPlatform = defaultPlatform();
-  return memoryPlatform;
+  return defaultPlatform();
+}
+
+async function loadPlatform() {
+  return loadStoredDocument(platformDocumentSpec());
 }
 
 async function savePlatform(platform) {
-  memoryPlatform = platform;
-  const file = platformFilePath();
-  if (file) {
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify(platform, null, 2));
-    return;
-  }
-  await s3Put(PLATFORM_S3_KEY(), JSON.stringify(platform, null, 2));
+  await saveStoredDocument(platformDocumentSpec(), platform, platform);
 }
 
 async function loadEvents() {
-  if (memoryEvents) return memoryEvents;
-  const bucket = partnerBucket();
-  if (bucket) {
-    try {
-      const body = await s3Get(ANALYTICS_S3_KEY());
-      if (body) {
-        const parsed = JSON.parse(body);
-        memoryEvents = Array.isArray(parsed) ? parsed : parsed?.events || [];
-        return memoryEvents;
-      }
-    } catch (e) {
-      console.warn('S3 analytics load failed', e?.message || e);
-    }
-  }
-  memoryEvents = [];
-  return memoryEvents;
+  return loadStoredDocument(eventsDocumentSpec());
 }
 
-async function saveEvents(list) {
-  memoryEvents = list;
-  await s3Put(ANALYTICS_S3_KEY(), JSON.stringify(list));
+async function saveEvents(list, loaded) {
+  await saveStoredDocument(eventsDocumentSpec(), list, loaded);
 }
 
 function pushActivity(platform, partial) {
@@ -753,7 +724,11 @@ function aggregateAnalyticsDashboard(allEvents, opts) {
 function json(statusCode, body) {
   return {
     statusCode,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS },
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      ...CORS,
+    },
     body: JSON.stringify(body),
   };
 }
@@ -877,7 +852,13 @@ export async function handler(event = {}) {
       const { login, password } = getBody(event);
       const platform = await loadPlatform();
       const user = findUser(platform, String(login || '').trim());
-      if (!user || !bcrypt.compareSync(String(password || ''), user.passwordHash)) {
+      if (
+        !user ||
+        user.loginDisabled === true ||
+        typeof user.passwordHash !== 'string' ||
+        !user.passwordHash ||
+        !bcrypt.compareSync(String(password || ''), user.passwordHash)
+      ) {
         return json(401, { message: 'Неверный логин или пароль' });
       }
       const org = user.orgId ? findOrg(platform, user.orgId) : null;
@@ -1144,14 +1125,14 @@ export async function handler(event = {}) {
 
     if (method === 'POST' && path.endsWith('/org/staff')) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, ['owner']);
+      assertRole(user, STAFF_MANAGER_ROLES);
       if (!user.orgId) return json(400, { message: 'Нет организации' });
       const body = getBody(event);
       const login = String(body.login || '').trim();
       const password = String(body.password || '').trim();
       const displayName = String(body.displayName || login).trim();
-      const role = normalizeRole(body.role || 'measurer');
-      if (!STAFF_ROLES.includes(role)) {
+      const role = assignableStaffRole(body.role);
+      if (!role) {
         return json(400, { message: 'Роль: sales, measurer или crew' });
       }
       if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
@@ -1185,13 +1166,21 @@ export async function handler(event = {}) {
 
     if (method === 'POST' && path.endsWith('/org/staff/reset-password')) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, ['owner', 'admin']);
+      assertRole(user, ['owner', 'sales', 'admin']);
       const { staffUserId, password } = getBody(event);
-      const idx = platform.users.findIndex((u) => {
-        if (u.id !== staffUserId || !STAFF_ROLES.includes(normalizeRole(u.role))) return false;
-        if (user.role === 'owner') return u.orgId === user.orgId;
-        return true;
-      });
+      const target = platform.users.find((u) => u.id === staffUserId);
+      if (!target) return json(404, { message: 'Сотрудник не найден' });
+      const targetRole = normalizeRole(target.role);
+      if (user.role !== 'admin' && target.orgId !== user.orgId) {
+        return json(404, { message: 'Сотрудник не найден' });
+      }
+      if (targetRole === 'owner' || targetRole === 'admin') {
+        return json(403, { message: 'Нельзя изменить владельца' });
+      }
+      if (!STAFF_ROLES.includes(targetRole)) {
+        return json(404, { message: 'Сотрудник не найден' });
+      }
+      const idx = platform.users.findIndex((u) => u.id === staffUserId);
       if (idx < 0) return json(404, { message: 'Сотрудник не найден' });
       const pw = String(password || '').trim();
       if (!pw) return json(400, { message: 'Пустой пароль' });
@@ -1214,15 +1203,25 @@ export async function handler(event = {}) {
 
     if (method === 'DELETE' && /\/org\/staff\/[^/]+$/.test(path)) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, ['owner']);
-      const staffUserId = path.split('/').pop();
-      const staff = platform.users.find(
-        (u) =>
-          u.id === staffUserId &&
-          u.orgId === user.orgId &&
-          STAFF_ROLES.includes(normalizeRole(u.role)),
-      );
-      if (!staff) return json(404, { message: 'Сотрудник не найден' });
+      assertRole(user, STAFF_MANAGER_ROLES);
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const staffUserId = decodeURIComponent(path.split('/').pop() || '');
+      const target = platform.users.find((u) => u.id === staffUserId);
+      if (!target) return json(404, { message: 'Сотрудник не найден' });
+      if (target.orgId !== user.orgId) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      const targetRole = normalizeRole(target.role);
+      if (targetRole === 'owner' || targetRole === 'admin') {
+        return json(403, { message: 'Нельзя удалить владельца' });
+      }
+      if (staffUserId === user.id) {
+        return json(403, { message: 'Нельзя удалить свою учётную запись' });
+      }
+      if (!STAFF_ROLES.includes(targetRole)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      const staff = target;
       platform.users = platform.users.filter((u) => u.id !== staffUserId);
       pushActivity(platform, {
         orgId: user.orgId,
@@ -1594,7 +1593,7 @@ export async function handler(event = {}) {
         0,
         ANALYTICS_CAP,
       );
-      await saveEvents(merged);
+      await saveEvents(merged, existing);
       return json(200, { ok: true, accepted: normalized.length });
     }
 

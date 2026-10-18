@@ -122,11 +122,9 @@ const emptyDraft = (city = ''): RoomDraft => ({
 export function ObjectsPanel({
   compact,
   onCreate,
-  filterRequest,
 }: {
   compact?: boolean;
   onCreate?: () => void;
-  filterRequest?: { status: JobObjectStatus | 'all'; nonce: number };
 }) {
   const api = usePartner();
   const user = api.user!;
@@ -162,14 +160,6 @@ export function ObjectsPanel({
     setSelectedKey(room.projectId || `room:${room.id}`);
     setSelectedId(room.id);
   }, [api.openedObjectId, api.objects]);
-
-  useEffect(() => {
-    if (!filterRequest) return;
-    setStatusFilter(filterRequest.status);
-    setQuery('');
-    setSelectedKey(null);
-    setSelectedId(null);
-  }, [filterRequest]);
 
   const counts = useMemo(() => {
     const map = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<JobObjectStatus, number>;

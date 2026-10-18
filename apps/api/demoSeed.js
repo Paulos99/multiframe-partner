@@ -1,8 +1,12 @@
 /**
  * Full demo dataset for leadership pitch: two ceiling partners + ~30 days of work.
  * Used by defaultPlatform() and POST /admin/demo/reset.
+ * «Потолки Столицы» получают отдельные демо-события и одного сотрудника без входа,
+ * чтобы агрегаты были round(Северный Потолок × 1.3).
  */
 import bcrypt from 'bcryptjs';
+import { boostCapitalEvents, boostCapitalStaff } from '../../packages/shared/demoAnalyticsBoost.js';
+import { sealDisabledDemoUsers } from './sealDemoUsers.js';
 
 const OFFICIAL_PANEL = 2396;
 const OFFICIAL_M2 = 5990;
@@ -374,7 +378,7 @@ export function buildDemoPlatform(opts = {}) {
     },
   ];
 
-  return {
+  const platform = {
     version: 2,
     users,
     orgs,
@@ -391,6 +395,8 @@ export function buildDemoPlatform(opts = {}) {
       },
     ],
   };
+  if (opts.boostCapital === false) return platform;
+  return sealDisabledDemoUsers(boostCapitalStaff(platform));
 }
 
 function pushEvent(list, e) {
@@ -409,8 +415,8 @@ function pushEvent(list, e) {
   });
 }
 
-/** ~30 days of analytics for both orgs. */
-export function buildDemoAnalyticsEvents() {
+/** ~30 days of analytics for both orgs. Capital is lifted to round(north × 1.3). */
+export function buildDemoAnalyticsEvents(opts = {}) {
   const events = [];
   const orgs = [
     {
@@ -603,5 +609,9 @@ export function buildDemoAnalyticsEvents() {
     });
   }
 
-  return events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const sorted = events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  if (opts.boostCapital === false) return sorted;
+  const platform = buildDemoPlatform({ withHashes: false });
+  const demoStaff = platform.users.filter((user) => user.demo && user.loginDisabled);
+  return boostCapitalEvents(sorted, demoStaff, platform);
 }

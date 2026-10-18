@@ -4,7 +4,6 @@ import {
   OFFICIAL_PRICE_PER_M2,
   PARTNER_NETWORK_NAME,
   ROLE_LABELS,
-  STAFF_ROLES,
   type SessionUser,
   type UserRole,
 } from '../../../../packages/shared/partner';
@@ -15,10 +14,11 @@ import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { NetworkOverview, RoleWorkspace } from './RoleOverview';
 import { ProjectsCabinet } from './ProjectsCabinet';
-import { NewPasswordButton } from './NewPasswordButton';
+import { StaffPanel } from './StaffPanel';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
+import { CabinetBrand } from './CabinetBrand';
 import styles from './partner.module.css';
 
 function roleHeading(role: UserRole, user: SessionUser): string {
@@ -179,6 +179,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{PARTNER_NETWORK_NAME}</h1>
           <p className={styles.lead}>
             Партнёры по регионам, официальные РРЦ и сетевая аналитика.
@@ -438,15 +439,9 @@ function OwnerCabinet({
   const [dowelPriceRub, setDowelPriceRub] = useState(
     user.org?.dowelPriceRub != null ? String(user.org.dowelPriceRub) : '',
   );
-  const [execLogin, setExecLogin] = useState('');
-  const [execPassword, setExecPassword] = useState(() => generatePassword());
-  const [execName, setExecName] = useState('');
-  const [execRole, setExecRole] = useState<UserRole>('measurer');
-  const [execCreated, setExecCreated] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [savingOrg, setSavingOrg] = useState(false);
-  const [savingStaff, setSavingStaff] = useState(false);
   const staff = api.partnerListStaff();
 
   async function onSave(e: FormEvent) {
@@ -472,36 +467,11 @@ function OwnerCabinet({
     }
   }
 
-  async function onCreateStaff(e: FormEvent) {
-    e.preventDefault();
-    setExecCreated(null);
-    setErr(null);
-    setSavingStaff(true);
-    try {
-      const password = execPassword.trim() || generatePassword();
-      const res = await api.partnerCreateStaff({
-        login: execLogin.trim(),
-        password,
-        displayName: execName.trim() || execLogin.trim(),
-        role: execRole,
-      });
-      setExecCreated(
-        `${ROLE_LABELS[res.role]} ${res.login} · пароль: ${res.password}`,
-      );
-      setExecLogin('');
-      setExecPassword(generatePassword());
-      setExecName('');
-    } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : 'Ошибка');
-    } finally {
-      setSavingStaff(false);
-    }
-  }
-
   return (
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{roleHeading('owner', user)}</h1>
           <p className={styles.lead}>
             Прайс, команда, объекты и воронка компании
@@ -624,112 +594,7 @@ function OwnerCabinet({
 
       {tab === 'staff' ? (
         <TabPanel>
-          <form
-            className={`${styles.card} ${styles.panelCard}`}
-            onSubmit={(e) => void onCreateStaff(e)}
-          >
-            <h2>Сотрудники</h2>
-            <p className={styles.lead}>
-              Менеджер ведёт сделки и КП, замерщик сохраняет объекты, у каждого монтажника свой
-              вход и свои задания. Цены монтажник не видит — только спецификацию и схемы.
-            </p>
-            <div className={styles.grid2}>
-              <label className={styles.field}>
-                Имя / подпись
-                <input
-                  value={execName}
-                  onChange={(e) => setExecName(e.target.value)}
-                  placeholder="Например, Иван · замер"
-                />
-              </label>
-              <label className={styles.field}>
-                Роль
-                <select
-                  value={execRole}
-                  onChange={(e) => setExecRole(e.target.value as UserRole)}
-                >
-                  {STAFF_ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABELS[r]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={styles.field}>
-                Логин
-                <input
-                  value={execLogin}
-                  onChange={(e) => setExecLogin(e.target.value)}
-                  required
-                  autoComplete="off"
-                />
-              </label>
-              <label className={`${styles.field} ${styles.passwordField}`}>
-                Пароль
-                <div className={styles.passwordRow}>
-                  <input
-                    type="text"
-                    value={execPassword}
-                    onChange={(e) => setExecPassword(e.target.value)}
-                    required
-                    autoComplete="new-password"
-                    spellCheck={false}
-                  />
-                  <button
-                    type="button"
-                    className={styles.ghost}
-                    onClick={() => setExecPassword(generatePassword())}
-                  >
-                    Сгенерировать
-                  </button>
-                </div>
-              </label>
-            </div>
-            {execCreated ? (
-              <p className={styles.flash} role="status">
-                {execCreated}
-              </p>
-            ) : null}
-            {err && tab === 'staff' ? (
-              <p className={styles.error} role="alert">
-                {err}
-              </p>
-            ) : null}
-            <Button type="submit" loading={savingStaff} disabled={savingStaff}>
-              {savingStaff ? 'Создаём…' : 'Создать сотрудника'}
-            </Button>
-            <div className={styles.table}>
-              {staff.map((ex) => (
-                <div key={ex.id} className={styles.tableRow}>
-                  <div>
-                    <strong>{ex.displayName}</strong>
-                    <div className={styles.hint}>
-                      {ex.login} · {ROLE_LABELS[ex.role] || ex.role}
-                    </div>
-                  </div>
-                  <div className={styles.rowActions}>
-                    <NewPasswordButton staffId={ex.id} staffName={ex.displayName} />
-                    <button
-                      type="button"
-                      className={styles.danger}
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `Удалить сотрудника «${ex.displayName}» (${ex.login})?`,
-                          )
-                        ) {
-                          void api.partnerDeleteStaff(ex.id);
-                        }
-                      }}
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {!staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
-            </div>
-          </form>
+          <StaffPanel />
         </TabPanel>
       ) : null}
 
@@ -757,12 +622,14 @@ function SalesCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [tab, setTab] = useState<'deals' | 'analytics' | 'help'>('deals');
+  const staff = api.partnerListStaff();
+  const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help'>('deals');
 
   return (
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{roleHeading('sales', user)}</h1>
           <p className={styles.lead}>Сделки, КП и отправка клиенту</p>
         </div>
@@ -776,6 +643,7 @@ function SalesCabinet({
       <CabinetTabs
         tabs={[
           { id: 'deals', label: `Сделки · ${api.objects.length}` },
+          { id: 'staff', label: `Сотрудники · ${staff.length}` },
           { id: 'analytics', label: 'Аналитика' },
           { id: 'help', label: 'Обучение' },
         ]}
@@ -785,6 +653,11 @@ function SalesCabinet({
       {tab === 'deals' ? (
         <TabPanel>
           <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
+        </TabPanel>
+      ) : null}
+      {tab === 'staff' ? (
+        <TabPanel>
+          <StaffPanel />
         </TabPanel>
       ) : null}
       {tab === 'analytics' ? (
@@ -816,6 +689,7 @@ function MeasurerCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{roleHeading('measurer', user)}</h1>
           <p className={styles.lead}>Замер за 5–10 минут</p>
         </div>
@@ -875,6 +749,7 @@ function CrewCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{roleHeading('crew', user)}</h1>
           <p className={styles.lead}>Личный кабинет монтажника · цены скрыты, PDF схемы доступен</p>
         </div>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import styles from './partner.module.css';
+import styles from './MaterialStubView.module.css';
+
+export const PREPARING_LABEL = 'Материал готовится к публикации';
 
 type Slide = { kicker: string; title: string; points: string[] };
 type Frame = { time: string; title: string; text: string; hot: 'slab' | 'panel' | 'film' };
@@ -213,17 +215,17 @@ function SlideDeck({ stub }: { stub: string }) {
   const slide = deck.slides[index]!;
   return (
     <div className={styles.deck}>
-      <p className={styles.deckEyebrow}>{deck.eyebrow}</p>
-      <div className={styles.deckStage}>
-        <p className={styles.deckKicker}>{slide.kicker}</p>
-        <h3 className={styles.deckTitle}>{slide.title}</h3>
-        <ul className={styles.deckPoints}>
+      <p className={styles.eyebrow}>{deck.eyebrow}</p>
+      <div className={styles.stage}>
+        <p className={styles.kicker}>{slide.kicker}</p>
+        <h3 className={styles.title}>{slide.title}</h3>
+        <ul className={styles.points}>
           {slide.points.map((point) => (
             <li key={point}>{point}</li>
           ))}
         </ul>
       </div>
-      <div className={styles.deckNav}>
+      <div className={styles.nav}>
         <button
           type="button"
           className={styles.ghost}
@@ -232,7 +234,7 @@ function SlideDeck({ stub }: { stub: string }) {
         >
           Назад
         </button>
-        <span className={styles.deckCount}>
+        <span className={styles.count}>
           {String(index + 1).padStart(2, '0')} / {String(deck.slides.length).padStart(2, '0')}
         </span>
         <button
@@ -270,19 +272,19 @@ function VideoStub() {
         onClick={() => setPlaying((v) => !v)}
         aria-pressed={playing}
       >
-        <span className={styles.playerBrand}>STP MultiFrame</span>
+        <span className={styles.brand}>STP MultiFrame</span>
         <span className={`${styles.ceiling} ${styles[`hot_${current.hot}`]}`}>
           <span>Плита</span>
           <span>Панель</span>
           <span>Полотно</span>
         </span>
-        <span className={styles.playerPlay}>{playing ? 'Пауза' : 'Смотреть'}</span>
-        <span className={styles.playerCaption}>
+        <span className={styles.play}>{playing ? 'Пауза' : 'Смотреть'}</span>
+        <span className={styles.caption}>
           <strong>{current.title}</strong>
           <span>{current.time}</span>
         </span>
       </button>
-      <p className={styles.playerText}>{current.text}</p>
+      <p className={styles.text}>{current.text}</p>
       <ol className={styles.chapters}>
         {FRAMES.map((item, index) => (
           <li key={item.time}>
@@ -300,7 +302,6 @@ function VideoStub() {
           </li>
         ))}
       </ol>
-      <p className={styles.stubNote}>Демонстрационный фрагмент для кабинета · 0:16</p>
     </div>
   );
 }
@@ -308,8 +309,8 @@ function VideoStub() {
 function ManualStub() {
   return (
     <article className={styles.manual}>
-      <p className={styles.deckEyebrow}>Инструкция по монтажу</p>
-      <h3 className={styles.deckTitle}>STP MultiFrame под натяжной потолок</h3>
+      <p className={styles.eyebrow}>Инструкция по монтажу</p>
+      <h3 className={styles.title}>STP MultiFrame под натяжной потолок</h3>
       <ol className={styles.manualList}>
         {MANUAL.map((section, index) => (
           <li key={section.title}>
@@ -321,13 +322,17 @@ function ManualStub() {
           </li>
         ))}
       </ol>
-      <p className={styles.stubNote}>Демонстрационный материал. Рабочая карта монтажа — у технолога STP.</p>
     </article>
   );
 }
 
 export function MaterialStubView({ stub }: { stub: string }) {
-  if (stub === 'video-install') return <VideoStub />;
-  if (stub === 'instruction-install') return <ManualStub />;
-  return <SlideDeck stub={stub} />;
+  const body =
+    stub === 'video-install' ? <VideoStub /> : stub === 'instruction-install' ? <ManualStub /> : <SlideDeck stub={stub} />;
+  return (
+    <div className={styles.stub}>
+      <p className={styles.banner}>{PREPARING_LABEL}</p>
+      {body}
+    </div>
+  );
 }

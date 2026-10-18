@@ -1,5 +1,6 @@
 import type { MaterialNode, PublicMaterial } from '../../../api/materialsLib.js';
 import {
+  MATERIAL_DIRECT_MAX_BYTES,
   addFile,
   createFolder,
   deleteMaterial,
@@ -13,6 +14,8 @@ import {
   apiDeleteMaterial,
   apiListMaterials,
   apiMaterialContent,
+  apiMaterialUploadUrl,
+  apiRegisterMaterialFile,
   apiRenameMaterial,
   apiReplaceMaterial,
   apiUploadMaterial,
@@ -107,10 +110,22 @@ async function filePayload(file: File): Promise<{ mime: string; contentBase64: s
   return { mime: file.type || 'application/octet-stream', contentBase64 };
 }
 
+async function uploadMaterialDirect(file: File, parentId: string | null): Promise<PublicMaterial[]> {
+  if (file.size > MATERIAL_DIRECT_MAX_BYTES) throw new Error('Файл больше 2 ГБ');
+  const mime = file.type || 'application/octet-stream';
+  const ticket = await apiMaterialUploadUrl({ name: file.name, parentId, mime });
+  const headers = new Headers(ticket.headers || {});
+  if (!headers.has('Content-Type')) headers.set('Content-Type', mime);
+  const put = await fetch(ticket.url, { method: ticket.method || 'PUT', body: file, headers });
+  if (!put.ok) throw new Error('Не удалось загрузить файл в хранилище');
+  return apiRegisterMaterialFile({ name: file.name, parentId, storageKey: ticket.storageKey });
+}
+
 export async function uploadMaterialFile(
   file: File,
   parentId: string | null,
 ): Promise<PublicMaterial[]> {
+  if (useRemote() && file.size > MAX_FILE_BYTES) return uploadMaterialDirect(file, parentId);
   const payload = await filePayload(file);
   if (useRemote()) {
     return apiUploadMaterial({
