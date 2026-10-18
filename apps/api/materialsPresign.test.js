@@ -52,6 +52,24 @@ test('старый узел без bucket подписывается тольк�
   assert.equal(url.includes('multiframe-partner-materials'), false);
 });
 
+test('подписанный PUT указывает на бакет материалов и не фиксирует Content-Type', async () => {
+  const { signMaterialUpload } = await import('./materialsStorage.js');
+  const signed = await signMaterialUpload('materials/mat_largevideo');
+  const parsed = new URL(signed.url);
+  assert.equal(parsed.protocol, 'https:');
+  assert.match(parsed.hostname, /(^|\.)storage\.yandexcloud\.net$/);
+  assert.equal(bucketOf(signed.url), 'multiframe-partner-materials');
+  assert.match(decodeURIComponent(parsed.pathname), /materials\/mat_largevideo/);
+  assert.equal(parsed.searchParams.get('X-Amz-Expires'), '3600');
+  assert.equal(parsed.searchParams.get('X-Amz-Algorithm'), 'AWS4-HMAC-SHA256');
+  const signedHeaders = String(parsed.searchParams.get('X-Amz-SignedHeaders') || '').toLowerCase();
+  assert.equal(signedHeaders.includes('content-type'), false);
+  assert.equal(signed.url.includes('multiframe-partner-data'), false);
+  await assert.rejects(() => signMaterialUpload('platform-v2.json'), /Некорректный ключ/);
+  await assert.rejects(() => signMaterialUpload('materials/mat_ok/extra'), /Некорректный ключ/);
+  await assert.rejects(() => signMaterialUpload('docs/org/file.pdf'), /Некорректный ключ/);
+});
+
 test('файл не для просмотра получает ссылку на скачивание', async () => {
   const url = await signedMaterialGetUrl({
     storageKey: 'materials/mat_sheet',

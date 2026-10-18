@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -237,50 +238,66 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     }>
   >([]);
   const remote = hasRemoteApi();
+  const objectsEpoch = useRef(0);
+  const projectsEpoch = useRef(0);
 
-  const refreshObjects = useCallback(async () => {
+  const refreshObjects = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
     const session = loadSession();
     if (!session) {
-      setObjects([]);
-      setPendingSyncCount(0);
+      if (!silent) {
+        setObjects([]);
+        setPendingSyncCount(0);
+      }
       return;
     }
-    setObjectsLoading(true);
+    if (!silent) objectsEpoch.current += 1;
+    const stamp = objectsEpoch.current;
+    if (!silent) setObjectsLoading(true);
     try {
       const list = withDemoDocuments(await loadVisibleObjects(session, remote), session.role);
+      if (stamp !== objectsEpoch.current) return;
       setObjects(list);
       cacheObjects(list);
-    } catch {
-      setObjects(loadCachedObjects());
-    } finally {
-      setObjectsLoading(false);
       const queuedDocs = peekObjectDocumentQueue().length;
       setPendingSyncCount(
         (await countMyOutbox(session.id).catch(() => peekObjectQueue().length)) + queuedDocs,
       );
+    } catch {
+      if (!silent && stamp === objectsEpoch.current) setObjects(loadCachedObjects());
+    } finally {
+      if (!silent && stamp === objectsEpoch.current) setObjectsLoading(false);
     }
   }, [remote]);
 
-  const refreshProjects = useCallback(async () => {
+  const refreshProjects = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
     const session = loadSession();
     if (!session) {
-      setProjects([]);
-      setProjectsError(null);
-      setProjectsUnavailable(false);
+      if (!silent) {
+        setProjects([]);
+        setProjectsError(null);
+        setProjectsUnavailable(false);
+      }
       return;
     }
-    setProjectsLoading(true);
+    if (!silent) projectsEpoch.current += 1;
+    const stamp = projectsEpoch.current;
+    if (!silent) setProjectsLoading(true);
     try {
       const result = await loadVisibleProjects(session, remote);
+      if (stamp !== projectsEpoch.current) return;
+      if (silent && result.error) return;
       setProjects(result.projects);
       setProjectsError(result.error);
       setProjectsUnavailable(result.unavailable);
     } catch (err) {
+      if (silent || stamp !== projectsEpoch.current) return;
       setProjects([]);
       setProjectsError(err instanceof Error ? err.message : 'Не удалось загрузить проекты');
       setProjectsUnavailable(true);
     } finally {
-      setProjectsLoading(false);
+      if (!silent && stamp === projectsEpoch.current) setProjectsLoading(false);
     }
   }, [remote]);
 
@@ -367,6 +384,50 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       void refreshProjects();
     }
   }, [user?.id, refreshObjects, refreshProjects]);
+
+  useEffect(() => {
+    if (!user || !remote) return;
+    let timer = 0;
+    let stopped = false;
+    let inflight = false;
+    const pull = () => {
+      if (stopped || inflight) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      inflight = true;
+      void Promise.all([
+        refreshObjects({ silent: true }),
+        refreshProjects({ silent: true }),
+      ]).finally(() => {
+        inflight = false;
+      });
+    };
+    const arm = () => {
+      window.clearInterval(timer);
+      timer = 0;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      timer = window.setInterval(pull, 45_000);
+    };
+    const onFocus = () => pull();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        pull();
+        arm();
+      } else {
+        window.clearInterval(timer);
+        timer = 0;
+      }
+    };
+    arm();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user?.id, remote, refreshObjects, refreshProjects]);
 
   useEffect(() => {
     const onOnline = () => {

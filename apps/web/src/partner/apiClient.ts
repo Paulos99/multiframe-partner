@@ -48,7 +48,7 @@ async function request<T>(
   let res: Response;
   try {
     const signal = opts.signal ?? AbortSignal.timeout(12000);
-    res = await fetch(`${base}${path}`, { ...opts, headers, signal });
+    res = await fetch(`${base}${path}`, { ...opts, headers, signal, cache: 'no-store' });
   } catch (err) {
     throw new ApiError(0, err instanceof Error ? err.message : 'Нет сети');
   }
@@ -310,6 +310,37 @@ export async function apiCreateMaterialFolder(
   }>('/materials/folders', {
     method: 'POST',
     body: JSON.stringify({ name, parentId }),
+  });
+  return data.materials;
+}
+
+export async function apiMaterialUploadUrl(input: {
+  name: string;
+  parentId: string | null;
+  mime?: string;
+}): Promise<{
+  url: string;
+  method: 'PUT';
+  storageKey: string;
+  expiresIn: number;
+  headers?: Record<string, string>;
+}> {
+  return request('/materials/files/upload-url', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function apiRegisterMaterialFile(input: {
+  name: string;
+  parentId: string | null;
+  storageKey: string;
+}): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{
+    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+  }>('/materials/files', {
+    method: 'POST',
+    body: JSON.stringify(input),
   });
   return data.materials;
 }
