@@ -2999,3 +2999,33 @@
     width: 100%;
   }
 }
+
+/* Админ · «Партнёры» → «Добавить»: заголовок с кнопкой и раскрывающаяся форма. */
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.sectionHead h2 {
+  margin: 0;
+}
+
+.addPartnerWrap {
+  overflow: hidden;
+}
+
+.addPartnerForm {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 4px;
+  padding: 14px;
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-sm);
+}
+
+.addPartnerForm h3 {
+  margin: 0;
+}

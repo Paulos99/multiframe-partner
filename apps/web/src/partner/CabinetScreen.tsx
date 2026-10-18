@@ -14,7 +14,7 @@ import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { NetworkOverview, RoleWorkspace } from './RoleOverview';
-import { FadeRise } from './motionBits';
+import { AnimatePresence, FadeRise, m, motionPresets } from './motionBits';
 import { ObjectsPanel } from './ObjectsPanel';
 import { StaffPanel } from './StaffPanel';
 import { generatePassword, usePartner } from './PartnerContext';
@@ -87,7 +87,7 @@ function profileOf(user: SessionUser, onLogout: () => void) {
   };
 }
 
-type AdminTab = 'add' | 'partners' | 'projects' | 'analytics' | 'help';
+type AdminTab = 'partners' | 'projects' | 'analytics' | 'help';
 
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
@@ -97,7 +97,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [city, setCity] = useState('');
-  const [created, setCreated] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -119,7 +119,6 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setErr(null);
-    setCreated(null);
     setSaving(true);
     try {
       const res = await api.adminCreatePartner({ login, password, companyName, city });
@@ -128,7 +127,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       setPassword('');
       setCompanyName('');
       setCity('');
-      setTab('partners');
+      setAddOpen(false);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
     } finally {
@@ -153,7 +152,6 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => setTab('analytics') },
     { id: 'partners', label: `Партнёры · ${partners.length}`, active: tab === 'partners', onSelect: () => setTab('partners') },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => setTab('projects') },
-    { id: 'add', label: 'Добавить', active: tab === 'add', onSelect: () => setTab('add') },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => setTab('help') },
   ];
 
@@ -178,63 +176,87 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     >
       <FrameBody>
       <NetworkOverview count={partners.length} onPartners={() => setTab('partners')}
-        onAdd={() => setTab('add')} onLearning={() => setTab('help')} />
-
-      {tab === 'add' ? (
-        <TabPanel>
-          <form className={`${styles.card} ${styles.panelCard}`} onSubmit={(e) => void onCreate(e)}>
-            <h2>Новый партнёр</h2>
-            <div className={styles.grid2}>
-              <label className={styles.field}>
-                Логин владельца
-                <input value={login} onChange={(e) => setLogin(e.target.value)} required />
-              </label>
-              <label className={styles.field}>
-                Пароль
-                <input
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                />
-              </label>
-              <label className={styles.field}>
-                Компания
-                <input
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  required
-                />
-              </label>
-              <label className={styles.field}>
-                Город
-                <CityField value={city} onChange={setCity} />
-              </label>
-            </div>
-            {created ? <p className={styles.flash}>{created}</p> : null}
-            {err && tab === 'add' ? (
-              <p className={styles.error} role="alert">
-                {err}
-              </p>
-            ) : null}
-            <Button type="submit" loading={saving} disabled={saving}>
-              {saving ? 'Создаём…' : 'Создать'}
-            </Button>
-          </form>
-        </TabPanel>
-      ) : null}
+        onAdd={() => {
+          setTab('partners');
+          setAddOpen(true);
+        }} onLearning={() => setTab('help')} />
 
       {tab === 'partners' ? (
         <TabPanel>
           <div className={`${styles.card} ${styles.panelCard}`}>
-            <h2>Партнёры сети</h2>
-          {api.partnersLoading && !partners.length ? <Skeleton count={3} label="Загрузка партнёров"/> : null}
+            <div className={styles.sectionHead}>
+              <h2>Партнёры сети</h2>
+              <Button
+                variant={addOpen ? 'secondary' : 'primary'}
+                aria-expanded={addOpen}
+                aria-controls="admin-add-partner"
+                onClick={() => {
+                  setErr(null);
+                  setAddOpen((v) => !v);
+                }}
+              >
+                {addOpen ? 'Свернуть' : 'Добавить'}
+              </Button>
+            </div>
+            <AnimatePresence initial={false}>
+              {addOpen ? (
+                <m.div
+                  key="add-partner"
+                  id="admin-add-partner"
+                  className={styles.addPartnerWrap}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={motionPresets.transition}
+                >
+                  <form className={styles.addPartnerForm} onSubmit={(e) => void onCreate(e)}>
+                    <h3>Новый партнёр</h3>
+                    <div className={styles.grid2}>
+                      <label className={styles.field}>
+                        Логин владельца
+                        <input value={login} onChange={(e) => setLogin(e.target.value)} required />
+                      </label>
+                      <label className={styles.field}>
+                        Пароль
+                        <input
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          autoComplete="new-password"
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        Компания
+                        <input
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                          required
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        Город
+                        <CityField value={city} onChange={setCity} />
+                      </label>
+                    </div>
+                    {err ? (
+                      <p className={styles.error} role="alert">
+                        {err}
+                      </p>
+                    ) : null}
+                    <Button type="submit" loading={saving} disabled={saving}>
+                      {saving ? 'Создаём…' : 'Создать'}
+                    </Button>
+                  </form>
+                </m.div>
+              ) : null}
+            </AnimatePresence>
+            {api.partnersLoading && !partners.length ? <Skeleton count={3} label="Загрузка партнёров"/> : null}
             {notice ? (
               <p className={styles.flash} role="status">
                 {notice}
               </p>
             ) : null}
-            {err && tab === 'partners' ? (
+            {err && !addOpen ? (
               <p className={styles.error} role="alert">
                 {err}
               </p>
