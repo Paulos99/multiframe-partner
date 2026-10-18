@@ -2999,3 +2999,100 @@
     width: 100%;
   }
 }
+
+/* Сенсорный слой (телефон и планшет): цели нажатия не меньше 44 px. */
+@media (max-width: 1024px), (pointer: coarse) {
+  .topActions .ghost,
+  .topActions .logoutBtn,
+  .navRow .primary,
+  .navRow .ghost,
+  .syncBadge,
+  .calTrigger,
+  .dashSelect,
+  .playerPlay {
+    min-height: var(--touch-min);
+  }
+
+  .syncDotBtn {
+    width: var(--touch-min);
+    height: var(--touch-min);
+    min-height: var(--touch-min);
+  }
+
+  .calNavBtn {
+    width: var(--touch-min);
+    height: var(--touch-min);
+  }
+
+  .calDay {
+    height: var(--touch-min);
+  }
+}
+
+/* Телефон: таблицы аналитики превращаются в карточки, подпись столбца берётся из data-label. */
+@media (max-width: 640px) {
+  .dashTableScroll {
+    overflow: visible;
+  }
+
+  .dashTableScroll::before {
+    content: none;
+    display: none;
+  }
+
+  .dashTable {
+    min-width: 0;
+    display: block;
+    font-size: 0.88rem;
+  }
+
+  .dashTable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .dashTable tbody {
+    display: grid;
+    gap: var(--cab-space-3);
+  }
+
+  .dashTable tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    padding: 14px;
+    border: 1px solid var(--cab-border);
+    border-radius: var(--cab-radius-md);
+    background: var(--cab-card);
+    box-shadow: var(--cab-shadow-sm);
+  }
+
+  .dashTable td {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .dashTable td::before {
+    content: attr(data-label);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--cab-muted);
+  }
+
+  .dashTable td:first-child {
+    grid-column: 1 / -1;
+    font-weight: 750;
+    font-size: 0.95rem;
+  }
+}

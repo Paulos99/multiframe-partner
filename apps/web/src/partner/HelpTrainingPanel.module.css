@@ -172,3 +172,9 @@
 .sectionHead::before { content: '›'; transition: transform .2s; }
 .section[open] .sectionHead::before { transform: rotate(90deg); }
 @media(prefers-reduced-motion: reduce) { .sectionHead::before { transition: none; } }
+
+@media (max-width: 1024px), (pointer: coarse) {
+  .sectionHead {
+    min-height: var(--touch-min);
+  }
+}

@@ -37,6 +37,10 @@
 .item,
 .itemOn {
   appearance: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -84,7 +88,136 @@
   width: 100%;
 }
 
-@media (max-width: 900px) {
+
+.icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.icon [data-nav-icon='letter'] {
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+/* На широком экране счётчик уже в подписи («Объекты · 2»). */
+.badge {
+  display: none;
+}
+
+.full {
+  min-width: 0;
+}
+
+.short {
+  display: none;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Инструменты в меню — кнопки той же высоты, что и пункты (не меньше 44 px). */
+.side .tools :global(button) {
+  min-height: var(--touch-min);
+}
+
+/*
+ * Планшет (641–1024 px, портрет и альбом): меню свёрнуто в рельс с иконками.
+ * Полная подпись остаётся для скринридера, видна короткая.
+ */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .side {
+    width: 88px;
+    padding: 12px 6px calc(16px + var(--safe-bottom));
+    gap: 8px;
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .scroll {
+    gap: 12px;
+  }
+
+  .item,
+  .itemOn {
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-height: 60px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+
+  .full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .short {
+    display: block;
+    max-width: 100%;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .badge {
+    position: absolute;
+    top: -6px;
+    right: -12px;
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: var(--cab-radius-pill);
+    background: var(--cab-accent-soft);
+    color: var(--cab-accent-text);
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .itemOn .badge {
+    background: var(--cab-on-accent);
+    color: var(--cab-accent);
+  }
+
+  .side .tools :global(button) {
+    padding: 8px 4px;
+    font-size: 0.68rem;
+    line-height: 1.15;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    border-radius: var(--cab-radius-sm);
+  }
+}
+
+/* Телефон (≤640 px): нижняя панель с иконками и короткими подписями, с учётом safe-area. */
+@media (max-width: 640px) {
   .side {
     position: fixed;
     z-index: 40;
@@ -93,10 +226,10 @@
     bottom: 0;
     top: auto;
     flex-direction: row;
-    align-items: center;
-    gap: 8px;
+    align-items: stretch;
+    gap: 0;
     height: auto;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    padding: 6px max(6px, env(safe-area-inset-right)) calc(6px + var(--safe-bottom)) max(6px, env(safe-area-inset-left));
     border-right: none;
     border-top: 1px solid var(--cab-border);
     box-shadow: 0 -10px 28px rgba(20, 28, 36, 0.08);
@@ -108,39 +241,92 @@
 
   .scroll {
     flex-direction: row;
-    align-items: center;
-    gap: 8px;
+    align-items: stretch;
+    gap: 4px;
     flex: 1;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .scroll::-webkit-scrollbar {
+    display: none;
   }
 
   .nav {
     flex-direction: row;
-    gap: 6px;
-    flex: 0 0 auto;
+    gap: 4px;
+    flex: 1 0 auto;
   }
 
   .item,
   .itemOn {
+    flex: 1 0 64px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
     width: auto;
+    min-width: 64px;
+    min-height: 52px;
+    padding: 6px 6px;
+    text-align: center;
     white-space: nowrap;
     scroll-margin-inline: 16px 132px;
   }
 
+  .full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .short {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .badge {
+    position: absolute;
+    top: -6px;
+    right: -12px;
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: var(--cab-radius-pill);
+    background: var(--cab-accent-soft);
+    color: var(--cab-accent-text);
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .itemOn .badge {
+    background: var(--cab-on-accent);
+    color: var(--cab-accent);
+  }
+
   .tools {
     flex-direction: row;
+    align-items: center;
     margin-top: 0;
     flex: 0 0 auto;
   }
 
   .tools > :global(*) {
     flex-direction: row;
+    margin: 0;
   }
 
-  .tools :global(button) {
+  .side .tools :global(button) {
     width: auto;
     white-space: nowrap;
   }

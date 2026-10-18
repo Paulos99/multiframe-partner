@@ -364,3 +364,10 @@
   white-space: nowrap;
   border: 0;
 }
+
+@media (max-width: 1024px), (pointer: coarse) {
+  .crumbBtn,
+  .crumbCurrent {
+    min-height: var(--touch-min);
+  }
+}
