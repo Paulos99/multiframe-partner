@@ -32,7 +32,7 @@ export const ROLES: RoleCase[] = [
     loginEnv: 'E2E_ADMIN_LOGIN',
     passwordEnv: 'E2E_ADMIN_PASSWORD',
     title: /^Сеть STP MultiFrame партнёра$/,
-    homeText: 'Обучение и материалы',
+    homeText: 'Аналитика',
     objectsHeading: null,
     trainingTitle: 'Ваша работа · Админ StP',
   },
