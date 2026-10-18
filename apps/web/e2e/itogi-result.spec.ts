@@ -13,13 +13,21 @@ async function enter(page: Page, role: string) {
   await page.getByLabel('Логин', { exact: true }).fill(`ui.${role}`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Мой профиль', exact: true })).toBeVisible();
+  await expect(toolsTab(page)).toBeVisible();
+}
+
+/** Вкладка «Инструменты»: в боковом меню на компьютере, в нижней панели на телефоне. */
+function toolsTab(page: Page) {
+  return page
+    .getByRole('tab', { name: 'Инструменты', exact: true })
+    .or(page.getByRole('button', { name: 'Инструменты', exact: true }))
+    .filter({ visible: true })
+    .first();
 }
 
 /** Проходит Проблемомер руками, как партнёр: Старт → Объект → Расчёт → Итог. */
 async function walkToResult(page: Page) {
-  const nav = page.getByRole('complementary', { name: 'Разделы кабинета' });
-  await nav.getByRole('tab', { name: 'Инструменты', exact: true }).or(nav.getByRole('button', { name: 'Инструменты', exact: true })).first().click();
+  await toolsTab(page).click();
   await page.getByRole('button', { name: 'Открыть Проблемомер', exact: true }).click();
   await page.getByRole('button', { name: 'Начать', exact: true }).click();
   const title = page.getByRole('heading', { name: 'Акустический профиль помещения' });
