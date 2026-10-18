@@ -870,6 +870,24 @@ export function upsertLocalObject(
     ...carriedObjectLink(input, existing),
   };
 
+  let projects = db.projects || [];
+  if (!existing && !obj.projectId) {
+    const project: Project = {
+      id: uid('prj'),
+      orgId: actor.orgId,
+      name: (obj.clientName || obj.address || obj.roomName || 'Проект').slice(0, 250),
+      clientName: obj.clientName,
+      clientPhone: obj.clientPhone,
+      address: obj.address,
+      city: obj.city,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: actor.id,
+    };
+    projects = [project, ...projects];
+    obj.projectId = project.id;
+  }
+
   if (!existing) {
     obj.history = [
       {
@@ -906,7 +924,7 @@ export function upsertLocalObject(
   const objects = existing
     ? db.objects.map((o) => (o.id === obj.id ? obj : o))
     : [obj, ...db.objects];
-  saveDb({ ...db, objects });
+  saveDb({ ...db, objects, projects });
   enqueueObjectSync(obj);
   cacheObjects(listLocalObjects(actor));
   return redactObjectForRole(obj, actor.role);

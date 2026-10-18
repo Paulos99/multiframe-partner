@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { canSeePrices, JOB_OBJECT_STATUS_LABELS, type JobObject, type UserRole } from '../../../../packages/shared/partner';
 import { formatRub } from './estimate';
+import listStyles from './ProjectList.module.css';
 import { preliminaryRoomTotal } from './projectSummary';
 import styles from './Projects.module.css';
 
@@ -11,13 +12,15 @@ export type ProjectView = {
 };
 export type ProjectRoom = JobObject & { projectId?: string | null; roomName?: string | null };
 
-export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenRoom, onDiagnose, onCalculate, onAttach }: {
+export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenRoom, onDiagnose, onCalculate, onAttach, onAddRoom }: {
   project: ProjectView; rooms: ProjectRoom[]; ungrouped: ProjectRoom[]; role: UserRole;
   onBack: () => void; onOpenRoom: (id: string) => void; onDiagnose?: (id: string) => void;
   onCalculate: (id: string) => void;
   onAttach?: (roomId: string, projectId: string) => Promise<void>;
+  onAddRoom?: (roomName: string) => Promise<void>;
 }) {
   const [roomId, setRoomId] = useState('');
+  const [newRoom, setNewRoom] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const priced = canSeePrices(role);
@@ -28,6 +31,13 @@ export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenR
     setBusy(true); setError('');
     try { await onAttach(roomId, project.id); setRoomId(''); }
     catch (err) { setError(err instanceof Error ? err.message : 'Не удалось добавить помещение'); }
+    finally { setBusy(false); }
+  }
+  async function addRoom() {
+    if (!newRoom.trim() || !onAddRoom) return;
+    setBusy(true); setError('');
+    try { await onAddRoom(newRoom.trim()); setNewRoom(''); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Не удалось добавить комнату'); }
     finally { setBusy(false); }
   }
   return <section className={styles.panel} aria-label="Карточка проекта">
@@ -52,7 +62,12 @@ export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenR
       </article>)}
       {!rooms.length ? <p className={styles.empty}>В проекте пока нет доступных вам помещений.</p> : null}
     </div>
-    {onAttach && (role === 'owner' || role === 'sales') ? <div className={styles.attach}>
+    {onAddRoom ? <div className={listStyles.add}>
+      <label>Новая комната<input aria-label="Название комнаты" value={newRoom} disabled={busy} onChange={event => setNewRoom(event.target.value)} /></label>
+      <button className={styles.primary} type="button" disabled={busy || !newRoom.trim()} onClick={() => void addRoom()}>{busy ? 'Сохраняем…' : 'Добавить комнату'}</button>
+      {error ? <p role="alert" className={styles.error}>{error}</p> : null}
+    </div> : null}
+    {onAttach && !onAddRoom && (role === 'owner' || role === 'sales') ? <div className={styles.attach}>
       <h3>Добавить существующее помещение</h3>
       <p className={styles.muted}>Расчёт, документы и история сохранятся в исходной карточке.</p>
       <div className={styles.actions}><select aria-label="Помещение без проекта" value={roomId} disabled={busy || !eligible.length} onChange={event => setRoomId(event.target.value)}>

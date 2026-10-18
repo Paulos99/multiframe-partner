@@ -73,7 +73,7 @@ test('привязка к проекту не пропадает, если PATCH
   );
   assert.deepEqual(carriedObjectLink({}, { id: 'old' } as never), {});
   assert.deepEqual(carriedObjectLink({ projectId: null, roomName: '  ' }, { projectId: 'prj_1' } as never), {
-    projectId: null,
+    projectId: 'prj_1',
     roomName: null,
   });
 });

@@ -374,4 +374,77 @@ describe('projects', { concurrency: false }, () => {
       await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
     }
   });
+
+  test('новый объект получает проект, пустая привязка запрещена, перенос внутри компании можно', async () => {
+    const owner = await login('partner1', 'demo1234');
+    const measurer = await login('exec1', 'exec1234');
+    const crew = await login('crew1', 'exec1234');
+    const other = await login('partner2', 'demo1234');
+    const legacyBefore = storedPlatform().objects.find((obj) => obj.id === 'obj_a11');
+    assert.equal(Object.prototype.hasOwnProperty.call(legacyBefore, 'projectId'), false);
+
+    assert.equal(
+      (await call('POST', '/objects', { token: crew, body: { clientName: 'Монтаж', address: 'нет' } })).statusCode,
+      403,
+    );
+
+    const created = readJson(
+      await call('POST', '/objects', {
+        token: measurer,
+        body: {
+          clientName: 'Петрова',
+          clientPhone: '+7 495 000-11-22',
+          address: 'ул. Пятницкая, 4',
+          city: 'Москва',
+          roomName: 'Кухня',
+          room: { areaM2: 11 },
+          estimate: { totalCost: 5000 },
+        },
+      }),
+    );
+    assert.equal(created.object.roomName, 'Кухня');
+    assert.equal(created.object.room.areaM2, 11);
+    assert.match(created.object.projectId, /^prj_/);
+    const projects = readJson(await call('GET', '/projects', { token: owner }));
+    const project = projects.projects.find((item) => item.id === created.object.projectId);
+    assert.ok(project);
+    assert.equal(project.name, 'Петрова');
+    assert.equal(project.address, 'ул. Пятницкая, 4');
+    assert.equal(project.clientPhone, '+7 495 000-11-22');
+    assert.equal(project.orgId, 'org_demo');
+    assert.equal(project.totalCost, undefined);
+    assert.equal(
+      readJson(await call('GET', '/projects', { token: other })).projects.some((item) => item.id === project.id),
+      false,
+    );
+
+    const cleared = await call('PATCH', `/objects/${created.object.id}`, {
+      token: owner,
+      body: { projectId: '' },
+    });
+    assert.equal(cleared.statusCode, 400);
+    const still = readJson(await call('GET', `/objects/${created.object.id}`, { token: owner }));
+    assert.equal(still.object.projectId, project.id);
+    assert.equal(still.object.clientName, 'Петрова');
+    assert.equal(still.object.room.areaM2, 11);
+
+    const second = readJson(
+      await call('POST', '/projects', {
+        token: owner,
+        body: { name: 'Второй адрес', address: 'ул. Ленина, 1', city: 'Москва' },
+      }),
+    );
+    const moved = readJson(
+      await call('PATCH', `/objects/${created.object.id}`, {
+        token: owner,
+        body: { projectId: second.project.id },
+      }),
+    );
+    assert.equal(moved.object.projectId, second.project.id);
+    assert.equal(moved.object.roomName, 'Кухня');
+    assert.equal(moved.object.estimate.totalCost, 5000);
+
+    const legacy = storedPlatform().objects.find((obj) => obj.id === 'obj_a11');
+    assert.equal(Object.prototype.hasOwnProperty.call(legacy, 'projectId'), false);
+  });
 });

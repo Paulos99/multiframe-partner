@@ -6,10 +6,11 @@ import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
 import { usePartner } from './PartnerContext';
+import listStyles from './ProjectList.module.css';
 import styles from './partner.module.css';
 
 export function SaveObjectCard() {
-  const { user, saveObject, partner, diagnosisRequest, objects } = usePartner();
+  const { user, saveObject, createProject, partner, diagnosisRequest, objects, projects } = usePartner();
   const { session, patchRoom, setCeilingArea } = useSession();
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -23,6 +24,8 @@ export function SaveObjectCard() {
   const [sentFlash, setSentFlash] = useState(false);
   /** Keep one card: save / send update the same object instead of creating clones. */
   const [objectId, setObjectId] = useState<string | null>(null);
+  const [projectChoice, setProjectChoice] = useState('new');
+  const [roomName, setRoomName] = useState('');
   const appliedDiagnosis = useRef<number | null>(null);
 
   useEffect(() => {
@@ -35,6 +38,8 @@ export function SaveObjectCard() {
     setClientPhone(obj.clientPhone || '');
     setAddress(obj.address || '');
     setCity(obj.city || user?.org?.city || '');
+    setProjectChoice(obj.projectId || 'new');
+    setRoomName(obj.roomName || '');
     const answers = obj.room?.answers;
     if (answers && typeof answers === 'object') patchRoom(answers as Partial<RoomAnswers>);
     if (typeof obj.room?.areaM2 === 'number') setCeilingArea(obj.room.areaM2);
@@ -83,16 +88,14 @@ export function SaveObjectCard() {
     };
   }
 
-  function objectFields(status: 'measured' | 'quote_sent') {
+  function objectFields(status: 'measured' | 'quote_sent', projectId?: string) {
     const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
+    const chosen = projectId || (projectChoice !== 'new' ? projectChoice : existing?.projectId || undefined);
+    const roomLabel = roomName.trim() || existing?.roomName || room.roomTypeCustom || '';
     return {
       ...(objectId ? { id: objectId } : {}),
-      ...(existing && Object.prototype.hasOwnProperty.call(existing, 'projectId')
-        ? { projectId: existing.projectId }
-        : {}),
-      ...(existing && Object.prototype.hasOwnProperty.call(existing, 'roomName')
-        ? { roomName: existing.roomName }
-        : {}),
+      ...(chosen ? { projectId: chosen } : {}),
+      ...(roomLabel ? { roomName: roomLabel } : {}),
       status,
       clientName,
       clientPhone,
@@ -104,6 +107,22 @@ export function SaveObjectCard() {
     };
   }
 
+  async function projectForSave(): Promise<string | undefined> {
+    if (projectChoice !== 'new') return projectChoice;
+    const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
+    if (!existing?.projectId) return undefined;
+    if (user?.role !== 'owner' && user?.role !== 'sales') return existing.projectId;
+    const project = await createProject({
+      name: clientName.trim() || address.trim() || roomName.trim() || 'Проект',
+      clientName,
+      clientPhone,
+      address,
+      city: city || user?.org?.city || '',
+    });
+    setProjectChoice(project.id);
+    return project.id;
+  }
+
   async function onSave(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -111,7 +130,9 @@ export function SaveObjectCard() {
     setErr(null);
     try {
       const updating = Boolean(objectId);
-      const obj = await saveObject(objectFields('measured'));
+      const linked = await projectForSave();
+      const obj = await saveObject(objectFields('measured', linked));
+      if (obj.projectId) setProjectChoice(obj.projectId);
       setObjectId(obj.id);
       setSavedFlash(true);
       setMsg(
@@ -147,7 +168,9 @@ export function SaveObjectCard() {
       } else {
         await navigator.clipboard.writeText(text);
       }
-      const obj = await saveObject(objectFields('quote_sent'));
+      const linked = await projectForSave();
+      const obj = await saveObject(objectFields('quote_sent', linked));
+      if (obj.projectId) setProjectChoice(obj.projectId);
       setObjectId(obj.id);
       setSentFlash(true);
       setMsg(
@@ -170,6 +193,29 @@ export function SaveObjectCard() {
         Замер появится у менеджера. Монтажник увидит объект, когда его назначат. Без сети сохранится на телефоне.
       </p>
       <form onSubmit={(e) => void onSave(e)}>
+        <div className={listStyles.picker}>
+          <label className={styles.field}>
+            Проект
+            <select aria-label="Проект" value={projectChoice} onChange={(event) => setProjectChoice(event.target.value)}>
+              <option value="new">Новый проект</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                  {project.address ? ` · ${project.address}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.field}>
+            Комната
+            <input
+              aria-label="Комната"
+              value={roomName}
+              placeholder="Кухня"
+              onChange={(event) => setRoomName(event.target.value)}
+            />
+          </label>
+        </div>
         <div className={styles.grid2}>
           <label className={styles.field}>
             Клиент

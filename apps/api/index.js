@@ -11,7 +11,7 @@ import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
 import { documentsForRole, findVisibleDocument } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
-import { applyObjectProjectFields, handleProjects } from './projects.js';
+import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -1375,7 +1375,31 @@ export async function handler(event = {}) {
         await savePlatform(platform);
         return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
       }
-      const obj = normalizeObjectInput(body, existing, user, org, platform);
+      let requestBody = body;
+      let createdProject = null;
+      if (!existing) {
+        const ensured = ensureProjectForNewObject(platform, body, user, uid);
+        requestBody = ensured.body;
+        createdProject = ensured.project;
+      }
+      let obj;
+      try {
+        obj = normalizeObjectInput(requestBody, existing, user, org, platform);
+      } catch (error) {
+        if (createdProject && Array.isArray(platform.projects)) {
+          platform.projects = platform.projects.filter((item) => item.id !== createdProject.id);
+        }
+        throw error;
+      }
+      if (createdProject) {
+        pushActivity(platform, {
+          orgId: user.orgId,
+          userId: user.id,
+          login: user.login,
+          action: 'create_project',
+          detail: createdProject.name,
+        });
+      }
       if (existing) {
         if (body.status && body.status !== existing.status) {
           obj.history = [
