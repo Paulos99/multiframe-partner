@@ -31,6 +31,8 @@ const OBJECTS_CAP = 5000;
 
 const ORG_ROLES = ['owner', 'sales', 'measurer', 'crew'];
 const STAFF_ROLES = ['sales', 'measurer', 'crew'];
+/** Владелец и менеджер компании. Админ StP сотрудников компании здесь не ведёт. */
+const STAFF_MANAGER_ROLES = ['owner', 'sales'];
 const OFFICIAL_PANEL = 2396;
 const OFFICIAL_M2 = 5990;
 const DEFAULT_INSTALL = 1500;
@@ -65,6 +67,18 @@ function normalizeRole(role) {
   if (role === 'executor') return 'measurer';
   if (['admin', 'owner', 'sales', 'measurer', 'crew'].includes(role)) return role;
   return 'measurer';
+}
+
+/**
+ * Роль нового сотрудника. Пустое значение — замерщик.
+ * owner, admin (StP) и прочие роли не назначаются.
+ */
+function assignableStaffRole(raw) {
+  const requested = String(raw ?? '').trim();
+  if (!requested) return 'measurer';
+  if (requested === 'executor') return 'measurer';
+  if (STAFF_ROLES.includes(requested)) return requested;
+  return null;
 }
 
 function canSeePrices(role) {
@@ -1144,14 +1158,14 @@ export async function handler(event = {}) {
 
     if (method === 'POST' && path.endsWith('/org/staff')) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, ['owner']);
+      assertRole(user, STAFF_MANAGER_ROLES);
       if (!user.orgId) return json(400, { message: 'Нет организации' });
       const body = getBody(event);
       const login = String(body.login || '').trim();
       const password = String(body.password || '').trim();
       const displayName = String(body.displayName || login).trim();
-      const role = normalizeRole(body.role || 'measurer');
-      if (!STAFF_ROLES.includes(role)) {
+      const role = assignableStaffRole(body.role);
+      if (!role) {
         return json(400, { message: 'Роль: sales, measurer или crew' });
       }
       if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
@@ -1185,13 +1199,21 @@ export async function handler(event = {}) {
 
     if (method === 'POST' && path.endsWith('/org/staff/reset-password')) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, ['owner', 'admin']);
+      assertRole(user, ['owner', 'sales', 'admin']);
       const { staffUserId, password } = getBody(event);
-      const idx = platform.users.findIndex((u) => {
-        if (u.id !== staffUserId || !STAFF_ROLES.includes(normalizeRole(u.role))) return false;
-        if (user.role === 'owner') return u.orgId === user.orgId;
-        return true;
-      });
+      const target = platform.users.find((u) => u.id === staffUserId);
+      if (!target) return json(404, { message: 'Сотрудник не найден' });
+      const targetRole = normalizeRole(target.role);
+      if (user.role !== 'admin' && target.orgId !== user.orgId) {
+        return json(404, { message: 'Сотрудник не найден' });
+      }
+      if (targetRole === 'owner' || targetRole === 'admin') {
+        return json(403, { message: 'Нельзя изменить владельца' });
+      }
+      if (!STAFF_ROLES.includes(targetRole)) {
+        return json(404, { message: 'Сотрудник не найден' });
+      }
+      const idx = platform.users.findIndex((u) => u.id === staffUserId);
       if (idx < 0) return json(404, { message: 'Сотрудник не найден' });
       const pw = String(password || '').trim();
       if (!pw) return json(400, { message: 'Пустой пароль' });
@@ -1214,15 +1236,25 @@ export async function handler(event = {}) {
 
     if (method === 'DELETE' && /\/org\/staff\/[^/]+$/.test(path)) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, ['owner']);
-      const staffUserId = path.split('/').pop();
-      const staff = platform.users.find(
-        (u) =>
-          u.id === staffUserId &&
-          u.orgId === user.orgId &&
-          STAFF_ROLES.includes(normalizeRole(u.role)),
-      );
-      if (!staff) return json(404, { message: 'Сотрудник не найден' });
+      assertRole(user, STAFF_MANAGER_ROLES);
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const staffUserId = decodeURIComponent(path.split('/').pop() || '');
+      const target = platform.users.find((u) => u.id === staffUserId);
+      if (!target) return json(404, { message: 'Сотрудник не найден' });
+      if (target.orgId !== user.orgId) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      const targetRole = normalizeRole(target.role);
+      if (targetRole === 'owner' || targetRole === 'admin') {
+        return json(403, { message: 'Нельзя удалить владельца' });
+      }
+      if (staffUserId === user.id) {
+        return json(403, { message: 'Нельзя удалить свою учётную запись' });
+      }
+      if (!STAFF_ROLES.includes(targetRole)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      const staff = target;
       platform.users = platform.users.filter((u) => u.id !== staffUserId);
       pushActivity(platform, {
         orgId: user.orgId,
