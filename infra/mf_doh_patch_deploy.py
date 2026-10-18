@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 from function_bundle import build_function_zip
+from verify_function_bundle import verify_function_zip
 
 FOLDER_ID = "b1gibd821or94p6f9v1q"
 SA_ID = "aje4r8khao2t9nl9dp8e"
@@ -233,12 +234,15 @@ def create_version(
 
 
 def main() -> None:
+    bundle = make_zip()
+    # Тот же файл, который create_version отправит в облако. Ошибка проверки
+    # завершает процесс до IAM и загрузки версии.
+    verify_function_zip(bundle.zip_path, entry_file=bundle.entry_file)
     keydata = json.loads(KEY_PATH.read_text(encoding="utf-8"))
     token = iam_token(keydata)
     print("IAM ok")
     fid = find_function_id(token)
     print("function", fid)
-    bundle = make_zip()
     storage_env = load_storage_env()
     print("storage bucket", storage_env.get("PARTNERS_BUCKET", "(none)"))
     vid = create_version(token, fid, bundle.zip_path, storage_env, bundle.entrypoint)

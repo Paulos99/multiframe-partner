@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Собрать архив функции во временную папку и импортировать точку входа.
+"""Проверить уже собранный архив Cloud Function до загрузки.
 
-Облачные ключи не читаются. Импорт идёт с пустым окружением хранилища и с
-заблокированными сетевыми вызовами: модуль должен загрузиться без
-ERR_MODULE_NOT_FOUND и без обращения к сети.
+verify_function_zip читает переданный zip (тот, который скрипт деплоя
+отправит в Yandex Cloud), распаковывает его во временную папку, ставит
+зависимости командой npm ci по lock из этого архива и импортирует точку
+входа. Облачные ключи не читаются. Сетевые вызовы на время импорта
+заблокированы.
 
-Зависимости берутся из apps/api/node_modules, если каталог уже есть
-(так делает CI после npm ci). Иначе npm ci ставит их по lock из архива.
+node_modules внутри архива не используются: иначе проверка смотрела бы
+не на lock, а на уже установленное дерево. Исходники и lock берутся
+только из переданного zip, второй архив не собирается.
 """
 from __future__ import annotations
 
@@ -67,79 +70,115 @@ console.log('IMPORT_OK');
 console.log('exports:', Object.keys(mod).sort().join(','));
 """
 
-REQUIRED_ANY = (("package-lock.json", "npm-shrinkwrap.json"),)
+LOCK_NAMES = ("package-lock.json", "npm-shrinkwrap.json")
+
+
+def verify_function_zip(zip_path: Path, *, entry_file: str) -> str:
+    """Проверить конкретный архив. SystemExit, если сервер из него не импортируется."""
+    zip_path = Path(zip_path)
+    if not zip_path.is_file():
+        raise SystemExit(f"нет архива функции: {zip_path}")
+    with tempfile.TemporaryDirectory(prefix="mf-function-bundle-") as tmp_name:
+        extract = Path(tmp_name) / "extract"
+        names = _safe_extract(zip_path, extract)
+        _check_members(names)
+        if entry_file not in names:
+            raise SystemExit(f"в архиве нет точки входа {entry_file}")
+        package_dir = _package_dir(extract, entry_file)
+        _npm_ci(package_dir)
+        import_result = _import_entry(extract / entry_file)
+    print("function bundle ok")
+    print(f"zip: {zip_path.resolve()}")
+    print(f"entry file: {entry_file}")
+    print("dependencies: npm ci --ignore-scripts (lock from this zip)")
+    print(import_result)
+    return import_result
 
 
 def main() -> None:
+    """Локальный прогон: собрать архив и сразу проверить этот же файл. В облако не отправляет."""
     repo = ROOT.resolve()
-    with tempfile.TemporaryDirectory(prefix="mf-function-bundle-") as tmp_name:
-        tmp = Path(tmp_name)
-        bundle = build_function_zip(tmp / "function.zip", include_node_modules=False, root=repo)
-        _check_members(bundle.api_files)
-        extract = tmp / "extract"
-        _safe_extract(bundle.zip_path, extract)
-        package_dir = extract / bundle.package_dir
-        deps = _stage_dependencies(package_dir, repo)
-        import_result = _import_entry(package_dir, bundle.entry_file)
-
-    print("function bundle ok")
-    print(f"repo: {repo}")
-    print(f"entrypoint: {bundle.entrypoint}")
-    print(f"entry file: {bundle.entry_file}")
-    print(f"dependencies: {deps}")
-    print(f"api files ({len(bundle.api_files)}):")
-    for name in bundle.api_files:
-        print(f"  {name}")
-    if bundle.outside_api:
-        print("local imports outside apps/api:")
-        for name in bundle.outside_api:
+    with tempfile.TemporaryDirectory(prefix="mf-function-preview-") as tmp_name:
+        bundle = build_function_zip(
+            Path(tmp_name) / "function.zip",
+            include_node_modules=False,
+            root=repo,
+        )
+        print(f"api files ({len(bundle.api_files)}):")
+        for name in bundle.api_files:
             print(f"  {name}")
-    else:
-        print("local imports outside apps/api: (none)")
-    print(import_result)
+        if bundle.outside_api:
+            print("local imports outside apps/api:")
+            for name in bundle.outside_api:
+                print(f"  {name}")
+        else:
+            print("local imports outside apps/api: (none)")
+        verify_function_zip(bundle.zip_path, entry_file=bundle.entry_file)
 
 
-def _check_members(api_files: tuple[str, ...]) -> None:
-    present = set(api_files)
-    for name in api_files:
+def _check_members(names: list[str]) -> None:
+    files = [name for name in names if "node_modules" not in Path(name).parts]
+    for name in files:
         path = Path(name)
         if ".test." in path.name:
             raise SystemExit(f"в архив попал тест: {name}")
         if "scripts" in path.parts:
             raise SystemExit(f"в архив попал scripts/: {name}")
-    if "package.json" not in present:
+    if not any(Path(name).name == "package.json" for name in files):
         raise SystemExit("в архиве нет package.json")
-    if "index.js" not in present and "index.mjs" not in present:
+    if not any(Path(name).name in ("index.js", "index.mjs") for name in files):
         raise SystemExit("в архиве нет index.js")
-    for options in REQUIRED_ANY:
-        if not any(name in present for name in options):
-            raise SystemExit(f"в архиве нет lock-файла: {' или '.join(options)}")
+    if not any(Path(name).name in LOCK_NAMES for name in files):
+        raise SystemExit("в архиве нет lock-файла")
 
 
-def _safe_extract(zip_path: Path, dest: Path) -> None:
+def _safe_extract(zip_path: Path, dest: Path) -> list[str]:
+    """Распаковать архив без node_modules: зависимости поставит npm ci по lock из него."""
     dest.mkdir(parents=True, exist_ok=True)
     dest_resolved = dest.resolve()
+    names: list[str] = []
     with zipfile.ZipFile(zip_path) as zf:
         for info in zf.infolist():
             name = info.filename
+            if not name or name.endswith("/"):
+                continue
             parts = Path(name).parts
-            if name.startswith("/") or ".." in parts or name.startswith("\\"):
+            if name.startswith("/") or name.startswith("\\") or ".." in parts:
                 raise SystemExit(f"небезопасное имя в архиве: {name}")
             target = (dest / name).resolve()
             if dest_resolved not in target.parents and target != dest_resolved:
                 raise SystemExit(f"небезопасное имя в архиве: {name}")
-        zf.extractall(dest)
+            if "node_modules" in parts:
+                continue
+            zf.extract(info, dest)
+            names.append(name)
+    return names
 
 
-def _stage_dependencies(package_dir: Path, repo: Path) -> str:
-    existing = (repo / "apps" / "api" / "node_modules").resolve()
-    dest = package_dir / "node_modules"
-    if existing.is_dir():
-        dest.symlink_to(existing, target_is_directory=True)
-        return f"symlink {existing}"
+def _package_dir(extract: Path, entry_file: str) -> Path:
+    entry = extract / entry_file
+    if not entry.is_file():
+        raise SystemExit(f"после распаковки нет {entry_file}")
+    current = entry.parent
+    while True:
+        if (current / "package.json").is_file():
+            lock = next((current / name for name in LOCK_NAMES if (current / name).is_file()), None)
+            if lock is None:
+                raise SystemExit(f"рядом с {entry_file} нет lock-файла")
+            return current
+        if current == extract:
+            break
+        current = current.parent
+    raise SystemExit("в архиве нет package.json рядом с точкой входа")
+
+
+def _npm_ci(package_dir: Path) -> None:
     if shutil.which("npm") is None:
-        raise SystemExit("нет apps/api/node_modules и нет npm, чтобы выполнить npm ci")
-    print("npm ci в распакованном архиве…", flush=True)
+        raise SystemExit("нет npm, чтобы выполнить npm ci по lock из архива")
+    node_modules = package_dir / "node_modules"
+    if node_modules.exists():
+        shutil.rmtree(node_modules)
+    print(f"npm ci по lock из архива в {package_dir}…", flush=True)
     proc = subprocess.run(
         ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
         cwd=package_dir,
@@ -147,13 +186,9 @@ def _stage_dependencies(package_dir: Path, repo: Path) -> str:
     )
     if proc.returncode != 0:
         raise SystemExit(f"npm ci в архиве завершился с кодом {proc.returncode}")
-    return "npm ci --ignore-scripts"
 
 
-def _import_entry(package_dir: Path, entry_file: str) -> str:
-    entry = package_dir / entry_file if Path(entry_file).is_absolute() else _entry_path(package_dir, entry_file)
-    if not entry.is_file():
-        raise SystemExit(f"после распаковки нет {entry}")
+def _import_entry(entry: Path) -> str:
     env = {
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
@@ -162,33 +197,27 @@ def _import_entry(package_dir: Path, entry_file: str) -> str:
         "NODE_NO_WARNINGS": "1",
         "MF_ENTRY": entry.resolve().as_uri(),
     }
-    proc = subprocess.run(
-        ["node", "--input-type=module", "-e", NODE_CHECK],
-        cwd=package_dir,
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=60,
-    )
+    try:
+        proc = subprocess.run(
+            ["node", "--input-type=module", "-e", NODE_CHECK],
+            cwd=entry.parent,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        raise SystemExit("импорт точки входа не завершился за 60с") from None
     sys.stdout.write(proc.stdout)
     sys.stderr.write(proc.stderr)
+    combined = f"{proc.stdout}\n{proc.stderr}"
+    if "ERR_MODULE_NOT_FOUND" in combined:
+        raise SystemExit(f"импорт точки входа не удался: ERR_MODULE_NOT_FOUND\n{combined.strip()}")
     if proc.returncode != 0 or "IMPORT_OK" not in proc.stdout:
         detail = (proc.stderr or proc.stdout or "").strip()
         raise SystemExit(f"импорт точки входа не удался (код {proc.returncode})\n{detail}")
-    if "ERR_MODULE_NOT_FOUND" in proc.stderr or "ERR_MODULE_NOT_FOUND" in proc.stdout:
-        raise SystemExit("импорт завершился с ERR_MODULE_NOT_FOUND")
     return "import: ok (handler exported, network blocked, storage env absent)"
 
 
-def _entry_path(package_dir: Path, entry_file: str) -> Path:
-    """entry_file задан от корня архива; package_dir — каталог с package.json внутри распаковки."""
-    if entry_file.startswith("apps/api/"):
-        return package_dir / entry_file.removeprefix("apps/api/")
-    return package_dir / entry_file
-
-
 if __name__ == "__main__":
-    try:
-        main()
-    except subprocess.TimeoutExpired:
-        raise SystemExit("импорт точки входа не завершился за 60с") from None
+    main()
