@@ -37,6 +37,9 @@ function SyncBadge() {
   return <SyncStatus compact />;
 }
 
+/** Вкладки админа плюс «Инструменты» (отдельный тип, чтобы не спорить с правками списка вкладок). */
+type AdminView = AdminTab | 'tools';
+
 /** Пункт меню «Инструменты» — вторым, чтобы на телефоне был виден без прокрутки панели. */
 function withToolsItem(items: SideItem[], active: boolean, onSelect: () => void): SideItem[] {
   const tools: SideItem = { id: 'tools', label: 'Инструменты', active, onSelect };
@@ -73,12 +76,12 @@ function profileOf(user: SessionUser, onLogout: () => void) {
   };
 }
 
-type AdminTab = 'add' | 'partners' | 'projects' | 'analytics' | 'help' | 'tools';
+type AdminTab = 'add' | 'partners' | 'projects' | 'analytics' | 'help';
 
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const partners = useMemo(() => api.adminListPartners(), [api]);
-  const [tab, setTab] = useState<AdminTab>(() => (consumeReturnToTools() ? 'tools' : 'analytics'));
+  const [tab, setTab] = useState<AdminView>(() => (consumeReturnToTools() ? 'tools' : 'analytics'));
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
