@@ -11,7 +11,8 @@ export function describeHistory(entry: JobObjectHistoryEntry, people: HistoryPer
   switch (entry.action) {
     case 'create': return 'Объект создан';
     case 'update': return 'Данные объекта обновлены';
-    case 'calc_pdf': return 'Документы расчёта сохранены';
+    case 'calc_pdf': return 'Смета сохранена';
+    case 'profile_pdf': return 'Профиль сохранён';
     case 'conflict_kept_server': return 'Сохранена более свежая версия объекта';
     case 'assign': {
       if (!detail || detail === '—') return 'Назначение исполнителя снято';

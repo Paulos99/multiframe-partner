@@ -251,7 +251,7 @@ export async function apiDeleteObject(
 export async function apiUploadObjectDocuments(
   objectId: string,
   documents: Array<{
-    kind: 'estimate' | 'spec';
+    kind: 'estimate' | 'profile';
     filename: string;
     pdfBase64: string;
     hasScheme: boolean;

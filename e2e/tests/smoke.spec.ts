@@ -127,38 +127,36 @@ async function expectForeignHidden(page: Page, foreignName: string): Promise<voi
   await page.getByPlaceholder('Имя, адрес или телефон').fill('');
 }
 
+/**
+ * Цены видят все роли. Монтажник видит «Смету» (цены, количество, схема) и «Профиль».
+ * Старая пара «смета + спецификация» показывается одной сметой.
+ */
 async function checkCrewDocuments(
   page: Page,
-  browser: Browser,
+  _browser: Browser,
   info: TestInfo,
   server: { objects: ServerObject[] },
 ): Promise<void> {
-  await expect(page.locator('body')).not.toContainText('₽');
   await expect.poll(() => server.objects.length, { timeout: 20_000 }).toBeGreaterThan(0);
-  expect(server.objects.some((obj) => obj.priced), 'в ответе монтажника есть сумма').toBe(false);
 
   const crewObject = server.objects.find((obj) => obj.clientName === CREW_OBJECT_NAME);
   expect(crewObject, `в списке монтажника нет «${CREW_OBJECT_NAME}»`).toBeTruthy();
   const kinds = crewObject?.documents.map((doc) => doc.kind) || [];
-  expect(kinds).toContain('spec');
-  expect(kinds).not.toContain('estimate');
+  expect(kinds.length, 'у тестового объекта нет документов').toBeGreaterThan(0);
+  expect(kinds.every((kind) => ['estimate', 'profile', 'spec'].includes(kind))).toBe(true);
 
   await page.getByRole('button', { name: /^Все · \d+/ }).click();
   await page.getByPlaceholder('Имя, адрес или телефон').fill(CREW_OBJECT_NAME);
   await page.getByRole('button', { name: /Проверка доступа монтажника/ }).click();
 
   const detail = page.locator('h3', { hasText: CREW_OBJECT_NAME }).locator('xpath=..');
-  await expect(detail.getByText('Спецификации без цен')).toBeVisible();
-  await expect(detail.getByText('Спецификация без цен').first()).toBeVisible();
-  await expect(detail.getByText('Смета с ценами')).toHaveCount(0);
-  await expect(detail.getByText('Итого КП')).toHaveCount(0);
-  await expect(detail.getByText(/₽/)).toHaveCount(0);
+  await expect(detail.getByText('Смета', { exact: true }).first()).toBeVisible();
+  await expect(detail.getByText(/Спецификац/)).toHaveCount(0);
   await shot(page, info, 'crew-object');
 
-  const spec = crewObject?.documents.find((doc) => doc.kind === 'spec');
-  expect(spec?.id).toBeTruthy();
+  const first = crewObject!.documents[0]!;
   await expect
-    .poll(() => documentStatus(page, crewObject!.id, spec!.id), { timeout: 30_000 })
+    .poll(() => documentStatus(page, crewObject!.id, first.id), { timeout: 30_000 })
     .toBe(200);
 
   const download = page.waitForResponse(
@@ -169,35 +167,6 @@ async function checkCrewDocuments(
   await detail.getByRole('button', { name: 'Открыть' }).first().click();
   expect((await download).status()).toBe(200);
   await expect(page.getByText('Не удалось открыть PDF')).toHaveCount(0);
-
-  const estimateId = await estimateIdFromOwner(browser, info);
-  expect(await documentStatus(page, crewObject!.id, estimateId)).toBe(404);
-}
-
-/**
- * Id сметы есть только у роли с ценами. Читаем его отдельным входом владельца
- * и не нажимаем «Выйти»: выход — это POST.
- */
-async function estimateIdFromOwner(browser: Browser, info: TestInfo): Promise<string> {
-  const page = await guardedPage(browser, info);
-  const server: { objects: ServerObject[] } = { objects: [] };
-  watchObjects(page, server);
-  try {
-    await login(page, roleById('owner'));
-    await expect.poll(() => server.objects.length, { timeout: 20_000 }).toBeGreaterThan(0);
-    const obj = server.objects.find((item) => item.clientName === CREW_OBJECT_NAME);
-    const estimate = obj?.documents.find((doc) => doc.kind === 'estimate');
-    const spec = obj?.documents.find((doc) => doc.kind === 'spec');
-    expect(obj, `у владельца нет «${CREW_OBJECT_NAME}»`).toBeTruthy();
-    expect(spec?.id, 'у владельца нет спецификации тестового объекта').toBeTruthy();
-    expect(estimate?.id, 'у владельца нет сметы тестового объекта').toBeTruthy();
-    expect(await documentStatus(page, obj!.id, spec!.id)).toBe(200);
-    expect(await documentStatus(page, obj!.id, estimate!.id)).toBe(200);
-    expect.soft(writesOf(page), 'запись при чтении документов владельцем').toEqual([]);
-    return estimate!.id;
-  } finally {
-    await page.close();
-  }
 }
 
 test('guard: запись кроме входа не уходит на сервер', async ({ page }) => {
