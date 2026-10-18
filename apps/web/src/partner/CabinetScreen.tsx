@@ -18,7 +18,7 @@ import { StaffPanel } from './StaffPanel';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
-import { CabinetBrand } from './CabinetBrand';
+import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
 import styles from './partner.module.css';
 
 function roleHeading(role: UserRole, user: SessionUser): string {
@@ -27,20 +27,6 @@ function roleHeading(role: UserRole, user: SessionUser): string {
 }
 
 type Route = 'cabinet' | 'problemomer' | 'calculator';
-
-function QuickLogout() {
-  const api = usePartner();
-  return (
-    <button
-      type="button"
-      className={styles.logoutBtn}
-      onClick={api.logout}
-      title="Выйти — смена сотрудника на общем планшете"
-    >
-      Выйти
-    </button>
-  );
-}
 
 function SyncBadge() {
   return <SyncStatus compact />;
@@ -82,35 +68,21 @@ function InstallHint() {
   );
 }
 
-function CabinetTabs<T extends string>({
-  tabs,
-  active,
-  onChange,
-}: {
-  tabs: Array<{ id: T; label: string }>;
-  active: T;
-  onChange: (id: T) => void;
-}) {
-  return (
-    <div className={styles.tabs} role="tablist">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          role="tab"
-          aria-selected={active === t.id}
-          className={active === t.id ? styles.tabActive : styles.tab}
-          onClick={() => onChange(t.id)}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function TabPanel({ children }: { children: ReactNode }) {
   return <div className={styles.tabPanel}>{children}</div>;
+}
+
+function FrameBody({ children }: { children: ReactNode }) {
+  return <div className={`${styles.shellWide} ${styles.framed}`}>{children}</div>;
+}
+
+function profileOf(user: SessionUser, onLogout: () => void) {
+  return {
+    name: user.displayName,
+    role: ROLE_LABELS[user.role],
+    company: user.org?.companyName,
+    onLogout,
+  };
 }
 
 type AdminTab = 'add' | 'partners' | 'projects' | 'analytics' | 'help';
@@ -175,40 +147,36 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     }
   }
 
+  const adminNav: SideItem[] = [
+    { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => setTab('analytics') },
+    { id: 'partners', label: `Партнёры · ${partners.length}`, active: tab === 'partners', onSelect: () => setTab('partners') },
+    { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => setTab('projects') },
+    { id: 'add', label: 'Добавить', active: tab === 'add', onSelect: () => setTab('add') },
+    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => setTab('help') },
+  ];
+
   return (
-    <div className={styles.shellWide}>
-      <header className={styles.top}>
-        <div>
-          <CabinetBrand />
-          <h1>{PARTNER_NETWORK_NAME}</h1>
-          <p className={styles.lead}>
-            Партнёры по регионам, официальные РРЦ и сетевая аналитика.
-            {api.remote ? ' · облако' : ' · локальный режим'}
-          </p>
-        </div>
-        <div className={styles.topActions}>
+    <CabinetChrome
+      title={PARTNER_NETWORK_NAME}
+      lead={
+        <>
+          Партнёры по регионам, официальные РРЦ и сетевая аналитика.
+          {api.remote ? ' · облако' : ' · локальный режим'}
+        </>
+      }
+      items={adminNav}
+      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={() => onNavigate('calculator')} />}
+      extra={
+        <>
           <SyncBadge />
           <InstallAppButton />
-          <QuickLogout />
-        </div>
-      </header>
-
-      <ToolButtons onNavigate={onNavigate} onOpenCalc={() => onNavigate('calculator')} />
-
+        </>
+      }
+      profile={profileOf(api.user!, api.logout)}
+    >
+      <FrameBody>
       <NetworkOverview count={partners.length} onPartners={() => setTab('partners')}
         onAdd={() => setTab('add')} onLearning={() => setTab('help')} />
-
-      <CabinetTabs
-        tabs={[
-          { id: 'analytics', label: 'Аналитика' },
-          { id: 'partners', label: `Партнёры · ${partners.length}` },
-          { id: 'projects', label: 'Проекты' },
-          { id: 'add', label: 'Добавить' },
-          { id: 'help', label: 'Обучение' },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
 
       {tab === 'add' ? (
         <TabPanel>
@@ -408,7 +376,8 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
           <HelpTrainingPanel role="admin" />
         </TabPanel>
       ) : null}
-    </div>
+      </FrameBody>
+    </CabinetChrome>
   );
 }
 
@@ -467,38 +436,34 @@ function OwnerCabinet({
     }
   }
 
+  const ownerNav: SideItem[] = [
+    { id: 'objects', label: `Объекты · ${api.objects.length}`, active: tab === 'objects', onSelect: () => setTab('objects') },
+    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => setTab('company') },
+    { id: 'staff', label: `Сотрудники · ${staff.length}`, active: tab === 'staff', onSelect: () => setTab('staff') },
+    { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => setTab('analytics') },
+    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => setTab('help') },
+  ];
+
   return (
-    <div className={styles.shellWide}>
-      <header className={styles.top}>
-        <div>
-          <CabinetBrand />
-          <h1>{roleHeading('owner', user)}</h1>
-          <p className={styles.lead}>
-            Прайс, команда, объекты и воронка компании
-            {user.org?.city ? ` · ${user.org.city}` : ''}
-          </p>
-        </div>
-        <div className={styles.topActions}>
+    <CabinetChrome
+      title={roleHeading('owner', user)}
+      lead={
+        <>
+          Прайс, команда, объекты и воронка компании
+          {user.org?.city ? ` · ${user.org.city}` : ''}
+        </>
+      }
+      items={ownerNav}
+      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />}
+      extra={
+        <>
           <SyncBadge />
           <InstallAppButton />
-          <QuickLogout />
-        </div>
-      </header>
-
-      <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
-
-      <CabinetTabs
-        tabs={[
-          { id: 'objects', label: `Объекты · ${api.objects.length}` },
-          { id: 'company', label: 'Компания' },
-          { id: 'staff', label: `Сотрудники · ${staff.length}` },
-          { id: 'analytics', label: 'Аналитика' },
-          { id: 'help', label: 'Обучение' },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
-
+        </>
+      }
+      profile={profileOf(user, api.logout)}
+    >
+      <FrameBody>
       {tab === 'objects' ? (
         <TabPanel>
           <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
@@ -609,7 +574,8 @@ function OwnerCabinet({
           <HelpTrainingPanel role="owner" />
         </TabPanel>
       ) : null}
-    </div>
+      </FrameBody>
+    </CabinetChrome>
   );
 }
 
@@ -625,31 +591,28 @@ function SalesCabinet({
   const staff = api.partnerListStaff();
   const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help'>('deals');
 
+  const salesNav: SideItem[] = [
+    { id: 'deals', label: `Сделки · ${api.objects.length}`, active: tab === 'deals', onSelect: () => setTab('deals') },
+    { id: 'staff', label: `Сотрудники · ${staff.length}`, active: tab === 'staff', onSelect: () => setTab('staff') },
+    { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => setTab('analytics') },
+    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => setTab('help') },
+  ];
+
   return (
-    <div className={styles.shellWide}>
-      <header className={styles.top}>
-        <div>
-          <CabinetBrand />
-          <h1>{roleHeading('sales', user)}</h1>
-          <p className={styles.lead}>Сделки, КП и отправка клиенту</p>
-        </div>
-        <div className={styles.topActions}>
+    <CabinetChrome
+      title={roleHeading('sales', user)}
+      lead="Сделки, КП и отправка клиенту"
+      items={salesNav}
+      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />}
+      extra={
+        <>
           <SyncBadge />
           <InstallAppButton />
-          <QuickLogout />
-        </div>
-      </header>
-      <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
-      <CabinetTabs
-        tabs={[
-          { id: 'deals', label: `Сделки · ${api.objects.length}` },
-          { id: 'staff', label: `Сотрудники · ${staff.length}` },
-          { id: 'analytics', label: 'Аналитика' },
-          { id: 'help', label: 'Обучение' },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
+        </>
+      }
+      profile={profileOf(user, api.logout)}
+    >
+      <FrameBody>
       {tab === 'deals' ? (
         <TabPanel>
           <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
@@ -670,7 +633,8 @@ function SalesCabinet({
           <HelpTrainingPanel role="sales" />
         </TabPanel>
       ) : null}
-    </div>
+      </FrameBody>
+    </CabinetChrome>
   );
 }
 
@@ -686,30 +650,28 @@ function MeasurerCabinet({
   const [showHelp, setShowHelp] = useState(false);
 
   return (
-    <div className={styles.shellWide}>
-      <header className={styles.top}>
-        <div>
-          <CabinetBrand />
-          <h1>{roleHeading('measurer', user)}</h1>
-          <p className={styles.lead}>Замер за 5–10 минут</p>
-        </div>
-        <div className={styles.topActions}>
-          <button
-            type="button"
-            className={`${styles.ghost} ${styles.trainBtn}`}
-            onClick={() => setShowHelp((v) => !v)}
-            aria-pressed={showHelp}
-            aria-label={showHelp ? 'К объектам' : 'Обучение'}
-            title="Обучение"
-          >
-            {showHelp ? 'К объектам' : 'Обучение'}
-          </button>
+    <CabinetChrome
+      title={roleHeading('measurer', user)}
+      lead="Замер за 5–10 минут"
+      mode="buttons"
+      items={[
+        {
+          id: 'help',
+          label: showHelp ? 'К объектам' : 'Обучение',
+          active: showHelp,
+          onSelect: () => setShowHelp((v) => !v),
+        },
+      ]}
+      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />}
+      extra={
+        <>
           <SyncBadge />
           <InstallAppButton />
-          <QuickLogout />
-        </div>
-      </header>
-      <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />
+        </>
+      }
+      profile={profileOf(user, api.logout)}
+    >
+      <FrameBody>
       {showHelp ? (
         <HelpTrainingPanel role="measurer" />
       ) : (
@@ -730,7 +692,8 @@ function MeasurerCabinet({
           </details>
         </>
       )}
-    </div>
+      </FrameBody>
+    </CabinetChrome>
   );
 }
 
@@ -746,30 +709,28 @@ function CrewCabinet({
   const [showHelp, setShowHelp] = useState(false);
 
   return (
-    <div className={styles.shellWide}>
-      <header className={styles.top}>
-        <div>
-          <CabinetBrand />
-          <h1>{roleHeading('crew', user)}</h1>
-          <p className={styles.lead}>Личный кабинет монтажника · цены скрыты, PDF схемы доступен</p>
-        </div>
-        <div className={styles.topActions}>
-          <button
-            type="button"
-            className={`${styles.ghost} ${styles.trainBtn}`}
-            onClick={() => setShowHelp((v) => !v)}
-            aria-pressed={showHelp}
-            aria-label={showHelp ? 'К заданиям' : 'Обучение'}
-            title="Обучение"
-          >
-            {showHelp ? 'К заданиям' : 'Обучение'}
-          </button>
+    <CabinetChrome
+      title={roleHeading('crew', user)}
+      lead="Личный кабинет монтажника · цены скрыты, PDF схемы доступен"
+      mode="buttons"
+      items={[
+        {
+          id: 'help',
+          label: showHelp ? 'К заданиям' : 'Обучение',
+          active: showHelp,
+          onSelect: () => setShowHelp((v) => !v),
+        },
+      ]}
+      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} quiet />}
+      extra={
+        <>
           <SyncBadge />
           <InstallAppButton />
-          <QuickLogout />
-        </div>
-      </header>
-      <ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} quiet />
+        </>
+      }
+      profile={profileOf(user, api.logout)}
+    >
+      <FrameBody>
       {showHelp ? (
         <HelpTrainingPanel role="crew" />
       ) : (
@@ -785,7 +746,8 @@ function CrewCabinet({
           </details>
         </>
       )}
-    </div>
+      </FrameBody>
+    </CabinetChrome>
   );
 }
 

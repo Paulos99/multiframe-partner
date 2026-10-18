@@ -2,6 +2,10 @@
   min-height: 100dvh;
   display: flex;
   justify-content: center;
+  color: var(--cab-ink);
+  background:
+    radial-gradient(900px 420px at 100% -8%, color-mix(in srgb, var(--cab-accent) 7%, transparent), transparent 60%),
+    var(--cab-page);
   padding:
     max(20px, env(safe-area-inset-top))
     max(16px, env(safe-area-inset-right))
@@ -22,10 +26,10 @@
   gap: 16px;
   min-width: 0;
   padding: 22px 16px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  background: var(--bg-card);
-  box-shadow: var(--shadow);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-xl);
+  background: var(--cab-card);
+  box-shadow: var(--cab-shadow);
 }
 
 @media (min-width: 720px) {
@@ -49,8 +53,8 @@
   width: min(210px, 68%);
   height: auto;
   padding: 6px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border: 1px solid #e4e7eb;
+  border-radius: var(--cab-radius-md);
   background: #fff;
 }
 
@@ -66,7 +70,7 @@
 .lead,
 .hint {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--cab-muted);
   font-size: 0.95rem;
   line-height: 1.45;
 }
@@ -97,9 +101,9 @@
   width: 100%;
   min-height: var(--touch-min);
   padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-subtle);
+  border: 1px solid var(--cab-border-strong);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-field);
   font-size: 16px;
   font-weight: 500;
 }
@@ -107,9 +111,9 @@
 .error {
   margin: 0;
   padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: var(--danger-soft);
-  color: #b42318;
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-danger-soft);
+  color: var(--cab-danger);
   font-size: 0.92rem;
   font-weight: 700;
   line-height: 1.35;
@@ -120,15 +124,15 @@
   width: 100%;
   min-height: var(--touch-min);
   padding: 10px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-md);
   background: transparent;
-  color: var(--accent-color);
+  color: var(--cab-accent-text);
   font: inherit;
   font-weight: 750;
   cursor: pointer;
 }
 
 .manual:hover {
-  background: var(--accent-soft);
+  background: var(--cab-accent-soft);
 }

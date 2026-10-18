@@ -110,7 +110,7 @@
 .danger {
   border: 1px solid transparent;
   background: var(--danger-soft);
-  color: #b42318;
+  color: var(--cab-danger);
 }
 
 .primary:disabled,
@@ -154,7 +154,7 @@
   justify-content: space-between;
   gap: 10px;
   background: var(--danger-soft);
-  color: #b42318;
+  color: var(--cab-danger);
   font-weight: 700;
 }
 
@@ -314,7 +314,7 @@
   padding: 6px 10px;
   border-radius: var(--radius-md);
   background: var(--warn-soft);
-  color: #8a4b08;
+  color: var(--cab-warn);
   font-size: 0.82rem;
   font-weight: 750;
   line-height: 1.35;

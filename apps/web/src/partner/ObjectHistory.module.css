@@ -1,10 +1,10 @@
 .history {
   margin-top: 16px;
   padding: 16px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background: var(--bg-subtle);
-  color: var(--text-primary);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-lg);
+  background: var(--cab-subtle);
+  color: var(--cab-ink);
 }
 
 .heading {
@@ -19,11 +19,11 @@
   margin: 0;
   font-size: 1.05rem;
   font-weight: 750;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--cab-track);
 }
 
 .heading > span {
-  color: var(--text-secondary);
+  color: var(--cab-muted);
   font-size: 0.85rem;
   font-weight: 650;
 }
@@ -49,7 +49,7 @@
   top: 18px;
   bottom: 0;
   width: 2px;
-  background: var(--border-color);
+  background: var(--cab-border);
 }
 
 .event:last-child {
@@ -62,7 +62,7 @@
   margin-top: 6px;
   justify-self: center;
   border-radius: 50%;
-  background: var(--accent-color);
+  background: var(--cab-accent);
 }
 
 .title {
@@ -79,7 +79,7 @@
   align-items: flex-start;
   gap: 2px;
   margin-top: 4px;
-  color: var(--text-secondary);
+  color: var(--cab-muted);
   font-size: 0.875rem;
   line-height: 1.4;
 }
@@ -99,7 +99,7 @@
   padding: 10px 0;
   border: none;
   background: none;
-  color: var(--accent-color);
+  color: var(--cab-accent-text);
   font: inherit;
   font-size: 0.95rem;
   font-weight: 750;
@@ -110,6 +110,12 @@
 .toggle:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--cab-accent);
+  outline-offset: 4px;
+  border-radius: 3px;
 }
 
 @media (min-width: 640px) {

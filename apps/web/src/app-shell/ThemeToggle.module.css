@@ -1,0 +1,77 @@
+.toggle,
+.toggleOn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-pill);
+  background: var(--cab-card);
+  color: var(--cab-ink);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--cab-shadow-sm);
+}
+
+.toggle:hover,
+.toggleOn:hover {
+  border-color: var(--cab-border-strong);
+}
+
+.track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: var(--cab-radius-pill);
+  background: var(--cab-subtle);
+  border: 1px solid var(--cab-border-strong);
+  flex: 0 0 auto;
+}
+
+.thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--cab-card);
+  box-shadow: var(--cab-shadow-sm);
+  transition: transform 0.2s ease;
+}
+
+.toggleOn .track {
+  background: var(--cab-accent);
+  border-color: var(--cab-accent);
+}
+
+.toggleOn .thumb {
+  transform: translateX(18px);
+  background: var(--cab-on-accent);
+}
+
+.caption {
+  padding-right: 4px;
+}
+
+@media (max-width: 720px) {
+  .caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .toggle,
+  .toggleOn {
+    padding: 4px;
+  }
+}
