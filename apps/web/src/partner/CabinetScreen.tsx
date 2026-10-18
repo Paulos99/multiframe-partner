@@ -21,6 +21,9 @@ import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
+import { canSeePrices } from '../../../../packages/shared/partner';
+import { ToolsPanel } from './ToolsPanel';
+import { consumeReturnToTools } from './toolsReturn';
 import styles from './partner.module.css';
 import addStyles from './AdminPartners.module.css';
 
@@ -35,27 +38,13 @@ function SyncBadge() {
   return <SyncStatus compact />;
 }
 
-function ToolButtons({
-  onNavigate,
-  onOpenCalc,
-  quiet,
-}: {
-  onNavigate: (r: Route) => void;
-  onOpenCalc: () => void;
-  /** Вторичные действия: монтажнику важнее список заданий, чем инструменты замера. */
-  quiet?: boolean;
-}) {
-  const cls = quiet ? styles.ghost : styles.primary;
-  return (
-    <div className={styles.navRow}>
-      <button type="button" className={cls} onClick={() => onNavigate('problemomer')}>
-        Проблемомер
-      </button>
-      <button type="button" className={cls} onClick={onOpenCalc}>
-        Калькулятор
-      </button>
-    </div>
-  );
+/** Вкладки админа плюс «Инструменты» (отдельный тип, чтобы не спорить с правками списка вкладок). */
+type AdminView = AdminTab | 'tools';
+
+/** Пункт меню «Инструменты» — вторым, чтобы на телефоне был виден без прокрутки панели. */
+function withToolsItem(items: SideItem[], active: boolean, onSelect: () => void): SideItem[] {
+  const tools: SideItem = { id: 'tools', label: 'Инструменты', active, onSelect };
+  return [...items.slice(0, 1), tools, ...items.slice(1)];
 }
 
 function InstallHint() {
@@ -93,7 +82,7 @@ type AdminTab = 'partners' | 'projects' | 'analytics' | 'help';
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const partners = useMemo(() => api.adminListPartners(), [api]);
-  const [tab, setTab] = useState<AdminTab>('analytics');
+  const [tab, setTab] = useState<AdminView>(() => (consumeReturnToTools() ? 'tools' : 'analytics'));
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -165,8 +154,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
           {api.remote ? ' · облако' : ' · локальный режим'}
         </>
       }
-      items={adminNav}
-      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={() => onNavigate('calculator')} />}
+      items={withToolsItem(adminNav, tab === 'tools', () => setTab('tools'))}
       extra={
         <>
           <SyncBadge />
@@ -389,6 +377,16 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         </TabPanel>
       ) : null}
 
+      {tab === 'tools' ? (
+        <TabPanel>
+          <ToolsPanel
+            seePrices={canSeePrices(api.user!.role)}
+            onProblemomer={() => onNavigate('problemomer')}
+            onCalculator={() => onNavigate('calculator')}
+          />
+        </TabPanel>
+      ) : null}
+
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="admin" />
@@ -399,7 +397,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   );
 }
 
-type OwnerTab = 'objects' | 'company' | 'staff' | 'analytics' | 'help';
+type OwnerTab = 'objects' | 'company' | 'staff' | 'analytics' | 'help' | 'tools';
 
 function OwnerCabinet({
   onNavigate,
@@ -410,7 +408,7 @@ function OwnerCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [tab, setTab] = useState<OwnerTab>('objects');
+  const [tab, setTab] = useState<OwnerTab>(() => (consumeReturnToTools() ? 'tools' : 'objects'));
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
   const [city, setCity] = useState(user.org?.city || '');
   const [panelPriceRub, setPanelPriceRub] = useState(
@@ -471,8 +469,7 @@ function OwnerCabinet({
           {user.org?.city ? ` · ${user.org.city}` : ''}
         </>
       }
-      items={ownerNav}
-      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />}
+      items={withToolsItem(ownerNav, tab === 'tools', () => setTab('tools'))}
       extra={
         <>
           <SyncBadge />
@@ -587,6 +584,16 @@ function OwnerCabinet({
         </TabPanel>
       ) : null}
 
+      {tab === 'tools' ? (
+        <TabPanel>
+          <ToolsPanel
+            seePrices={canSeePrices(api.user!.role)}
+            onProblemomer={() => onNavigate('problemomer')}
+            onCalculator={onOpenCalc}
+          />
+        </TabPanel>
+      ) : null}
+
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="owner" />
@@ -607,7 +614,9 @@ function SalesCabinet({
   const api = usePartner();
   const user = api.user!;
   const staff = api.partnerListStaff();
-  const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help'>('deals');
+  const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help' | 'tools'>(() =>
+    consumeReturnToTools() ? 'tools' : 'deals',
+  );
 
   const salesNav: SideItem[] = [
     { id: 'deals', label: `Сделки · ${api.objects.length}`, active: tab === 'deals', onSelect: () => setTab('deals') },
@@ -620,8 +629,7 @@ function SalesCabinet({
     <CabinetChrome
       title={roleHeading('sales', user)}
       lead="Сделки, КП и отправка клиенту"
-      items={salesNav}
-      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />}
+      items={withToolsItem(salesNav, tab === 'tools', () => setTab('tools'))}
       extra={
         <>
           <SyncBadge />
@@ -646,6 +654,16 @@ function SalesCabinet({
           <AnalyticsDashboard mode="partner" />
         </TabPanel>
       ) : null}
+      {tab === 'tools' ? (
+        <TabPanel>
+          <ToolsPanel
+            seePrices={canSeePrices(api.user!.role)}
+            onProblemomer={() => onNavigate('problemomer')}
+            onCalculator={onOpenCalc}
+          />
+        </TabPanel>
+      ) : null}
+
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="sales" />
@@ -665,7 +683,9 @@ function MeasurerCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [showHelp, setShowHelp] = useState(false);
+  const [view, setView] = useState<'home' | 'tools' | 'help'>(() =>
+    consumeReturnToTools() ? 'tools' : 'home',
+  );
 
   return (
     <CabinetChrome
@@ -673,14 +693,10 @@ function MeasurerCabinet({
       lead="Замер за 5–10 минут"
       mode="buttons"
       items={[
-        {
-          id: 'help',
-          label: showHelp ? 'К объектам' : 'Обучение',
-          active: showHelp,
-          onSelect: () => setShowHelp((v) => !v),
-        },
+        { id: 'objects', label: 'Объекты', active: view === 'home', onSelect: () => setView('home') },
+        { id: 'tools', label: 'Инструменты', active: view === 'tools', onSelect: () => setView('tools') },
+        { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => setView('help') },
       ]}
-      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} />}
       extra={
         <>
           <SyncBadge />
@@ -690,7 +706,13 @@ function MeasurerCabinet({
       profile={profileOf(user, api.logout)}
     >
       <FrameBody>
-      {showHelp ? (
+      {view === 'tools' ? (
+        <ToolsPanel
+          seePrices={canSeePrices(user.role)}
+          onProblemomer={() => onNavigate('problemomer')}
+          onCalculator={onOpenCalc}
+        />
+      ) : view === 'help' ? (
         <HelpTrainingPanel role="measurer" />
       ) : (
         <>
@@ -724,7 +746,9 @@ function CrewCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [showHelp, setShowHelp] = useState(false);
+  const [view, setView] = useState<'home' | 'tools' | 'help'>(() =>
+    consumeReturnToTools() ? 'tools' : 'home',
+  );
 
   return (
     <CabinetChrome
@@ -732,14 +756,10 @@ function CrewCabinet({
       lead="Личный кабинет монтажника · цены скрыты, PDF схемы доступен"
       mode="buttons"
       items={[
-        {
-          id: 'help',
-          label: showHelp ? 'К заданиям' : 'Обучение',
-          active: showHelp,
-          onSelect: () => setShowHelp((v) => !v),
-        },
+        { id: 'objects', label: 'Задания', active: view === 'home', onSelect: () => setView('home') },
+        { id: 'tools', label: 'Инструменты', active: view === 'tools', onSelect: () => setView('tools') },
+        { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => setView('help') },
       ]}
-      tools={<ToolButtons onNavigate={onNavigate} onOpenCalc={onOpenCalc} quiet />}
       extra={
         <>
           <SyncBadge />
@@ -749,7 +769,13 @@ function CrewCabinet({
       profile={profileOf(user, api.logout)}
     >
       <FrameBody>
-      {showHelp ? (
+      {view === 'tools' ? (
+        <ToolsPanel
+          seePrices={canSeePrices(user.role)}
+          onProblemomer={() => onNavigate('problemomer')}
+          onCalculator={onOpenCalc}
+        />
+      ) : view === 'help' ? (
         <HelpTrainingPanel role="crew" />
       ) : (
         <>

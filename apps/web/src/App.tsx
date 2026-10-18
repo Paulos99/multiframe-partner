@@ -51,8 +51,6 @@ function ToolChrome({
   caption,
   notice,
   onCabinet,
-  onProblemomer,
-  onCalculator,
   onLogout,
 }: {
   route: 'problemomer' | 'calculator';
@@ -60,8 +58,6 @@ function ToolChrome({
   caption: string;
   notice: string | null;
   onCabinet: () => void;
-  onProblemomer: () => void;
-  onCalculator: () => void;
   onLogout: () => void;
 }) {
   const [menu, setMenu] = useState(false);
@@ -97,24 +93,8 @@ function ToolChrome({
           />
         </svg>
       </button>
-      <div className={styles.toolSwitch} role="tablist" aria-label="Инструмент">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={route === 'problemomer'}
-          onClick={onProblemomer}
-        >
-          Проблемомер
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={route === 'calculator'}
-          onClick={onCalculator}
-        >
-          Калькулятор
-        </button>
-      </div>
+      {/* Переключатель инструментов убран: оба открываются из вкладки «Инструменты». */}
+      <span className={styles.toolTitle}>{route === 'calculator' ? 'Калькулятор' : 'Проблемомер'}</span>
       <SyncStatus compact />
       <DemoSwitcherFab inline />
       <div className={styles.toolMenuWrap} ref={wrapRef}>
@@ -276,13 +256,6 @@ function PartnerShell() {
         caption={toolCaption(user, hidePrices)}
         notice={route === 'calculator' ? calcNotice : null}
         onCabinet={() => setRoute('cabinet')}
-        onProblemomer={() => {
-          noteTool('problemomer');
-          setRoute('problemomer');
-        }}
-        onCalculator={() => {
-          if (route !== 'calculator') requestCalculator(null);
-        }}
         onLogout={logout}
       />
     );
