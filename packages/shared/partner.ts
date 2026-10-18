@@ -14,7 +14,7 @@ export const ORG_ROLES: UserRole[] = ['owner', 'sales', 'measurer', 'crew'];
 export const STAFF_ROLES: UserRole[] = ['sales', 'measurer', 'crew'];
 
 /** Название партнёрской сети в кабинете и демо-материалах. */
-export const PARTNER_NETWORK_NAME = 'Сеть STP MultiFrame партнёра';
+export const PARTNER_NETWORK_NAME = 'Партнёрская сеть StP MultiFrame';
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Админ StP',
