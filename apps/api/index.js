@@ -8,6 +8,13 @@ import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
 import ruCitiesTsv from './data/ru-cities.js';
 import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
 import { handleMaterials } from './materialsRoutes.js';
+import {
+  deleteObject,
+  getObjectBuffer,
+  getObjectText,
+  partnerBucket,
+  putObject,
+} from './objectStore.js';
 
 ensureIndexFromTsv(ruCitiesTsv);
 
@@ -176,56 +183,31 @@ function migrateLegacyPartners(list) {
   return null;
 }
 
-function s3ClientConfig() {
-  return {
-    region: process.env.YC_REGION || 'ru-central1',
-    endpoint: 'https://storage.yandexcloud.net',
-    credentials: {
-      accessKeyId: process.env.YC_ACCESS_KEY_ID,
-      secretAccessKey: process.env.YC_SECRET_ACCESS_KEY,
-    },
-  };
-}
-
 async function s3Get(key) {
-  const bucket = process.env.PARTNERS_BUCKET;
+  const bucket = partnerBucket();
   if (!bucket) return null;
-  const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-  const client = new S3Client(s3ClientConfig());
-  const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-  return out.Body.transformToString();
+  return getObjectText({ bucket, key });
 }
 
 async function s3Put(key, body) {
-  const bucket = process.env.PARTNERS_BUCKET;
+  const bucket = partnerBucket();
   if (!bucket) return;
-  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-  const client = new S3Client(s3ClientConfig());
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      Body: typeof body === 'string' ? body : JSON.stringify(body),
-      ContentType: 'application/json',
-    }),
-  );
+  await putObject({
+    bucket,
+    key,
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+    contentType: 'application/json',
+  });
 }
 
-/** PDF и файлы материалов. Без бакета байты остаются в памяти процесса (демо API). */
+/** PDF смет и спецификаций. Без бакета байты остаются в памяти процесса (демо API). */
 const memoryDocs = new Map();
-
-function hasBucket() {
-  return Boolean(process.env.PARTNERS_BUCKET);
-}
 
 async function s3GetBuffer(key) {
   if (memoryDocs.has(key)) return memoryDocs.get(key);
-  const bucket = process.env.PARTNERS_BUCKET;
+  const bucket = partnerBucket();
   if (!bucket) return null;
-  const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-  const client = new S3Client(s3ClientConfig());
-  const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-  return Buffer.from(await out.Body.transformToByteArray());
+  return getObjectBuffer({ bucket, key });
 }
 
 async function s3GetBytes(key) {
@@ -233,31 +215,25 @@ async function s3GetBytes(key) {
 }
 
 async function s3PutBytes(key, body, contentType) {
-  const bucket = process.env.PARTNERS_BUCKET;
+  const bucket = partnerBucket();
   if (!bucket) {
     memoryDocs.set(key, Buffer.from(body));
     return;
   }
-  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-  const client = new S3Client(s3ClientConfig());
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      Body: body,
-      ContentType: contentType || 'application/octet-stream',
-    }),
-  );
+  await putObject({
+    bucket,
+    key,
+    body,
+    contentType: contentType || 'application/octet-stream',
+  });
 }
 
 async function s3Delete(key) {
   memoryDocs.delete(key);
-  const bucket = process.env.PARTNERS_BUCKET;
+  const bucket = partnerBucket();
   if (!bucket || !key) return;
   try {
-    const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-    const client = new S3Client(s3ClientConfig());
-    await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    await deleteObject({ bucket, key });
   } catch (e) {
     console.warn('s3 delete failed', key, e?.message || e);
   }
@@ -265,7 +241,7 @@ async function s3Delete(key) {
 
 async function loadPlatform() {
   if (memoryPlatform) return memoryPlatform;
-  const bucket = process.env.PARTNERS_BUCKET;
+  const bucket = partnerBucket();
   if (bucket) {
     try {
       const body = await s3Get(PLATFORM_S3_KEY());
@@ -305,7 +281,7 @@ async function savePlatform(platform) {
 
 async function loadEvents() {
   if (memoryEvents) return memoryEvents;
-  const bucket = process.env.PARTNERS_BUCKET;
+  const bucket = partnerBucket();
   if (bucket) {
     try {
       const body = await s3Get(ANALYTICS_S3_KEY());
@@ -864,10 +840,6 @@ export async function handler(event = {}) {
       getBody: () => getBody(event),
       savePlatform,
       uid,
-      hasBucket,
-      s3PutBytes,
-      s3GetBuffer,
-      s3Delete,
     });
     if (materialsResponse) return materialsResponse;
 

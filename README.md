@@ -63,9 +63,31 @@ npm run dev
 - `GET|POST /org/staff`, `DELETE /org/staff/:id`
 - `GET|POST /objects`, `PATCH /objects/:id`, `POST /objects/:id/documents`, `GET /objects/:id/documents/:docId`
 - Analytics: `/analytics/events`, `/analytics/dashboard`
-- Материалы: `GET /materials` (все роли), папки и файлы — только `admin`. Байты файла: Object Storage, ключ `materials/{id}`. Метаданные: поле `materials` в `platform-v2.json`. Пока админ ничего не менял, API отдаёт демо-набор и не записывает его в бакет. Загрузка через API — до 2 МБ (тело запроса шлюза около 3,5 МБ).
+- Материалы: `GET /materials` (все роли кабинета), папки и файлы — только `admin`. Метаданные: поле `materials` в `platform-v2.json`. Пока админ ничего не менял, API отдаёт демо-набор и не записывает его в бакет. `GET /materials/{id}/content` для файла в бакете возвращает `{ name, mime, url }` — подписанная ссылка на 15 минут. Ответ с `base64` остаётся для встроенного `contentBase64`, поле `stub` — для заглушек. Загрузка через кабинет — до 2 МБ.
 
-Новые маршруты шлюза (`/objects/{objectId}/documents`, `/objects/{objectId}/documents/{docId}`, `/materials`, `/materials/folders`, `/materials/files`, `/materials/{materialId}`, `/materials/{materialId}/content`) попадают в API Gateway при следующем `infra/deploy_yc.py`. Отдельных секретов не нужно: используются уже заданные `PARTNERS_BUCKET`, `YC_ACCESS_KEY_ID`, `YC_SECRET_ACCESS_KEY`. Файлы крупнее 2 МБ потребуют отдельной настройки CORS бакета и прямой загрузки по presigned URL — в этом изменении её нет.
+Новые маршруты шлюза (`/objects/{objectId}/documents`, `/objects/{objectId}/documents/{docId}`, `/materials`, `/materials/folders`, `/materials/files`, `/materials/{materialId}`, `/materials/{materialId}/content`) попадают в API Gateway при следующем `infra/deploy_yc.py`.
+
+## Хранилище
+
+| Переменная | Куда пишет API |
+|---|---|
+| `PARTNERS_BUCKET` | Данные кабинета: `platform-v2.json`, `analytics-events.json`, PDF смет и спецификаций (`docs/…`). Имя бакета не подставляется само: без переменной деплой не выбирает `multiframe-partner-data`. |
+| `MATERIALS_BUCKET` | Только методические материалы, ключи `materials/mat_…`. Секрет уже заведён в GitHub. Не должен совпадать с `PARTNERS_BUCKET`. |
+| `YC_ACCESS_KEY_ID`, `YC_SECRET_ACCESS_KEY` | Статический ключ сервисного аккаунта. Регион — `YC_REGION`, по умолчанию `ru-central1`. |
+
+Без `MATERIALS_BUCKET` загрузка файла отвечает `503` «Хранилище материалов не настроено» и не пишет байты в бакет кабинета. Старый узел с `storageKey` и без поля `bucket` по-прежнему открывается чтением из `PARTNERS_BUCKET`. Новый узел хранит `bucket: "materials"`. Функции материалов не удаляют и не перезаписывают ключи бакета кабинета.
+
+Подписанная ссылка указывает на `https://storage.yandexcloud.net`. Чтобы браузер на `https://paulos99.github.io` смог её открыть, CORS бакета материалов выставляется отдельно и идемпотентно:
+
+```bash
+MATERIALS_BUCKET=multiframe-partner-materials \
+YC_ACCESS_KEY_ID=... YC_SECRET_ACCESS_KEY=... \
+node infra/set_materials_bucket_cors.mjs
+```
+
+Скрипт не запускается деплоем и не трогает бакет кабинета. Повторный запуск не меняет уже подходящее правило. Разрешены `GET` и `HEAD` (HEAD нужен видео). `PUT` из браузера не открыт.
+
+Крупный файл через интерфейс не загружается: шлюз принимает до 2 МБ. Подписанный `PUT` не делался — для него нужен отдельный CORS на запись и шаг подтверждения. Большой пакет владелец кладёт напрямую в `MATERIALS_BUCKET`. Сами байты в кабинете не появятся, пока в `platform.materials` нет узла с тем же `storageKey` и `bucket: "materials"`. Образец переменных — `apps/api/.env.example`.
 
 Пароли на сервере — bcrypt. Сессия — JWT 12ч. Для монтажника API отдаёт прайс и суммы КП без денег. PDF в объект прикладывается после расчёта «по размерам» или «начертить схему»: это тот же файл, что собирает калькулятор, со схемой раскладки. Расчёт «по площади» объект не создаёт. Имя файла — «Клиент — спецификация — ГГГГ-ММ-ДД.pdf». У монтажника та же схема без цен.
 

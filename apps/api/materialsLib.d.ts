@@ -7,9 +7,13 @@ export type MaterialNode = {
   size: number | null;
   stub: string | null;
   storageKey: string | null;
+  /** "materials" — новый бакет. Нет поля или null — старый ключ в бакете кабинета. */
+  bucket?: string | null;
   contentBase64: string | null;
   updatedAt: string;
 };
+
+export const MATERIAL_BUCKET_MARKER: 'materials';
 
 export type PublicMaterial = {
   id: string;
@@ -40,6 +44,7 @@ export function addFile(
     mime?: string | null;
     size?: number | null;
     storageKey?: string | null;
+    bucket?: string | null;
     contentBase64?: string | null;
     now: string;
   },
@@ -55,17 +60,23 @@ export function replaceFile(
     mime?: string | null;
     size?: number | null;
     storageKey?: string | null;
+    bucket?: string | null;
     contentBase64?: string | null;
     name?: string | null;
     now: string;
   },
 ):
-  | { ok: true; nodes: MaterialNode[]; previousKey: string | null }
+  | { ok: true; nodes: MaterialNode[]; previousKey: string | null; previousBucket: string | null }
   | { ok: false; message: string };
 export function deleteMaterial(
   stored: unknown,
   input: { id: string },
 ):
-  | { ok: true; nodes: MaterialNode[]; storageKeys: string[] }
+  | {
+      ok: true;
+      nodes: MaterialNode[];
+      storageKeys: string[];
+      storageObjects: { key: string; bucket: string | null }[];
+    }
   | { ok: false; message: string };
 export function findMaterial(stored: unknown, id: string): MaterialNode | null;

@@ -1,7 +1,10 @@
 /**
  * Методические материалы: дерево папок и файлов.
  * Байты файла живут в Object Storage, здесь только метаданные.
+ * Новые файлы помечаются bucket: "materials". Узел без bucket — старый ключ в бакете кабинета.
  */
+
+export const MATERIAL_BUCKET_MARKER = 'materials';
 
 export const MATERIAL_STUBS = [
   'video-install',
@@ -149,7 +152,10 @@ export function createFolder(stored, { name, parentId, id, now }) {
   return { ok: true, nodes };
 }
 
-export function addFile(stored, { name, parentId, id, mime, size, storageKey, contentBase64, now }) {
+export function addFile(
+  stored,
+  { name, parentId, id, mime, size, storageKey, contentBase64, bucket, now },
+) {
   const nodes = materialBase(stored);
   const title = cleanName(name, 120);
   if (!title) return fail('Укажите имя файла');
@@ -165,6 +171,7 @@ export function addFile(stored, { name, parentId, id, mime, size, storageKey, co
     size: size ?? null,
     stub: null,
     storageKey: storageKey || null,
+    bucket: storageKey ? bucket || null : null,
     contentBase64: contentBase64 || null,
     updatedAt: now,
   });
@@ -185,7 +192,10 @@ export function renameMaterial(stored, { id, name, now }) {
   return { ok: true, nodes };
 }
 
-export function replaceFile(stored, { id, mime, size, storageKey, contentBase64, name, now }) {
+export function replaceFile(
+  stored,
+  { id, mime, size, storageKey, contentBase64, name, bucket, now },
+) {
   const nodes = materialBase(stored);
   const idx = nodes.findIndex((node) => node.id === id);
   if (idx < 0) return fail('Файл не найден');
@@ -197,6 +207,7 @@ export function replaceFile(stored, { id, mime, size, storageKey, contentBase64,
     return fail('Такое имя в этой папке уже есть');
   }
   const previousKey = current.storageKey || null;
+  const previousBucket = current.bucket || null;
   nodes[idx] = {
     ...current,
     name: title,
@@ -204,6 +215,7 @@ export function replaceFile(stored, { id, mime, size, storageKey, contentBase64,
     size: size ?? current.size ?? null,
     stub: null,
     storageKey: storageKey || null,
+    bucket: storageKey ? bucket || null : null,
     contentBase64: contentBase64 || null,
     updatedAt: now,
   };
@@ -211,6 +223,7 @@ export function replaceFile(stored, { id, mime, size, storageKey, contentBase64,
     ok: true,
     nodes,
     previousKey: previousKey && previousKey !== storageKey ? previousKey : null,
+    previousBucket,
   };
 }
 
@@ -233,13 +246,15 @@ export function deleteMaterial(stored, { id }) {
   const nodes = materialBase(stored);
   if (!nodes.some((node) => node.id === id)) return fail('Материал не найден');
   const ids = descendantIds(nodes, id);
-  const storageKeys = nodes
-    .filter((node) => ids.has(node.id) && node.storageKey)
-    .map((node) => node.storageKey);
+  const removed = nodes.filter((node) => ids.has(node.id) && node.storageKey);
   return {
     ok: true,
     nodes: nodes.filter((node) => !ids.has(node.id)),
-    storageKeys,
+    storageKeys: removed.map((node) => node.storageKey),
+    storageObjects: removed.map((node) => ({
+      key: node.storageKey,
+      bucket: node.bucket || null,
+    })),
   };
 }
 
