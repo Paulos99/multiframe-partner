@@ -721,9 +721,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       if (!user) throw new Error('Нет сессии');
       const obj = await saveObjectSynced(user, remote, stripObjectDocuments(input));
       await refreshObjects();
+      await refreshProjects();
       return obj;
     },
-    [user, remote, refreshObjects],
+    [user, remote, refreshObjects, refreshProjects],
   );
 
   const createProject = useCallback(

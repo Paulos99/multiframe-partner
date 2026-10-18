@@ -1,0 +1,124 @@
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+
+.card,
+.room {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #d7e4de;
+  background: #f8fbf9;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.card strong,
+.room strong {
+  font-size: 17px;
+}
+
+.meta {
+  color: #60746b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.back {
+  border: 0;
+  background: transparent;
+  color: #086b55;
+  font: inherit;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.rooms {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.room {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.roomOn {
+  border-color: #086b55;
+}
+
+.add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  margin: 8px 0 16px;
+}
+
+.add input {
+  min-height: 44px;
+  min-width: min(100%, 220px);
+  flex: 1;
+}
+
+.picker {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.picker select,
+.picker input,
+.form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cdded5;
+  border-radius: 12px;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+}
+
+@media (max-width: 650px) {
+  .form,
+  .toolbar,
+  .room {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

@@ -1,7 +1,8 @@
 /**
- * Проекты компании. Запись живёт в platform.projects и не обязательна,
- * пока проект не создан: чтение отсутствующего ключа — пустой список.
- * Привязка помещения — это projectId на объекте, не отдельный маршрут.
+ * Проекты компании. Проект — клиент и адрес, комната — объект с roomName.
+ * Новых объектов без проекта не бывает: создание само заводит проект.
+ * Уже сохранённый объект нельзя отвязать в пустоту, только перенести в другой проект своей компании.
+ * Чтение отсутствующего ключа platform.projects — пустой список.
  */
 
 const NAME_MAX = 250;
@@ -82,6 +83,7 @@ function writeProject(body, existing, actor, uid) {
 /**
  * Белый список projectId и roomName для normalizeObjectInput.
  * Отсутствующее поле не затирает уже сохранённое. Чужой или неизвестный проект — ошибка.
+ * Пустой projectId у привязанного объекта — отказ, а не отвязка.
  * @returns {Record<string, string | null>}
  */
 export function applyObjectProjectFields(body, existing, platform, orgId) {
@@ -97,7 +99,7 @@ export function applyObjectProjectFields(body, existing, platform, orgId) {
   if (Object.prototype.hasOwnProperty.call(source, 'projectId')) {
     const raw = source.projectId;
     if (raw == null || String(raw).trim() === '') {
-      fields.projectId = null;
+      if (existing?.projectId) throw httpError(400, 'Нельзя отвязать помещение от проекта');
     } else {
       const id = String(raw).trim();
       const project = projectRows(platform).find((item) => item.id === id);
@@ -111,6 +113,38 @@ export function applyObjectProjectFields(body, existing, platform, orgId) {
     fields.projectId = existing.projectId ?? null;
   }
   return fields;
+}
+
+/**
+ * Новый объект без projectId получает проект той же компании.
+ * Имя берётся из клиента, адреса или названия комнаты.
+ * Уже существующий объект эта функция не меняет.
+ * @returns {{ body: object, project: object | null }}
+ */
+export function ensureProjectForNewObject(platform, body, actor, uid) {
+  const source = body && typeof body === 'object' ? { ...body } : {};
+  const raw = Object.prototype.hasOwnProperty.call(source, 'projectId') ? source.projectId : undefined;
+  if (raw != null && String(raw).trim() !== '') return { body: source, project: null };
+  if (!actor?.orgId) throw httpError(400, 'Нет организации');
+  const project = writeProject(
+    {
+      name:
+        text(source.clientName, NAME_MAX) ||
+        text(source.address, TEXT_MAX) ||
+        text(source.roomName, ROOM_MAX) ||
+        'Проект',
+      clientName: source.clientName,
+      clientPhone: source.clientPhone,
+      address: source.address,
+      city: source.city,
+    },
+    null,
+    actor,
+    uid,
+  );
+  if (!Array.isArray(platform.projects)) platform.projects = [];
+  platform.projects = [project, ...platform.projects];
+  return { body: { ...source, projectId: project.id }, project };
 }
 
 /**
