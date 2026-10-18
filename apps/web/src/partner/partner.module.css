@@ -1211,7 +1211,6 @@
 }
 
 .toolIconBtn,
-.toolSwitch button,
 .toolDemoBtn {
   appearance: none;
   border: 1px solid var(--cab-border-strong);
@@ -1245,33 +1244,17 @@
   display: block;
 }
 
-.toolSwitch {
+.toolTitle {
   flex: 1 1 auto;
   min-width: 0;
-  display: flex;
-  height: 32px;
-  border: 1px solid var(--cab-border-strong);
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--cab-accent-softer);
-}
-
-.toolSwitch button {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0 6px;
+  margin: 0 6px;
+  font-size: 0.95rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: var(--cab-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.toolSwitch button[aria-selected='true'] {
-  background: var(--cab-accent);
-  color: #fff;
 }
 
 .toolMenuWrap,
@@ -1603,17 +1586,11 @@
 }
 
 :global(body.theme-dark) .toolIconBtn,
-:global(body.theme-dark) .toolSwitch,
 :global(body.theme-dark) .toolDemoBtn,
 :global(body.theme-dark) .toolBar button {
   background: var(--cab-subtle);
   color: var(--cab-accent-text);
   border-color: var(--cab-border);
-}
-
-:global(body.theme-dark) .toolSwitch button[aria-selected='true'] {
-  background: var(--cab-accent);
-  color: #fff;
 }
 
 :global(body.theme-dark) .toolMenu,

@@ -196,6 +196,6 @@ test('admin uses the same board and editor in projects', async ({ page }) => {
 
 test('diagnostic and calculator open without runtime regressions', async ({page}) => {
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await enter(page);
- await page.getByRole('button',{name:'Проблемомер',exact:true}).click();await expect(page.getByRole('button',{name:'Начать',exact:true})).toBeVisible();
- await page.getByRole('tab',{name:'Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
+ await page.getByRole('tab',{name:'Инструменты',exact:true}).click();await page.getByRole('button',{name:'Открыть Проблемомер',exact:true}).click();await expect(page.getByRole('button',{name:'Начать',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Кабинет',exact:true}).click();await page.getByRole('button',{name:'Открыть Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
 });
