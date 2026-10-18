@@ -134,6 +134,7 @@ export function redactOrgPrices(org: OrgSettings | null): OrgSettings | null {
 }
 
 export type SessionUser = {
+  avatarUrl?: string | null;
   id: string;
   login: string;
   role: UserRole;

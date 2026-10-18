@@ -1,3 +1,5 @@
+import { m, AnimatePresence, motionPresets, usePrefersReducedMotion } from './motionBits';
+import { Skeleton } from './Skeleton';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PublicMaterial } from '../../../api/materialsLib.js';
 import { MaterialStubView, PREPARING_LABEL } from './MaterialStubView';
@@ -61,6 +63,7 @@ function FolderIcon() {
 }
 
 export function MaterialsPanel({ canManage }: { canManage: boolean }) {
+  const reduce=usePrefersReducedMotion();
   const [items, setItems] = useState<PublicMaterial[]>([]);
   const [folderId, setFolderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -301,11 +304,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
         </p>
       ) : null}
       {loading ? (
-        <div className={styles.loading} aria-busy="true">
-          <p>Загружаем материалы</p>
-          <div className={styles.skeleton} />
-          <div className={styles.skeleton} />
-        </div>
+        <Skeleton kind="rows" count={4} label="Загружаем материалы"/>
       ) : null}
 
       {!loading ? (
@@ -313,7 +312,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
           {folders.length ? (
             <div className={styles.folders}>
               {folders.map((item) => (
-                <article key={item.id} className={styles.folder}>
+                <m.article layout={!reduce} initial={reduce?false:motionPresets.page.initial} animate={motionPresets.page.animate} key={item.id} className={styles.folder}>
                   {renamingId === item.id ? (
                     <input
                       className={styles.rename}
@@ -359,7 +358,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
                       }}
                     />
                   ) : null}
-                </article>
+                </m.article>
               ))}
             </div>
           ) : null}
@@ -368,7 +367,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
               {files.map((item) => {
                 const preparing = !item.hasFile && Boolean(item.stub);
                 return (
-                  <article key={item.id} className={preparing ? styles.stub : styles.file}>
+                  <m.article layout={!reduce} initial={reduce?false:motionPresets.page.initial} animate={motionPresets.page.animate} key={item.id} className={preparing ? styles.stub : styles.file}>
                     {renamingId === item.id ? (
                       <input
                         className={styles.rename}
@@ -415,7 +414,7 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
                         }}
                       />
                     ) : null}
-                  </article>
+                  </m.article>
                 );
               })}
             </div>
@@ -429,8 +428,8 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
         </>
       ) : null}
 
-      {preview ? (
-        <div className={styles.viewer} role="dialog" aria-modal="true" aria-label={preview.name}>
+      <AnimatePresence>{preview ? (
+        <m.div initial={reduce?false:motionPresets.modal.initial} animate={motionPresets.modal.animate} exit={reduce?undefined:motionPresets.modal.exit} className={styles.viewer} role="dialog" aria-modal="true" aria-label={preview.name}>
           <div className={styles.sheet}>
             <header className={styles.head}>
               <h3>{preview.name}</h3>
@@ -463,8 +462,8 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
               )}
             </div>
           </div>
-        </div>
-      ) : null}
+        </m.div>
+      ) : null}</AnimatePresence>
     </div>
   );
 }

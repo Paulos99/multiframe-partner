@@ -1,3 +1,4 @@
+import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { useEffect, useId, useRef, useState } from 'react';
 import { formatPeriodLabel, ymdLocal, ymdShift } from './analytics';
 import styles from './partner.module.css';
@@ -39,6 +40,7 @@ function monthCells(year: number, month: number): Array<string | null> {
 
 export function PeriodCalendar({ fromYmd, toYmd, onChange, triggerClassName }: Props) {
   const today = ymdLocal(new Date());
+  const reduce=usePrefersReducedMotion();
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<string | null>(null);
   const [cursor, setCursor] = useState(() => {
@@ -107,7 +109,7 @@ export function PeriodCalendar({ fromYmd, toYmd, onChange, triggerClassName }: P
         <span className={styles.calTriggerLabel}>{formatPeriodLabel(fromYmd, toYmd)}</span>
       </button>
       {open ? (
-        <div className={styles.calPop} id={panelId} role="dialog" aria-label="Период">
+        <m.div className={styles.calPop} initial={reduce?false:motionPresets.modal.initial} animate={motionPresets.modal.animate} id={panelId} role="dialog" aria-label="Период">
           <div className={styles.calPresets}>
             <button type="button" className={styles.ghost} onClick={() => apply(ymdShift(-6), today, true)}>
               7 дней
@@ -183,7 +185,7 @@ export function PeriodCalendar({ fromYmd, toYmd, onChange, triggerClassName }: P
           <p className={styles.calHint}>
             {anchor ? 'Выберите второй день диапазона' : 'Нажмите день начала, затем день конца'}
           </p>
-        </div>
+        </m.div>
       ) : null}
     </div>
   );

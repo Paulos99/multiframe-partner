@@ -1,3 +1,4 @@
+import { Skeleton } from './Skeleton';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   OFFICIAL_PANEL_PRICE_RUB,
@@ -13,7 +14,8 @@ import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { NetworkOverview, RoleWorkspace } from './RoleOverview';
-import { ProjectsCabinet } from './ProjectsCabinet';
+import { FadeRise } from './motionBits';
+import { ObjectsPanel } from './ObjectsPanel';
 import { StaffPanel } from './StaffPanel';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
@@ -69,7 +71,7 @@ function InstallHint() {
 }
 
 function TabPanel({ children }: { children: ReactNode }) {
-  return <div className={styles.tabPanel}>{children}</div>;
+  return <FadeRise className={styles.tabPanel}>{children}</FadeRise>;
 }
 
 function FrameBody({ children }: { children: ReactNode }) {
@@ -226,6 +228,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         <TabPanel>
           <div className={`${styles.card} ${styles.panelCard}`}>
             <h2>Партнёры сети</h2>
+          {api.partnersLoading && !partners.length ? <Skeleton count={3} label="Загрузка партнёров"/> : null}
             {notice ? (
               <p className={styles.flash} role="status">
                 {notice}
@@ -363,11 +366,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
 
       {tab === 'projects' ? (
         <TabPanel>
-          <ProjectsCabinet
-            onOpenRoom={(id) => api.openObject(id)}
-            onDiagnose={(id) => api.requestDiagnosis(id)}
-            onCalculate={(id) => api.requestCalculator(id)}
-          />
+          <ObjectsPanel />
         </TabPanel>
       ) : null}
 

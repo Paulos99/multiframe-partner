@@ -421,3 +421,17 @@ export async function apiFlushObjectQueue(
     }
   }
 }
+
+// Profile writes use the authenticated user; no user id is accepted from the UI.
+export async function apiProfile() { return (await request<{user:SessionUser}>('/me')).user; }
+export async function apiUpdateProfile(login:string,currentPassword:string) {
+  const result=await request<{user:SessionUser;token:string}>('/me',{method:'PATCH',body:JSON.stringify({login,currentPassword})});
+  saveToken(result.token); return result.user;
+}
+export async function apiChangePassword(currentPassword:string,newPassword:string) {
+  const result=await request<{token:string}>('/me/password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});
+  saveToken(result.token);
+}
+export async function apiUploadAvatar(base64:string) {
+  return (await request<{user:SessionUser}>('/me/avatar',{method:'PUT',body:JSON.stringify({base64,mime:'image/webp'})})).user;
+}

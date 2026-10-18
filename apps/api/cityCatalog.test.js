@@ -10,7 +10,7 @@ import {
 import ruCitiesTsv from './data/ru-cities.js';
 
 const tsvFile = readFileSync(new URL('./data/ru-cities.tsv', import.meta.url), 'utf8');
-assert.equal(ruCitiesTsv, tsvFile);
+assert.equal(ruCitiesTsv.replace(/\r\n/g, '\n'), tsvFile.replace(/\r\n/g, '\n'));
 ensureIndexFromTsv(ruCitiesTsv);
 
 test('Шуя находится с регионом', () => {

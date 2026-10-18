@@ -1,3 +1,4 @@
+import { ModalSurface } from '../partner/motionBits';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLenis } from 'lenis/react';
@@ -132,7 +133,7 @@ function SoundPressureHelpDialog({ highlightDb, onClose }: DialogProps) {
         if (e.target === e.currentTarget) requestClose();
       }}
     >
-      <div
+      <ModalSurface
         className={`${styles.sheet} ${visible ? styles.sheetOpen : ''}`}
         role="dialog"
         aria-modal="true"
@@ -206,7 +207,7 @@ function SoundPressureHelpDialog({ highlightDb, onClose }: DialogProps) {
           дБ — логарифмическая величина, именно поэтому снижение звука в 6&nbsp;дБ равно уменьшению
           на 50% или в 2 раза
         </p>
-      </div>
+      </ModalSurface>
     </div>,
     document.body,
   );

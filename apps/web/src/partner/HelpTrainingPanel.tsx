@@ -114,14 +114,14 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
 
 function SectionBlock({ section, highlight }: { section: HelpSection; highlight?: boolean }) {
   return (
-    <section
+    <details open={highlight}
       className={highlight ? `${styles.section} ${styles.mine}` : styles.section}
       aria-labelledby={`help-title-${section.id}`}
     >
-      <div className={styles.sectionHead}>
+      <summary className={styles.sectionHead}>
         <h3 id={`help-title-${section.id}`}>{section.title}</h3>
         {highlight ? <span className={styles.badge}>Ваша роль</span> : null}
-      </div>
+      </summary>
       <p className={styles.lead}>{section.lead}</p>
       <ol className={styles.steps}>
         {section.steps.map((step) => (
@@ -138,7 +138,7 @@ function SectionBlock({ section, highlight }: { section: HelpSection; highlight?
           </ul>
         </div>
       ) : null}
-    </section>
+    </details>
   );
 }
 

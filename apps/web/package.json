@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "check:acoustic": "npx --yes tsx src/state/acoustic/check.ts"
+    "check:acoustic": "npx --yes tsx src/state/acoustic/check.ts",
+    "lint": "eslint src e2e playwright.config.ts vitest.config.ts",
+    "typecheck": "tsc -b",
+    "test:unit": "vitest run && tsx --test src/partner/*.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
@@ -20,13 +24,20 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "tsx": "^4.23.15",
     "typescript": "~5.8.3",
+    "typescript-eslint": "^8.71.2",
     "vite": "^6.3.3",
     "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5",
     "workbox-window": "^7.4.1"
   }
 }

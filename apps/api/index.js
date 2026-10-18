@@ -1,3 +1,4 @@
+import { handleProfile } from './profileRoutes.js';
 /**
  * Yandex Cloud Function HTTP handler — multi-role partner platform.
  * Storage: Object Storage JSON or in-memory seed.
@@ -144,6 +145,7 @@ function publicUser(user, org) {
     displayName: user.displayName,
     orgId: user.orgId || null,
     org: settings,
+    avatarUrl: null,
   };
 }
 
@@ -332,7 +334,7 @@ function findUser(platform, idOrLogin) {
 }
 
 async function signToken(user) {
-  return new SignJWT({ login: user.login, role: normalizeRole(user.role), orgId: user.orgId })
+  return new SignJWT({ login: user.login, role: normalizeRole(user.role), orgId: user.orgId, sessionVersion: user.sessionVersion || 0 })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.id)
     .setIssuedAt()
@@ -346,7 +348,7 @@ async function requireAuth(event) {
   const { payload } = await jwtVerify(token, JWT_SECRET());
   const platform = await loadPlatform();
   const user = findUser(platform, payload.sub) || findUser(platform, payload.login);
-  if (!user) throw Object.assign(new Error('Unauthorized'), { status: 401 });
+  if (!user || user.loginDisabled || (payload.sessionVersion || 0) !== (user.sessionVersion || 0)) throw Object.assign(new Error('Unauthorized'), { status: 401 });
   return { platform, user: { ...user, role: normalizeRole(user.role) }, payload };
 }
 
@@ -815,6 +817,8 @@ export async function handler(event = {}) {
   const method = getMethod(event);
 
   try {
+    const profileResponse = await handleProfile({path,method,requireAuth:()=>requireAuth(event),json,getBody:()=>getBody(event),savePlatform,publicUser,signToken});
+    if(profileResponse) return profileResponse;
     const materialsResponse = await handleMaterials({
       path,
       method,

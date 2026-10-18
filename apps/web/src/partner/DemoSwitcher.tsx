@@ -1,3 +1,4 @@
+import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { useEffect, useId, useState } from 'react';
 import type { DemoAccount } from './demoSeed';
 import { DEMO_ACCOUNTS } from './demoSeed';
@@ -192,6 +193,7 @@ export function DemoLoginPicker() {
 }
 
 export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
+  const reduce=usePrefersReducedMotion();
   const { user, login, loading } = usePartner();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -215,7 +217,7 @@ export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
   return (
     <div className={inline ? styles.inlineWrap : styles.fabWrap}>
       {open ? (
-        <div className={styles.panel} role="dialog" aria-label="Сменить роль">
+        <m.div className={styles.panel} role="dialog" initial={reduce?false:motionPresets.modal.initial} animate={motionPresets.modal.animate} aria-label="Сменить роль">
           <div className={styles.panelHead}>
             <h2>Сменить роль</h2>
             <button type="button" className={styles.close} onClick={() => setOpen(false)} aria-label="Закрыть">
@@ -240,7 +242,7 @@ export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
             disabled={loading || busy != null}
             onPick={(account) => void switchTo(account)}
           />
-        </div>
+        </m.div>
       ) : null}
       <button
         type="button"

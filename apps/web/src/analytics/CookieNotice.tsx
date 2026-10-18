@@ -1,3 +1,4 @@
+import { ModalSurface } from '../partner/motionBits';
 import { useEffect, useState } from 'react';
 import { getConsent, setConsent, type ConsentState } from './consent';
 import { hasMetrikaConfigured, initMetrika } from './metrika';
@@ -16,7 +17,7 @@ export function CookieNotice() {
   if (consent !== 'unknown') return null;
 
   return (
-    <div className={styles.banner} role="dialog" aria-label="Согласие на аналитику">
+    <ModalSurface className={styles.banner} role="dialog" aria-label="Согласие на аналитику">
       <p className={styles.text}>
         Мы используем обезличенную статистику (Яндекс.Метрика), чтобы понимать, как проходит
         проблемомер. Контакты не собираем.{' '}
@@ -46,6 +47,6 @@ export function CookieNotice() {
           Принять
         </button>
       </div>
-    </div>
+    </ModalSurface>
   );
 }

@@ -1,3 +1,4 @@
+import { PageTransition, usePageReveal } from '../partner/motionBits';
 import { useEffect } from 'react';
 import { useLenis } from 'lenis/react';
 import styles from './AppShell.module.css';
@@ -9,52 +10,6 @@ import { StartScreen } from '../screens/Start/StartScreen';
 import { RoomScreen } from '../screens/Room/RoomScreen';
 import { ProcessingScreen } from '../screens/Processing/ProcessingScreen';
 import { ResultWideScreen } from '../screens/Result/ResultWideScreen';
-
-function useScrollReveal(deps: string) {
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      document.querySelectorAll('[data-reveal]').forEach((el) => {
-        el.classList.add('is-revealed');
-      });
-      return;
-    }
-
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
-    if (!nodes.length) return;
-
-    let cascadeIndex = 0;
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort(
-            (a, b) =>
-              a.target.getBoundingClientRect().top - b.target.getBoundingClientRect().top,
-          );
-        for (const entry of visible) {
-          const el = entry.target as HTMLElement;
-          io.unobserve(el);
-          el.style.setProperty('--reveal-delay', `${Math.min(cascadeIndex, 14) * 90}ms`);
-          cascadeIndex += 1;
-          // Force reflow so delay applies before the reveal class.
-          void el.offsetWidth;
-          el.classList.add('is-revealed');
-        }
-      },
-      { threshold: 0.08, rootMargin: '0px 0px -4% 0px' },
-    );
-
-    for (const node of nodes) {
-      node.classList.remove('is-revealed');
-      node.style.removeProperty('--reveal-delay');
-      io.observe(node);
-    }
-
-    return () => io.disconnect();
-  }, [deps]);
-}
 
 function useScrollTopOnStep(step: string) {
   const lenis = useLenis();
@@ -70,7 +25,7 @@ export function AppShell() {
   const isProcessing = step === 'processing';
   const isResult = step === 'result';
   const revealKey = step;
-  useScrollReveal(revealKey);
+  usePageReveal(revealKey);
   useScrollTopOnStep(revealKey);
   /** Sticky footer only for wizard steps — Result has its own CTA block. */
   const showNav = step !== 'start' && !isProcessing && !isResult;
@@ -102,7 +57,7 @@ export function AppShell() {
       <main
         className={`${styles.main} ${isProcessing ? styles.mainProcessing : ''} ${isResult ? styles.mainWide : ''}`}
       >
-        {content}
+        <PageTransition pageKey={step}>{content}</PageTransition>
       </main>
       {showNav ? (
         <StickyCta onBack={goBack} onNext={goNext} nextDisabled={!canGoNext} nextLabel="Далее" />

@@ -1,3 +1,5 @@
+import { Skeleton } from './Skeleton';
+import { KanbanBoard } from './KanbanBoard';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   JOB_OBJECT_STATUS_LABELS,
@@ -134,6 +136,7 @@ export function ObjectsPanel({
   const canDelete = canDeleteObjects(user.role);
   const canCreate = canCreateObjects(user.role);
   const staff = api.partnerListStaff();
+  const [view,setView]=useState<'list'|'kanban'>('list');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -216,6 +219,13 @@ export function ObjectsPanel({
     } finally {
       setPendingId(null);
     }
+  }
+
+  async function moveRoom(room:JobObject,status:JobObjectStatus) {
+    setErr(null);setPendingId(room.id);
+    try {const saved=await api.saveObject({id:room.id,status});setMsg(saved.pendingSync?'Стадия сохранена на устройстве, ожидает синхронизации':'Стадия сохранена');}
+    catch(e){setErr(e instanceof Error?e.message:'Стадия не сохранена');}
+    finally {setPendingId(null);}
   }
 
   async function openDocument(obj: JobObject, doc: JobObjectDocument, download: boolean) {
@@ -506,12 +516,15 @@ export function ObjectsPanel({
               );
             })}
           </div>
+          <div className={styles.chipRow} role="group" aria-label="Вид объектов">
+            <button type="button" className={view==='list'?styles.chipOn:styles.chip} aria-pressed={view==='list'} onClick={()=>setView('list')}>Список</button>
+            <button type="button" className={view==='kanban'?styles.chipOn:styles.chip} aria-pressed={view==='kanban'} onClick={()=>setView('kanban')}>Канбан</button>
+          </div>
           {api.objectsLoading && !api.objects.length ? (
-            <div className={styles.objectList} aria-busy="true" aria-label="Загрузка объектов">
-              <div className={`${styles.skeleton} ${styles.skeletonRow}`} />
-              <div className={`${styles.skeleton} ${styles.skeletonRow}`} />
-              <div className={`${styles.skeleton} ${styles.skeletonRow}`} />
-            </div>
+            <Skeleton kind="cards" count={3} label="Загрузка объектов"/>
+          ) : view==='kanban' ? (
+            <KanbanBoard rooms={cards.flatMap(card=>visibleRooms(card.rooms,statusFilter))} projects={api.projects} role={user.role} pendingId={pendingId}
+              onMove={moveRoom} onOpen={room=>{setSelectedKey(room.projectId||`room:${room.id}`);setSelectedId(room.id);}} />
           ) : (
             <div className={listStyles.grid}>
               {cards.map((card, index) => (

@@ -1,3 +1,4 @@
+import { Skeleton } from './Skeleton';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type {
   AnalyticsBreakdownItem,
@@ -425,14 +426,10 @@ export function AnalyticsDashboard({
     return (
       <div className={`${styles.card} ${styles.dashCard}`} aria-busy="true">
         <h2>{mode === 'admin' ? 'Аналитика' : 'Аналитика команды'}</h2>
-        <p className={styles.lead}>Считаем показатели…</p>
-        <div className={styles.kpiRow}>
-          {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className={`${styles.skeleton} ${styles.skeletonKpi}`} />
-          ))}
-        </div>
-        <div className={`${styles.skeleton} ${styles.skeletonLine}`} />
-        <div className={`${styles.skeleton} ${styles.skeletonLine}`} />
+        <Skeleton kind="rows" count={1} label="Загрузка фильтров аналитики"/>
+        <div className={styles.kpiRow}>{Array.from({length:mode==='admin'?9:8},(_,i)=><Skeleton key={i} kind="cards" count={1} label="Загрузка показателя"/>)}</div>
+        <div className={styles.funnelGrid}><Skeleton kind="chart" count={1}/><Skeleton kind="chart" count={1}/></div>
+        <Skeleton kind="chart" count={1} label="Загрузка графика"/>
       </div>
     );
   }
@@ -713,7 +710,7 @@ export function AnalyticsDashboard({
             orgId={mode === 'partner' ? user.orgId : focusOrg || null}
           />
           {loading ? (
-            <p className={styles.lead}>Считаем журнал…</p>
+            <Skeleton kind="rows" count={6} label="Загрузка журнала"/>
           ) : dash.recentObjects.length ? (
             <div className={styles.dashTableScroll}>
               <table className={styles.dashTable}>

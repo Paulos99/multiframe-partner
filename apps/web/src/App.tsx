@@ -1,3 +1,5 @@
+import { PageTransition } from './partner/motionBits';
+import { Skeleton } from './partner/Skeleton';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SessionProvider } from './state/SessionContext';
 import { AppShell } from './app-shell/AppShell';
@@ -242,7 +244,7 @@ function PartnerShell() {
   if (loading && !user) {
     body = (
       <div className={styles.shell}>
-        <p className={styles.lead}>Загрузка…</p>
+        <Skeleton kind="page" count={3} label="Загрузка кабинета"/>
       </div>
     );
   } else if (!user) {
@@ -322,7 +324,7 @@ function PartnerShell() {
       );
   }
 
-  return <ShellFrame install={!user || route === 'cabinet'}>{body}</ShellFrame>;
+  return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${user?.id||'login'}-${route}`}>{body}</PageTransition></ShellFrame>;
 }
 
 export default function App() {
