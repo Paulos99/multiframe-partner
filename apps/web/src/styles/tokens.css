@@ -72,9 +72,9 @@
   --cab-ok-soft: #e5f4ee;
   --cab-neutral: #3e4944;
   --cab-neutral-soft: #eef1f2;
-  --cab-shadow: 0 10px 30px rgba(20, 28, 36, 0.06);
-  --cab-shadow-md: 0 18px 44px rgba(20, 28, 36, 0.1);
-  --cab-shadow-sm: 0 1px 2px rgba(20, 28, 36, 0.05);
+  --cab-shadow: 0 1px 3px rgba(20, 28, 36, 0.07), 0 10px 30px rgba(20, 28, 36, 0.09);
+  --cab-shadow-md: 0 2px 6px rgba(20, 28, 36, 0.08), 0 18px 44px rgba(20, 28, 36, 0.14);
+  --cab-shadow-sm: 0 1px 2px rgba(20, 28, 36, 0.08), 0 3px 8px rgba(20, 28, 36, 0.06);
   --cab-radius-sm: 12px;
   --cab-radius-md: 16px;
   --cab-radius-lg: 20px;
@@ -156,9 +156,9 @@ body.theme-dark {
   --cab-ok-soft: #1a2e28;
   --cab-neutral: #d5dde4;
   --cab-neutral-soft: #2a2e34;
-  --cab-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-  --cab-shadow-md: 0 20px 48px rgba(0, 0, 0, 0.45);
-  --cab-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --cab-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 12px 32px rgba(0, 0, 0, 0.42);
+  --cab-shadow-md: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 20px 48px rgba(0, 0, 0, 0.52);
+  --cab-shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 1px 3px rgba(0, 0, 0, 0.42);
   --cab-raised: #262b34;
 }
 
