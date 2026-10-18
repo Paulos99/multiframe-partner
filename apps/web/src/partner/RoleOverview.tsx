@@ -1,7 +1,6 @@
 import { usePartner } from './PartnerContext';
 import { PartnerNetworkOverview } from './network/PartnerNetwork';
 import { ObjectsPanel } from './ObjectsPanel';
-import styles from './RoleOverview.module.css';
 
 export function NetworkOverview({
   count,
