@@ -15,6 +15,7 @@ import {
   type RoomType,
 } from '../state/types';
 import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
+import { funnelPercents } from '../../../../packages/shared/funnel';
 import {
   fetchAnalyticsDashboard,
   formatPeriodLabel,
@@ -79,11 +80,6 @@ function deltaClass(current: number, prev: number | null | undefined): string {
   if (d > 0) return styles.kpiUp;
   if (d < 0) return styles.kpiDown;
   return styles.kpiFlat;
-}
-
-function pct(part: number, whole: number): string {
-  if (!whole) return '—';
-  return `${Math.round((part / whole) * 100)}%`;
 }
 
 function labelKey(
@@ -162,18 +158,24 @@ function FunnelBlock({
   title: string;
   steps: Array<{ label: string; value: number }>;
 }) {
-  const base = steps[0]?.value || 0;
+  const percents = funnelPercents(steps.map((step) => step.value));
   return (
     <div className={styles.funnelBlock}>
-      <h4 className={styles.funnelTitle}>{title}</h4>
+      <h4 className={styles.funnelTitle}>
+        {title}
+        <span
+          className={styles.funnelLabel}
+          style={{ display: 'block', marginTop: 4, fontSize: '0.75rem', fontWeight: 650 }}
+        >
+          % от всех открытий
+        </span>
+      </h4>
       <ol className={styles.funnelSteps}>
-        {steps.map((s, i) => (
-          <li key={s.label}>
-            <span className={styles.funnelLabel}>{s.label}</span>
-            <strong>{s.value}</strong>
-            <span className={styles.funnelPct}>
-              {i === 0 ? '100%' : pct(s.value, base)}
-            </span>
+        {steps.map((step, index) => (
+          <li key={step.label}>
+            <span className={styles.funnelLabel}>{step.label}</span>
+            <strong>{step.value}</strong>
+            <span className={styles.funnelPct}>{percents[index]}</span>
           </li>
         ))}
       </ol>
