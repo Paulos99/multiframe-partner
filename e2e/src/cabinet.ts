@@ -28,7 +28,7 @@ export async function login(page: Page, role: RoleCase): Promise<void> {
   const decline = page.getByRole('button', { name: 'Отклонить' });
   if (await decline.isVisible().catch(() => false)) await decline.click();
 
-  const manual = page.getByRole('button', { name: /Войти по логину|Скрыть ручной вход/ });
+  const manual = page.getByRole('button', { name: /Войти по логину|Скрыть форму|Скрыть ручной вход/ });
   if (await manual.isVisible().catch(() => false)) {
     const label = (await manual.innerText()).trim();
     if (label.includes('Войти по логину')) await manual.click();
@@ -59,16 +59,14 @@ export async function login(page: Page, role: RoleCase): Promise<void> {
 
 export async function expectHome(page: Page, role: RoleCase): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: role.title })).toBeVisible();
-  const summary = page.getByRole('region', { name: role.summaryRegion });
-  await expect(summary).toBeVisible();
-  await expect(summary).toContainText(role.summaryTitle);
-  if (role.id === 'owner') await expect(summary).toContainText('Работа компании');
-  if (role.id === 'owner-b') await expect(summary).toContainText('Работа компании');
-  if (role.id === 'sales' || role.id === 'measurer' || role.id === 'crew') {
-    await expect(summary).toContainText('Ваш рабочий день');
+  if (role.id === 'admin') {
+    const summary = page.getByRole('region', { name: 'Управление партнёрской сетью' });
+    await expect(summary).toBeVisible();
+    await expect(summary).toContainText(role.homeText);
+    await expect(page.getByText('облако', { exact: false }).first()).toBeVisible();
+    return;
   }
-  if (role.id === 'crew') await expect(page.getByText('цены скрыты')).toBeVisible();
-  if (role.id === 'admin') await expect(page.getByText('облако', { exact: false }).first()).toBeVisible();
+  await expect(page.getByText(role.homeText).first()).toBeVisible();
 }
 
 export async function openList(page: Page, role: RoleCase): Promise<void> {
@@ -79,15 +77,14 @@ export async function openList(page: Page, role: RoleCase): Promise<void> {
     return;
   }
   await expect(page.getByRole('heading', { level: 2, name: role.objectsHeading })).toBeVisible();
-  const counter = page.getByRole('button', { name: /Все доступные объекты · \d+/ });
-  await expect(counter).toBeVisible();
+  const all = page.getByRole('button', { name: /^Все · \d+/ });
+  await expect(all).toBeVisible();
   await expect
-    .poll(async () => Number((await counter.innerText()).match(/(\d+)/)?.[1] || '0'), {
+    .poll(async () => Number((await all.innerText()).match(/(\d+)/)?.[1] || '0'), {
       timeout: 25_000,
     })
     .toBeGreaterThan(0);
-  const all = page.getByRole('button', { name: /^Все · \d+/ });
-  if (await all.count()) await all.first().click();
+  await all.click();
   await expect(page.getByPlaceholder('Имя, адрес или телефон')).toBeVisible();
 }
 
@@ -123,15 +120,10 @@ export async function openTraining(page: Page, role: RoleCase): Promise<void> {
     await page.getByRole('tab', { name: 'Обучение' }).click();
   }
   await expect(page.getByRole('heading', { level: 2, name: 'Обучение' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Методические материалы' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
-  await expect(
-    page.getByText('Инструкции, презентации и видео по продукту STP MultiFrame'),
-  ).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Материалы' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('Инструкции и презентации по продукту.')).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Папки' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Работа с кабинетом' }).click();
+  await page.getByRole('tab', { name: 'Кабинет' }).click();
   await expect(page.getByRole('heading', { level: 3, name: role.trainingTitle })).toBeVisible();
 }
 

@@ -15,9 +15,11 @@ export type RoleCase = {
   passwordEnv: string;
   /** Заголовок h1 кабинета. */
   title: RegExp;
-  /** Своя сводка на главной. */
-  summaryRegion: string;
-  summaryTitle: string;
+  /**
+   * Своя главная. У админа это обзор сети.
+   * У остальных ролей дублирующая сводка убрана: остаётся подзаголовок кабинета.
+   */
+  homeText: string;
   /** null — у админа нет списка объектов, открываем список партнёров. */
   objectsHeading: 'Объекты' | 'Задания на монтаж' | null;
   /** Заголовок личной инструкции в «Обучении». */
@@ -30,8 +32,7 @@ export const ROLES: RoleCase[] = [
     loginEnv: 'E2E_ADMIN_LOGIN',
     passwordEnv: 'E2E_ADMIN_PASSWORD',
     title: /^Сеть STP MultiFrame партнёра$/,
-    summaryRegion: 'Управление партнёрской сетью',
-    summaryTitle: 'Партнёры и поддержка команды',
+    homeText: 'Партнёры и поддержка команды',
     objectsHeading: null,
     trainingTitle: 'Ваша работа · Админ StP',
   },
@@ -40,8 +41,7 @@ export const ROLES: RoleCase[] = [
     loginEnv: 'E2E_OWNER_LOGIN',
     passwordEnv: 'E2E_OWNER_PASSWORD',
     title: /^Владелец · Потолки Столицы$/,
-    summaryRegion: 'Рабочая сводка',
-    summaryTitle: 'Продолжите работу с клиентами',
+    homeText: 'Прайс, команда, объекты и воронка компании',
     objectsHeading: 'Объекты',
     trainingTitle: 'Ваша работа · Владелец',
   },
@@ -50,8 +50,7 @@ export const ROLES: RoleCase[] = [
     loginEnv: 'E2E_SALES_LOGIN',
     passwordEnv: 'E2E_SALES_PASSWORD',
     title: /^Менеджер · Потолки Столицы$/,
-    summaryRegion: 'Рабочая сводка',
-    summaryTitle: 'Продолжите работу с клиентами',
+    homeText: 'Сделки, КП и отправка клиенту',
     objectsHeading: 'Объекты',
     trainingTitle: 'Ваша работа · Менеджер',
   },
@@ -60,8 +59,7 @@ export const ROLES: RoleCase[] = [
     loginEnv: 'E2E_MEASURER_LOGIN',
     passwordEnv: 'E2E_MEASURER_PASSWORD',
     title: /^Замерщик · Потолки Столицы$/,
-    summaryRegion: 'Рабочая сводка',
-    summaryTitle: 'От жалобы клиента к точному замеру',
+    homeText: 'Замер за 5–10 минут',
     objectsHeading: 'Объекты',
     trainingTitle: 'Ваша работа · Замерщик',
   },
@@ -70,8 +68,7 @@ export const ROLES: RoleCase[] = [
     loginEnv: 'E2E_CREW_LOGIN',
     passwordEnv: 'E2E_CREW_PASSWORD',
     title: /^Монтажник · Потолки Столицы$/,
-    summaryRegion: 'Рабочая сводка',
-    summaryTitle: 'Схема, материалы и задания — под рукой',
+    homeText: 'цены скрыты',
     objectsHeading: 'Задания на монтаж',
     trainingTitle: 'Ваша работа · Монтажник',
   },
@@ -80,8 +77,7 @@ export const ROLES: RoleCase[] = [
     loginEnv: 'E2E_OWNER_B_LOGIN',
     passwordEnv: 'E2E_OWNER_B_PASSWORD',
     title: /^Владелец · Северный Потолок$/,
-    summaryRegion: 'Рабочая сводка',
-    summaryTitle: 'Продолжите работу с клиентами',
+    homeText: 'Прайс, команда, объекты и воронка компании',
     objectsHeading: 'Объекты',
     trainingTitle: 'Ваша работа · Владелец',
   },

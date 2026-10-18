@@ -205,9 +205,37 @@ test('guard: запись кроме входа не уходит на серв�
   writesByPage.set(page, hits);
   await installReadOnlyGuard(page, hits);
   await page.goto('./');
-  await page.evaluate(async (api) => {
-    await fetch(`${api}/objects`, { method: 'POST', body: '{}' }).catch(() => undefined);
+  const statuses = await page.evaluate(async (api) => {
+    const analytics = await fetch(`${api}/analytics/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"events":[]}',
+    });
+    const blocked = async (path: string, method: string) => {
+      try {
+        return (await fetch(`${api}${path}`, { method, body: '{}' })).status;
+      } catch {
+        return 0;
+      }
+    };
+    return {
+      analytics: analytics.status,
+      objects: await blocked('/objects', 'POST'),
+      patch: await blocked('/org/settings', 'PATCH'),
+      put: await blocked('/objects/smoke-guard', 'PUT'),
+      delete: await blocked('/objects/smoke-guard', 'DELETE'),
+    };
   }, API.replace(/\/$/, ''));
-  expect(hits.map((hit) => `${hit.method} ${hit.path}`)).toEqual(['POST /objects']);
+  expect(statuses.analytics).toBe(200);
+  expect(statuses.objects).toBe(0);
+  expect(statuses.patch).toBe(0);
+  expect(statuses.put).toBe(0);
+  expect(statuses.delete).toBe(0);
+  expect(hits.map((hit) => `${hit.method} ${hit.path}`)).toEqual([
+    'POST /objects',
+    'PATCH /org/settings',
+    'PUT /objects/smoke-guard',
+    'DELETE /objects/smoke-guard',
+  ]);
   hits.length = 0;
 });
