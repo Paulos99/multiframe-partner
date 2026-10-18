@@ -42,6 +42,19 @@ async function enter(page: Page, role: string) {
   await page.getByRole(role === 'measurer' || role === 'crew' ? 'button' : 'tab', { name: 'Обучение', exact: true }).first().click();
 }
 
+
+/**
+ * Меню появляется с анимацией (opacity/scale) и после первого кадра сдвигается к курсору.
+ * Клик в этот момент попадает мимо пункта: pointerdown на <html> закрывает меню, и
+ * Playwright ждёт пункт, которого уже нет. Ждём, пока меню встанет на место.
+ */
+async function menuSettled(menu: ReturnType<Page['getByRole']>) {
+  await expect(menu).toBeVisible();
+  await menu.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+  await expect(menu).toHaveCSS('opacity', '1');
+  await expect(menu).toHaveCSS('transform', 'none');
+}
+
 const folderCard = (page: Page, name: string) =>
   page.locator('article[data-material-id]', { has: page.getByText(name, { exact: true }) });
 
@@ -52,14 +65,15 @@ test('админ: правый клик по папке → «Удалить» �
   await expect(card).toBeVisible();
   await card.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: 'Папка «Старые инструкции»' });
-  await expect(menu).toBeVisible();
+  await menuSettled(menu);
   await expect(menu.getByRole('menuitem', { name: 'Удалить' })).toBeFocused();
   // Esc закрывает меню без удаления.
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
 
   await card.click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Удалить' }).click();
+  await menuSettled(menu);
+  await menu.getByRole('menuitem', { name: 'Удалить' }).click();
   const dialog = page.getByRole('dialog', { name: 'Удалить папку «Старые инструкции»?' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Вместе с ней удалятся 2 файла и 1 вложенная папка.');
@@ -85,7 +99,9 @@ test('админ: правый клик по пустому месту → «С�
   const list = page.getByTestId('materials-list');
   const box = (await list.boundingBox())!;
   await page.mouse.click(box.x + box.width / 2, box.y + box.height - 6, { button: 'right' });
-  await page.getByRole('menuitem', { name: 'Создать папку' }).click();
+  const menu = page.getByRole('menu', { name: 'Материалы' });
+  await menuSettled(menu);
+  await menu.getByRole('menuitem', { name: 'Создать папку' }).click();
   const input = page.getByLabel('Название папки');
   await expect(input).toBeFocused();
   await input.fill('Новая из меню');
