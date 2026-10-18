@@ -16,6 +16,7 @@ import {
   ROOM_TYPE_LABELS,
   type RoomType,
 } from '../state/types';
+import { calcModeLabel } from './calcModeLabel';
 
 export type JournalCellFormat = 'text' | 'number' | 'msk';
 
@@ -48,12 +49,6 @@ const ACTION_LABELS: Record<string, string> = {
   share: 'Отправка',
   open: 'Открытие',
   login: 'Вход',
-};
-
-const MODE_LABELS: Record<string, string> = {
-  area: 'Только площадь',
-  dims: 'Размеры',
-  polygon: 'Полигон',
 };
 
 export function formatMsk(iso: string | null | undefined): string {
@@ -128,7 +123,7 @@ export const JOURNAL_COLUMNS: JournalColumn[] = [
     key: 'mode',
     header: 'Режим калькулятора',
     format: 'text',
-    value: (e) => MODE_LABELS[String(e.object?.mode || '')] || e.object?.mode || '',
+    value: (e) => (e.object?.mode ? calcModeLabel(e.object.mode) : ''),
   },
 ];
 
