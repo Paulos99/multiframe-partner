@@ -72,7 +72,7 @@ for (const vp of widths) {
         expect(d!.width).toBeGreaterThanOrEqual(vp.width - 16);
       }
       const fontSize = await dialog
-        .getByLabel('Текущий пароль', { exact: true })
+        .getByLabel('Логин', { exact: true })
         .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       expect(fontSize).toBeGreaterThanOrEqual(16);
       await noHorizontalOverflow(page, `${role} профиль`);
