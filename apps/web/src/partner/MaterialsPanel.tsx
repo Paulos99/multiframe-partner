@@ -153,7 +153,13 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
     const target = replaceId.current;
     replaceId.current = null;
     if (target) await run(() => replaceMaterialFile(target, file));
-    else await run(() => uploadMaterialFile(file, folderId));
+    else
+      await run(() =>
+        uploadMaterialFile(file, folderId, (loaded, total) => {
+          const percent = total ? Math.floor((loaded / total) * 100) : 0;
+          setStatus(`Загрузка «${file.name}»: ${percent}%`);
+        }),
+      );
   }
 
   /**
@@ -275,7 +281,6 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
             ref={fileRef}
             className={styles.filePick}
             type="file"
-            accept=".pdf,.mp4,.webm,.mov,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.doc,.docx,.txt,video/*,image/*,application/pdf"
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = '';

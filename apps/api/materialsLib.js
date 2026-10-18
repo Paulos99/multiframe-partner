@@ -6,7 +6,22 @@
 
 export const MATERIAL_BUCKET_MARKER = 'materials';
 /** Прямой PUT в бакет. Шлюз API по-прежнему принимает только до 2 МБ base64. */
-export const MATERIAL_DIRECT_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+/** Предел одного объекта в S3 (5 ТБ). Одиночный PUT — до 5 ГБ, крупнее только multipart. */
+export const MATERIAL_DIRECT_MAX_BYTES = 5 * 1024 * 1024 * 1024 * 1024;
+export const MATERIAL_SINGLE_PUT_MAX_BYTES = 5 * 1024 * 1024 * 1024;
+export const MATERIAL_PART_MIN_BYTES = 8 * 1024 * 1024;
+export const MATERIAL_PART_MAX_BYTES = 100 * 1024 * 1024;
+export const MATERIAL_MAX_PARTS = 10000;
+
+/** Размер части: от 8 до 100 МБ (последние — до лимита S3 в 5 ГБ), не больше 10 000 частей. */
+export function materialPartSize(size) {
+  const total = Math.max(0, Number(size) || 0);
+  let part = MATERIAL_PART_MIN_BYTES;
+  while (Math.ceil(total / part) > MATERIAL_MAX_PARTS) {
+    part = part < MATERIAL_PART_MAX_BYTES ? Math.min(part * 2, MATERIAL_PART_MAX_BYTES) : part * 2;
+  }
+  return part;
+}
 
 export const MATERIAL_STUBS = [
   'video-install',

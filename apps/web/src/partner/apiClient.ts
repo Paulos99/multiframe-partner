@@ -332,6 +332,50 @@ export async function apiMaterialUploadUrl(input: {
   });
 }
 
+export type MaterialMultipartTicket = {
+  storageKey: string;
+  uploadId: string;
+  partSize: number;
+  partCount: number;
+  mime: string;
+};
+
+export async function apiMaterialMultipartStart(input: {
+  name: string;
+  size: number;
+  mime?: string;
+}): Promise<MaterialMultipartTicket> {
+  return request('/materials/files/multipart', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function apiMaterialMultipartParts(input: {
+  storageKey: string;
+  uploadId: string;
+  partNumbers: number[];
+}): Promise<{ urls: Record<string, string>; expiresIn: number }> {
+  return request('/materials/files/multipart/parts', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function apiMaterialMultipartComplete(input: {
+  storageKey: string;
+  uploadId: string;
+  partCount: number;
+  name: string;
+  parentId: string | null;
+}): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{
+    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+  }>('/materials/files/multipart/complete', { method: 'POST', body: JSON.stringify(input) });
+  return data.materials;
+}
+
+export async function apiMaterialMultipartAbort(input: {
+  storageKey: string;
+  uploadId: string;
+}): Promise<void> {
+  await request('/materials/files/multipart/abort', { method: 'POST', body: JSON.stringify(input) });
+}
+
 export async function apiRegisterMaterialFile(input: {
   name: string;
   parentId: string | null;

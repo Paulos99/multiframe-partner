@@ -6,6 +6,11 @@
 
 import { MATERIAL_BUCKET_MARKER } from './materialsLib.js';
 import {
+  abortMultipartUpload,
+  completeMultipartUpload,
+  createMultipartUpload,
+  listUploadedParts,
+  signUploadPart,
   deleteObject,
   headObject,
   materialsBucket,
@@ -73,9 +78,20 @@ export async function statMaterialObject(key) {
   return headObject({ bucket, key });
 }
 
-function isInlineMime(mime) {
-  const value = String(mime || '').toLowerCase();
-  return value === 'application/pdf' || value.startsWith('image/') || value.startsWith('video/');
+/**
+ * Inline только для типов, которые браузер не исполняет: PDF, растровые
+ * картинки, видео, аудио. SVG, HTML и всё неизвестное — attachment и
+ * application/octet-stream, чтобы ничего не выполнялось в origin бакета.
+ */
+export function isInlineMime(mime) {
+  const value = String(mime || '').toLowerCase().split(';')[0].trim();
+  if (value === 'image/svg+xml') return false;
+  return (
+    value === 'application/pdf' ||
+    value.startsWith('image/') ||
+    value.startsWith('video/') ||
+    value.startsWith('audio/')
+  );
 }
 
 function contentDisposition(filename, mime) {
@@ -104,7 +120,7 @@ export async function signedMaterialGetUrl(node, { filename, mime } = {}) {
   const name = filename || node.name || 'file';
   const type = mime || node.mime || 'application/octet-stream';
   const responseContentDisposition = contentDisposition(name, type);
-  const responseContentType = type;
+  const responseContentType = isInlineMime(type) ? type : 'application/octet-stream';
   if (!node.bucket) {
     const bucket = partnerBucket();
     if (!bucket) return null;
@@ -125,4 +141,35 @@ export async function signedMaterialGetUrl(node, { filename, mime } = {}) {
     responseContentType,
     responseContentDisposition,
   });
+}
+
+export async function startMaterialMultipart(key, contentType) {
+  assertMaterialKey(key);
+  const bucket = writableMaterialsBucket();
+  return createMultipartUpload({ bucket, key, contentType });
+}
+
+export async function signMaterialParts(key, uploadId, partNumbers) {
+  assertMaterialKey(key);
+  const bucket = writableMaterialsBucket();
+  const urls = {};
+  for (const partNumber of partNumbers) {
+    urls[partNumber] = await signUploadPart({ bucket, key, uploadId, partNumber });
+  }
+  return { urls, expiresIn: SIGNED_PUT_TTL_SECONDS };
+}
+
+export async function listMaterialParts(key, uploadId) {
+  assertMaterialKey(key);
+  return listUploadedParts({ bucket: writableMaterialsBucket(), key, uploadId });
+}
+
+export async function completeMaterialMultipart(key, uploadId, parts) {
+  assertMaterialKey(key);
+  return completeMultipartUpload({ bucket: writableMaterialsBucket(), key, uploadId, parts });
+}
+
+export async function abortMaterialMultipart(key, uploadId) {
+  assertMaterialKey(key);
+  return abortMultipartUpload({ bucket: writableMaterialsBucket(), key, uploadId });
 }

@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { ICON_FILES, MANIFEST_ICONS } from './src/pwa/icons';
 
 const base = process.env.VITE_BASE || '/';
 
@@ -14,10 +15,7 @@ export default defineConfig({
         'logo-stp.png',
         'logo-multiframe.png',
         'og-share.jpg',
-        'apple-touch-icon.png',
-        'pwa-192.png',
-        'pwa-512.png',
-        'pwa-maskable-512.png',
+        ...Object.keys(ICON_FILES),
         'sw-sync.js',
       ],
       manifest: {
@@ -30,11 +28,7 @@ export default defineConfig({
         lang: 'ru',
         start_url: base,
         scope: base,
-        icons: [
-          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: 'pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
+        icons: MANIFEST_ICONS,
       },
       workbox: {
         navigateFallback: `${base}index.html`.replace(/\/+/g, '/'),
