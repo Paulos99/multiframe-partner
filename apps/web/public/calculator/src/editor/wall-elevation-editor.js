@@ -3,7 +3,7 @@ import { roundMeters } from '../core/geometry.js';
 
 const ACCENT = '#01644f';
 const DOOR_COLOR = '#e67e22';
-const WINDOW_COLOR = '#2196F3';
+const WINDOW_COLOR = ACCENT; // окна — фирменный зелёный, было синее
 const MIN_USER_ZOOM = 0.6;
 const MAX_USER_ZOOM = 4;
 
@@ -208,7 +208,7 @@ export class WallElevationEditor {
       const isDoor = o.type === OPENING_TYPES.DOOR;
       this.ctx.fillStyle = isDoor
         ? (active ? '#ffb74d' : DOOR_COLOR)
-        : (active ? '#64b5f6' : WINDOW_COLOR);
+        : (active ? '#028a6a' : WINDOW_COLOR);
       this.ctx.globalAlpha = 0.85;
       this.ctx.fillRect(box.x, box.y, box.w, box.h);
       this.ctx.globalAlpha = 1;

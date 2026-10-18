@@ -3,7 +3,7 @@ import { roundMeters } from '../core/geometry.js';
 
 export class PlanEditor {
   static OPENING_COLOR = '#e67e22';
-  static OPENING_ACTIVE_COLOR = '#2196F3';
+  static OPENING_ACTIVE_COLOR = '#01644f'; // = ACCENT (бренд), было синее
   static ACCENT = '#01644f';
 
   constructor(canvas, {

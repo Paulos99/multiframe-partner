@@ -31,6 +31,8 @@ body {
   /* Firefox scrollbar — solid brand green */
   scrollbar-width: thin;
   scrollbar-color: var(--accent-color) transparent;
+  /* Нативные radio/checkbox/range/progress — фирменный зелёный вместо системного синего. */
+  accent-color: var(--cab-accent, var(--accent-color));
 }
 
 body.theme-dark {
