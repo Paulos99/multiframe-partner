@@ -1,5 +1,5 @@
 /** Тип файла для окна предпросмотра: по MIME, а если его нет — по расширению. */
-export type FileKind = 'pdf' | 'image' | 'video' | 'audio' | 'text' | 'office' | 'other';
+export type FileKind = 'pdf' | 'image' | 'video' | 'audio' | 'text' | 'docx' | 'doc' | 'office' | 'other';
 
 const EXT_KIND: Record<string, FileKind> = {
   pdf: 'pdf',
@@ -7,7 +7,9 @@ const EXT_KIND: Record<string, FileKind> = {
   mp4: 'video', webm: 'video', mov: 'video', m4v: 'video', ogv: 'video',
   mp3: 'audio', wav: 'audio', ogg: 'audio', oga: 'audio', m4a: 'audio', aac: 'audio', flac: 'audio',
   txt: 'text', csv: 'text', md: 'text', json: 'text', log: 'text',
-  doc: 'office', docx: 'office', xls: 'office', xlsx: 'office', ppt: 'office', pptx: 'office',
+  docx: 'docx', docm: 'docx', dotx: 'docx', dotm: 'docx',
+  doc: 'doc', dot: 'doc',
+  xls: 'office', xlsx: 'office', ppt: 'office', pptx: 'office',
   odt: 'office', ods: 'office', odp: 'office', rtf: 'office', pages: 'office', key: 'office', numbers: 'office',
 };
 
@@ -26,6 +28,12 @@ export function detectFileKind(mime: string | null | undefined, name?: string | 
     if (m.startsWith('video/')) return 'video';
     if (m.startsWith('audio/')) return 'audio';
     if (m.startsWith('text/') || m === 'application/json') return 'text';
+    if (m.includes('wordprocessingml') || m.startsWith('application/vnd.ms-word.document')) return 'docx';
+    if (m === 'application/msword') {
+      // Часто .docx приходит с типом msword — расширение точнее.
+      const byExt = EXT_KIND[fileExtension(name)];
+      return byExt === 'docx' ? 'docx' : 'doc';
+    }
     if (
       m.includes('officedocument') ||
       m.includes('opendocument') ||
@@ -38,9 +46,34 @@ export function detectFileKind(mime: string | null | undefined, name?: string | 
   return EXT_KIND[fileExtension(name)] ?? 'other';
 }
 
-/** Можно ли показать файл прямо в окне (иначе — карточка с кнопкой «Скачать»). */
+/** Можно ли показать файл прямо в окне (иначе — карточка с кнопкой «Скачать»).
+ *  .doc показывается только через PDF-копию, поэтому здесь false. */
 export function isInlinePreviewable(kind: FileKind): boolean {
-  return kind !== 'office' && kind !== 'other';
+  return kind !== 'office' && kind !== 'other' && kind !== 'doc';
+}
+
+/** Формат Word по первым байтам: .docx — ZIP (PK\x03\x04), старый .doc — OLE2 (D0 CF 11 E0). */
+export type WordFormat = 'docx' | 'doc' | 'unknown';
+export function sniffWordFormat(head: ArrayLike<number> | null | undefined): WordFormat {
+  if (!head || head.length < 4) return 'unknown';
+  if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) return 'docx';
+  if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) return 'doc';
+  return 'unknown';
+}
+
+/** Документ Word крупнее этого рендерим только по явной кнопке-скачиванию. */
+export const WORD_RENDER_MAX_BYTES = 40 * 1024 * 1024;
+
+export type WordPlan = 'render' | 'pdf-copy' | 'fallback';
+/**
+ * Что показать для Word: PDF-копию (если есть и это .doc), отрисовку .docx в браузере
+ * или карточку «Скачать». Для .docx PDF-копия — запасной вариант при ошибке отрисовки.
+ */
+export function wordPreviewPlan(kind: FileKind, opts: { hasPdfCopy: boolean; size?: number | null }): WordPlan {
+  if (kind === 'doc') return opts.hasPdfCopy ? 'pdf-copy' : 'fallback';
+  if (kind !== 'docx') return 'fallback';
+  if (opts.size != null && opts.size > WORD_RENDER_MAX_BYTES) return opts.hasPdfCopy ? 'pdf-copy' : 'fallback';
+  return 'render';
 }
 
 const KIND_LABEL: Record<FileKind, string> = {
@@ -49,13 +82,15 @@ const KIND_LABEL: Record<FileKind, string> = {
   video: 'Видео',
   audio: 'Аудио',
   text: 'Текст',
+  docx: 'Документ',
+  doc: 'Документ',
   office: 'Документ',
   other: 'Файл',
 };
 
 export function fileKindLabel(kind: FileKind, name?: string | null): string {
   const ext = fileExtension(name);
-  if ((kind === 'office' || kind === 'other') && ext) return `${KIND_LABEL[kind]} ${ext.toUpperCase()}`;
+  if ((kind === 'office' || kind === 'other' || kind === 'docx' || kind === 'doc') && ext) return `${KIND_LABEL[kind]} ${ext.toUpperCase()}`;
   return KIND_LABEL[kind];
 }
 
