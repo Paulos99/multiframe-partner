@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,6 +16,7 @@ import {
 } from '../../packages/shared/demoAnalyticsBoost.js';
 
 delete process.env.PARTNERS_BUCKET;
+process.env.JWT_SECRET = randomBytes(32).toString('hex');
 delete process.env.MATERIALS_BUCKET;
 
 const METRICS = [

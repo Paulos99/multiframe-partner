@@ -73,7 +73,8 @@ export async function apiLogin(
 }
 
 export async function apiMe(): Promise<SessionUser> {
-  const data = await request<{ user: SessionUser }>('/auth/me');
+  const data = await request<{ user: SessionUser; token?: string }>('/auth/me');
+  if (data.token) saveToken(data.token);
   return data.user;
 }
 
