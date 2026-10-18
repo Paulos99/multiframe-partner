@@ -16,7 +16,7 @@ import {
   type RoomType,
 } from '../state/types';
 import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
-import { funnelPercents } from '../../../../packages/shared/funnel';
+import { funnelStopPercents } from '../../../../packages/shared/funnel';
 import {
   fetchAnalyticsDashboard,
   formatPeriodLabel,
@@ -158,9 +158,9 @@ function FunnelBlock({
   steps,
 }: {
   title: string;
-  steps: Array<{ label: string; value: number }>;
+  steps: Array<{ label: string; stop: string; value: number }>;
 }) {
-  const percents = funnelPercents(steps.map((step) => step.value));
+  const percents = funnelStopPercents(steps.map((step) => step.value));
   return (
     <div className={styles.funnelBlock}>
       <h4 className={styles.funnelTitle}>
@@ -169,15 +169,20 @@ function FunnelBlock({
           className={styles.funnelLabel}
           style={{ display: 'block', marginTop: 4, fontSize: '0.75rem', fontWeight: 650 }}
         >
-          % от всех открытий
+          где остановились, в сумме 100%
         </span>
       </h4>
       <ol className={styles.funnelSteps}>
         {steps.map((step, index) => (
           <li key={step.label}>
-            <span className={styles.funnelLabel}>{step.label}</span>
-            <strong>{step.value}</strong>
-            <span className={styles.funnelPct}>{percents[index]}</span>
+            <span className={styles.funnelLabel}>
+              {step.label}
+              <span className={styles.funnelStop}>{step.stop}</span>
+            </span>
+            <strong title="Дошли до этапа">{step.value}</strong>
+            <span className={styles.funnelPct} title={`${step.stop}: ${percents[index]} от открытий`}>
+              {percents[index]}
+            </span>
           </li>
         ))}
       </ol>
@@ -310,18 +315,18 @@ function BreakdownList({
 
 function funnelStepsPm(f: AnalyticsFunnel) {
   return [
-    { label: 'Открыл', value: f.problemomer.open },
-    { label: 'Расчёт', value: f.problemomer.result },
-    { label: 'PDF', value: f.problemomer.pdf },
-    { label: 'Поделился', value: f.problemomer.share },
+    { label: 'Открыл', stop: 'Только открыл', value: f.problemomer.open },
+    { label: 'Расчёт', stop: 'До расчёта', value: f.problemomer.result },
+    { label: 'PDF', stop: 'До PDF', value: f.problemomer.pdf },
+    { label: 'Поделился', stop: 'Поделился', value: f.problemomer.share },
   ];
 }
 
 function funnelStepsCalc(f: AnalyticsFunnel) {
   return [
-    { label: 'Открыл', value: f.calculator.open },
-    { label: 'Расчёт', value: f.calculator.calcDone },
-    { label: 'PDF', value: f.calculator.pdf },
+    { label: 'Открыл', stop: 'Только открыл', value: f.calculator.open },
+    { label: 'Расчёт', stop: 'До расчёта', value: f.calculator.calcDone },
+    { label: 'PDF', stop: 'Скачал PDF', value: f.calculator.pdf },
   ];
 }
 

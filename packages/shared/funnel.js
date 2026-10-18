@@ -73,16 +73,26 @@ export function funnelStepPercent(part, whole) {
     const ratio = Math.min(1, Math.max(0, value / base));
     return `${Math.round(ratio * 100)}%`;
 }
-export function funnelPercents(counts) {
-    const numbers = counts.map((value)=>typeof value === 'number' && Number.isFinite(value) ? value : 0);
-    const openings = numbers[0] ?? 0;
-    let previous = 100;
-    return numbers.map((value, index)=>{
-        if (index === 0) return '100%';
-        if (openings <= 0) return '—';
-        const raw = Number(funnelStepPercent(Math.min(value, openings), openings).replace('%', ''));
-        const percent = Math.min(raw, previous);
-        previous = percent;
-        return `${percent}%`;
-    });
+export function funnelStopPercents(counts) {
+    const clamped = [];
+    for (const raw of counts){
+        const value = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, raw) : 0;
+        clamped.push(clamped.length ? Math.min(value, clamped[clamped.length - 1]) : value);
+    }
+    const total = clamped[0] ?? 0;
+    if (total <= 0) return clamped.map(()=>'—');
+    const stopped = clamped.map((value, index)=>index + 1 < clamped.length ? value - clamped[index + 1] : value);
+    const exact = stopped.map((value)=>value * 100 / total);
+    const percents = exact.map((value)=>Math.floor(value));
+    let rest = 100 - percents.reduce((sum, value)=>sum + value, 0);
+    const order = exact.map((value, index)=>({
+            index,
+            remainder: value - Math.floor(value)
+        })).sort((a, b)=>b.remainder - a.remainder || a.index - b.index);
+    for (const { index } of order){
+        if (rest <= 0) break;
+        percents[index] += 1;
+        rest -= 1;
+    }
+    return percents.map((value)=>`${value}%`);
 }
