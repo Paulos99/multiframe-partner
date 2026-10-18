@@ -54,13 +54,12 @@ export function ProjectsPanel({ projects, rooms, role, loading, error, onRetry, 
         <span className={styles.muted}>{[project.clientName, project.address].filter(Boolean).join(' · ') || 'Адрес не заполнен'}</span>
         <span className={styles.link}>Открыть проект →</span>
       </button>;
-    })}</div>
-    {!loading && !error && !filtered.length ? <p className={styles.empty}>{query ? 'По этому запросу проектов нет.' : 'Пока нет проектов. Старые объекты доступны ниже — их можно объединить без потери данных.'}</p> : null}
-    {ungrouped.length ? <div className={styles.ungrouped}><h3>Помещения без проекта · {ungrouped.length}</h3>
-      <p className={styles.muted}>Существующие карточки сохранены. Откройте их или добавьте в проект.</p>
-      {ungrouped.map(room => <button key={room.id} className={styles.roomLink} onClick={() => onOpenRoom(room.id)}>
-        <span>{room.roomName || room.clientName || 'Помещение'}</span><span>{room.room.areaM2 ?? '—'} м² →</span>
-      </button>)}
-    </div> : null}
+    })}
+    {ungrouped.map(room => <button className={styles.project} key={room.id} onClick={() => onOpenRoom(room.id)}>
+      <span className={styles.caption}>Комната</span><strong>{room.roomName || room.clientName || 'Помещение'}</strong>
+      <span className={styles.muted}>{[room.address, room.room.areaM2 != null ? `${room.room.areaM2} м²` : ''].filter(Boolean).join(' · ') || 'Адрес не заполнен'}</span>
+    </button>)}
+    </div>
+    {!loading && !error && !filtered.length && !ungrouped.length ? <p className={styles.empty}>{query ? 'По этому запросу проектов нет.' : 'Пока нет проектов.'}</p> : null}
   </section>;
 }
