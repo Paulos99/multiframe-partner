@@ -79,13 +79,41 @@ export async function openList(page: Page, role: RoleCase): Promise<void> {
     return;
   }
   await expect(page.getByRole('heading', { level: 2, name: role.objectsHeading })).toBeVisible();
+  const counter = page.getByRole('button', { name: /Все доступные объекты · \d+/ });
+  await expect(counter).toBeVisible();
+  await expect
+    .poll(async () => Number((await counter.innerText()).match(/(\d+)/)?.[1] || '0'), {
+      timeout: 25_000,
+    })
+    .toBeGreaterThan(0);
   const all = page.getByRole('button', { name: /^Все · \d+/ });
   if (await all.count()) await all.first().click();
   await expect(page.getByPlaceholder('Имя, адрес или телефон')).toBeVisible();
-  const counter = page.getByRole('button', { name: /Все доступные объекты · \d+/ });
-  await expect(counter).toBeVisible();
-  const count = Number((await counter.innerText()).match(/(\d+)/)?.[1] || '0');
-  expect(count, `у роли ${role.id} пустой список объектов`).toBeGreaterThan(0);
+}
+
+/** Вкладка или блок «Проекты». Форму создания не открываем. */
+export async function openProjects(page: Page): Promise<'opened' | 'unavailable' | 'missing'> {
+  const tab = page.getByRole('tab', { name: 'Проекты', exact: true });
+  const heading = page.getByRole('heading', { level: 2, name: 'Проекты' });
+  if (await tab.count()) {
+    await tab.click();
+    await expect(heading).toBeVisible();
+  } else if (!(await heading.isVisible().catch(() => false))) {
+    return 'missing';
+  }
+  let state: 'opened' | 'unavailable' | 'loading' = 'loading';
+  await expect
+    .poll(
+      async () => {
+        if (await page.getByText('Проекты на сервере пока недоступны').count()) state = 'unavailable';
+        else if (await page.getByText('Загружаем проекты…').count()) state = 'loading';
+        else state = 'opened';
+        return state;
+      },
+      { timeout: 20_000 },
+    )
+    .not.toBe('loading');
+  return state === 'unavailable' ? 'unavailable' : 'opened';
 }
 
 export async function openTraining(page: Page, role: RoleCase): Promise<void> {

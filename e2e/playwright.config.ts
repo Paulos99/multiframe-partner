@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
+
+const configDir = path.dirname(fileURLToPath(import.meta.url));
 
 /** Подхватывает локальный e2e/.env, не печатая значения. Уже заданные переменные не трогает. */
 function loadLocalEnv(): void {
-  const file = path.join(__dirname, '.env');
+  const file = path.join(configDir, '.env');
   if (!fs.existsSync(file)) return;
   for (const raw of fs.readFileSync(file, 'utf8').split('\n')) {
     const line = raw.trim();

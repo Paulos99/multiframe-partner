@@ -6,6 +6,7 @@ import {
   login,
   objectNames,
   openList,
+  openProjects,
   openTraining,
   shot,
   watchObjects,
@@ -62,6 +63,10 @@ for (const role of ROLES) {
     await openList(page, role);
     await assertPageFits(page);
     await shot(page, info, `${role.id}-list`);
+
+    const projects = await openProjects(page);
+    info.annotations.push({ type: 'projects', description: projects });
+    await shot(page, info, `${role.id}-projects`);
 
     if (role.id === 'crew') await checkCrewDocuments(page, browser, info, server);
 
@@ -140,7 +145,7 @@ async function checkCrewDocuments(
 
   await page.getByRole('button', { name: /^Все · \d+/ }).click();
   await page.getByPlaceholder('Имя, адрес или телефон').fill(CREW_OBJECT_NAME);
-  await page.getByRole('button', { name: new RegExp(CREW_OBJECT_NAME) }).click();
+  await page.getByRole('button', { name: /Проверка доступа монтажника/ }).click();
 
   const detail = page.locator('h3', { hasText: CREW_OBJECT_NAME }).locator('xpath=..');
   await expect(detail.getByText('Спецификации без цен')).toBeVisible();
