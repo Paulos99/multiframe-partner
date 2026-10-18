@@ -21,9 +21,9 @@ button.compact.compact {
   margin: 0;
   padding: 0 12px 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(1, 100, 79, 0.35);
-  background: #fff;
-  color: #01644f;
+  border: 1px solid var(--cab-border-strong);
+  background: var(--cab-card);
+  color: var(--cab-accent-text);
   font: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -69,10 +69,10 @@ button.compact.compact:active {
   margin: 0;
   padding: 8px 2px 8px 10px;
   border-radius: 14px;
-  background: #fff;
-  color: #152018;
-  border: 1px solid rgba(1, 100, 79, 0.18);
-  box-shadow: 0 8px 28px rgba(12, 28, 24, 0.16);
+  background: var(--cab-card);
+  color: var(--cab-ink);
+  border: 1px solid var(--cab-border);
+  box-shadow: var(--cab-shadow-md);
 }
 
 .hint p {
@@ -87,7 +87,7 @@ button.compact.compact:active {
   flex: 0 0 auto;
   border: 0;
   background: transparent;
-  color: #01644f;
+  color: var(--cab-accent-text);
   font: inherit;
   font-size: 18px;
   font-weight: 700;
@@ -114,9 +114,9 @@ button.compact.compact:active {
   width: min(480px, 100%);
   max-height: min(86dvh, 640px);
   overflow: auto;
-  background: #fff;
-  color: #152018;
-  border-radius: 20px 20px 16px 16px;
+  background: var(--cab-card);
+  color: var(--cab-ink);
+  border-radius: var(--cab-radius-xl) var(--cab-radius-xl) var(--cab-radius-md) var(--cab-radius-md);
   padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
   box-shadow: 0 16px 48px rgba(12, 28, 24, 0.28);
 }
@@ -138,7 +138,7 @@ button.compact.compact:active {
   appearance: none;
   border: 0;
   background: transparent;
-  color: #01644f;
+  color: var(--cab-accent-text);
   font: inherit;
   font-weight: 700;
   min-height: 44px;
@@ -148,7 +148,7 @@ button.compact.compact:active {
 
 .lead {
   margin: 8px 0 12px;
-  color: #3d5148;
+  color: var(--cab-muted);
   font-size: 0.95rem;
 }
 
@@ -173,33 +173,33 @@ button.compact.compact:active {
   width: 36px;
   height: 36px;
   flex: 0 0 auto;
-  color: #01644f;
-  background: rgba(1, 100, 79, 0.1);
+  color: var(--cab-accent-text);
+  background: var(--cab-accent-soft);
   border-radius: 10px;
   padding: 6px;
 }
 
 :global(body.theme-dark) .compact,
 :global(body.theme-dark) button.compact.compact {
-  background: #12211c;
-  color: #8ee0c8;
-  border-color: #2a5c4c;
+  background: var(--cab-card);
+  color: var(--cab-accent-text);
+  border-color: var(--cab-border-strong);
 }
 
 :global(body.theme-dark) .hint,
 :global(body.theme-dark) .sheet {
-  background: #12211c;
-  color: #e8f2ef;
+  background: var(--cab-card);
+  color: var(--cab-ink);
 }
 
 :global(body.theme-dark) .lead {
-  color: #c5d6d0;
+  color: var(--cab-muted);
 }
 
 :global(body.theme-dark) .close,
 :global(body.theme-dark) .hintClose,
 :global(body.theme-dark) .icon {
-  color: #8ee0c8;
+  color: var(--cab-accent-text);
 }
 
 @media (display-mode: standalone), (display-mode: fullscreen) {

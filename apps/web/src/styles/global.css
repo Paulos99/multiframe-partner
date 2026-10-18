@@ -57,7 +57,7 @@ img {
 }
 
 :focus-visible {
-  outline: 3px solid rgba(1, 100, 79, 0.45);
+  outline: 3px solid color-mix(in srgb, var(--cab-accent, var(--accent-color)) 55%, transparent);
   outline-offset: 2px;
 }
 

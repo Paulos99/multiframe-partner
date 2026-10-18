@@ -40,6 +40,57 @@
   --footer-h: 120px;
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --max-w: 720px;
+
+  /*
+   * Кабинет партнёра. Акцент — фирменный зелёный MultiFrame/StP (#01644f):
+   * тот же цвет, что на logo-stp.png / logo-multiframe.png и в --accent-color.
+   * Голубой и лайм из референсов дашбордов не используем: бренд важнее.
+   * Публичный калькулятор эти --cab-* переменные не читает.
+   */
+  --cab-accent: #01644f;
+  --cab-accent-hover: #014e3e;
+  --cab-accent-text: #01644f;
+  --cab-on-accent: #ffffff;
+  --cab-accent-soft: #e6f4ef;
+  --cab-accent-softer: #f4faf7;
+  --cab-page: #f3f4f6;
+  --cab-card: #ffffff;
+  --cab-subtle: #f6f7f9;
+  --cab-field: #ffffff;
+  --cab-ink: #14211c;
+  --cab-ink-soft: #3d4f48;
+  --cab-muted: #4e5d56;
+  --cab-border: #e4e7eb;
+  --cab-border-strong: #d3d8de;
+  --cab-danger: #9f2c24;
+  --cab-danger-soft: #fdecec;
+  --cab-warn: #8a4b08;
+  --cab-warn-soft: #fff4e5;
+  --cab-info: #1a4b8c;
+  --cab-info-soft: #e7f1fb;
+  --cab-ok: #0d5c45;
+  --cab-ok-soft: #e5f4ee;
+  --cab-neutral: #3e4944;
+  --cab-neutral-soft: #eef1f2;
+  --cab-shadow: 0 10px 30px rgba(20, 28, 36, 0.06);
+  --cab-shadow-md: 0 18px 44px rgba(20, 28, 36, 0.1);
+  --cab-shadow-sm: 0 1px 2px rgba(20, 28, 36, 0.05);
+  --cab-radius-sm: 12px;
+  --cab-radius-md: 16px;
+  --cab-radius-lg: 20px;
+  --cab-radius-xl: 24px;
+  --cab-radius-pill: 999px;
+  --cab-space-2: 8px;
+  --cab-space-3: 12px;
+  --cab-space-4: 16px;
+  --cab-space-5: 20px;
+  --cab-space-6: 24px;
+  --cab-space-7: 32px;
+  --cab-title: clamp(1.45rem, 2.2vw, 1.8rem);
+  --cab-kpi: clamp(1.85rem, 3vw, 2.35rem);
+  --cab-track: -0.03em;
+  --cab-font: var(--font);
+  --cab-raised: #ffffff;
 }
 
 /* Wider column on large screens — no zoom (it ballooned buttons/charts). */
@@ -78,6 +129,37 @@ body.theme-dark {
   --danger-soft: #3a2424;
   --warn-soft: #3a2e22;
   --ok-soft: #1e2f28;
+
+  /* Тёмная тема кабинета: почти чёрный холст, приподнятые карточки, тот же зелёный акцент. */
+  --cab-accent: #01644f;
+  --cab-accent-hover: #018562;
+  --cab-accent-text: #9ee4cf;
+  --cab-on-accent: #ffffff;
+  --cab-accent-soft: rgba(46, 184, 148, 0.16);
+  --cab-accent-softer: #1a2420;
+  --cab-page: #121418;
+  --cab-card: #1c1f26;
+  --cab-subtle: #171a21;
+  --cab-field: #171a21;
+  --cab-ink: #f3f5f7;
+  --cab-ink-soft: #d5ddd8;
+  --cab-muted: #c5ced6;
+  --cab-border: rgba(255, 255, 255, 0.08);
+  --cab-border-strong: rgba(255, 255, 255, 0.14);
+  --cab-danger: #ffb4ae;
+  --cab-danger-soft: #3a2424;
+  --cab-warn: #f3d2a4;
+  --cab-warn-soft: #3a2e22;
+  --cab-info: #c5daf5;
+  --cab-info-soft: #1c2a3a;
+  --cab-ok: #b7e8d4;
+  --cab-ok-soft: #1a2e28;
+  --cab-neutral: #d5dde4;
+  --cab-neutral-soft: #2a2e34;
+  --cab-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --cab-shadow-md: 0 20px 48px rgba(0, 0, 0, 0.45);
+  --cab-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --cab-raised: #262b34;
 }
 
 @media (prefers-reduced-motion: reduce) {
