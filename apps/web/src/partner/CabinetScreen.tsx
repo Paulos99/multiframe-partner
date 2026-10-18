@@ -19,6 +19,7 @@ import { NewPasswordButton } from './NewPasswordButton';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
+import { CabinetBrand } from './CabinetBrand';
 import styles from './partner.module.css';
 
 function roleHeading(role: UserRole, user: SessionUser): string {
@@ -179,6 +180,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{PARTNER_NETWORK_NAME}</h1>
           <p className={styles.lead}>
             Партнёры по регионам, официальные РРЦ и сетевая аналитика.
@@ -502,6 +504,7 @@ function OwnerCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{roleHeading('owner', user)}</h1>
           <p className={styles.lead}>
             Прайс, команда, объекты и воронка компании
@@ -777,6 +780,7 @@ function SalesCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{roleHeading('sales', user)}</h1>
           <p className={styles.lead}>Сделки, КП и отправка клиенту</p>
         </div>
@@ -843,6 +847,7 @@ function MeasurerCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{roleHeading('measurer', user)}</h1>
           <p className={styles.lead}>Замер за 5–10 минут</p>
         </div>
@@ -907,6 +912,7 @@ function CrewCabinet({
     <div className={styles.shellWide}>
       <header className={styles.top}>
         <div>
+          <CabinetBrand />
           <h1>{roleHeading('crew', user)}</h1>
           <p className={styles.lead}>Личный кабинет монтажника · цены скрыты, PDF схемы доступен</p>
         </div>
