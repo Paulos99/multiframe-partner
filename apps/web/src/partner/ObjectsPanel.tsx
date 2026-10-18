@@ -18,6 +18,7 @@ import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
 import { RiseItem, StatusSwap, usePrefersReducedMotion } from './motionBits';
 import { usePartner } from './PartnerContext';
+import { ObjectHistory } from './ObjectHistory';
 import styles from './partner.module.css';
 
 const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
@@ -498,15 +499,7 @@ export function ObjectsPanel({
             </div>
           ) : null}
 
-          {selected.history?.length ? (
-            <div className={styles.hint}>
-              История:{' '}
-              {selected.history
-                .slice(0, 3)
-                .map((h) => `${h.login}: ${h.action}${h.detail ? ` (${h.detail})` : ''}`)
-                .join(' · ')}
-            </div>
-          ) : null}
+          <ObjectHistory key={selected.id} entries={selected.history || []} people={[user, ...staff]} />
 
           {canDelete ? (
             <div className={styles.navRow}>
