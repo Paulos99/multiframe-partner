@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiProfile, hasRemoteApi } from '../partner/apiClient';
 import { ProfilePanel } from '../partner/ProfilePanel';
 import { usePartner } from '../partner/PartnerContext';
 import { AnimatePresence } from '../partner/motionBits';
@@ -25,14 +26,24 @@ export function ProfileMenu({
   onLogout: () => void;
 }) {
   const [editing,setEditing]=useState(false);
-  const {user}=usePartner();
+  const {user,acceptProfile}=usePartner();
+  // Ссылка на фото подписана на ограниченный срок: если она истекла, один раз
+  // берём свежую из /me, а пока её нет — показываем инициалы.
+  const [brokenUrl,setBrokenUrl]=useState<string|null>(null);
+  const avatarUrl=user?.avatarUrl && user.avatarUrl!==brokenUrl ? user.avatarUrl : null;
+  function onAvatarError(){
+    const failed=user?.avatarUrl||null;
+    setBrokenUrl(failed);
+    if(!failed||!hasRemoteApi()) return;
+    void apiProfile().then((p)=>{ if(p.avatarUrl && p.avatarUrl!==failed) acceptProfile(p); }).catch(()=>{});
+  }
   const meta = company ? `${role} · ${company}` : role;
   const subtitle = meta === name ? role : meta;
   return (
     <div className={styles.menu}>
       <button type="button" className={styles.who} onClick={()=>setEditing(true)} aria-label="Мой профиль" title={`${name}. ${subtitle}`}>
         <span className={styles.avatar} aria-hidden>
-          {user?.avatarUrl ? <img src={user.avatarUrl} alt="" style={{width:32,height:32,borderRadius:"50%",objectFit:"cover"}}/> : initials(name)}
+          {avatarUrl ? <img src={avatarUrl} alt="" data-testid="header-avatar" onError={onAvatarError} style={{width:32,height:32,borderRadius:"50%",objectFit:"cover"}}/> : initials(name)}
         </span>
         <span className={styles.text}>
           <strong>{name}</strong>

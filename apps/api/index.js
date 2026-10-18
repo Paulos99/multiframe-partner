@@ -1,4 +1,4 @@
-import { handleProfile } from './profileRoutes.js';
+import { handleProfile, profileWithAvatar } from './profileRoutes.js';
 /**
  * Yandex Cloud Function HTTP handler — multi-role partner platform.
  * Storage: Object Storage JSON or in-memory seed.
@@ -122,6 +122,17 @@ function publicUser(user, org) {
     org: settings,
     avatarUrl: null,
   };
+}
+
+/** Пользователь для ответов входа и /auth/me: с актуальной ссылкой на фото профиля.
+ * Ссылка подписывается заново при каждом запросе (срок жизни ограничен), поэтому
+ * шапка кабинета показывает фото сразу после загрузки страницы. Сбой подписи не ломает вход. */
+async function sessionUser(user, platform) {
+  try {
+    return await profileWithAvatar(user, platform, { publicUser });
+  } catch {
+    return publicUser(user, user.orgId ? findOrg(platform, user.orgId) : null);
+  }
 }
 
 function defaultPlatform() {
@@ -854,7 +865,6 @@ export async function handler(event = {}) {
       ) {
         return json(401, { message: 'Неверный логин или пароль' });
       }
-      const org = user.orgId ? findOrg(platform, user.orgId) : null;
       const token = await signToken(user);
       pushActivity(platform, {
         orgId: user.orgId,
@@ -864,13 +874,12 @@ export async function handler(event = {}) {
         detail: `Роль: ${normalizeRole(user.role)}`,
       });
       await savePlatform(platform);
-      return json(200, { token, user: publicUser(user, org) });
+      return json(200, { token, user: await sessionUser(user, platform) });
     }
 
     if (method === 'GET' && path.endsWith('/auth/me')) {
       const { platform, user, usedPreviousKey } = await requireAuth(event);
-      const org = user.orgId ? findOrg(platform, user.orgId) : null;
-      return json(200, { user: publicUser(user, org), ...(usedPreviousKey ? { token: await signToken(user) } : {}) });
+      return json(200, { user: await sessionUser(user, platform), ...(usedPreviousKey ? { token: await signToken(user) } : {}) });
     }
 
     if (method === 'POST' && path.endsWith('/auth/logout')) {
