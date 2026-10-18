@@ -1,6 +1,7 @@
 import { Skeleton } from './Skeleton';
 import { roomRank } from './kanban';
 import { KanbanBoard } from './KanbanBoard';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   JOB_OBJECT_STATUS_LABELS,
@@ -138,6 +139,8 @@ export function ObjectsPanel({
   const canCreate = canCreateObjects(user.role);
   const staff = api.partnerListStaff();
   const [createStage, setCreateStage] = useState<JobObjectStatus>('draft');
+  const [toDelete, setToDelete] = useState<JobObject | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -289,17 +292,23 @@ export function ObjectsPanel({
     }
   }
 
+  const objectLabel = (obj: JobObject) =>
+    [obj.clientName, obj.roomName].filter(Boolean).join(' · ') || obj.address || 'Комната';
+
+  // Confirmed in ConfirmDialog; the server checks the role again (admin/owner only).
   async function remove(obj: JobObject) {
-    const label = obj.roomName || obj.clientName || obj.address || 'комнату';
-    if (!window.confirm(`Удалить «${label}»? Это действие нельзя отменить.`)) return;
     setMsg(null);
     setErr(null);
+    setDeleting(true);
     try {
       await api.deleteObject(obj.id);
-      setSelectedId(null);
-      setMsg('Комната удалена');
+      if (selectedId === obj.id) setSelectedId(null);
+      setMsg('Объект удалён');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось удалить');
+    } finally {
+      setDeleting(false);
+      setToDelete(null);
     }
   }
 
@@ -578,6 +587,7 @@ export function ObjectsPanel({
                   : undefined
               }
               onMove={moveRoom}
+              onDelete={canDelete ? setToDelete : undefined}
               onOpen={(room) => {
                 setSelectedKey(room.projectId || `room:${room.id}`);
                 setSelectedId(room.id);
@@ -781,7 +791,7 @@ export function ObjectsPanel({
 
           {canDelete ? (
             <div className={styles.navRow}>
-              <button type="button" className={styles.danger} onClick={() => void remove(selected)}>
+              <button type="button" className={styles.danger} onClick={() => setToDelete(selected)}>
                 Удалить комнату
               </button>
             </div>
@@ -799,6 +809,17 @@ export function ObjectsPanel({
           {err}
         </p>
       ) : null}
+      <ConfirmDialog
+        open={!!toDelete}
+        title={toDelete ? `Удалить объект «${objectLabel(toDelete)}»?` : ''}
+        message="Действие нельзя отменить."
+        confirmLabel="Удалить"
+        busy={deleting}
+        onCancel={() => setToDelete(null)}
+        onConfirm={() => {
+          if (toDelete) void remove(toDelete);
+        }}
+      />
     </div>
   );
 }

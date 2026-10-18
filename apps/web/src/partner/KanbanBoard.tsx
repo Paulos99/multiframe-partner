@@ -1,4 +1,5 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DndContext,
   DragOverlay,
@@ -71,6 +72,7 @@ function Card({
   onHover,
   related,
   onStep,
+  onMenu,
 }: {
   room: JobObject;
   disabled: boolean;
@@ -79,6 +81,8 @@ function Card({
   onHover: (id: string | null) => void;
   related: boolean;
   onStep: (direction: number) => void;
+  /** Opens the card actions menu at viewport coordinates; omitted when the role has no actions. */
+  onMenu?: (x: number, y: number) => void;
 }) {
   const reduce = usePrefersReducedMotion();
   const {
@@ -96,6 +100,7 @@ function Card({
   return (
     <div
       ref={setNodeRef}
+      className={styles.cardWrap}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <button
@@ -121,9 +126,36 @@ function Card({
         onClick={() => {
           if (!isDragging) onOpen();
         }}
+        onContextMenu={
+          onMenu
+            ? (e) => {
+                e.preventDefault();
+                onMenu(e.clientX, e.clientY);
+              }
+            : undefined
+        }
       >
         {children}
       </button>
+      {onMenu && !isDragging ? (
+        <button
+          type="button"
+          className={styles.cardMenu}
+          aria-label={`Действия с объектом «${room.roomName || room.clientName || 'Комната'}»`}
+          aria-haspopup="menu"
+          // Keep the dnd-kit sensors (pointer, long-press touch, keyboard) off this button.
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            const r = e.currentTarget.getBoundingClientRect();
+            onMenu(r.right, r.bottom + 4);
+          }}
+        >
+          …
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -138,6 +170,7 @@ export function KanbanBoard({
   onCreate,
   loading,
   staff,
+  onDelete,
 }: {
   rooms: JobObject[];
   projects: Project[];
@@ -148,6 +181,8 @@ export function KanbanBoard({
   onCreate?: (status: JobObjectStatus) => void;
   loading?: boolean;
   staff: { id: string; displayName: string }[];
+  /** Present only for roles that may delete objects (admin, owner). */
+  onDelete?: (room: JobObject) => void;
 }) {
   const reduce = usePrefersReducedMotion();
   const board = useRef<HTMLDivElement>(null);
@@ -158,7 +193,25 @@ export function KanbanBoard({
   const [tab, setTab] = useState<JobObjectStatus>('draft');
   const [assigned, setAssigned] = useState('all');
   const [filters, setFilters] = useState(false);
+  const [menu, setMenu] = useState<{ room: JobObject; x: number; y: number } | null>(null);
+  // Where the pointer grabbed the card, relative to its top-left; the overlay rotates/scales around it.
+  const [grab, setGrab] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const busy = useRef(false);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [menu]);
   const snapshot = useRef<JobObject[]>([]);
   const draft = useRef<JobObject[]>([]);
   const sensors = useSensors(
@@ -388,9 +441,31 @@ export function KanbanBoard({
               ? []
               : closestCorners(args);
         }}
-        onDragStart={({ active: drag }) => {
+        onDragStart={({ active: drag, activatorEvent }) => {
           if (busy.current) return;
+          setMenu(null);
           const room = visible.find((r) => r.id === drag.id);
+          // dnd-kit has not measured the active rect yet at drag start, so read the card node itself.
+          const node = (activatorEvent?.target as Element | null)?.closest(
+            `.${styles.cardWrap}`,
+          );
+          const rect = node?.getBoundingClientRect() ?? drag.rect.current.initial;
+          const point =
+            activatorEvent && 'touches' in activatorEvent
+              ? (activatorEvent as TouchEvent).touches[0]
+              : (activatorEvent as PointerEvent | null);
+          setGrab(
+            rect && point && 'clientX' in point
+              ? {
+                  x: point.clientX - rect.left,
+                  y: point.clientY - rect.top,
+                  width: rect.width,
+                  height: rect.height,
+                }
+              : rect
+                ? { x: rect.width / 2, y: rect.height / 2, width: rect.width, height: rect.height }
+                : null,
+          );
           if (room) {
             snapshot.current = visible;
             preview(visible);
@@ -507,6 +582,11 @@ export function KanbanBoard({
                                   !canMoveRoom(role, room.status)
                                 }
                                 related={!!hover && hover === room.projectId}
+                                onMenu={
+                                  onDelete
+                                    ? (x, y) => setMenu({ room, x, y })
+                                    : undefined
+                                }
                                 onHover={setHover}
                                 onOpen={() => onOpen(room)}
                                 onStep={(direction) => {
@@ -551,21 +631,71 @@ export function KanbanBoard({
             );
           })}
         </div>
-        <DragOverlay
-          dropAnimation={reduce ? null : { duration: 160, easing: 'ease-out' }}
-        >
-          {active ? (
-            <m.div
-              className={`${styles.card} ${styles.overlay}`}
-              initial={false}
-              animate={{ rotate: reduce ? 0 : 3, scale: reduce ? 1 : 1.04 }}
-              transition={motionPresets.layout}
-            >
-              {content(active)}
-            </m.div>
-          ) : null}
-        </DragOverlay>
+        {/* Portaled to body: an ancestor with transform/backdrop-filter would otherwise become the
+            containing block of the fixed overlay and shift it away from the pointer. */}
+        {createPortal(
+          <DragOverlay
+            dropAnimation={reduce ? null : { duration: 160, easing: 'ease-out' }}
+          >
+            {active ? (
+              <m.div
+                className={`${styles.card} ${styles.overlay}`}
+                data-kanban-overlay
+                initial={false}
+                style={{
+                  width: grab?.width,
+                  // Motion owns transform-origin; rotate/scale around the grab point so it stays put.
+                  originX: grab ? grab.x / grab.width : 0.5,
+                  originY: grab ? grab.y / grab.height : 0.5,
+                }}
+                animate={{ rotate: reduce ? 0 : 3, scale: reduce ? 1 : 1.04 }}
+                transition={motionPresets.layout}
+              >
+                {content(active)}
+              </m.div>
+            ) : null}
+          </DragOverlay>,
+          document.body,
+        )}
       </DndContext>
+      {menu && onDelete
+        ? createPortal(
+            <div
+              className={styles.menuBackdrop}
+              onPointerDown={() => setMenu(null)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setMenu(null);
+              }}
+            >
+              <div
+                role="menu"
+                aria-label="Действия с объектом"
+                className={styles.menu}
+                style={{
+                  left: Math.max(8, Math.min(menu.x, window.innerWidth - 188)),
+                  top: Math.max(8, Math.min(menu.y, window.innerHeight - 64)),
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuDanger}
+                  autoFocus
+                  onClick={() => {
+                    const room = menu.room;
+                    setMenu(null);
+                    onDelete(room);
+                  }}
+                >
+                  Удалить
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

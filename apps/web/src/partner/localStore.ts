@@ -829,7 +829,9 @@ export function deleteLocalObject(id: string, actor: SessionUser): void {
   const existing = db.objects.find((o) => o.id === id);
   if (!existing) return;
   if (!objectVisible(actor, existing)) throw new Error('Недостаточно прав');
-  if (actor.role === 'crew') throw new Error('Монтажник не удаляет объекты');
+  if (actor.role !== 'admin' && actor.role !== 'owner') {
+    throw new Error('Удалять объекты могут только администратор и владелец');
+  }
   saveDb({ ...db, objects: db.objects.filter((o) => o.id !== id) });
   removeFromObjectQueue(id);
   cacheObjects(listLocalObjects(actor));
