@@ -171,3 +171,14 @@ body.theme-dark {
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * Общие брейкпоинты (см. src/styles/breakpoints.ts). В @media переменные не работают,
+ * поэтому значения продублированы в модулях; держите их синхронными:
+ *   телефон ≤640 px · планшет 641–1024 px · десктоп ≥1025 px.
+ *   «Сенсорный» слой: (max-width: 1024px), (pointer: coarse) — цели ≥44 px, поля ≥16 px.
+ */
+:root {
+  --bp-phone: 640px;
+  --bp-tablet: 1024px;
+}

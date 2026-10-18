@@ -7,6 +7,7 @@ import type { JobObject, JobObjectDocument, UserRole } from '../../../../package
 import { documentsForRole } from '../../../../packages/shared/partner';
 import { readablePdfName } from './cabinetCalc';
 import { isDemoModeEnabled } from './DemoSwitcher';
+import { openFilePreview } from '../ui/filePreview/previewStore';
 
 const DEMO_IDS = ['obj_a01', 'obj_a03', 'obj_a04', 'obj_a05', 'obj_b01', 'obj_b03'];
 
@@ -198,22 +199,17 @@ export async function buildDemoPdfBlob(obj: JobObject, doc: JobObjectDocument): 
 }
 
 export function openPdfBlob(blob: Blob, filename: string, download: boolean): void {
-  const file = new File([blob], filename || 'документ.pdf', { type: 'application/pdf' });
-  const url = URL.createObjectURL(file);
-  if (download) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-  } else {
-    const opened = window.open(url, '_blank', 'noopener');
-    if (!opened) {
-      const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      a.click();
-    }
+  const name = filename || 'документ.pdf';
+  const file = new File([blob], name, { type: 'application/pdf' });
+  if (!download) {
+    // «Открыть» — общее окно предпросмотра вместо новой вкладки.
+    openFilePreview({ id: `pdf:${name}:${blob.size}`, name, mime: 'application/pdf', source: { blob: file, mime: 'application/pdf' } });
+    return;
   }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 20000);
 }

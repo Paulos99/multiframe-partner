@@ -69,12 +69,17 @@ const base = {
   activity: [],
   toolUsage: {},
 };
+// Роли продажника и замерщика — для проверок вёрстки по ролям.
+for (const role of ['sales', 'measurer']) {
+  base.users.push({ ...base.users[0], id: `ui_${role}`, login: `ui.${role}`, displayName: `UI ${role}`, role });
+}
 base.objects.push({
   ...base.objects[0],
   id: 'ui_crew_room',
   roomName: 'Гостиная',
   status: 'install',
 });
+base.objects.push({...base.objects[0], id:'ui_measured', roomName:'Кухня', status:'measured', stageOrder:100});
 writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(base));
 const { setObjectStoreTransportForTests } =
   await import('../../api/objectStore.js');
