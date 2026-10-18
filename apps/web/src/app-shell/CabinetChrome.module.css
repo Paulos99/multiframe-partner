@@ -1,0 +1,120 @@
+.frame {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  align-items: stretch;
+  background:
+    radial-gradient(900px 420px at 100% -8%, color-mix(in srgb, var(--cab-accent) 7%, transparent), transparent 60%),
+    var(--cab-page);
+  color: var(--cab-ink);
+  font-family: var(--cab-font);
+}
+
+.main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 16px 24px 12px;
+  background: color-mix(in srgb, var(--cab-page) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--cab-border);
+}
+
+.mobileBrand {
+  display: none;
+}
+
+.titles {
+  min-width: 0;
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.titles h1 {
+  margin: 0;
+  font-size: var(--cab-title);
+  font-weight: 750;
+  letter-spacing: var(--cab-track);
+  line-height: 1.2;
+  color: var(--cab-ink);
+  overflow-wrap: anywhere;
+}
+
+.lead {
+  margin: 0;
+  color: var(--cab-muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.work {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cab-space-5);
+  padding: 20px 24px calc(156px + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 900px) {
+  .frame {
+    grid-template-columns: 1fr;
+  }
+
+  .main {
+    min-height: 0;
+  }
+
+  .topbar {
+    padding: 12px 12px 10px;
+  }
+
+  .mobileBrand {
+    display: block;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .titles {
+    flex: 1 1 100%;
+  }
+
+  .actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .work {
+    padding: 16px 12px calc(188px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 390px) {
+  .titles h1 {
+    font-size: 1.35rem;
+  }
+}

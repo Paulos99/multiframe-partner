@@ -53,8 +53,8 @@
   width: min(210px, 68%);
   height: auto;
   padding: 6px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border: 1px solid #e4e7eb;
+  border-radius: var(--cab-radius-md);
   background: #fff;
 }
 
@@ -70,7 +70,7 @@
 .lead,
 .hint {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--cab-muted);
   font-size: 0.95rem;
   line-height: 1.45;
 }
@@ -111,8 +111,8 @@
 .error {
   margin: 0;
   padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: var(--danger-soft);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-danger-soft);
   color: var(--cab-danger);
   font-size: 0.92rem;
   font-weight: 700;
@@ -124,15 +124,15 @@
   width: 100%;
   min-height: var(--touch-min);
   padding: 10px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-md);
   background: transparent;
-  color: var(--accent-color);
+  color: var(--cab-accent-text);
   font: inherit;
   font-weight: 750;
   cursor: pointer;
 }
 
 .manual:hover {
-  background: var(--accent-soft);
+  background: var(--cab-accent-soft);
 }

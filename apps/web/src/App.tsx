@@ -11,6 +11,7 @@ import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
 import { DemoSwitcherFab } from './partner/DemoSwitcher';
 import { SyncStatus } from './partner/SyncStatus';
+import { applyStoredTheme } from './app-shell/theme';
 import styles from './partner/partner.module.css';
 
 type Route = 'cabinet' | 'problemomer' | 'calculator';
@@ -194,11 +195,7 @@ function PartnerShell() {
   }, [user, attachCalculation]);
 
   useEffect(() => {
-    try {
-      document.body.classList.toggle('theme-dark', localStorage.getItem('mf_theme') === 'dark');
-    } catch {
-      /* ignore */
-    }
+    applyStoredTheme();
   }, []);
 
   useEffect(() => {

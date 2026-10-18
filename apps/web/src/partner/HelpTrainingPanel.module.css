@@ -5,10 +5,10 @@
   gap: 16px;
   min-width: 0;
   padding: 18px 14px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-lg);
+  background: var(--cab-card);
+  box-shadow: var(--cab-shadow-sm);
 }
 
 @media (min-width: 720px) {
@@ -26,7 +26,7 @@
 
 .lead {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--cab-muted);
   font-size: 0.95rem;
   line-height: 1.45;
 }
@@ -36,9 +36,9 @@
   grid-template-columns: 1fr 1fr;
   gap: 4px;
   padding: 4px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-subtle);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-subtle);
 }
 
 .tab,
@@ -47,9 +47,9 @@
   min-height: var(--touch-min);
   padding: 8px 10px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--cab-radius-sm);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--cab-muted);
   font: inherit;
   font-size: 0.92rem;
   font-weight: 750;
@@ -58,9 +58,9 @@
 }
 
 .tabOn {
-  background: var(--bg-card);
-  color: var(--accent-color);
-  box-shadow: var(--shadow-sm);
+  background: var(--cab-card);
+  color: var(--cab-accent-text);
+  box-shadow: var(--cab-shadow-sm);
 }
 
 .section {
@@ -68,15 +68,15 @@
   flex-direction: column;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-subtle);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-subtle);
 }
 
 .mine {
-  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
-  background: var(--bg-card);
-  box-shadow: 0 0 0 1px var(--accent-soft);
+  border-color: color-mix(in srgb, var(--cab-accent) 45%, var(--cab-border));
+  background: var(--cab-card);
+  box-shadow: 0 0 0 1px var(--cab-accent-soft);
 }
 
 .sectionHead {
@@ -98,9 +98,9 @@
   align-items: center;
   min-height: 24px;
   padding: 0 8px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: var(--accent-color);
+  border-radius: var(--cab-radius-pill);
+  background: var(--cab-accent-soft);
+  color: var(--cab-accent-text);
   font-size: 0.75rem;
   font-weight: 750;
 }
@@ -120,7 +120,7 @@
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 10px;
   align-items: start;
-  color: var(--text-primary);
+  color: var(--cab-ink);
   font-size: 0.95rem;
   line-height: 1.45;
 }
@@ -133,16 +133,16 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--bg-card);
-  color: var(--accent-color);
+  background: var(--cab-card);
+  color: var(--cab-accent-text);
   font-size: 0.78rem;
   font-weight: 750;
 }
 
 .note {
   padding: 12px 14px;
-  border-radius: var(--radius-md);
-  background: var(--warn-soft);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-warn-soft);
 }
 
 .note strong {
@@ -157,7 +157,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: var(--text-primary);
+  color: var(--cab-ink);
   font-size: 0.92rem;
   line-height: 1.4;
 }

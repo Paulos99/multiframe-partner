@@ -1,0 +1,147 @@
+.side {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+  padding: 16px 12px 20px;
+  background: var(--cab-card);
+  border-right: 1px solid var(--cab-border);
+}
+
+.brand {
+  padding: 4px 8px 12px;
+  border-bottom: 1px solid var(--cab-border);
+}
+
+.scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item,
+.itemOn {
+  appearance: none;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--cab-radius-sm);
+  background: transparent;
+  color: var(--cab-ink-soft);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: var(--cab-subtle);
+  color: var(--cab-ink);
+}
+
+.itemOn {
+  background: var(--cab-accent);
+  color: var(--cab-on-accent);
+}
+
+.itemOn:hover {
+  background: var(--cab-accent-hover);
+  color: var(--cab-on-accent);
+}
+
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.tools > :global(*) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tools :global(button) {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .side {
+    position: fixed;
+    z-index: 40;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    height: auto;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    border-right: none;
+    border-top: 1px solid var(--cab-border);
+    box-shadow: 0 -10px 28px rgba(20, 28, 36, 0.08);
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .scroll {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .nav {
+    flex-direction: row;
+    gap: 6px;
+    flex: 0 0 auto;
+  }
+
+  .item,
+  .itemOn {
+    width: auto;
+    white-space: nowrap;
+    scroll-margin-inline: 16px 132px;
+  }
+
+  .tools {
+    flex-direction: row;
+    margin-top: 0;
+    flex: 0 0 auto;
+  }
+
+  .tools > :global(*) {
+    flex-direction: row;
+  }
+
+  .tools :global(button) {
+    width: auto;
+    white-space: nowrap;
+  }
+}

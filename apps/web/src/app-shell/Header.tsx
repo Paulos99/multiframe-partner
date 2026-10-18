@@ -1,28 +1,11 @@
-import { useEffect, useState } from 'react';
+import { ThemeToggle } from './ThemeToggle';
+import { useTheme } from './theme';
 import styles from './Header.module.css';
 
 const BASE = import.meta.env.BASE_URL;
-const THEME_KEY = 'mf_theme';
-
-function readDark(): boolean {
-  try {
-    return localStorage.getItem(THEME_KEY) === 'dark';
-  } catch {
-    return false;
-  }
-}
 
 export function Header() {
-  const [dark, setDark] = useState(readDark);
-
-  useEffect(() => {
-    document.body.classList.toggle('theme-dark', dark);
-    try {
-      localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
-    } catch {
-      /* ignore quota / private mode */
-    }
-  }, [dark]);
+  const { dark } = useTheme();
 
   return (
     <header className={`${styles.header} ${dark ? styles.dark : ''}`}>
@@ -43,22 +26,7 @@ export function Header() {
           />
           <span className={styles.product}>Проблемомер</span>
         </div>
-        <div className={styles.themeToggle}>
-          <span className={styles.themeLabel}>Тема</span>
-          <label className={styles.themeSwitch} title="Светлая / тёмная тема">
-            <input
-              type="checkbox"
-              checked={dark}
-              onChange={(e) => setDark(e.target.checked)}
-              aria-label="Переключить тёмную тему"
-            />
-            <span className={styles.switchTrack}>
-              <span className={styles.iconSun} aria-hidden />
-              <span className={styles.iconMoon} aria-hidden />
-              <span className={styles.switchThumb} />
-            </span>
-          </label>
-        </div>
+        <ThemeToggle />
       </div>
     </header>
   );

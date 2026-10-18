@@ -24,6 +24,17 @@
   padding-right: max(20px, env(safe-area-inset-right));
 }
 
+/* Внутри оболочки кабинета фон и отступы задаёт каркас, карточки остаются на всю ширину. */
+.framed.shellWide {
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  align-items: stretch;
+}
+
 .cabinetGrid {
   display: grid;
   grid-template-columns: 1fr;
