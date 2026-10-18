@@ -1,0 +1,113 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cab-space-4);
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cab-space-4);
+  padding: var(--cab-space-5);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-xl);
+  background: var(--cab-card);
+  box-shadow: var(--cab-shadow);
+  min-width: 0;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--cab-accent-soft);
+  color: var(--cab-accent-text);
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.text strong {
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: var(--cab-ink);
+  overflow-wrap: anywhere;
+}
+
+.text span {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--cab-muted);
+  overflow-wrap: anywhere;
+}
+
+.login {
+  font-weight: 500;
+}
+
+.hint {
+  margin: -6px 0 0;
+  color: var(--cab-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.logout {
+  width: 100%;
+  min-height: var(--touch-min);
+  padding: 10px 16px;
+  border: 1px solid color-mix(in srgb, var(--cab-danger) 35%, var(--cab-border));
+  border-radius: var(--cab-radius-pill);
+  background: var(--cab-danger-soft);
+  color: var(--cab-danger);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.logout:hover {
+  border-color: var(--cab-danger);
+}
+
+.logout:focus-visible {
+  outline: 3px solid var(--cab-accent);
+  outline-offset: 2px;
+}
+
+/* Фото во вкладке нижней панели — того же размера, что иконки соседних вкладок. */
+.tabAvatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1.5px currentColor;
+}

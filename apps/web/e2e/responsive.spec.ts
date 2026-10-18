@@ -25,7 +25,7 @@ async function enter(page: Page, role: string) {
   await page.getByLabel('Логин', { exact: true }).fill(`ui.${role}`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Мой профиль', exact: true })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
 }
 
 for (const vp of widths) {
@@ -64,7 +64,7 @@ for (const vp of widths) {
         await noHorizontalOverflow(page, `${role} · ${name.trim()}`);
       }
 
-      await page.getByRole('button', { name: 'Мой профиль', exact: true }).click();
+      await openProfileSettings(page);
       const dialog = page.getByRole('dialog', { name: 'Мой профиль' });
       await expect(dialog).toBeVisible();
       if (vp.kind === 'phone') {
@@ -78,5 +78,16 @@ for (const vp of widths) {
       await noHorizontalOverflow(page, `${role} профиль`);
       await page.getByRole('button', { name: 'Закрыть профиль' }).click();
     });
+  }
+}
+
+/** На телефоне профиль — последняя вкладка нижней панели, настройки открываются оттуда; на шире — кнопка в шапке. */
+async function openProfileSettings(page: Page) {
+  const tab = page.locator('[data-nav-id="profile"]');
+  if (await tab.isVisible()) {
+    await tab.click();
+    await page.getByRole('button', { name: 'Настройки профиля', exact: true }).click();
+  } else {
+    await page.getByRole('button', { name: 'Мой профиль', exact: true }).click();
   }
 }

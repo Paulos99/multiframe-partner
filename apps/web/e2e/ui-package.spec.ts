@@ -8,9 +8,7 @@ async function enter(page: Page, role = 'owner', pw = password) {
   await page.getByLabel('Логин', { exact: true }).fill(`ui.${role}`);
   await page.getByLabel('Пароль', { exact: true }).fill(pw);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Мой профиль', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
 }
 test('admin keeps one shared period control inside the analytics card', async ({ page }) => {
   await enter(page, 'admin');
@@ -176,7 +174,7 @@ test('mobile and reduced motion: profile and board stay within viewport', async 
   await page.setViewportSize({ width: 360, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await enter(page, 'crew');
-  await page.getByRole('button', { name: 'Мой профиль', exact: true }).click();
+  await openProfileSettings(page);
   await expect(page.getByRole('dialog')).toBeVisible();
   expect(
     await page.evaluate(
@@ -262,3 +260,14 @@ test('theme toggle: green knob in light theme, dark theme unchanged', async ({ p
   const dark = page.getByRole('button', { name: 'Тёмная тема', exact: true });
   await expect.poll(() => knob(dark)).toBe('rgb(255, 255, 255)');
 });
+
+/** На телефоне профиль — последняя вкладка нижней панели, настройки открываются оттуда; на шире — кнопка в шапке. */
+async function openProfileSettings(page: Page) {
+  const tab = page.locator('[data-nav-id="profile"]');
+  if (await tab.isVisible()) {
+    await tab.click();
+    await page.getByRole('button', { name: 'Настройки профиля', exact: true }).click();
+  } else {
+    await page.getByRole('button', { name: 'Мой профиль', exact: true }).click();
+  }
+}

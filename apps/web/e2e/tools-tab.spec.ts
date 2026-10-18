@@ -14,7 +14,7 @@ async function enter(page: Page, role: string) {
   await page.getByLabel('Логин', { exact: true }).fill(`ui.${role}`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Мой профиль', exact: true })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
 }
 
 function toolsItem(page: Page, role: string) {
