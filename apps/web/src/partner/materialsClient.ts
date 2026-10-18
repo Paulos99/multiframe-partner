@@ -18,6 +18,7 @@ import {
   apiMaterialMultipartComplete,
   apiMaterialMultipartParts,
   apiMaterialMultipartStart,
+  apiMaterialPreview,
   apiRenameMaterial,
   apiReplaceMaterial,
   apiUploadMaterial,
@@ -328,4 +329,22 @@ export async function openMaterial(item: PublicMaterial): Promise<MaterialConten
   }
   if (node?.stub) return { kind: 'stub', stub: node.stub, name: node.name };
   throw new Error('У файла нет содержимого');
+}
+
+/**
+ * PDF-копия для предпросмотра (есть только у файлов с hasPreview, обычно у .doc).
+ * null — копии нет или её не удалось получить: окно тогда покажет оригинал или «Скачать».
+ */
+export async function openMaterialPdfCopy(
+  item: PublicMaterial,
+): Promise<{ url: string } | { blob: Blob } | null> {
+  if (!item.hasPreview || !remoteEnabled()) return null;
+  try {
+    const data = await apiMaterialPreview(item.id);
+    if (data.url) return { url: data.url };
+    if (data.base64) return { blob: base64ToBlob(data.base64, 'application/pdf') };
+  } catch {
+    // Копия — дополнение: без неё окно всё равно откроется.
+  }
+  return null;
 }

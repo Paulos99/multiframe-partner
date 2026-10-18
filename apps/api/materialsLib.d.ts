@@ -10,6 +10,10 @@ export type MaterialNode = {
   /** "materials" — новый бакет. Нет поля или null — старый ключ в бакете кабинета. */
   bucket?: string | null;
   contentBase64: string | null;
+  /** PDF-копия для предпросмотра: materials/<id>_pdfpreview в бакете материалов. */
+  previewKey?: string | null;
+  previewSize?: number | null;
+  previewUpdatedAt?: string | null;
   updatedAt: string;
 };
 
@@ -30,6 +34,8 @@ export type PublicMaterial = {
   size: number | null;
   stub: string | null;
   hasFile: boolean;
+  /** Есть PDF-копия для предпросмотра (GET /materials/:id/preview). */
+  hasPreview?: boolean;
   updatedAt: string;
 };
 

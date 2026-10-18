@@ -67,6 +67,7 @@ GATEWAY_PATHS = (
     "/materials/files/multipart/abort",
     "/materials/{materialId}",
     "/materials/{materialId}/content",
+    "/materials/{materialId}/preview",
 )
 
 
