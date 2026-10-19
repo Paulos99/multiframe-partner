@@ -47,7 +47,8 @@ test('старый узел без bucket подписывается тольк�
   const parsed = new URL(url);
   assert.equal(bucketOf(url), 'multiframe-partner-data');
   assert.match(decodeURIComponent(parsed.pathname), /materials\/mat_oldfile/);
-  assert.equal(parsed.searchParams.get('X-Amz-Expires'), '900');
+  // Видео: ссылка живёт 6 часов, чтобы плеер докачивал кусками весь просмотр.
+  assert.equal(parsed.searchParams.get('X-Amz-Expires'), '21600');
   assert.match(parsed.searchParams.get('response-content-disposition') || '', /^inline/i);
   assert.equal(url.includes('multiframe-partner-materials'), false);
 });
@@ -79,4 +80,32 @@ test('файл не для просмотра получает ссылку на
   });
   const parsed = new URL(url);
   assert.match(parsed.searchParams.get('response-content-disposition') || '', /^attachment/i);
+});
+
+test('видео: ссылка на оригинал и на копию для просмотра живут 6 часов', async () => {
+  const { signedMaterialStreamUrl } = await import('./materialsStorage.js');
+  const node = {
+    storageKey: 'materials/mat_video',
+    bucket: 'materials',
+    name: '2.Как продавать.mp4',
+    mime: 'video/mp4',
+    streamKey: 'materials/mat_video_stream',
+    streamSize: 1000,
+  };
+  const original = new URL(await signedMaterialGetUrl(node));
+  assert.equal(original.searchParams.get('X-Amz-Expires'), '21600');
+  assert.match(decodeURIComponent(original.pathname), /materials\/mat_video$/);
+  const stream = new URL(await signedMaterialStreamUrl(node));
+  assert.equal(bucketOf(stream.href), 'multiframe-partner-materials');
+  assert.match(decodeURIComponent(stream.pathname), /materials\/mat_video_stream$/);
+  assert.equal(stream.searchParams.get('X-Amz-Expires'), '21600');
+  assert.equal(stream.searchParams.get('response-content-type'), 'video/mp4');
+  assert.match(stream.searchParams.get('response-content-disposition') || '', /^inline/i);
+  assert.equal(await signedMaterialStreamUrl({ ...node, streamKey: null }), null);
+  await assert.rejects(() => signedMaterialStreamUrl({ ...node, streamKey: 'platform-v2.json' }), /Некорректный ключ/);
+});
+
+test('PDF по-прежнему подписывается на 15 минут', async () => {
+  const url = await signedMaterialGetUrl({ storageKey: 'materials/mat_pdf', bucket: 'materials', name: 'a.pdf', mime: 'application/pdf' });
+  assert.equal(new URL(url).searchParams.get('X-Amz-Expires'), '900');
 });

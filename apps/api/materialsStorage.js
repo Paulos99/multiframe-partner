@@ -109,6 +109,17 @@ function contentDisposition(filename, mime) {
 }
 
 /**
+ * Видео и аудио смотрят долго, а плеер докачивает файл кусками (Range) всё время просмотра.
+ * Ссылка на 15 минут обрывала бы просмотр на середине — для медиа подпись живёт 6 часов.
+ */
+export const MEDIA_URL_TTL_SECONDS = 6 * 60 * 60;
+
+export function isMediaMime(mime) {
+  const value = String(mime || '').toLowerCase().split(';')[0].trim();
+  return value.startsWith('video/') || value.startsWith('audio/');
+}
+
+/**
  * Подписанный GET. Новый узел (bucket: "materials") — MATERIALS_BUCKET.
  * Узел без bucket — только чтение старого ключа из PARTNERS_BUCKET.
  * @returns {Promise<string | null>}
@@ -121,6 +132,7 @@ export async function signedMaterialGetUrl(node, { filename, mime } = {}) {
   const type = mime || node.mime || 'application/octet-stream';
   const responseContentDisposition = contentDisposition(name, type);
   const responseContentType = isInlineMime(type) ? type : 'application/octet-stream';
+  const expiresIn = isMediaMime(type) ? MEDIA_URL_TTL_SECONDS : undefined;
   if (!node.bucket) {
     const bucket = partnerBucket();
     if (!bucket) return null;
@@ -129,6 +141,7 @@ export async function signedMaterialGetUrl(node, { filename, mime } = {}) {
       key,
       responseContentType,
       responseContentDisposition,
+      ...(expiresIn ? { expiresIn } : {}),
     });
   }
   if (node.bucket !== MATERIAL_BUCKET_MARKER) {
@@ -140,6 +153,27 @@ export async function signedMaterialGetUrl(node, { filename, mime } = {}) {
     key,
     responseContentType,
     responseContentDisposition,
+    ...(expiresIn ? { expiresIn } : {}),
+  });
+}
+
+/**
+ * Подписанный GET копии видео для просмотра (materials/<id>_stream в MATERIALS_BUCKET).
+ * Всегда video/mp4 inline, ссылка живёт 6 часов.
+ * @returns {Promise<string | null>}
+ */
+export async function signedMaterialStreamUrl(node) {
+  const key = node?.streamKey;
+  if (!key) return null;
+  assertMaterialKey(key);
+  const bucket = writableMaterialsBucket();
+  const base = String(node.name || 'video').replace(/\.[A-Za-z0-9]{1,8}$/, '');
+  return signGetObject({
+    bucket,
+    key,
+    responseContentType: 'video/mp4',
+    responseContentDisposition: contentDisposition(`${base}.mp4`, 'video/mp4'),
+    expiresIn: MEDIA_URL_TTL_SECONDS,
   });
 }
 

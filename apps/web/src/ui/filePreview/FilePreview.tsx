@@ -59,6 +59,9 @@ type Resolved =
       node?: ReactNode;
       /** PDF-копия для просмотра (.doc и запасной вариант для .docx). */
       pdfCopyUrl?: string;
+      /** Видео: лёгкая копия для плеера; url остаётся оригиналом для «Скачать». */
+      playbackUrl?: string;
+      poster?: string | null;
     };
 
 const PHONE_QUERY = '(max-width: 640px)';
@@ -122,6 +125,8 @@ function useResolvedSources(items: PreviewItem[]) {
         mime: src.mime || item.mime,
         size: src.size ?? item.size,
         pdfCopyUrl: copyUrl(src.pdfCopy),
+        playbackUrl: src.playbackUrl,
+        poster: src.poster ?? null,
       };
     };
     if (item.source) {
@@ -411,17 +416,13 @@ function PreviewBody({
   if (kind === 'image') return <ZoomableImage src={url} alt={item.name} onError={() => onError('Не удалось показать изображение')} />;
   if (kind === 'video')
     return (
-      <div className={styles.mediaWrap}>
-        <video
-          className={styles.video}
-          src={url}
-          controls
-          playsInline
-          preload="metadata"
-          aria-label={item.name}
-          onError={() => onError('Видео не воспроизводится в браузере')}
-        />
-      </div>
+      <VideoPlayer
+        item={item}
+        src={resolved.playbackUrl || url}
+        hasStreamCopy={!!resolved.playbackUrl}
+        poster={resolved.poster || undefined}
+        onError={onError}
+      />
     );
   if (kind === 'audio')
     return (
@@ -456,6 +457,87 @@ function PreviewBody({
         sandbox=""
         onLoad={() => setLoaded(true)}
       />
+    </div>
+  );
+}
+
+/**
+ * Видео играет прямо по подписанной ссылке: браузер сам запрашивает куски (Range, 206)
+ * и начинает показ, как только есть первые секунды. Ничего не скачиваем целиком.
+ * Если ссылка истекла посреди просмотра — берём новую и продолжаем с того же места.
+ */
+function VideoPlayer({
+  item,
+  src,
+  hasStreamCopy,
+  poster,
+  onError,
+}: {
+  item: PreviewItem;
+  src: string;
+  hasStreamCopy: boolean;
+  poster?: string;
+  onError: (message: string) => void;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [current, setCurrent] = useState(src);
+  const [noPicture, setNoPicture] = useState(false);
+  const resume = useRef<{ time: number; play: boolean } | null>(null);
+  const retries = useRef(0);
+
+  useEffect(() => setCurrent(src), [src]);
+
+  async function recover() {
+    const video = ref.current;
+    if (!video || !item.load || retries.current >= 2) {
+      onError('Видео не воспроизводится в браузере');
+      return;
+    }
+    retries.current += 1;
+    resume.current = { time: video.currentTime || 0, play: !video.paused };
+    try {
+      const next = await item.load();
+      const nextUrl = 'url' in next ? next.playbackUrl || next.url : undefined;
+      if (!nextUrl) throw new Error('no url');
+      setCurrent(nextUrl);
+    } catch {
+      onError('Не удалось продолжить видео. Проверьте интернет');
+    }
+  }
+
+  return (
+    <div className={styles.mediaWrap}>
+      <video
+        ref={ref}
+        className={styles.video}
+        src={current}
+        poster={poster}
+        controls
+        playsInline
+        preload="metadata"
+        aria-label={item.name}
+        data-stream-copy={hasStreamCopy ? 'true' : 'false'}
+        onLoadedMetadata={(event) => {
+          const video = event.currentTarget;
+          // Звук есть, а картинки нет: браузер не умеет кодек оригинала (H.265/HEVC).
+          setNoPicture(video.videoWidth === 0 && video.videoHeight === 0);
+          const at = resume.current;
+          if (at) {
+            resume.current = null;
+            if (at.time > 0) video.currentTime = at.time;
+            if (at.play) void video.play().catch(() => {});
+          }
+        }}
+        onError={() => {
+          void recover();
+        }}
+      />
+      {noPicture && !hasStreamCopy ? (
+        <p className={styles.videoNote} role="note">
+          Этот браузер не показывает изображение видео: оно записано в формате H.265 (HEVC). Откройте его на iPhone
+          или Mac либо скачайте файл.
+        </p>
+      ) : null}
     </div>
   );
 }

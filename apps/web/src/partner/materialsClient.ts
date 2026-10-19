@@ -294,7 +294,15 @@ export async function deleteMaterialItem(id: string): Promise<PublicMaterial[]> 
 export type MaterialContent =
   | { kind: 'stub'; stub: string; name: string }
   | { kind: 'file'; name: string; mime: string; blob: Blob }
-  | { kind: 'remote'; name: string; mime: string; url: string };
+  | {
+      kind: 'remote';
+      name: string;
+      mime: string;
+      url: string;
+      /** Лёгкая копия видео для просмотра (H.264, moov в начале). Оригинал — url. */
+      streamUrl?: string;
+      streamSize?: number | null;
+    };
 
 type MaterialPayload = {
   name?: string;
@@ -302,6 +310,8 @@ type MaterialPayload = {
   base64?: string;
   stub?: string;
   url?: string;
+  streamUrl?: string;
+  streamSize?: number | null;
 };
 
 export async function openMaterial(item: PublicMaterial): Promise<MaterialContent> {
@@ -316,6 +326,7 @@ export async function openMaterial(item: PublicMaterial): Promise<MaterialConten
         name: data.name || item.name,
         mime: data.mime || item.mime || 'application/octet-stream',
         url: data.url,
+        ...(data.streamUrl ? { streamUrl: data.streamUrl, streamSize: data.streamSize ?? null } : {}),
       };
     }
     if (data.stub && !data.base64) {
