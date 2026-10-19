@@ -299,7 +299,7 @@ export function InstallPromptHost({
       {children}
       {!hidden && showHint ? (
         <aside className={styles.hint} role="note">
-          <p>Установка — значок в шапке, рядом с «Выйти».</p>
+          <p>Установка — кнопка «Установить» в шапке справа вверху.</p>
           <button type="button" className={styles.hintClose} onClick={dismissHint} aria-label="Закрыть подсказку">
             <CloseIcon size="1em" />
           </button>
