@@ -17,6 +17,37 @@ async function enter(page: Page, role: string) {
 }
 
 const nav = (page: Page) => page.getByRole('complementary', { name: 'Разделы кабинета' });
+const strip = (page: Page) => nav(page).locator('[class*="scroll"]').first();
+
+/** Прокрутка ленты вкладок к началу или к концу (без анимации). */
+async function scrollStrip(page: Page, to: 'start' | 'end') {
+  await strip(page).evaluate((el, end) => {
+    el.style.scrollBehavior = 'auto';
+    el.scrollLeft = end ? el.scrollWidth : 0;
+    el.dispatchEvent(new Event('scroll'));
+    el.style.scrollBehavior = '';
+  }, to === 'end');
+}
+
+/** По центру вкладки при клике попадаем именно в неё, а не в соседнюю. */
+async function hitTarget(page: Page, id: string) {
+  return nav(page)
+    .locator(`[data-nav-id="${id}"]`)
+    .evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!hit && el.contains(hit);
+    });
+}
+
+async function expectNoOverlap(page: Page) {
+  const rects = await nav(page)
+    .locator('button')
+    .evaluateAll((buttons) => buttons.map((b) => b.getBoundingClientRect()).map((r) => [r.left, r.right]));
+  for (let i = 1; i < rects.length; i += 1) {
+    expect(rects[i]![0], `вкладка ${i} не наезжает на ${i - 1}`).toBeGreaterThanOrEqual(rects[i - 1]![1] - 0.5);
+  }
+}
 
 for (const width of [360, 390]) {
   for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew']) {
@@ -33,11 +64,17 @@ for (const width of [360, 390]) {
       const last = items.last();
       await expect(last).toHaveAttribute('data-nav-id', 'profile');
       await expect(last).toHaveAccessibleName('Профиль');
-      // Видна целиком и прижата к правому краю панели.
+      // «Профиль» — обычный последний пункт ленты, не закреплён поверх других.
+      expect(await last.evaluate((el) => getComputedStyle(el).position)).not.toBe('sticky');
+      // Докручиваем ленту до конца: «Профиль» виден целиком у правого края.
+      await scrollStrip(page, 'end');
       await expect(last).toBeInViewport({ ratio: 1 });
       const box = (await last.boundingBox())!;
       expect(box.x + box.width).toBeGreaterThan(width - 24);
       expect(box.height).toBeGreaterThanOrEqual(44);
+      // Ничего не перекрывает его, и вкладки не наезжают друг на друга.
+      expect(await hitTarget(page, 'profile')).toBe(true);
+      await expectNoOverlap(page);
 
       // Подписи не переносятся и не вылезают за свою кнопку.
       const labels = await nav(page)
@@ -69,6 +106,88 @@ test('360px · admin: все шесть вкладок помещаются бе
   const tabs = nav(page).getByRole('tab');
   await expect(tabs).toHaveCount(6);
   for (let i = 0; i < 6; i += 1) await expect(tabs.nth(i)).toBeInViewport({ ratio: 1 });
+});
+
+test('360px · admin: вкладки стоят ровно, без прокрутки и затухания', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await enter(page, 'admin');
+  const el = strip(page);
+  expect(await el.evaluate((e) => e.scrollWidth - e.clientWidth)).toBeLessThanOrEqual(1);
+  await expect(el).not.toHaveAttribute('data-overflow', /.*/);
+  await expect(el).not.toHaveAttribute('data-fade-end', /.*/);
+  expect(await el.evaluate((e) => getComputedStyle(e).maskImage)).toBe('none');
+  // Равномерно: промежутки между вкладками одинаковые, ряд занимает всю ширину.
+  const rects = await nav(page)
+    .getByRole('tab')
+    .evaluateAll((tabs) => tabs.map((t) => t.getBoundingClientRect()).map((r) => [r.left, r.right]));
+  const gaps = rects.slice(1).map((r, i) => r[0]! - rects[i]![1]!);
+  for (const g of gaps) expect(Math.abs(g - gaps[0]!)).toBeLessThanOrEqual(1);
+  expect(rects.at(-1)![1]).toBeGreaterThan(360 - 24);
+  await expectNoOverlap(page);
+});
+
+for (const width of [360, 390]) {
+  test(`${width}px · owner: панель — горизонтальная лента, «Профиль» последний и доступен прокруткой`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await enter(page, 'owner');
+    const el = strip(page);
+    const tabs = nav(page).getByRole('tab');
+    await expect(tabs).toHaveCount(7);
+    await expect(tabs.last()).toHaveAttribute('data-nav-id', 'profile');
+
+    // Лента: прокрутка нативная, со snap, без видимой полосы прокрутки.
+    const style = await el.evaluate((e) => {
+      const cs = getComputedStyle(e);
+      return { overflowX: cs.overflowX, snap: cs.scrollSnapType, bar: cs.scrollbarWidth, overflow: e.scrollWidth - e.clientWidth };
+    });
+    expect(style.overflowX).toBe('auto');
+    expect(style.snap).toContain('x');
+    expect(style.bar).toBe('none');
+    expect(style.overflow).toBeGreaterThan(1);
+
+    // В начале: первая вкладка видна, затухание только справа, «Профиль» за краем.
+    await scrollStrip(page, 'start');
+    await expect(tabs.first()).toBeInViewport({ ratio: 1 });
+    await expect(el).toHaveAttribute('data-fade-end', '');
+    await expect(el).not.toHaveAttribute('data-fade-start', /.*/);
+    await expect(tabs.last()).not.toBeInViewport({ ratio: 1 });
+    await expectNoOverlap(page);
+
+    // В конце: «Профиль» виден целиком, кликается, затухание только слева.
+    await scrollStrip(page, 'end');
+    await expect(el).toHaveAttribute('data-fade-start', '');
+    await expect(el).not.toHaveAttribute('data-fade-end', /.*/);
+    await expect(tabs.last()).toBeInViewport({ ratio: 1 });
+    expect(await hitTarget(page, 'profile')).toBe(true);
+    await expectNoOverlap(page);
+    // Ни одна вкладка не спрятана под другой: в своей точке каждая — сама себе цель.
+    for (const id of await tabs.evaluateAll((t) => t.map((b) => b.getAttribute('data-nav-id')!))) {
+      const tab = nav(page).locator(`[data-nav-id="${id}"]`);
+      await tab.evaluate((b) => b.scrollIntoView({ inline: 'center', block: 'nearest' }));
+      expect(await hitTarget(page, id), `вкладка ${id} не перекрыта`).toBe(true);
+    }
+    await tabs.last().click();
+    await expect(page.getByRole('region', { name: 'Профиль' })).toBeVisible();
+  });
+}
+
+test('390px · owner: активная вкладка сама докручивается в видимую область', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await enter(page, 'owner');
+  const profile = nav(page).locator('[data-nav-id="profile"]');
+  await scrollStrip(page, 'start');
+  await expect(profile).not.toBeInViewport({ ratio: 1 });
+  // Вкладка стала активной, пока была за краем (например, переход из кода) — лента докручивает её.
+  await profile.evaluate((b) => (b as HTMLButtonElement).click());
+  await expect(profile).toHaveAttribute('aria-selected', 'true');
+  await expect(profile).toBeInViewport({ ratio: 1 });
+  const first = nav(page).getByRole('tab').first();
+  await scrollStrip(page, 'end');
+  await first.evaluate((b) => (b as HTMLButtonElement).click());
+  await expect(first).toHaveAttribute('aria-selected', 'true');
+  await expect(first).toBeInViewport({ ratio: 1 });
 });
 
 test('phone: вкладка «Профиль» открывает профиль, активна, «Выйти» выходит', async ({ page }) => {

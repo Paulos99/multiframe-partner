@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { CabinetBrand } from '../partner/CabinetBrand';
 import { NavIcon, splitNavLabel } from './navIcons';
 import styles from './Sidebar.module.css';
@@ -22,6 +22,9 @@ export function Sidebar({
   mode?: 'tabs' | 'buttons';
   tools?: ReactNode;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const activeId = items.find((item) => item.active)?.id ?? null;
+  useScrollStrip(scrollRef, activeId, items.length);
   const nav =
     mode === 'tabs' ? (
       <div className={styles.nav} role="tablist" aria-label="Разделы">
@@ -62,7 +65,7 @@ export function Sidebar({
       <div className={styles.brand}>
         <CabinetBrand />
       </div>
-      <div className={styles.scroll}>
+      <div className={styles.scroll} ref={scrollRef} data-many={items.length > 6 ? '' : undefined}>
         {nav}
         {tools ? <div className={styles.tools}>{tools}</div> : null}
       </div>
@@ -71,8 +74,68 @@ export function Sidebar({
 }
 
 function itemClass(item: SideItem): string {
-  const base = item.active ? styles.itemOn : styles.item;
-  return item.id === 'profile' ? `${base} ${styles.profileItem}` : base;
+  return item.active ? styles.itemOn : styles.item;
+}
+
+/**
+ * Телефон: если вкладок больше, чем влезает, нижняя панель — горизонтальная лента.
+ * Отмечает края, за которыми есть ещё вкладки (для мягкого затухания), и докручивает
+ * активную вкладку в видимую область. На компьютере и планшете меню вертикальное,
+ * горизонтального переполнения нет — атрибуты не ставятся.
+ */
+function useScrollStrip(
+  ref: RefObject<HTMLDivElement | null>,
+  activeId: string | null,
+  count: number,
+) {
+  const firstRun = useRef(true);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      const overflow = max > 1;
+      el.toggleAttribute('data-overflow', overflow);
+      el.toggleAttribute('data-fade-start', overflow && el.scrollLeft > 1);
+      el.toggleAttribute('data-fade-end', overflow && el.scrollLeft < max - 1);
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    if (el.firstElementChild) ro?.observe(el.firstElementChild);
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', update);
+      ro?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [ref, count]);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !activeId) return;
+    const max = el.scrollWidth - el.clientWidth;
+    if (max <= 1) return;
+    const tab = el.querySelector<HTMLElement>(`[data-nav-id="${CSS.escape(activeId)}"]`);
+    if (!tab) return;
+    const box = el.getBoundingClientRect();
+    const r = tab.getBoundingClientRect();
+    const pad = 28;
+    let target = el.scrollLeft;
+    if (r.left < box.left + pad) target += r.left - box.left - pad;
+    else if (r.right > box.right - pad) target += r.right - box.right + pad;
+    else {
+      firstRun.current = false;
+      return;
+    }
+    const reduce =
+      firstRun.current ||
+      (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    firstRun.current = false;
+    el.scrollTo({ left: Math.max(0, Math.min(max, target)), behavior: reduce ? 'auto' : 'smooth' });
+  }, [ref, activeId, count]);
 }
 
 /** Полная подпись остаётся доступным именем; на планшете и телефоне видна короткая подпись с иконкой и счётчиком. */
