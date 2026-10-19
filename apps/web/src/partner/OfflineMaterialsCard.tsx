@@ -60,7 +60,9 @@ export function OfflineMaterialsCard({ list, offline }: { list: PublicMaterial[]
           </span>
         ) : (
           <span className={styles.offlineMeta}>
-            {filesLabel(needFiles)} · около {formatBytes(needBytes)}. Будут открываться без интернета и обновляться сами.
+            {!list && !needFiles
+              ? 'Считаем размер…'
+              : `${filesLabel(needFiles)} · около ${formatBytes(needBytes)}. Будут открываться без интернета и обновляться сами.`}
           </span>
         )}
       </div>
