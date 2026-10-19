@@ -10,48 +10,51 @@ export interface VerdictPcts {
   perceivedImpactPct: number;
 }
 
-function endsWithPeriod(s: string): string {
-  const t = s.trim();
-  if (!t) return t;
-  return /[.!?…]$/.test(t) ? t : `${t}.`;
+/*
+ * «Рекомендации» on the Result step — короткий текст для клиента и для
+ * консультации (замерщик, монтажник, менеджер пересказывают его своими словами).
+ *
+ * Структура (не больше 3 предложений):
+ *   1) Что не так в этой комнате — одно предложение: проблемы через запятую
+ *      + одна причина (перекрытие/потолок) один раз, без повторов.
+ *   2) Что сделает MultiFrame — одно предложение с цифрами из симуляции
+ *      (perceivedImpactPct / perceivedAirPct, как есть).
+ *   3) Честная оговорка про шаги сверху — только когда она уместна.
+ *
+ * Что такое панель, из чего она и «до 17 дБ» — в блоке «Что такое MultiFrame»,
+ * здесь это не повторяем. Этот файл одинаковый в multiframe-partner
+ * (apps/web/src/state) и multiframe-problemomer (src/state).
+ */
+
+function capitalize(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
+function sentence(s: string): string {
+  const t = s.trim().replace(/\s+/g, ' ');
+  if (!t) return t;
+  return capitalize(/[.!?…]$/.test(t) ? t : `${t}.`);
+}
+
+/** «в спальне», «на кухне» … */
 function roomWhere(room: RoomAnswers): string {
   switch (room.roomType) {
     case 'bedroom':
-      return 'спальне';
+      return 'в спальне';
     case 'kids':
-      return 'детской';
+      return 'в детской';
     case 'living':
-      return 'гостиной';
+      return 'в гостиной';
     case 'kitchen':
-      return 'кухне';
+      return 'на кухне';
     case 'office':
-      return 'кабинете';
+      return 'в кабинете';
     default:
-      return 'комнате';
+      return 'в комнате';
   }
 }
 
-/** Accusative + possessive for «сделает вашу спальню зоной…». */
-function roomAsComfortZone(room: RoomAnswers): string {
-  switch (room.roomType) {
-    case 'bedroom':
-      return 'вашу спальню';
-    case 'kids':
-      return 'вашу детскую';
-    case 'living':
-      return 'вашу гостиную';
-    case 'kitchen':
-      return 'вашу кухню';
-    case 'office':
-      return 'ваш кабинет';
-    default:
-      return 'вашу комнату';
-  }
-}
-
-function heardKind(room: RoomAnswers, noiseType: NoiseType): NoiseType | 'unknown' {
+function heardKind(room: RoomAnswers, noiseType: NoiseType): NoiseType {
   if (room.noiseKind === 'impact' || room.noiseKind === 'airborne' || room.noiseKind === 'mixed') {
     return room.noiseKind;
   }
@@ -76,138 +79,104 @@ function slabNoun(room: RoomAnswers): string {
   return 'перекрытие';
 }
 
-function ceilingWithSlab(room: RoomAnswers): string {
+/** Why sound passes — named once per text. */
+function isolationCause(room: RoomAnswers): string {
   const slab = slabNoun(room);
   switch (room.plannedCeiling) {
     case 'stretch':
-      return `${slab} с натяжным потолком только усиливают этот гул, работая как барабан`;
+      return `${slab} с натяжным потолком гудит, как барабан`;
     case 'gypsum':
-      return `${slab} и обычный гипсокартон почти не останавливают этот шум`;
+      return `${slab} и обычный гипсокартон почти не держат звук`;
     case 'plaster':
-      return `${slab} под штукатуркой или краской почти не защищает от шума сверху`;
+      return `${slab} без звукоизоляции почти не держит звук`;
     case 'other_exists':
-      return `${slab} и готовый потолок без звукоизоляции этот путь не закрывают`;
+      return `${slab} и нынешний потолок почти не держат звук`;
     default:
-      return `${slab} хорошо пропускает этот шум`;
+      return `${slab} почти не держит звук`;
   }
 }
 
-/** Beat 1: what you hear + construction makes it worse. */
-function diagnosisBeat(room: RoomAnswers, noiseType: NoiseType): string {
+/** The customer hears neighbours (not «usually quiet») and cares about it. */
+function hearsFromAbove(room: RoomAnswers): boolean {
+  if (room.noisyNeighbors === 'usually_quiet') return false;
+  return (
+    hasWish(room, 'from_above') ||
+    (!hasWish(room, 'privacy_out') && !hasWish(room, 'music_recording'))
+  );
+}
+
+/** «a», «a, а b», «a, b, а c». */
+function joinProblems(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')}, а ${items[items.length - 1]}`;
+}
+
+/** Sentence 1 — what is wrong in this room, in everyday words. */
+function factSentence(room: RoomAnswers, noiseType: NoiseType): string {
   const kind = heardKind(room, noiseType);
-  const construction = ceilingWithSlab(room);
-  const parts: string[] = [];
+  const above = hearsFromAbove(room);
+  const privacy = hasWish(room, 'privacy_out');
+  const echo = hasWish(room, 'music_recording');
+  const problems: string[] = [];
 
-  if (hasWish(room, 'privacy_out')) {
-    parts.push(
-      `Ваши разговоры и музыка уходят наверх тем же путём, которым чужой шум приходит вниз, а ${construction}`,
-    );
-  }
-  if (hasWish(room, 'music_recording')) {
-    parts.push(
-      `В ${roomWhere(room)} звук долго не затихает: жёсткий потолок возвращает эхо обратно, а ${construction}`,
-    );
-  }
-
-  if (parts.length === 0) {
-    if (room.noisyNeighbors === 'usually_quiet') {
-      return `Сейчас сверху обычно тихо, но если соседи станут шумнее, звук пройдёт почти без препятствий: ${construction}`;
-    }
-    const heard =
+  if (above) {
+    problems.push(
       kind === 'impact'
-        ? 'Вы слышите шаги и стук сверху'
+        ? 'слышны шаги и стук сверху'
         : kind === 'airborne'
-          ? 'Вы слышите голоса и музыку сверху'
-          : 'Вы слышите то шаги, то разговоры';
-    return `${heard}, и ${construction}`;
+          ? 'слышны голоса и музыка сверху'
+          : 'слышны шаги и голоса сверху',
+    );
   }
+  if (privacy) problems.push(above ? 'соседи слышат вас' : 'соседи сверху слышат вас');
+  if (echo) problems.push('звук отдаётся эхом');
 
-  return parts.join(' ');
+  if (problems.length === 0) {
+    return `Сверху пока тихо, но ${slabNoun(room)} почти не держит звук, и шумных соседей будет хорошо слышно`;
+  }
+  const cause =
+    !above && !privacy
+      ? 'гладкий потолок отражает звук обратно в комнату'
+      : isolationCause(room);
+  return `${roomWhere(room)} ${joinProblems(problems)}: ${cause}`;
 }
 
-/** Beat 2: MultiFrame mechanism. */
-function mechanismBeat(room: RoomAnswers): string {
-  const where =
-    room.plannedCeiling === 'stretch'
-      ? 'в зазоре между перекрытием и полотном'
-      : 'под потолком';
-  return `Панели MultiFrame — это жёсткий каркас, который гасит удары, и акустический наполнитель, который рассеивает звук ${where}`;
-}
-
-/** Beat 3: perceived % from simulation. */
-function pctBeat(pcts: VerdictPcts): string {
-  return `С ними вы снизите ударный шум на ${pcts.perceivedImpactPct}%, а воздушный — на ${pcts.perceivedAirPct}%`;
-}
-
-/** Beat 4: lived sensory effect. */
-function sensationBeat(room: RoomAnswers, noiseType: NoiseType): string {
+/** Sentence 2 — what MultiFrame changes here, with simulated numbers. */
+function benefitSentence(room: RoomAnswers, noiseType: NoiseType, pcts: VerdictPcts): string {
   const kind = heardKind(room, noiseType);
-  const bits: string[] = [];
-  if (hasWish(room, 'music_recording')) {
-    bits.push('Эхо в комнате станет короче и мягче');
-  }
-  if (hasWish(room, 'privacy_out')) {
-    bits.push('вас будет меньше слышно наверху');
-  }
-  if (hasWish(room, 'from_above') || bits.length === 0) {
-    if (kind === 'airborne') {
-      bits.push('громкие голоса и музыка сверху перестанут быть навязчивыми');
-    } else if (kind === 'impact') {
-      bits.push('топот станет приглушённым и потеряет свою резкость');
-    } else {
-      bits.push(
-        'топот станет приглушённым и потеряет свою резкость, а громкие голоса перестанут быть навязчивыми',
-      );
-    }
-  }
-  if (bits.length === 1) {
-    const s = bits[0]!;
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }
-  return bits
-    .map((s, i) => (i === 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s))
-    .join(', а ');
+  const voices = hasWish(room, 'privacy_out') ? 'голоса в обе стороны' : 'голоса';
+  const steps = 'шаги';
+  const impact = pcts.perceivedImpactPct;
+  const air = pcts.perceivedAirPct;
+  const numbers =
+    kind === 'airborne'
+      ? `${voices} станут тише на ${air}%, ${steps} — на ${impact}%`
+      : `${steps} станут тише на ${impact}%, ${voices} — на ${air}%`;
+  const echo = hasWish(room, 'music_recording') ? ', а эха станет меньше' : '';
+  return `С MultiFrame на потолке ${numbers}${echo}`;
 }
 
-/** Beat 5: honesty + room as comfort zone. */
-function closingBeat(room: RoomAnswers, noiseType: NoiseType): string {
-  const zone = roomAsComfortZone(room);
-  const kind = heardKind(room, noiseType);
-  const impactHeavy = kind === 'impact' || kind === 'mixed' || kind === 'unknown';
-
-  if (hasWish(room, 'music_recording') && !hasWish(room, 'from_above')) {
-    return `MultiFrame уберёт раздражающее эхо и сделает ${zone} зоной комфорта и спокойствия`;
-  }
-  if (hasWish(room, 'privacy_out') && !hasWish(room, 'from_above')) {
-    return `MultiFrame снизит утечку звука наверх и сделает ${zone} зоной комфорта и спокойствия`;
-  }
-
-  if (impactHeavy) {
-    if (room.floorAbove === 'floating') {
-      return `Пол сверху уже убрал основную часть удара, а MultiFrame доберёт оставшийся дискомфорт и сделает ${zone} зоной комфорта и спокойствия`;
-    }
-    return `Честно скажем: идеальную тишину по шагам даст только пол у соседей сверху, но MultiFrame уберёт раздражающий дискомфорт и сделает ${zone} зоной комфорта и спокойствия`;
-  }
-
-  return `MultiFrame уберёт раздражающий дискомфорт и сделает ${zone} зоной комфорта и спокойствия`;
+/** Optional sentence 3 — honest limit for footsteps from above. */
+function limitSentence(room: RoomAnswers, noiseType: NoiseType): string | null {
+  if (!hearsFromAbove(room)) return null;
+  if (heardKind(room, noiseType) === 'airborne') return null;
+  if (room.floorAbove === 'floating') return null;
+  return 'Честно скажем: полностью убрать шаги может только пол у соседей, но стук станет глухим и мягким';
 }
 
 /**
- * Expert recommendations for Result: five connected beats.
- * Diagnosis → mechanism → % → sensation → honesty + comfort zone.
+ * Recommendations for Result: 2–3 short sentences.
+ * First item is the key fact (rendered bold), then the benefit, then an optional limit.
  */
 export function caseVerdictParts(
   room: RoomAnswers,
   noiseType: NoiseType,
   pcts: VerdictPcts,
 ): readonly string[] {
-  return [
-    endsWithPeriod(diagnosisBeat(room, noiseType)),
-    endsWithPeriod(mechanismBeat(room)),
-    endsWithPeriod(pctBeat(pcts)),
-    endsWithPeriod(sensationBeat(room, noiseType)),
-    endsWithPeriod(closingBeat(room, noiseType)),
-  ];
+  const parts = [factSentence(room, noiseType), benefitSentence(room, noiseType, pcts)];
+  const limit = limitSentence(room, noiseType);
+  if (limit) parts.push(limit);
+  return parts.map(sentence);
 }
 
 export function caseVerdict(room: RoomAnswers, noiseType: NoiseType, pcts: VerdictPcts): string {
