@@ -1,4 +1,5 @@
 import {
+  Component,
   lazy,
   Suspense,
   useCallback,
@@ -172,6 +173,17 @@ function useResolvedSources(items: PreviewItem[]) {
     force((n) => n + 1);
   };
   return { resolve, get, fail, itemsKey: items.map((i) => i.id).join('|') };
+}
+
+/** Ленивый просмотрщик не догрузился (нет сети, новая версия сайта) — показываем запасной вариант, а не белый экран. */
+class ViewerBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
 }
 
 const FOCUSABLE =
@@ -441,9 +453,11 @@ function PreviewBody({
     );
   if (kind === 'pdf')
     return (
-      <Suspense fallback={<PreviewSkeleton kind="pdf" />}>
-        <PdfView name={item.name} url={url} onFail={onError} />
-      </Suspense>
+      <ViewerBoundary fallback={<FileCard item={item} kind={kind} url={url} error="Просмотр PDF не загрузился без сети" />}>
+        <Suspense fallback={<PreviewSkeleton kind="pdf" />}>
+          <PdfView name={item.name} url={url} onFail={onError} />
+        </Suspense>
+      </ViewerBoundary>
     );
   // Текст — в песочнице без скриптов.
   return (
@@ -562,9 +576,11 @@ function WordBody({
   const plan = wordPreviewPlan(kind, { hasPdfCopy: !!pdfCopyUrl, size: size ?? item.size });
   if (plan === 'render' && !renderError)
     return (
-      <Suspense fallback={<PreviewSkeleton kind={kind} />}>
-        <WordView name={item.name} kind={kind} url={url} size={size ?? item.size} phone={phone} onFail={setRenderError} />
-      </Suspense>
+      <ViewerBoundary fallback={<FileCard item={item} kind={kind} url={url} size={size} error="Просмотр Word не загрузился без сети" />}>
+        <Suspense fallback={<PreviewSkeleton kind={kind} />}>
+          <WordView name={item.name} kind={kind} url={url} size={size ?? item.size} phone={phone} onFail={setRenderError} />
+        </Suspense>
+      </ViewerBoundary>
     );
   if (pdfCopyUrl) return <PdfCopyFrame name={item.name} url={pdfCopyUrl} />;
   if (renderError) return <FileCard item={item} kind={kind} url={url} size={size} error={renderError} />;

@@ -55,6 +55,7 @@ import {
   type CabinetCalcMessage,
 } from './cabinetCalc';
 import { withDemoDocuments } from './demoDocuments';
+import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
 import {
   bootstrapHistoryReset,
   flushAnalyticsQueue,
@@ -469,6 +470,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       navigator.serviceWorker?.removeEventListener('message', onMsg);
     };
   }, [flushObjectQueue, refreshObjects]);
+
+  // Офлайн-копии «Обучения» обновляются сами, если пользователь их включил.
+  useOfflineMaterialsAutoSync(user?.id ?? null, online);
 
   useEffect(() => {
     if (!user) {

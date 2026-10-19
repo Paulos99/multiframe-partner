@@ -78,6 +78,17 @@ export default defineConfig({
         // pdf.js: воркер и декодеры большие и нужны только при открытии PDF.
         globIgnores: ['pdfjs/**', '**/pdf.worker*.mjs', '**/pdf.worker*.js'],
         importScripts: ['sw-sync.js'],
+        // pdf.js (воркер, шрифты, wasm) не в precache — кладём в кэш при первом использовании,
+        // чтобы PDF из офлайн-копий открывались без сети. Только свой сайт: файлы из бакета
+        // (видео с Range) service worker не трогает.
+        runtimeCaching: [
+          {
+            urlPattern: ({ url, sameOrigin }) =>
+              sameOrigin && (url.pathname.includes('/pdfjs/') || /\/assets\/pdf\.worker[^/]*\.m?js$/.test(url.pathname)),
+            handler: 'CacheFirst',
+            options: { cacheName: 'mf-pdfjs-v1', expiration: { maxEntries: 400 } },
+          },
+        ],
       },
     }),
   ],

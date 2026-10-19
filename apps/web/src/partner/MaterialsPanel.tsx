@@ -1,6 +1,6 @@
 import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { Skeleton } from './Skeleton';
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from 'react';
 import type { PublicMaterial } from '../../../api/materialsLib.js';
 import { MaterialStubView, PREPARING_LABEL } from './MaterialStubView';
 import {
@@ -21,6 +21,17 @@ import { openFilePreview, type PreviewItem, type PreviewSource } from '../ui/fil
 import { FolderIcon as FolderGlyph } from '../icons';
 import { MaterialThumb } from './MaterialThumb';
 import { thumbnailAfterUpload } from './materialThumbnails';
+import {
+  getOfflineState,
+  isAvailableOffline,
+  offlineEnabled,
+  offlineMaterialBlob,
+  offlineMaterialsList,
+  rememberMaterialsList,
+  subscribeOffline,
+  syncOfflineMaterials,
+} from './offlineMaterials';
+import { OfflineMaterialsCard } from './OfflineMaterialsCard';
 
 export { PREPARING_LABEL };
 
@@ -60,8 +71,14 @@ function FolderIcon() {
   );
 }
 
-export function MaterialsPanel({ canManage }: { canManage: boolean }) {
+export function MaterialsPanel({ canManage: canManageOnline }: { canManage: boolean }) {
   const reduce=usePrefersReducedMotion();
+  // Перерисовка, когда меняется набор офлайн-копий (значок «Офлайн» у файлов).
+  useSyncExternalStore(subscribeOffline, getOfflineState, getOfflineState);
+  /** Без сети показываем сохранённый список: только чтение, правка — онлайн. */
+  const [offlineView, setOfflineView] = useState<{ at: string | null; reason: string } | null>(null);
+  const [serverList, setServerList] = useState<PublicMaterial[] | null>(null);
+  const canManage = canManageOnline && !offlineView;
   const [items, setItems] = useState<PublicMaterial[]>([]);
   const [folderId, setFolderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,9 +101,26 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      setItems(await listMaterials());
+      // Без сети не ждём таймаута запроса — сразу сохранённый список.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false && offlineEnabled()) throw new Error('Нет сети');
+      const list = await listMaterials();
+      setItems(list);
+      setServerList(list);
+      setOfflineView(null);
+      if (offlineEnabled()) {
+        rememberMaterialsList(list);
+        void syncOfflineMaterials(list);
+      }
     } catch (ex) {
-      setError(ex instanceof Error ? ex.message : 'Не удалось открыть материалы');
+      const message = ex instanceof Error ? ex.message : 'Не удалось открыть материалы';
+      const saved = await offlineMaterialsList().catch(() => null);
+      if (saved) {
+        setItems(saved.items);
+        setServerList(null);
+        setOfflineView({ at: saved.at, reason: message });
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -94,6 +128,9 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
 
   useEffect(() => {
     void reload();
+    const onOnline = () => void reload();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
   }, []);
 
 
@@ -220,6 +257,14 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
       }}
     >
       <p className={styles.lead}>Инструкции и презентации по продукту.</p>
+      {offlineView ? (
+        <p className={styles.status} role="status" data-testid="materials-offline-note">
+          {typeof navigator !== 'undefined' && navigator.onLine === false ? 'Нет сети' : offlineView.reason}. Показаны
+          офлайн-копии{offlineView.at ? ` от ${new Date(offlineView.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}` : ''}
+          . Открываются файлы со значком «Офлайн».
+        </p>
+      ) : null}
+      {materialsUseApi() ? <OfflineMaterialsCard list={serverList} offline={!!offlineView} /> : null}
       <nav className={styles.crumbs} aria-label="Папки">
         <button type="button" className={folderId ? styles.crumbBtn : styles.crumbCurrent} onClick={() => setFolderId(null)}>
           Все материалы
@@ -396,6 +441,11 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
                         <span className={styles.copy}>
                           <span className={styles.kind}>{materialKindLabel(item)}</span>
                           <span className={styles.name}>{item.name}</span>
+                          {isAvailableOffline(item.id) ? (
+                            <span className={styles.offlineBadge} data-testid="offline-badge">
+                              Офлайн
+                            </span>
+                          ) : null}
                           {materialNote(item) === PREPARING_LABEL ? (
                             <span className={styles.pending}>{PREPARING_LABEL}</span>
                           ) : materialNote(item) ? (
@@ -519,7 +569,26 @@ function materialPreviewItem(item: PublicMaterial): PreviewItem {
     mime: item.mime,
     size: item.size,
     load: async (): Promise<PreviewSource> => {
-      const [content, pdfCopy] = await Promise.all([openMaterial(item), openMaterialPdfCopy(item)]);
+      const local = async (): Promise<PreviewSource | null> => {
+        const copy = await offlineMaterialBlob(item.id).catch(() => null);
+        return copy ? { blob: copy.blob, mime: copy.mime } : null;
+      };
+      // Без сети — сразу с устройства.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        const saved = await local();
+        if (saved) return saved;
+        throw new Error('Нет сети, а офлайн-копии этого файла на устройстве нет');
+      }
+      let content: Awaited<ReturnType<typeof openMaterial>>;
+      let pdfCopy: Awaited<ReturnType<typeof openMaterialPdfCopy>>;
+      try {
+        [content, pdfCopy] = await Promise.all([openMaterial(item), openMaterialPdfCopy(item)]);
+      } catch (error) {
+        // Сервер недоступен (или сессия истекла) — откроем офлайн-копию, если она есть.
+        const saved = await local();
+        if (saved) return saved;
+        throw error;
+      }
       const extra = pdfCopy ? { pdfCopy } : {};
       if (content.kind === 'stub') return { node: <MaterialStubView stub={content.stub} /> };
       if (content.kind === 'remote')
