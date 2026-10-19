@@ -67,7 +67,9 @@ test('preview opens PDF and image, navigates with arrows and closes', async ({ p
   const dialog = page.getByRole('dialog', { name: 'Просмотр: Инструкция.pdf' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute('data-file-kind', 'pdf');
-  await expect(dialog.locator('iframe[title="Инструкция.pdf"]')).toBeAttached();
+  // PDF рисует pdf.js на холсте — без iframe (мобильный браузер не показывает PDF во фрейме).
+  await expect(dialog.locator('[data-testid="pdf-preview"] canvas').first()).toBeAttached({ timeout: 20000 });
+  await expect(dialog.locator('iframe, object, embed')).toHaveCount(0);
   await expect(dialog.getByRole('link', { name: 'Скачать' })).toHaveAttribute('download', 'Инструкция.pdf');
   await expect(dialog.getByRole('link', { name: 'Открыть в новой вкладке' })).toHaveAttribute('target', '_blank');
   await expect(dialog.getByText(/2 из 3/)).toBeVisible();
