@@ -41,4 +41,12 @@ describe('listMaterials with a remote API', () => {
     const items = await listMaterials();
     expect(items.some((m) => m.id === 'mat_fld_mount')).toBe(true);
   });
+  it('shows the session-expired message when the server rejects the stored token', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://api.example.test');
+    const { saveToken } = await import('./localStore');
+    saveToken('expired');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 })));
+    const { listMaterials, MATERIALS_SESSION_EXPIRED } = await import('./materialsClient');
+    await expect(listMaterials()).rejects.toThrow(MATERIALS_SESSION_EXPIRED);
+  });
 });

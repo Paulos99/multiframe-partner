@@ -23,6 +23,7 @@ import {
   apiReplaceMaterial,
   apiUploadMaterial,
   hasRemoteApi,
+  isApiError,
 } from './apiClient';
 import { loadDb, loadToken, saveDb } from './localStore';
 
@@ -80,7 +81,15 @@ function remoteEnabled(): boolean {
 }
 
 export async function listMaterials(): Promise<PublicMaterial[]> {
-  if (remoteEnabled()) return apiListMaterials();
+  if (remoteEnabled()) {
+    try {
+      return await apiListMaterials();
+    } catch (error) {
+      // Токен в хранилище есть, но сервер его уже не принимает (истёк/отозван).
+      if (isApiError(error) && error.status === 401) throw new Error(MATERIALS_SESSION_EXPIRED);
+      throw error;
+    }
+  }
   return localList();
 }
 
