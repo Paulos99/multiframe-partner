@@ -68,6 +68,7 @@ GATEWAY_PATHS = (
     "/materials/{materialId}",
     "/materials/{materialId}/content",
     "/materials/{materialId}/preview",
+    "/materials/{materialId}/thumbnail",
 )
 
 

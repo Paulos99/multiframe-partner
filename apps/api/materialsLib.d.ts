@@ -14,6 +14,11 @@ export type MaterialNode = {
   previewKey?: string | null;
   previewSize?: number | null;
   previewUpdatedAt?: string | null;
+  /** Миниатюра для списка: materials/<id>_thumb в бакете материалов. */
+  thumbKey?: string | null;
+  thumbSize?: number | null;
+  thumbType?: string | null;
+  thumbUpdatedAt?: string | null;
   updatedAt: string;
 };
 
@@ -36,6 +41,10 @@ export type PublicMaterial = {
   hasFile: boolean;
   /** Есть PDF-копия для предпросмотра (GET /materials/:id/preview). */
   hasPreview?: boolean;
+  /** Есть миниатюра (GET /materials/:id/thumbnail). */
+  hasThumbnail?: boolean;
+  /** Подписанная ссылка на миниатюру (~6 ч) — только в ответах API. */
+  thumbnailUrl?: string | null;
   updatedAt: string;
 };
 

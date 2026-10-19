@@ -4,7 +4,7 @@
  * для чтения старых ключей materials/<id> без поля bucket.
  */
 
-import { MATERIAL_BUCKET_MARKER } from './materialsLib.js';
+import { MATERIAL_BUCKET_MARKER, materialBase, toPublicMaterial } from './materialsLib.js';
 import {
   abortMultipartUpload,
   completeMultipartUpload,
@@ -172,4 +172,57 @@ export async function completeMaterialMultipart(key, uploadId, parts) {
 export async function abortMaterialMultipart(key, uploadId) {
   assertMaterialKey(key);
   return abortMultipartUpload({ bucket: writableMaterialsBucket(), key, uploadId });
+}
+
+/** Ссылка на миниатюру живёт 6 ч; подпись от начала часа — ссылка не меняется весь час и кэшируется браузером. */
+export const THUMB_URL_TTL_SECONDS = 6 * 60 * 60;
+const THUMB_TYPES = new Set(['image/webp', 'image/jpeg', 'image/png']);
+
+export function thumbSigningDate(now = Date.now()) {
+  return new Date(Math.floor(now / 3_600_000) * 3_600_000);
+}
+
+/**
+ * Подписанный GET миниатюры (materials/<id>_thumb в MATERIALS_BUCKET).
+ * @returns {Promise<string | null>}
+ */
+export async function signedThumbnailUrl(node, { now } = {}) {
+  const key = node?.thumbKey;
+  if (!key) return null;
+  assertMaterialKey(key);
+  const bucket = writableMaterialsBucket();
+  const type = THUMB_TYPES.has(node.thumbType) ? node.thumbType : 'image/webp';
+  const ext = type === 'image/png' ? 'png' : type === 'image/jpeg' ? 'jpg' : 'webp';
+  return signGetObject({
+    bucket,
+    key,
+    responseContentType: type,
+    responseContentDisposition: `inline; filename="thumbnail.${ext}"`,
+    expiresIn: THUMB_URL_TTL_SECONDS,
+    signingDate: thumbSigningDate(now),
+  });
+}
+
+/**
+ * Список материалов для ответа API: публичные поля + thumbnailUrl у файлов с миниатюрой.
+ * Хранилище не настроено или подпись не удалась — thumbnailUrl: null, список всё равно отдаётся.
+ */
+export async function signedPublicMaterials(stored, { now } = {}) {
+  const nodes = materialBase(stored);
+  const ready = !materialsConfigError();
+  return Promise.all(
+    nodes.map(async (node) => {
+      const item = toPublicMaterial(node);
+      if (!item.hasThumbnail) return item;
+      let thumbnailUrl = null;
+      if (ready) {
+        try {
+          thumbnailUrl = (await signedThumbnailUrl(node, { now })) || null;
+        } catch {
+          thumbnailUrl = null;
+        }
+      }
+      return { ...item, thumbnailUrl };
+    }),
+  );
 }
