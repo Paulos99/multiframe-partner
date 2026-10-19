@@ -54,14 +54,13 @@ export default defineConfig({
       includeAssets: [
         'logo-stp.png',
         'logo-multiframe.png',
-        'og-share.jpg',
         ...Object.keys(ICON_FILES),
         'sw-sync.js',
       ],
       manifest: {
         name: 'MultiFrame · Кабинет партнёра',
         short_name: 'MF Партнёр',
-        description: 'Проблемомер и калькулятор для коммерческих партнёров',
+        description: 'Партнёрская сеть StP MultiFrame',
         theme_color: '#01644f',
         background_color: '#f4f7f6',
         display: 'standalone',
