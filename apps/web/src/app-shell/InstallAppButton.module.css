@@ -15,8 +15,8 @@ button.compact.compact {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 36px;
-  min-height: 36px;
+  height: 40px;
+  min-height: 40px;
   max-width: 100%;
   margin: 0;
   padding: 0 12px 0 10px;
@@ -55,6 +55,24 @@ button.compact.compact:active {
   min-width: max-content;
   overflow: visible;
   white-space: nowrap;
+}
+
+/* Самые узкие телефоны (360 px): в верхнем ряду шапки только значок, имя кнопки остаётся для скринридера. */
+@media (max-width: 374px) {
+  button.compact.compact {
+    width: 40px;
+    padding: 0;
+  }
+
+  .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-width: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
 }
 
 .hint {

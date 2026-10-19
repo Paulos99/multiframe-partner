@@ -39,10 +39,17 @@
   opacity: 1;
 }
 
+/* Планшет и телефон: логотипы стоят в одном ряду с кнопками шапки — без нижнего отступа. */
+@media (max-width: 1024px) {
+  .brand {
+    margin-bottom: 0;
+  }
+}
+
 @media (max-width: 420px) {
   .brand {
     gap: 8px;
-    margin-bottom: 4px;
+    margin-bottom: 0;
   }
 
   .stp {
