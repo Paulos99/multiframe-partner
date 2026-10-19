@@ -900,8 +900,10 @@ export async function handler(event = {}) {
     }
 
     if (method === 'GET' && path.endsWith('/auth/me')) {
-      const { platform, user, usedPreviousKey } = await requireAuth(event);
-      return json(200, { user: await sessionUser(user, platform), ...(usedPreviousKey ? { token: await signToken(user) } : {}) });
+      const { platform, user, payload, usedPreviousKey } = await requireAuth(event);
+      // Скользящая сессия: токен старше часа обновляется, чтобы активный пользователь не упирался в 12 ч.
+      const stale = Number(payload?.iat) > 0 && Date.now() / 1000 - Number(payload.iat) > 3600;
+      return json(200, { user: await sessionUser(user, platform), ...(usedPreviousKey || stale ? { token: await signToken(user) } : {}) });
     }
 
     if (method === 'POST' && path.endsWith('/auth/logout')) {

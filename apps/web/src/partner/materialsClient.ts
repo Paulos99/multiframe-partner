@@ -23,6 +23,7 @@ import {
   apiReplaceMaterial,
   apiUploadMaterial,
   hasRemoteApi,
+  isApiError,
 } from './apiClient';
 import { loadDb, loadToken, saveDb } from './localStore';
 
@@ -63,16 +64,20 @@ function localList(): PublicMaterial[] {
 
 /** Материалы идут через API (а не localStorage) — тогда есть миниатюры и их загрузка. */
 export function materialsUseApi(): boolean {
-  return remoteEnabled();
+  return hasRemoteApi();
 }
 
+export const MATERIALS_SESSION_EXPIRED = 'Сессия истекла. Выйдите и войдите заново, чтобы открыть материалы.';
+
+/**
+ * С настроенным API материалы берутся только с сервера. Без токена (истёк, 401)
+ * раньше молча открывалась локальная демо-библиотека из localStorage — реальные
+ * файлы «пропадали». Теперь — явная ошибка с просьбой войти заново.
+ */
 function remoteEnabled(): boolean {
-  return hasRemoteApi() && Boolean(loadToken());
-}
-
-function missingApi(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : '';
-  return /not found|404/i.test(message);
+  if (!hasRemoteApi()) return false;
+  if (!loadToken()) throw new Error(MATERIALS_SESSION_EXPIRED);
+  return true;
 }
 
 export async function listMaterials(): Promise<PublicMaterial[]> {
@@ -80,7 +85,8 @@ export async function listMaterials(): Promise<PublicMaterial[]> {
     try {
       return await apiListMaterials();
     } catch (error) {
-      if (missingApi(error)) return publicMaterials(undefined);
+      // Токен в хранилище есть, но сервер его уже не принимает (истёк/отозван).
+      if (isApiError(error) && error.status === 401) throw new Error(MATERIALS_SESSION_EXPIRED);
       throw error;
     }
   }
@@ -345,7 +351,7 @@ export async function openMaterial(item: PublicMaterial): Promise<MaterialConten
 export async function openMaterialPdfCopy(
   item: PublicMaterial,
 ): Promise<{ url: string } | { blob: Blob } | null> {
-  if (!item.hasPreview || !remoteEnabled()) return null;
+  if (!item.hasPreview || !hasRemoteApi() || !loadToken()) return null;
   try {
     const data = await apiMaterialPreview(item.id);
     if (data.url) return { url: data.url };
