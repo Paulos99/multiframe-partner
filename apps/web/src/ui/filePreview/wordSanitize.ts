@@ -50,3 +50,36 @@ export function sanitizeRenderedDoc(root: ParentNode): number {
   });
   return removed;
 }
+
+/**
+ * Обрезанная в Word картинка (srcRect). docx-preview рисует её через clip-path + transform,
+ * и масштаб идёт от центра — картинка съезжает и наезжает на текст ниже. Переводим
+ * в честную обрезку: контейнер с overflow:hidden, картинка нужного размера со сдвигом.
+ * Возвращает число исправленных картинок.
+ */
+export function fixCroppedImages(root: ParentNode): number {
+  let fixed = 0;
+  root.querySelectorAll<HTMLImageElement>('img').forEach((img) => {
+    const clip = img.style.clipPath || img.style.getPropertyValue('clip-path');
+    const m = /rect\(\s*([\d.]+)%\s+([\d.]+)%\s+([\d.]+)%\s+([\d.]+)%\s*\)/.exec(clip || '');
+    const box = img.parentElement;
+    if (!m || !box) return;
+    const [top, right, bottom, left] = m.slice(1, 5).map((v) => Number(v) / 100) as [number, number, number, number];
+    const w = right - left;
+    const h = bottom - top;
+    if (!(w > 0.01 && h > 0.01 && w <= 1 && h <= 1)) return;
+    box.style.overflow = 'hidden';
+    if (!box.style.position || box.style.position === 'static') box.style.position = 'relative';
+    img.style.clipPath = '';
+    img.style.removeProperty('clip-path');
+    img.style.transform = '';
+    img.style.position = 'absolute';
+    img.style.maxWidth = 'none';
+    img.style.width = `${(100 / w).toFixed(4)}%`;
+    img.style.height = `${(100 / h).toFixed(4)}%`;
+    img.style.left = `${(-(left / w) * 100).toFixed(4)}%`;
+    img.style.top = `${(-(top / h) * 100).toFixed(4)}%`;
+    fixed += 1;
+  });
+  return fixed;
+}

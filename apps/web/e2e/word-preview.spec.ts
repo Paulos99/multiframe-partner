@@ -171,12 +171,13 @@ test('.doc with a PDF copy shows the copy, download keeps the original', async (
   );
   await page.getByRole('button', { name: /Старый договор\.doc/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Просмотр: Старый договор.doc' });
-  await expect(dialog.locator('iframe[data-pdf-copy="true"]')).toBeAttached();
+  await expect(dialog.locator('[data-pdf-copy="true"] [data-testid="pdf-preview"] canvas').first()).toBeAttached({ timeout: 20000 });
+  await expect(dialog.locator('iframe, object, embed')).toHaveCount(0);
   await expect(dialog.getByText('PDF-копия документа для просмотра', { exact: false })).toBeVisible();
   await expect(dialog.getByRole('link', { name: 'Скачать' }).first()).toHaveAttribute('download', 'Старый договор.doc');
 });
 
-test('phone: .docx text reflows to the screen width', async ({ page }) => {
+test('phone: .docx page is scaled to the screen width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await enter(page, [docxFile], { mat_kp: fixture('kp-sample.docx').toString('base64') });

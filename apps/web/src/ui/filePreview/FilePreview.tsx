@@ -28,6 +28,8 @@ import {
 } from './fileKind';
 // Просмотр Word (вместе с docx-preview) грузится только при открытии документа.
 const WordView = lazy(() => import('./WordPreview').then((mod) => ({ default: mod.WordView })));
+// PDF рисует pdf.js на холстах (мобильный браузер не показывает PDF во iframe). Тоже лениво.
+const PdfView = lazy(() => import('./PdfPreview').then((mod) => ({ default: mod.PdfView })));
 import {
   closeFilePreview,
   getFilePreviewState,
@@ -389,9 +391,9 @@ function PreviewBody({
   onError: (message: string) => void;
 }) {
   const [loaded, setLoaded] = useState(false);
-  const framed = resolved.status === 'ready' && !!resolved.url && (kind === 'pdf' || kind === 'text');
+  const framed = resolved.status === 'ready' && !!resolved.url && kind === 'text';
   useEffect(() => {
-    // Встроенный PDF-просмотрщик не везде шлёт load — не держим скелетон вечно.
+    // iframe не везде шлёт load — не держим скелетон вечно.
     if (!framed || loaded) return;
     const t = window.setTimeout(() => setLoaded(true), 3500);
     return () => window.clearTimeout(t);
@@ -436,7 +438,13 @@ function PreviewBody({
         />
       </div>
     );
-  // PDF и текст — встроенный просмотр браузера. Текст — в песочнице без скриптов.
+  if (kind === 'pdf')
+    return (
+      <Suspense fallback={<PreviewSkeleton kind="pdf" />}>
+        <PdfView name={item.name} url={url} onFail={onError} />
+      </Suspense>
+    );
+  // Текст — в песочнице без скриптов.
   return (
     <div className={styles.frameWrap}>
       {!loaded ? <PreviewSkeleton kind={kind} /> : null}
@@ -444,8 +452,8 @@ function PreviewBody({
         className={styles.frame}
         data-loaded={loaded ? 'true' : 'false'}
         title={item.name}
-        src={kind === 'pdf' ? `${url}#view=FitH` : url}
-        sandbox={kind === 'text' ? '' : undefined}
+        src={url}
+        sandbox=""
         onLoad={() => setLoaded(true)}
       />
     </div>
@@ -493,28 +501,19 @@ function WordBody({
   );
 }
 
-/** PDF-копия документа во встроенном просмотрщике браузера. Кнопка «Скачать» в шапке отдаёт оригинал. */
+/** PDF-копия документа (pdf.js). Кнопка «Скачать» в шапке отдаёт оригинал. */
 function PdfCopyFrame({ name, url }: { name: string; url: string }) {
-  const [loaded, setLoaded] = useState(false);
-  useEffect(() => {
-    if (loaded) return;
-    const t = window.setTimeout(() => setLoaded(true), 3500);
-    return () => window.clearTimeout(t);
-  }, [loaded]);
+  const [error, setError] = useState<string | null>(null);
   return (
-    <div className={styles.copyWrap}>
-      <p className={styles.copyNote}>PDF-копия документа для просмотра. «Скачать» сохранит оригинал.</p>
-      <div className={styles.frameWrap}>
-        {!loaded ? <PreviewSkeleton kind="pdf" /> : null}
-        <iframe
-          className={styles.frame}
-          data-loaded={loaded ? 'true' : 'false'}
-          data-pdf-copy="true"
-          title={`PDF-копия: ${name}`}
-          src={`${url}#view=FitH`}
-          onLoad={() => setLoaded(true)}
-        />
-      </div>
+    <div className={styles.copyWrap} data-pdf-copy="true">
+      <p className={styles.copyNote} role={error ? 'alert' : undefined}>
+        {error ? `${error}. «Скачать» сохранит оригинал.` : 'PDF-копия документа для просмотра. «Скачать» сохранит оригинал.'}
+      </p>
+      {error ? null : (
+        <Suspense fallback={<PreviewSkeleton kind="pdf" />}>
+          <PdfView name={`PDF-копия: ${name}`} url={url} onFail={setError} />
+        </Suspense>
+      )}
     </div>
   );
 }

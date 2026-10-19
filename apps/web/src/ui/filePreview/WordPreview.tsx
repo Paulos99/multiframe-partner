@@ -1,21 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { sniffWordFormat, WORD_RENDER_MAX_BYTES, type FileKind } from './fileKind';
-import { sanitizeRenderedDoc } from './wordSanitize';
+import { wordFitScale, WORD_ZOOM_MAX } from './viewerMath';
+import { fixCroppedImages, sanitizeRenderedDoc } from './wordSanitize';
 import styles from './FilePreview.module.css';
 
-/** Стили внутри теневого DOM: страницы как в Word на десктопе, текст по ширине экрана на телефоне. */
+/**
+ * Стили внутри теневого DOM. Документ всегда сверстан страницами, как в Word,
+ * а затем целиком уменьшается под ширину окна (transform: scale) — на телефоне
+ * видна вся ширина листа, горизонтальной прокрутки нет. На широком экране масштаб 1.
+ */
 const SHADOW_CSS = `
 :host { display: block; height: 100%; }
-.mf-scroll { height: 100%; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: var(--cab-subtle, #eef2f1); }
-.mf-scroll .mf-docx-wrapper { background: transparent; padding: 24px 16px 48px; }
-.mf-scroll .mf-docx-wrapper > section.mf-docx { box-shadow: 0 2px 12px rgba(0,0,0,.12); margin: 0 auto 24px; color: #111; background: #fff; max-width: 100%; box-sizing: border-box; }
-.mf-scroll img, .mf-scroll svg { max-width: 100%; height: auto; }
-.mf-scroll table { max-width: 100%; }
+.mf-scroll { height: 100%; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: var(--cab-subtle, #eef2f1); box-sizing: border-box; padding: 0 0 88px; outline: none; }
+.mf-scroll[data-zoomed='true'] { overflow-x: auto; }
+.mf-fit { position: relative; overflow: hidden; margin: 0 auto; }
+.mf-fit > .mf-docx-wrapper { position: absolute; top: 0; left: 0; width: max-content; transform-origin: 0 0; background: transparent; padding: 24px 16px 24px; box-sizing: border-box; }
+.mf-fit > .mf-docx-wrapper > section.mf-docx { box-shadow: 0 2px 12px rgba(0,0,0,.12); margin: 0 auto 24px; color: #111; background: #fff; box-sizing: border-box; overflow: hidden; }
+.mf-fit > .mf-docx-wrapper > section.mf-docx:last-child { margin-bottom: 0; }
 .mf-scroll a { color: #01644f; }
-.mf-phone .mf-docx-wrapper { padding: 8px 0 32px; }
-.mf-phone .mf-docx-wrapper > section.mf-docx { padding: 20px 16px !important; min-height: 0 !important; width: auto !important; margin: 0 0 8px; box-shadow: none; }
-.mf-phone section.mf-docx { font-size: 15px; overflow-wrap: anywhere; }
-.mf-phone section.mf-docx table { display: block; overflow-x: auto; }
+.mf-phone .mf-fit > .mf-docx-wrapper { padding: 12px 6px; }
+.mf-phone .mf-fit > .mf-docx-wrapper > section.mf-docx { margin-bottom: 14px; }
 `;
 
 export type WordViewProps = {
@@ -35,6 +39,12 @@ export type WordViewProps = {
 export function WordView({ name, kind, url, size, phone, onFail }: WordViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'loading' | 'ready'>('loading');
+  const [zoom, setZoom] = useState(1);
+  const layoutRef = useRef<{ scroll: HTMLElement; fit: HTMLElement; wrapper: HTMLElement | null } | null>(null);
+  const zoomRef = useRef(zoom);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
   const failRef = useRef(onFail);
   useEffect(() => {
     failRef.current = onFail;
@@ -68,16 +78,19 @@ export function WordView({ name, kind, url, size, phone, onFail }: WordViewProps
       scroll.setAttribute('role', 'document');
       scroll.setAttribute('aria-label', name);
       scroll.tabIndex = 0;
+      const fit = document.createElement('div');
+      fit.className = 'mf-fit';
+      scroll.append(fit);
       shadow.append(base, docStyles, scroll);
-      await renderAsync(buffer, scroll, docStyles, {
+      await renderAsync(buffer, fit, docStyles, {
         className: 'mf-docx',
         inWrapper: true,
-        ignoreWidth: phone,
-        ignoreHeight: phone,
-        breakPages: !phone,
+        ignoreWidth: false,
+        ignoreHeight: false,
+        breakPages: true,
         ignoreLastRenderedPageBreak: true,
-        renderHeaders: !phone,
-        renderFooters: !phone,
+        renderHeaders: true,
+        renderFooters: true,
         renderFootnotes: true,
         renderEndnotes: true,
         renderComments: false,
@@ -89,6 +102,8 @@ export function WordView({ name, kind, url, size, phone, onFail }: WordViewProps
       });
       if (cancelled) return;
       sanitizeRenderedDoc(shadow);
+      fixCroppedImages(shadow);
+      layoutRef.current = { scroll, fit, wrapper: fit.querySelector<HTMLElement>(':scope > .mf-docx-wrapper') };
       setState('ready');
     })().catch((error: unknown) => {
       if (cancelled || (error instanceof DOMException && error.name === 'AbortError')) return;
@@ -104,6 +119,30 @@ export function WordView({ name, kind, url, size, phone, onFail }: WordViewProps
     };
   }, [url, size, kind, name, phone]);
 
+  // Подгоняем лист под ширину окна и пересчитываем при повороте/ресайзе и догрузке картинок.
+  useEffect(() => {
+    const layout = layoutRef.current;
+    if (state !== 'ready' || !layout || !layout.wrapper) return;
+    const { scroll, fit, wrapper } = layout;
+    const apply = () => {
+      const naturalW = Math.max(wrapper.offsetWidth, wrapper.scrollWidth);
+      const naturalH = Math.max(wrapper.offsetHeight, wrapper.scrollHeight);
+      const s = wordFitScale(scroll.clientWidth, naturalW) * zoomRef.current;
+      wrapper.style.transform = `scale(${s})`;
+      fit.style.width = `${Math.floor(naturalW * s)}px`;
+      fit.style.height = `${Math.ceil(naturalH * s)}px`;
+      scroll.dataset.zoomed = zoomRef.current > 1 ? 'true' : 'false';
+      scroll.dataset.scale = s.toFixed(3);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(scroll);
+    ro.observe(wrapper);
+    return () => ro.disconnect();
+  }, [state, zoom]);
+
+  const step = (next: number) => setZoom(Math.min(WORD_ZOOM_MAX, Math.max(1, Math.round(next * 100) / 100)));
+
   return (
     <div className={styles.wordWrap} data-word-state={state}>
       {state === 'loading' ? (
@@ -117,6 +156,19 @@ export function WordView({ name, kind, url, size, phone, onFail }: WordViewProps
         </div>
       ) : null}
       <div ref={hostRef} className={styles.wordHost} data-testid="word-preview" />
+      {state === 'ready' ? (
+        <div className={styles.zoomBar} role="group" aria-label="Масштаб">
+          <button type="button" onClick={() => step(zoom / 1.25)} disabled={zoom <= 1} aria-label="Уменьшить">
+            −
+          </button>
+          <button type="button" onClick={() => setZoom(1)} aria-label="По ширине" className={styles.zoomValue}>
+            {Math.round(zoom * 100)}%
+          </button>
+          <button type="button" onClick={() => step(zoom * 1.25)} disabled={zoom >= WORD_ZOOM_MAX} aria-label="Увеличить">
+            +
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
