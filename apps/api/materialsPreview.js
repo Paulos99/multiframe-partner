@@ -14,13 +14,14 @@
  *   DELETE /materials/:id/preview  — только admin: убрать копию
  */
 
-import { MATERIAL_BUCKET_MARKER, findMaterial, materialBase, publicMaterials } from './materialsLib.js';
+import { MATERIAL_BUCKET_MARKER, findMaterial, materialBase } from './materialsLib.js';
 import {
   deleteMaterialBytes,
   materialsConfigError,
   putMaterialBytes,
   signMaterialUpload,
   signedMaterialGetUrl,
+  signedPublicMaterials,
   statMaterialObject,
 } from './materialsStorage.js';
 
@@ -59,7 +60,7 @@ async function savePreview(ctx, platform, id, fields) {
   nodes[idx] = { ...nodes[idx], ...fields };
   platform.materials = nodes;
   await ctx.savePlatform(platform);
-  return ctx.json(200, { materials: publicMaterials(platform.materials) });
+  return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
 }
 
 /**

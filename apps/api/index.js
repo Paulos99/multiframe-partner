@@ -11,6 +11,7 @@ import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
 import { findVisibleDocument, incomingDocumentKind, visibleDocuments } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
 import { handleMaterialPreview } from './materialsPreview.js';
+import { handleMaterialThumbnail } from './materialsThumbnail.js';
 import {
   loadStoredDocument,
   mergeEventList,
@@ -837,6 +838,16 @@ export async function handler(event = {}) {
       savePlatform,
     });
     if (materialPreviewResponse) return materialPreviewResponse;
+    const materialThumbResponse = await handleMaterialThumbnail({
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      assertRole,
+      json,
+      getBody: () => getBody(event),
+      savePlatform,
+    });
+    if (materialThumbResponse) return materialThumbResponse;
     const materialsResponse = await handleMaterials({
       path,
       method,

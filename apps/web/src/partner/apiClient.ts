@@ -450,6 +450,26 @@ export async function apiMaterialPreview(id: string): Promise<{
   return request(`/materials/${id}/preview`);
 }
 
+/** Миниатюра материала (только админ): подписанный PUT в бакет. */
+export async function apiMaterialThumbnailTicket(
+  id: string,
+  mime: string,
+): Promise<{ url: string; method: 'PUT'; storageKey: string; headers?: Record<string, string>; maxBytes?: number }> {
+  return request(`/materials/${id}/thumbnail`, { method: 'POST', body: JSON.stringify({ upload: true, mime }) });
+}
+
+/** Подтвердить загруженную миниатюру — API проверит тип и размер и вернёт список материалов. */
+export async function apiMaterialThumbnailConfirm(
+  id: string,
+  storageKey: string,
+): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{ materials: import('../../../api/materialsLib.js').PublicMaterial[] }>(
+    `/materials/${id}/thumbnail`,
+    { method: 'POST', body: JSON.stringify({ storageKey }) },
+  );
+  return data.materials;
+}
+
 export async function apiMaterialContent(id: string): Promise<{
   name?: string;
   mime?: string | null;

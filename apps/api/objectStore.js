@@ -199,6 +199,8 @@ export async function signGetObject({
   key,
   responseContentType,
   responseContentDisposition,
+  expiresIn,
+  signingDate,
 }) {
   if (transportForTests) {
     const out = await transportForTests({
@@ -207,6 +209,8 @@ export async function signGetObject({
       key,
       responseContentType,
       responseContentDisposition,
+      ...(expiresIn ? { expiresIn } : {}),
+      ...(signingDate ? { signingDate } : {}),
     });
     return out == null ? '' : String(out);
   }
@@ -226,7 +230,10 @@ export async function signGetObject({
       ? { ResponseContentDisposition: responseContentDisposition }
       : {}),
   });
-  return getSignedUrl(client, command, { expiresIn: SIGNED_GET_TTL_SECONDS });
+  return getSignedUrl(client, command, {
+    expiresIn: expiresIn || SIGNED_GET_TTL_SECONDS,
+    ...(signingDate ? { signingDate } : {}),
+  });
 }
 
 /**

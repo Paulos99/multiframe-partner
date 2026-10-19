@@ -91,10 +91,19 @@ writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(base));
 const { setObjectStoreTransportForTests } =
   await import('../../api/objectStore.js');
 const avatars = new Map();
+const objectTypes = new Map();
 setObjectStoreTransportForTests(async (op) => {
   if (op.action === 'put') {
     avatars.set(op.key, op.body);
+    if (op.contentType) objectTypes.set(op.key, op.contentType);
     return {};
+  }
+  // Подписанный PUT миниатюры: браузер кладёт байты в /test-put/<key>.
+  if (op.action === 'sign-put') return `http://127.0.0.1:4181/test-put/${encodeURIComponent(op.key)}`;
+  if (op.action === 'head') {
+    const b = avatars.get(op.key);
+    if (!b) return { missing: true, etag: null, contentLength: null, contentType: null };
+    return { missing: false, etag: 'e2e', contentLength: Buffer.byteLength(b), contentType: objectTypes.get(op.key) || 'application/octet-stream' };
   }
   // Удаление материалов/аватаров — только в памяти этого процесса.
   if (op.action === 'delete') {
@@ -114,14 +123,36 @@ const server = createServer(async (req, res) => {
       resetStoredDocumentsForTests();
       writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(base));
       avatars.clear();
+      objectTypes.clear();
       res.writeHead(200);
       res.end('{}');
       return;
     }
+    if (req.url.startsWith('/test-put/')) {
+      const cors = {
+        'Access-Control-Allow-Origin': 'http://127.0.0.1:4180',
+        'Access-Control-Allow-Methods': 'PUT',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      };
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, cors);
+        res.end();
+        return;
+      }
+      const chunks = [];
+      for await (const c of req) chunks.push(c);
+      const key = decodeURIComponent(req.url.slice('/test-put/'.length));
+      avatars.set(key, Buffer.concat(chunks));
+      objectTypes.set(key, String(req.headers['content-type'] || ''));
+      res.writeHead(200, cors);
+      res.end();
+      return;
+    }
     if (req.url.startsWith('/test-avatar/')) {
       const b = avatars.get(decodeURIComponent(req.url.slice(13)));
+      const key = decodeURIComponent(req.url.slice(13));
       res.writeHead(b ? 200 : 404, {
-        'Content-Type': 'image/webp',
+        'Content-Type': objectTypes.get(key) || 'image/webp',
         'Access-Control-Allow-Origin': 'http://127.0.0.1:4180',
       });
       res.end(b);

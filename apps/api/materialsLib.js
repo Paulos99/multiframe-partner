@@ -117,6 +117,8 @@ export function toPublicMaterial(node) {
     hasFile: Boolean(node.storageKey || node.contentBase64),
     /** Есть PDF-копия для предпросмотра (GET /materials/:id/preview). */
     hasPreview: Boolean(node.previewKey),
+    /** Есть миниатюра для списка (подписанная ссылка — thumbnailUrl в ответе API). */
+    hasThumbnail: Boolean(node.thumbKey),
     updatedAt: node.updatedAt || DEMO_AT,
   };
 }
@@ -240,6 +242,11 @@ export function replaceFile(
     previewKey: null,
     previewSize: null,
     previewUpdatedAt: null,
+    // И миниатюра тоже — новую строит кабинет после загрузки.
+    thumbKey: null,
+    thumbSize: null,
+    thumbType: null,
+    thumbUpdatedAt: null,
     updatedAt: now,
   };
   return {
@@ -283,6 +290,10 @@ export function deleteMaterial(stored, { id }) {
       ...nodes
         .filter((node) => ids.has(node.id) && node.previewKey)
         .map((node) => ({ key: node.previewKey, bucket: MATERIAL_BUCKET_MARKER })),
+      // Миниатюры — тоже только в бакете материалов.
+      ...nodes
+        .filter((node) => ids.has(node.id) && node.thumbKey)
+        .map((node) => ({ key: node.thumbKey, bucket: MATERIAL_BUCKET_MARKER })),
     ],
   };
 }

@@ -36,6 +36,8 @@ export function materialKindLabel(item: PublicMaterial): string {
   if (item.stub?.startsWith('deck-') || item.mime?.includes('presentation')) return 'Презентация';
   if (item.stub === 'instruction-install') return 'Инструкция';
   if (item.mime === 'application/pdf') return 'PDF';
+  if (item.mime?.startsWith('image/')) return 'Изображение';
+  if (item.mime?.includes('wordprocessingml') || item.mime === 'application/msword') return 'Документ';
   return 'Файл';
 }
 
@@ -57,6 +59,11 @@ function base64ToBlob(b64: string, mime: string): Blob {
 
 function localList(): PublicMaterial[] {
   return publicMaterials(loadDb().materials);
+}
+
+/** Материалы идут через API (а не localStorage) — тогда есть миниатюры и их загрузка. */
+export function materialsUseApi(): boolean {
+  return remoteEnabled();
 }
 
 function remoteEnabled(): boolean {

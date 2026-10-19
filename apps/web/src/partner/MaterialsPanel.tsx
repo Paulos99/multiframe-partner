@@ -8,6 +8,7 @@ import {
   deleteMaterialItem,
   listMaterials,
   materialKindLabel,
+  materialsUseApi,
   openMaterial,
   openMaterialPdfCopy,
   renameMaterialItem,
@@ -18,6 +19,8 @@ import styles from './MaterialsPanel.module.css';
 import { ContextMenu, DeleteFolderDialog, folderContents } from './MaterialsContextMenu';
 import { openFilePreview, type PreviewItem, type PreviewSource } from '../ui/filePreview/previewStore';
 import { FolderIcon as FolderGlyph } from '../icons';
+import { MaterialThumb } from './MaterialThumb';
+import { thumbnailAfterUpload } from './materialThumbnails';
 
 export { PREPARING_LABEL };
 
@@ -153,14 +156,23 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
     if (!file) return;
     const target = replaceId.current;
     replaceId.current = null;
-    if (target) await run(() => replaceMaterialFile(target, file));
-    else
-      await run(() =>
-        uploadMaterialFile(file, folderId, (loaded, total) => {
-          const percent = total ? Math.floor((loaded / total) * 100) : 0;
-          setStatus(`Загрузка «${file.name}»: ${percent}%`);
-        }),
-      );
+    const parentId = folderId;
+    let saved: PublicMaterial[] | null = null;
+    const ok = await run(async () => {
+      saved = target
+        ? await replaceMaterialFile(target, file)
+        : await uploadMaterialFile(file, parentId, (loaded, total) => {
+            const percent = total ? Math.floor((loaded / total) * 100) : 0;
+            setStatus(`Загрузка «${file.name}»: ${percent}%`);
+          });
+      return saved;
+    });
+    // Миниатюра из локального файла (картинка, кадр видео, 1-я страница PDF) — в фоне, без ожидания.
+    if (ok && saved && materialsUseApi()) {
+      void thumbnailAfterUpload(file, saved, { id: target, parentId }).then((next) => {
+        if (next) setItems(next);
+      });
+    }
   }
 
   /**
@@ -379,7 +391,8 @@ export function MaterialsPanel({ canManage }: { canManage: boolean }) {
                         }}
                       />
                     ) : (
-                      <button type="button" className={styles.open} onClick={() => void openItem(item)}>
+                      <button type="button" className={`${styles.open} ${styles.fileOpen}`} onClick={() => void openItem(item)}>
+                        <MaterialThumb key={item.thumbnailUrl || item.id} item={item} />
                         <span className={styles.copy}>
                           <span className={styles.kind}>{materialKindLabel(item)}</span>
                           <span className={styles.name}>{item.name}</span>

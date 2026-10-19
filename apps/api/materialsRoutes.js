@@ -16,7 +16,6 @@ import {
   deleteMaterial,
   findMaterial,
   materialBase,
-  publicMaterials,
   renameMaterial,
   replaceFile,
 } from './materialsLib.js';
@@ -31,6 +30,7 @@ import {
   putMaterialBytes,
   signMaterialUpload,
   signedMaterialGetUrl,
+  signedPublicMaterials,
   statMaterialObject,
 } from './materialsStorage.js';
 
@@ -140,7 +140,7 @@ async function registerUploadedMaterial(ctx, platform, body) {
   if (!result.ok) return ctx.json(400, { message: result.message });
   platform.materials = result.nodes;
   await ctx.savePlatform(platform);
-  return ctx.json(200, { materials: publicMaterials(platform.materials) });
+  return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
 }
 
 async function signedContent(ctx, node) {
@@ -172,7 +172,7 @@ export async function handleMaterials(ctx) {
   if (method === 'GET' && (path === '/materials' || path.endsWith('/materials'))) {
     const { platform, user } = await ctx.requireAuth();
     ctx.assertRole(user, READ_ROLES);
-    return ctx.json(200, { materials: publicMaterials(platform.materials) });
+    return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
   }
 
   if (method === 'POST' && /\/materials\/folders$/.test(path)) {
@@ -189,7 +189,7 @@ export async function handleMaterials(ctx) {
     if (!result.ok) return ctx.json(400, { message: result.message });
     platform.materials = result.nodes;
     await ctx.savePlatform(platform);
-    return ctx.json(200, { materials: publicMaterials(platform.materials) });
+    return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
   }
 
   if (method === 'POST' && /\/materials\/files\/upload-url$/.test(path)) {
@@ -304,7 +304,7 @@ export async function handleMaterials(ctx) {
     }
     platform.materials = result.nodes;
     await ctx.savePlatform(platform);
-    return ctx.json(200, { materials: publicMaterials(platform.materials) });
+    return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
   }
 
   const contentMatch = path.match(/\/materials\/([^/]+)\/content$/);
@@ -360,7 +360,7 @@ export async function handleMaterials(ctx) {
       ) {
         await deleteMaterialBytes(result.previousKey);
       }
-      return ctx.json(200, { materials: publicMaterials(platform.materials) });
+      return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
     }
   }
 
@@ -380,7 +380,7 @@ export async function handleMaterials(ctx) {
       if (!result.ok) return ctx.json(400, { message: result.message });
       platform.materials = result.nodes;
       await ctx.savePlatform(platform);
-      return ctx.json(200, { materials: publicMaterials(platform.materials) });
+      return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
     }
     if (method === 'DELETE') {
       const { platform, user } = await ctx.requireAuth();
@@ -399,7 +399,7 @@ export async function handleMaterials(ctx) {
       for (const item of doomed) {
         await deleteMaterialBytes(item.key);
       }
-      return ctx.json(200, { materials: publicMaterials(platform.materials) });
+      return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
     }
   }
 
