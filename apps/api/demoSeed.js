@@ -112,7 +112,18 @@ function orgSettings(companyName, city) {
 const ROOM_TYPES = ['living', 'bedroom', 'kids', 'kitchen', 'office'];
 const HOUSE_TYPES = ['panel', 'block', 'brick', 'monolith'];
 const STAGES = ['newbuild', 'renovation', 'occupied'];
-const CLASSES = ['below', 'V', 'B', 'A'];
+/**
+ * Demo «было → с MultiFrame» pairs. Only transitions the problem meter can really
+ * produce (the ceiling never lowers the class). Mirrors apps/web/src/partner/demoSeed.ts.
+ * Before: classBefore/classAfter rotated the same list with an offset of 2, which
+ * produced impossible pairs like «А → В» and «Б → Дискомфорт» in analytics.
+ */
+export const DEMO_CLASS_PAIRS = [
+  ['below', 'V'],
+  ['V', 'B'],
+  ['below', 'V'],
+  ['B', 'A'],
+];
 
 function pick(arr, i) {
   return arr[i % arr.length];
@@ -141,8 +152,8 @@ function makeObject(spec) {
   const installAt = daysAgo(Math.max(0, dayOffset - 10), 10, 0);
   const closedAt = daysAgo(Math.max(0, dayOffset - 14), 16, 0);
   const est = estimate(areaM2);
-  const classBefore = pick(CLASSES, dayOffset);
-  const classAfter = pick(CLASSES, dayOffset + 2);
+  const classBefore = pick(DEMO_CLASS_PAIRS, dayOffset)[0];
+  const classAfter = pick(DEMO_CLASS_PAIRS, dayOffset)[1];
   const history = [{ at: createdAt, userId: createdBy, login: 'system', action: 'create', detail: 'measured' }];
   let updatedAt = createdAt;
   if (['quote_sent', 'install', 'closed'].includes(status)) {
@@ -493,8 +504,8 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         const roomType = pick(ROOM_TYPES, day + i);
         const houseType = pick(HOUSE_TYPES, day + i * 2);
         const objectStage = pick(STAGES, day + i);
-        const classBefore = pick(CLASSES, day);
-        const classAfter = pick(CLASSES, day + 2);
+        const classBefore = pick(DEMO_CLASS_PAIRS, day)[0];
+        const classAfter = pick(DEMO_CLASS_PAIRS, day)[1];
         const object = {
           roomType,
           areaM2: area,

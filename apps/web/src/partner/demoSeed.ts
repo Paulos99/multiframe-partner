@@ -144,7 +144,16 @@ function estimate(areaM2: number) {
 const ROOM_TYPES = ['living', 'bedroom', 'kids', 'kitchen', 'office'] as const;
 const HOUSE_TYPES = ['panel', 'block', 'brick', 'monolith'] as const;
 const STAGES = ['newbuild', 'renovation', 'occupied'] as const;
-const CLASSES = ['below', 'V', 'B', 'A'] as const;
+/**
+ * Demo «было → с MultiFrame» pairs. Only transitions the problem meter can really
+ * produce (the ceiling never lowers the class). Mirrors apps/api/demoSeed.js.
+ */
+export const DEMO_CLASS_PAIRS = [
+  ['below', 'V'],
+  ['V', 'B'],
+  ['below', 'V'],
+  ['B', 'A'],
+] as const;
 
 function pick<T>(arr: readonly T[], i: number): T {
   return arr[i % arr.length]!;
@@ -256,8 +265,8 @@ function makeObject(
       areaM2: spec.area,
       houseType,
       objectStage,
-      classBefore: pick(CLASSES, spec.day),
-      classAfter: pick(CLASSES, spec.day + 2),
+      classBefore: pick(DEMO_CLASS_PAIRS, spec.day)[0],
+      classAfter: pick(DEMO_CLASS_PAIRS, spec.day)[1],
       answers: { roomType, ceilingAreaM2: spec.area, houseType, objectStage },
     },
     estimate: estimate(spec.area),
@@ -398,8 +407,8 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
           areaM2: area,
           houseType: pick(HOUSE_TYPES, day + i * 2),
           objectStage: pick(STAGES, day + i),
-          classBefore: pick(CLASSES, day),
-          classAfter: pick(CLASSES, day + 2),
+          classBefore: pick(DEMO_CLASS_PAIRS, day)[0],
+          classAfter: pick(DEMO_CLASS_PAIRS, day)[1],
           city: org.city,
           panels: Math.ceil(area / PANEL_AREA_M2),
         };

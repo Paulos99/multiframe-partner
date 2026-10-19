@@ -49,21 +49,28 @@
   gap: 8px;
 }
 
-.logoBox {
-  display: block;
-  width: min(210px, 68%);
-  padding: 6px 8px;
-  border: 1px solid #e4e7eb;
-  border-radius: var(--cab-radius-md);
-  background: #fff;
-}
-
-/* Файл логотипа белый: на белой плашке затемняем, иначе логотип не виден. */
+/* Файл logo-multiframe.png — белая надпись (маска). Как в шапке кабинета:
+   на светлой теме затемняем до чёрного, на тёмной оставляем белой.
+   Исходник 1024 px, поэтому и на 2–3x экранах логотип чёткий. */
 .logo {
   display: block;
-  width: 100%;
+  width: 150px;
+  max-width: 100%;
   height: auto;
+  margin: 2px 0 6px;
   filter: brightness(0) saturate(100%);
+  opacity: 0.9;
+}
+
+:global(body.theme-dark) .logo {
+  filter: none;
+  opacity: 1;
+}
+
+@media (max-width: 480px) {
+  .logo {
+    width: 120px;
+  }
 }
 
 .brand h1,
