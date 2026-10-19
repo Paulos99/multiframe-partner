@@ -188,7 +188,9 @@ export function applyMultiFrame(before: ConstructionResult): MultiFrameResult {
   let impact = before.impactIsolation.map((v, i) => round1(v + (impScaled[i] ?? 0)));
   let Ln = isolationToLn(impact);
   let afterLnw = before.Lnw - dLnwTarget;
-  afterLnw = Math.max(afterLnw, MIN_AFTER_LNW);
+  // The soft floor only caps the gain. It must never push Lnw above «before»:
+  // a slab that is already at class-A impact (Lnw ≤ 55) stays there with the ceiling.
+  afterLnw = Math.max(afterLnw, Math.min(MIN_AFTER_LNW, before.Lnw));
   Ln = calibrateToLnw(Ln, SPECTRUM_HZ, afterLnw);
   impact = lnToIsolation(Ln);
 
