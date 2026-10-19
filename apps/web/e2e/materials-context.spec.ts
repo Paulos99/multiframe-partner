@@ -138,6 +138,8 @@ test('касание: долгое нажатие не перехватывае�
   await enter(page, 'admin');
   const card = folderCard(page, 'Старые инструкции');
   await expect(card).toBeVisible();
+  // Над списком есть карточка «Офлайн-доступ»: на телефоне папка может оказаться ниже экрана.
+  await card.scrollIntoViewIfNeeded();
   const box = (await card.boundingBox())!;
   const prevented = await page.evaluate(
     ({ x, y }) => {
