@@ -15,7 +15,7 @@
   },
   "scripts": {
     "lint": "node scripts/check-syntax.mjs",
-    "test:unit": "node --test *.test.js",
+    "test:unit": "node --test *.test.js scripts/*.test.mjs",
     "test": "npm run test:unit"
   }
 }

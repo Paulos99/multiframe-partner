@@ -522,7 +522,14 @@ function materialPreviewItem(item: PublicMaterial): PreviewItem {
       const [content, pdfCopy] = await Promise.all([openMaterial(item), openMaterialPdfCopy(item)]);
       const extra = pdfCopy ? { pdfCopy } : {};
       if (content.kind === 'stub') return { node: <MaterialStubView stub={content.stub} /> };
-      if (content.kind === 'remote') return { url: content.url, mime: content.mime, ...extra };
+      if (content.kind === 'remote')
+        return {
+          url: content.url,
+          mime: content.mime,
+          ...(content.streamUrl ? { playbackUrl: content.streamUrl } : {}),
+          poster: item.thumbnailUrl ?? null,
+          ...extra,
+        };
       return { blob: content.blob, mime: content.mime, ...extra };
     },
   };

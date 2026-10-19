@@ -30,6 +30,7 @@ import {
   putMaterialBytes,
   signMaterialUpload,
   signedMaterialGetUrl,
+  signedMaterialStreamUrl,
   signedPublicMaterials,
   statMaterialObject,
 } from './materialsStorage.js';
@@ -147,7 +148,17 @@ async function signedContent(ctx, node) {
   try {
     const url = await signedMaterialGetUrl(node, { filename: node.name, mime: node.mime });
     if (!url) return ctx.json(404, { message: 'Файл не найден в хранилище' });
-    return ctx.json(200, { name: node.name, mime: node.mime, url });
+    // Лёгкая копия видео для просмотра онлайн. Оригинал остаётся по ссылке url («Скачать»).
+    let stream = {};
+    if (node.streamKey) {
+      try {
+        const streamUrl = await signedMaterialStreamUrl(node);
+        if (streamUrl) stream = { streamUrl, streamMime: 'video/mp4', streamSize: node.streamSize ?? null };
+      } catch {
+        stream = {};
+      }
+    }
+    return ctx.json(200, { name: node.name, mime: node.mime, url, ...stream });
   } catch (error) {
     const status = error.status || 500;
     return ctx.json(status, { message: error.message || 'Не удалось выдать ссылку' });

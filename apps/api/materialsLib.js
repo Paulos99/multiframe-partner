@@ -119,6 +119,9 @@ export function toPublicMaterial(node) {
     hasPreview: Boolean(node.previewKey),
     /** Есть миниатюра для списка (подписанная ссылка — thumbnailUrl в ответе API). */
     hasThumbnail: Boolean(node.thumbKey),
+    /** Есть лёгкая копия видео для просмотра онлайн (H.264, moov в начале). */
+    hasStream: Boolean(node.streamKey),
+    streamSize: node.streamKey ? (node.streamSize ?? null) : null,
     updatedAt: node.updatedAt || DEMO_AT,
   };
 }
@@ -247,6 +250,10 @@ export function replaceFile(
     thumbSize: null,
     thumbType: null,
     thumbUpdatedAt: null,
+    // И копия видео для просмотра онлайн.
+    streamKey: null,
+    streamSize: null,
+    streamUpdatedAt: null,
     updatedAt: now,
   };
   return {
@@ -294,6 +301,10 @@ export function deleteMaterial(stored, { id }) {
       ...nodes
         .filter((node) => ids.has(node.id) && node.thumbKey)
         .map((node) => ({ key: node.thumbKey, bucket: MATERIAL_BUCKET_MARKER })),
+      // Копии видео для просмотра онлайн — тоже в бакете материалов.
+      ...nodes
+        .filter((node) => ids.has(node.id) && node.streamKey)
+        .map((node) => ({ key: node.streamKey, bucket: MATERIAL_BUCKET_MARKER })),
     ],
   };
 }

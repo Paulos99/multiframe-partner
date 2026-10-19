@@ -2,7 +2,16 @@ import type { ReactNode } from 'react';
 
 /** Источник содержимого: ссылка (подписанная или blob:), Blob или готовый узел (заглушка материала). */
 export type PreviewSource =
-  | { url: string; mime?: string | null; size?: number | null; pdfCopy?: PdfCopySource }
+  | {
+      url: string;
+      mime?: string | null;
+      size?: number | null;
+      pdfCopy?: PdfCopySource;
+      /** Видео: что играть в плеере (лёгкая копия). «Скачать» отдаёт url — оригинал. */
+      playbackUrl?: string;
+      /** Картинка-обложка для плеера (миниатюра материала). */
+      poster?: string | null;
+    }
   | { blob: Blob; mime?: string | null; pdfCopy?: PdfCopySource }
   | { node: ReactNode };
 

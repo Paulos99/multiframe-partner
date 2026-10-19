@@ -19,6 +19,10 @@ export type MaterialNode = {
   thumbSize?: number | null;
   thumbType?: string | null;
   thumbUpdatedAt?: string | null;
+  /** Копия видео для просмотра онлайн: materials/<id>_stream (H.264 до 1080p, faststart). */
+  streamKey?: string | null;
+  streamSize?: number | null;
+  streamUpdatedAt?: string | null;
   updatedAt: string;
 };
 
@@ -45,6 +49,9 @@ export type PublicMaterial = {
   hasThumbnail?: boolean;
   /** Подписанная ссылка на миниатюру (~6 ч) — только в ответах API. */
   thumbnailUrl?: string | null;
+  /** Есть лёгкая копия видео для просмотра онлайн. */
+  hasStream?: boolean;
+  streamSize?: number | null;
   updatedAt: string;
 };
 
