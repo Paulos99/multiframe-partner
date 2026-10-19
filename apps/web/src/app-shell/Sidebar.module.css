@@ -263,6 +263,8 @@
   /*
    * Ширина пункта — по подписи, остаток делится поровну: шесть вкладок
    * (пять разделов + «Профиль») помещаются в 360–390 px без переноса.
+   * Если вкладок больше (у владельца — семь), панель становится горизонтальной
+   * лентой: «Профиль» — последний пункт ленты, ничего не закреплено и не перекрыто.
    */
   .item,
   .itemOn {
@@ -273,26 +275,51 @@
     width: auto;
     min-width: 44px;
     min-height: 52px;
-    padding: 6px 2px;
+    padding: 6px 1px;
     text-align: center;
     white-space: nowrap;
-    scroll-margin-inline: 16px 72px;
+    scroll-snap-align: start;
+    scroll-margin-inline: 24px;
   }
 
-  /* «Профиль» всегда последним и всегда виден справа, даже если разделов больше, чем влезает. */
-  .profileItem {
-    position: sticky;
-    right: 0;
-    z-index: 1;
+  .scroll {
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 24px;
+    scroll-behavior: smooth;
   }
 
-  .item.profileItem {
-    background: var(--cab-card);
+  @media (prefers-reduced-motion: reduce) {
+    .scroll {
+      scroll-behavior: auto;
+    }
   }
 
-  /* Если разделов больше, чем влезает (у владельца — семь), прокручиваемые пункты мягко уходят под «Профиль». */
-  .profileItem {
-    box-shadow: -10px 0 10px -10px rgba(20, 28, 36, 0.35);
+  /* Запас в 1 px, чтобы дробная ширина подписей не обрезала крайнюю вкладку. */
+  .nav {
+    padding-inline: 1px;
+  }
+
+  /* Больше шести вкладок (у владельца — семь) — лента: у пунктов есть поля, они не слипаются. */
+  .scroll[data-many] .item,
+  .scroll[data-many] .itemOn {
+    min-width: 60px;
+    padding-inline: 8px;
+  }
+
+  /* Мягкое затухание у края, за которым есть ещё вкладки. */
+  .scroll[data-fade-end] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+
+  .scroll[data-fade-start] {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+  }
+
+  .scroll[data-fade-start][data-fade-end] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
   }
 
   .icon img {
