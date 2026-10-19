@@ -25,8 +25,8 @@
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px 16px;
-  padding: 16px 24px 12px;
+  gap: 10px 16px;
+  padding: 12px 24px 10px;
   background: color-mix(in srgb, var(--cab-page) 88%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--cab-border);
@@ -85,14 +85,27 @@
     grid-template-columns: 88px minmax(0, 1fr);
   }
 
+  /* Верхний ряд: логотипы слева, «Установить», статус и тема справа; заголовок ниже. */
   .mobileBrand {
     display: block;
-    flex: 1 1 100%;
+    order: 0;
+    /* Базис 0: логотипы ужимаются, а не переносят кнопки на следующую строку. */
+    flex: 1 1 0;
     min-width: 0;
   }
 
+  .actions {
+    order: 1;
+  }
+
+  .titles {
+    order: 2;
+    flex: 1 1 100%;
+  }
+
   .topbar {
-    padding: 14px 20px 12px;
+    align-items: center;
+    padding: 10px 20px 10px;
   }
 
   .work {
@@ -109,24 +122,46 @@
     min-height: 0;
   }
 
+  /*
+   * Тонкая шапка: верхний ряд — логотипы StP + MultiFrame слева,
+   * «Установить», статус синхронизации и тема — справа. Заголовок роли и подзаголовок — ниже, плотнее.
+   */
   .topbar {
-    padding: 12px 12px 10px;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 6px 12px 8px;
   }
 
   .mobileBrand {
     display: block;
-    flex: 1 1 100%;
+    order: 0;
+    /* Базис 0: логотипы ужимаются, а не переносят кнопки на следующую строку. */
+    flex: 1 1 0;
     min-width: 0;
   }
 
-  .titles {
-    flex: 1 1 100%;
+  .actions {
+    order: 1;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin-left: auto;
   }
 
-  .actions {
-    width: 100%;
-    margin-left: 0;
-    justify-content: flex-start;
+  .titles {
+    order: 2;
+    flex: 1 1 100%;
+    gap: 2px;
+  }
+
+  .titles h1 {
+    font-size: 1.15rem;
+    line-height: 1.2;
+  }
+
+  .lead {
+    font-size: 0.82rem;
+    line-height: 1.3;
   }
 
   .work {
@@ -137,6 +172,6 @@
 
 @media (max-width: 390px) {
   .titles h1 {
-    font-size: 1.35rem;
+    font-size: 1.1rem;
   }
 }

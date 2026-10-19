@@ -88,3 +88,12 @@
     min-height: var(--touch-min);
   }
 }
+
+/* Телефон: переключатель в верхнем ряду шапки рядом с логотипами — 40 px, как остальные кнопки ряда. */
+@media (max-width: 640px) {
+  .toggle,
+  .toggleOn {
+    min-height: 40px;
+    box-shadow: none;
+  }
+}
