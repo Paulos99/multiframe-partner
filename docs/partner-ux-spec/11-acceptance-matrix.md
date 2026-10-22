@@ -1,9 +1,9 @@
 # D11 — Матрица приёмки
 
-**Revision:** `rev-gate-b-draft-1`  
+**Revision:** `rev-gate-b-draft-2`  
 **ID:** D11  
 **Зависит от:** D2–D10 (сценарии, IA, коммерция, академия, StP); SoT Gate A: ADR-001…008  
-**Статус:** черновик Gate B · **не Gate C** (доказательства — сценарий/данные/RBAC-тест, не «макет есть»)
+**Статус:** черновик Gate B · **NOT approved** · **не Gate C** (доказательства — сценарий/данные/RBAC-тест, не «макет есть»)
 
 ---
 
@@ -51,6 +51,8 @@
 | AC-EL-01 | Early decline/pause **до КП** с `lossReason` + `stageAtOutcome` | S-sales-02a | E-deal / inbox CTA | Deal.outcome early_*, lossReason, stageAtOutcome | Сохранить без Quote; пустая причина → блок | «Поле причины есть в форме» |
 | AC-EL-02 | StP/аналитика видит этап потери до КП | S-sales-02a, S-admin-02 | E-analytics, E-partner-card | Aggregates early_* | Запись видна в воронке/сигналах | «CI по API 200» |
 | AC-EL-03 | Training-событие не подменяет early outcome | S-sales-02a, D9 | E-analytics vs E-analytics-training | context training excluded | Attempt completed не создаёт Deal.outcome | «Виджет training на том же дашборде» |
+| AC-EL-04 | **Pause ≠ close:** CTA Пауза не пишет closedAt; resume = тот же dealId | S-com-01, GB-P0-01 | E-project-deal | Deal.active + early_paused | Negative: pause path ≠ POST close; resume id equal | «Кнопка Пауза есть» |
+| AC-EL-05 | early_declined → closed; reopen запрещён | S-com-03 | E-project-deal | closedAt set | PATCH reopen → reject | «Статус Отказ в UI» |
 
 ### 1.3 Sequential Deal (новый dealId)
 
@@ -103,6 +105,8 @@
 | AC-OF-02 | Повторный save того же draft не создаёт дубликат комнаты | S-sales-05 | BindModal | Room id stable | Два save → один roomId | «Тост Успех» |
 | AC-OF-03 | События дедупятся по eventId после офлайна | D5/events ориентир | sync | PlatformEvent | `dedupeEventsById` | «Счётчик событий в CI» |
 | AC-OF-04 | Save tool без bind/project запрещён (анти-разрыв) | S-x-05 | Tool → Bind | SessionDraft | Silent create без имени → блок | «Tool route 200» |
+| AC-OF-05 | Two-device calc: stale expectedRevision → 409; обе revision recoverable | S-calc-05, GB-P0-03 | E-calc-save | CalculationRevision[] | Device A+B save; history has both; no silent LWW | «Тост Конфликт» без истории |
+| AC-OF-06 | Reconnect flush: Idempotency-Key не создаёт duplicate Project/Deal | A-11 | E-quick-bind | Project+Room+Deal | Retry same key → same ids | «Два успеха в логе» |
 
 ### 1.9 Training isolation
 
@@ -114,6 +118,14 @@
 | AC-TI-04 | Opening ≠ mastery; false promise −25 score | D9 | Trainer Feedback | score | Unit + ручной false promise | «Score отображается» |
 | AC-TI-05 | Open материала ∉ KPI продаж | S-admin-03 | E-materials | Material open event | Не двигает Deal funnel | «Файл открылся» |
 | AC-TI-06 | StP контур 5 шагов; training отдельно от outcomes | S-admin-02, D10 | E-partner-card | Intervention.result vs Deal | Adoption ≠ conversion widget | «График на дашборде» |
+
+### 1.10 Migration assent (GB-P0-02)
+
+| AC-ID | Измеримый результат | Сценарий | Экран | Данные | Доказательство | Не-доказательство |
+|-------|---------------------|----------|-------|--------|----------------|-------------------|
+| AC-MG-01 | Sent-only quote → roomAssent unknown; не ordered | D5 M-F1 | migrate job | roomAssent | Fixture assert | «Есть sent в истории» |
+| AC-MG-02 | Ambiguous → needs_review; exclude KPI amount + crew inbox | D5 M-F5 | E-home-crew, analytics | assent | Room not in install pool | «Комната в проекте» |
+| AC-MG-03 | Accepted partial evidence → ordered only evidenced rooms | D5 M-F4 | migrate | roomAssent | Scope match | «Все комнаты из PDF» |
 
 ---
 
@@ -146,32 +158,33 @@
 
 ---
 
-## 4. Счётчик ключевых AC
+## 4. Счётчик ключевых AC (§1 data/RBAC)
 
 | Блок | Число AC |
 |------|----------|
 | Golden path | 4 |
-| Early loss | 3 |
+| Early loss | 5 |
 | Sequential Deal | 4 |
 | Tech-ready | 3 |
 | Sent immutable | 3 |
 | Checklist | 3 |
 | RBAC | 5 |
-| Offline / anti-loss | 4 |
+| Offline / anti-loss | 6 |
 | Training isolation | 6 |
-| **Итого ключевых AC в §1** | **35** |
+| Migration assent | 3 |
+| **Итого ключевых AC в §1** | **42** |
 
-Дополнительно специфицированы в D9/D10 локальные AC-D9-01…07 и AC-D10-01…08 (трассируются через §2; не дублируют счётчик §1, кроме пересечения по смыслу с AC-TI / AC-RB).
+Дополнительно: D9/D10 локальные AC; §7 UX usability — **отдельный** набор (не заменяет §1).
 
 ---
 
 ## 5. Assumptions
 
-1. **Assumption:** колонка «Экран» = ID из D3 до готовности D4 pixel-specs; логическая приёмка инварианта не ждёт Gate C.  
-2. **Assumption:** open Blocker блокирует `room.closed` (AC-CL-02) — уточнение waive-исключений остаётся residual Gate B, но N/A+причина уже обязательна (AC-CL-01).  
-3. **Assumption:** negative RBAC-тесты admin delete — на API и UI; одного UI hide недостаточно.  
-4. **Assumption:** offline proof допускает локальный outbox/PWA draft без полного multi-device sync в v1.  
-5. **Assumption:** «ключевые AC» §1 = обязательный минимум закрытия Gate B по приёмке продукта; расширенные поля PM/Calc (D6/D7) добавляют свои AC отдельно, не заменяя этот набор.
+1. **Assumption A-33:** колонка «Экран» = ID из D3/D4; логическая приёмка инварианта не ждёт Gate C pixels.  
+2. **Assumption A-04:** open Blocker блокирует `room.closed` (AC-CL-02).  
+3. **Assumption A-34:** negative RBAC — API и UI.  
+4. **Assumption:** offline proof = outbox + AC-OF-05 two-device (больше не «LWW ok»).  
+5. «Ключевые AC» §1 + §7 usability = минимум Gate B specification; observed UX scores = Gate C.
 
 ---
 
@@ -179,7 +192,43 @@
 
 - Gate C: wireframes / HTML-прототипы как замена доказательства.  
 - Продуктовый код `apps/*` до OK на Gate B.  
-- Done по «файл спеки существует» — **запрещён** тем же правилом §0.
+- Done по «файл спеки существует» / «маршрут открылся» — **запрещён** (§0 и §7).  
+- Помечать Gate B approved без owner OK — запрещено.
+
+---
+
+## 7. UX usability acceptance (GB-P0-06) — независимо от data AC
+
+**Различие:** §1 = инварианты данных/RBAC (**specified tests**). Этот раздел = **человеческое понимание и успешное завершение задачи** на будущем интерактивном прототипе Gate C **без объяснения модератора**.  
+**Observed results** (first-click, confusion, comments) фиксируются в Gate C/E — здесь только критерии и задачи.
+
+### 7.1 Протокол наблюдения (Gate C)
+
+Для каждой задачи записать: first-click success (Y/N), blocking confusion (Y/N + где), re-entry of data (Y/N), clarity of next step (1–5), recovery behavior, device (mobile/desktop), user comments.  
+**Не Done**, если: маршрут просто открылся; пользователь «в итоге нашёл» после долгих блужданий; данные введены повторно из-за UX.
+
+### 7.2 Задачи по ролям
+
+| AC-ID | Роль | Задача (без подсказки) | Успех = |
+|-------|------|------------------------|---------|
+| AC-UX-S01 | sales | Начать новый inquiry / проект | Проект+комната созданы осознанно |
+| AC-UX-S02 | sales | Получить предварительный ориентир и сохранить в **правильную** комнату | Preliminary на нужном roomId |
+| AC-UX-S03 | sales | Создать / share / confirm_sent КП | lifecycle sent_confirmed; copy≠sent понятен |
+| AC-UX-S04 | sales | Поставить паузу и позже возобновить | Тот же dealId; не «новая сделка» |
+| AC-UX-M01 | measurer | Найти назначенную комнату | ≤2 осмысленных перехода с home |
+| AC-UX-M02 | measurer | Detailed calc → save → вернуться в комнату | Detailed revision; back to same room |
+| AC-UX-C01 | crew | Найти своё задание | Только ordered+tech-ready |
+| AC-UX-C02 | crew | Прочитать схему/чек-лист и зафиксировать blocker | Blocker создан; next step ясен |
+| AC-UX-O01 | owner | Найти, что требует вмешательства | Inbox item → правильная сущность |
+| AC-UX-O02 | owner | Назначить ответственность (crew/measurer) | Assignment сохранён |
+| AC-UX-A01 | StP admin | Найти фактический stalled stage партнёра | PartnerCard / сигнал с этапом |
+| AC-UX-A02 | StP admin | Инициировать support / intervention | Case или Intervention создан |
+
+### 7.3 Анти-критерии
+
+- «Кнопка нашлась на 4-м экране» ≠ first-click success.  
+- Повторный ввод площади/геометрии после «успешного» save = fail AC-UX-M02/S02.  
+- Смешение training и sales KPI на одном виджете без подписи = fail admin clarity.
 
 ---
 
@@ -187,6 +236,7 @@
 
 - Сценарии: [02-role-scenarios.md](./02-role-scenarios.md)  
 - IA: [03-information-architecture.md](./03-information-architecture.md)  
+- Screen coverage: [gate-b-screen-coverage-matrix.md](./gate-b-screen-coverage-matrix.md)  
 - Академия: [09-academy.md](./09-academy.md)  
 - StP: [10-stp-support-analytics.md](./10-stp-support-analytics.md)  
 - Идентичность Deal/Quote: [adr/008-deal-quote-project-identity.md](./adr/008-deal-quote-project-identity.md)

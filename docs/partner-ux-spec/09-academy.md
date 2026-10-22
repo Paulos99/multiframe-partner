@@ -1,10 +1,10 @@
 # D9 — Академия: instructional + game design
 
-**Revision:** `rev-gate-b-draft-1`  
+**Revision:** `rev-gate-b-draft-2`  
 **ID:** D9  
 **Зависит от:** [D1 §5.4](./01-product-architecture.md), [D2](./02-role-scenarios.md) (admin/materials), [D3 §4.1](./03-information-architecture.md), [ADR-006](./adr/006-academy-mixed-mechanics.md)  
 **Ориентир кода (readonly):** `packages/shared/learning.ts`, события `training_*` в `packages/shared/events.ts`  
-**Статус:** черновик Gate B · **не Gate C** (без wireframes/прототипов)
+**Статус:** черновик Gate B · **NOT approved** · **не Gate C** (без wireframes/прототипов)
 
 ---
 
@@ -151,6 +151,38 @@ N3 Завершение
 2. 2–4 карточки: «что сработало» / «что улучшить» с цитатой узла.  
 3. CTA: **Пройти снова** (новая attempt) · **К хабу** · (admin) **Назначить коллеге**.
 
+#### 4.2.1 Полный скриптовый пример `sell_multiframe` / `client_anna` (GB-P1-01)
+
+Один законченный пример: реплики NPC и игрока, ≥3 траектории, score и feedback. **Не** «кнопки вокруг пустых пузырей» как единственная механика — кнопки = ускорители реплик; free text (если включён) матчится к узлам или → «переформулируйте».
+
+**Старт (N0)**  
+- NPC Anna: «Здравствуйте, нужен натяжной в спальню, хочется побыстрее.»  
+- Варианты игрока:  
+  - P0a: «Отлично, сразу возьмите MultiFrame — без него шумно.» → **Pushy** (trust−20, non_pushy−)  
+  - P0b: «Расскажите про комнату: соседи сверху, что беспокоит?» → **N1**  
+  - P0c: «Полотно от 400 ₽/м², что ещё?» → **PriceTrap**  
+
+**N1 Discovery**  
+- Anna: «Соседи иногда слышны, но я за красотой пришла.»  
+- P1a: «Под полотном можно сделать каркас MultiFrame — давайте посмотрим, зачем это вам.» → **N2** (need_discovery+)  
+- P1b: «Это даёт −35 дБ гарантированно.» → **false_promise** (FailFast)  
+- P1c: длинный жаргон без опоры → **N2b Confusion** (tech_accuracy−)
+
+**N2 Value → N3**  
+- Anna: «И что дальше?»  
+- P2a: «Могу показать профиль в проблемомере и дать ориентир по площади — без обязательства.» → **OfferOk** (next_step+)  
+- P2b: «Решать надо сегодня, иначе цена вырастет.» → **Pressure**  
+- P2c: «Ну ок, думайте.» (без next step) → **Incomplete**
+
+| Trajectory | Path | End state | Score sketch (равные веса − penalty) | Feedback cites |
+|------------|------|-----------|--------------------------------------|----------------|
+| **Successful** | P0b→P1a→P2a | OfferOk completed | ≥70; falsePromise=false | «Выяснили контекст»; «мягкий next step» |
+| **Partial** | P0c→…→P2a или P0b→P1c→P2a | completed с weakness | 50–69 | «PriceTrap / жаргон»; «оффер спасён» |
+| **Poor** | P0a→… или P1b | FailFast / Pressure | <50 или penalty 25 | «Давление»; «ложное обещание дБ» |
+
+**Runtime UX:** wrong answer → coach tip + retry node (не мгновенный fail, кроме false_promise hard); pause attempt → `abandoned` confirm; a11y: focus order chat → choices; free text unknown → «выберите ближе к смыслу или кнопкой».  
+**Isolation:** `context: training`; **0** записей в Deal/KPI.
+
 ---
 
 ### 4.3 Сценарий `objections` — «Возражения»
@@ -253,6 +285,8 @@ Hub → Lobby(scenario) → Playing → Feedback → (Retry | Hub)
 | AC-D9-05 | Opening ≠ mastery | `openingCountsAsMastery` false |
 | AC-D9-06 | Материалы открываются из E-materials, не подменяют тренажёр | nav IA |
 | AC-D9-07 | Слоты `calc_sandbox` / `install_nodes` существуют в хабе (хотя бы coming_soon) | E-academy-hub |
+| AC-D9-08 | Скрипт §4.2.1: три траектории дают различимый score + feedback с цитатой узла | fixture attempt |
+| AC-D9-09 | Free-text unknown / retry / pause не пишут Deal | events assert |
 
 Полная матрица приёмки продукта — [D11](./11-acceptance-matrix.md) (блок Training isolation).
 

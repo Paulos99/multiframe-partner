@@ -1,57 +1,45 @@
 # Gate B — резюме для заказчика
 
-**Revision:** `rev-gate-b-draft-1`  
+**Revision:** `rev-gate-b-draft-2`  
 **Дата:** 2026-10-22  
 **После:** Gate A `rev-gate-a-approved-20261022` (условно, ADR-008)  
-**Статус:** черновик Gate B на ваше ревью. **Gate C и код не начаты.**
+**Статус:** черновик Gate B · **NOT approved**. **Gate C и код не начаты.**  
+**Ответ на:** [CHATGPT_GATE_B_REVIEW_2026-10-22.md](./CHATGPT_GATE_B_REVIEW_2026-10-22.md)
 
 ---
 
-## 1. Что сделано
+## 1. Что сделано в draft-2
 
-Полный комплект D4–D11 + assumptions + ADR-008 + снимок Gate A.
+Исправлены все P0 (GB-P0-01…06) и P1 (GB-P1-01…02) по замечаниям независимого ревью. Детали: [gate-b-changelog-draft-1-to-2.md](./gate-b-changelog-draft-1-to-2.md).
 
-| Блок | Суть |
-|------|------|
-| **D4** | Screen specs: 5 homes, nav, projects, project, room, inquiry, tools, calc-save, PM, quote/deal, install, academy, support, analytics |
-| **D5** | Целевая модель; инварианты Deal/Quote/Project; gaps vs `packages/shared` + API; миграции |
-| **D6** | PM потолочники: без вопроса типа потолка; next steps с контекстом; ядро не ломаем |
-| **D7** | Calc: walls вне UI; prelim+detailed; Save/bind; anti-loss; связь с КП |
-| **D8** | Коммерческий путь целиком: early loss → КП → partial → sequential new dealId |
-| **D9** | Академия: чат-продажи + слоты не-чат; training ≠ KPI |
-| **D10** | StP контур 5 шагов; learning vs sales |
-| **D11** | 35 измеримых AC; запрет Done по «экран есть / CI green» |
+| Блок | Суть draft-2 |
+|------|----------------|
+| **D4** | Role homes; E-quick-bind, room-docs, partner-card, analytics-training, staff, org; [coverage matrix](./gate-b-screen-coverage-matrix.md) |
+| **D5** | Pause nonterminal; migration sent≠ordered; append-only calc + 409; A-06/09/11 proposals + AC |
+| **D7/D8** | Concurrency; pause/resume flowchart fixed |
+| **D9** | Full scripted sell_multiframe example (3 trajectories) |
+| **D10** | Observational denominator + coverage warning |
+| **D11** | + migration/pause/concurrency AC; **§7 UX usability** per role |
 
 ---
 
-## 2. Неизменные решения Gate A (кратко)
+## 2. Неизменные решения Gate A
 
-- Project→Rooms; одна активная Deal; после closed — **новый dealId**.  
-- Quote sent immutable; N+1 на **конкретной Deal**.  
-- Закрытие Deal ≠ завершение Project при deferred.  
-- §8 (1–14) сохранены.
+Project→Rooms; Deal≠room; sequential dealId; Quote sent immutable; ADR-008 — **сохранены**.
 
 ---
 
-## 3. Главные gaps к коду (не чинить сейчас)
+## 3. Нужны решения владельца (не approved)
 
-- `dealId` на Quote nullable; version per project.  
-- Нет `roomAssent` / early_* / checklist в shared.  
-- `canManageStaff(sales)=true` vs §8.11.  
-- UI homes = стеки (целевой UX в D4).
+Таблица: [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md)  
+Ключевые: A-06 close policy, A-09 stage hybrid, A-11 atomic create, confirm A-12 (no LWW), pause canon, migration assent.
 
 ---
 
-## 4. Assumptions
+## 4. Просьба
 
-Сводный список: [assumptions.md](./assumptions.md). Всё, что не §8/ADR — помечено Assumption.
+1. Ревью draft-2 (ChatGPT / заказчик) по changelog.  
+2. Отметить OK/правки по owner decisions — **молчание ≠ согласование**.  
+3. Gate C / код — только после явного OK на Gate B.
 
----
-
-## 5. Просьба к заказчику
-
-1. Подтвердить Gate B (или точечные замечания по D4–D11).  
-2. Особенно: пороги StP (A-28), waive чек-листа (A-05), политика закрытия Deal после partial (A-06).  
-3. После OK — Gate C (wireframes + HTML prototypes). **Не** начинать код до вашего «можно в код».
-
-Ссылки: [README](./README.md) · [handoff](./gate-b-handoff-report.md) · [self-review](./gate-b-self-review.md)
+Ссылки: [README](./README.md) · [self-review](./gate-b-self-review.md) · PR #78

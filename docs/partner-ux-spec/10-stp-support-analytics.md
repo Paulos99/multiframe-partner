@@ -1,10 +1,10 @@
 # D10 — StP: поддержка и аналитика
 
-**Revision:** `rev-gate-b-draft-1`  
+**Revision:** `rev-gate-b-draft-2`  
 **ID:** D10  
-**Зависит от:** [D1 §5.5](./01-product-architecture.md), [D2 S-admin-02 / S-x-04](./02-role-scenarios.md), [D3 §4.2](./03-information-architecture.md), [D9](./09-academy.md)  
+**Зависит от:** [D1 §5.5](./01-product-architecture.md), [D2 S-admin-02 / S-x-04](./02-role-scenarios.md), [D3 §4.2](./03-information-architecture.md), [D9](./09-academy.md), [D6](./06-probleмомер-ceiling.md)  
 **Ориентир кода (readonly):** `packages/shared/support.ts`, `funnel.ts`, `events.ts`, `learning.ts`  
-**Статус:** черновик Gate B · **не Gate C**
+**Статус:** черновик Gate B · **NOT approved** · **не Gate C**
 
 ---
 
@@ -67,7 +67,7 @@
 | Где рвётся инструмент? | PM: open→result→pdf→share; Calc: open→calc_done→pdf (`funnelStopCounts`) |
 | Кто в org тянет простой? | **Assumption:** v1 — org-level сигнал + top users по stall только при N≥minReliable; иначе «недостаточно наблюдений» |
 
-### 3.3 «Почему не предлагают MultiFrame»
+### 3.3 «Почему не предлагают MultiFrame» + observational denominator (GB-P1-02)
 
 Гипотезы диагностики (фиксируются текстом на case, не авто-корнем истины):
 
@@ -79,6 +79,20 @@
 | Техошибка / не понимают UI | SupportCase category `tech_error` / `calculation` |
 
 **Assumption:** автоматический классификатор гипотез v1 **не** обязателен — admin выбирает hypothesis вручную из справочника; сигнал только подсвечивает паттерн.
+
+#### Observational denominator (обязательно в UI)
+
+`multiframe_offered / consultation_started` измеряет **только сессии, зафиксированные в приложении**. Это **не** «все консультации компании» и не «все продажи».
+
+| Понятие | Идентификатор / правило |
+|---------|-------------------------|
+| Logged consultation | Событие `consultation_started` с `context: work` + `orgId` (+ опц. `userId`, `dealId` если уже есть) |
+| Unsaved / abandoned quick-entry | SessionDraft без bind: может эмитить `consultation_started` **только если** пользователь явно начал tool с intent consult; иначе **не** в знаменателе. Discard draft → не считать sale; опц. `consultation_abandoned` (не KPI conversion) |
+| Demo / training | `context: training\|demo` — **exclude** из знаменателя и числителя sales |
+| Early loss pre-Quote | `early_declined` / `early_paused` **представимы** без Quote и без fabricated sale |
+| Coverage warning | UI всегда показывает: `N = consultation_started (work)`, `offered/N`, текст: «Доля среди консультаций **в приложении**; офлайн/незалогированные не входят» |
+
+**Запрет:** подписывать метрику как «доля всех консультаций партнёра» или «доля реальных продаж».
 
 ### 3.4 Пороги (черновик цифр)
 
@@ -228,6 +242,9 @@ SupportCase: open → in_progress → resolved → closed
 | AC-D10-06 | Видны stall-этап и паттерн «нет оффера MF» при достаточных N | signal list |
 | AC-D10-07 | Intervention связана с signalId и reviewAt | `linkInterventionToSignal` |
 | AC-D10-08 | Outcomes Deal считаются по dealId, context=work | `computeDealFunnel` |
+| AC-D10-09 | Offer-rate UI показывает N, ratio и coverage warning | E-analytics / PartnerCard |
+| AC-D10-10 | training/demo excluded from consultation denominator | events filter |
+| AC-D10-11 | early_* без Quote видим в early_loss; не создаёт ordered/sale | funnel assert |
 
 Полная матрица — [D11](./11-acceptance-matrix.md).
 

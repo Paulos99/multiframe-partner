@@ -1,10 +1,10 @@
 # D8 — Коммерческий процесс (Deal / КП / исходы)
 
-**Revision:** `rev-gate-b-draft-1`  
-**Gate:** B (черновик)  
+**Revision:** `rev-gate-b-draft-2`  
+**Gate:** B · **NOT approved**  
 **Зависит от:** [D1](./01-product-architecture.md), [D3](./03-information-architecture.md), [ADR-004](./adr/004-deal-separate-from-room-status.md), [ADR-008](./adr/008-deal-quote-project-identity.md), [ADR-005](./adr/005-ceiling-segment-presets-pm-calc.md), [ADR-007](./adr/007-quick-entry-without-full-client-card.md)  
-**Связь:** [D6](./06-probleмомер-ceiling.md), [D7](./07-calculator-ceiling.md), [D2](./02-role-scenarios.md)  
-**Статус:** черновик Gate B. Поля snapshot Quote — принцип здесь; JSON/API — D5.
+**Связь:** [D6](./06-probleмомер-ceiling.md), [D7](./07-calculator-ceiling.md), [D2](./02-role-scenarios.md), [D5](./05-data-model-contracts.md)  
+**Статус:** черновик Gate B (`rev-gate-b-draft-2`). Поля snapshot Quote — принцип здесь; JSON/API — D5.
 
 ---
 
@@ -38,15 +38,17 @@ Project
            └─ QuoteRevision[]  (каждая с dealId; sent → immutable)
 ```
 
-**roomAssent** на комнату в рамках Deal: `ordered` | `deferred` | `out_of_scope`.
+**roomAssent** на комнату в рамках Deal: `ordered` | `deferred` | `out_of_scope` | `unknown` | `needs_review`.  
+`ordered` только при доказанном согласии клиента на scope; **sent КП ≠ ordered** ([D5 §4](./05-data-model-contracts.md)).
 
-**Продуктовые early-исходы** (до КП; обязательны для StP):
+**Продуктовые early-исходы** (до КП; обязательны для StP) — GB-P0-01:
 
-| Outcome | Смысл |
-|---------|--------|
-| `early_declined` | Отказ до создания КП |
-| `early_paused` | Пауза до КП (возобновляема) |
+| Outcome | Terminal? | Смысл | Следствие |
+|---------|-----------|--------|-----------|
+| `early_declined` | **да** | Отказ до создания КП | Deal → **closed**; resume запрещён; новый заказ = новый dealId |
+| `early_paused` | **нет** | Пауза до КП | Deal остаётся **active**; CTA «Возобновить» на **том же** dealId; **не** close |
 
+**Запрет:** объединять pause и decline в один путь «→ Deal_closed».  
 **Assumption:** в shared `DealOutcome` сегодня нет early_*; Gate B фиксирует **продукт**, миграция enum — D5. Не подменять early через `declined` без `stageAtOutcome`.
 
 **Quote lifecycle (продукт):** только документ. Accept/decline на Quote в текущем коде — **gap**; целевой UX не показывает исход на КП как SoT.
@@ -79,14 +81,14 @@ Project
 |------|------------|
 | **Начало** | Клиент за натяжной; MultiFrame предложен устно / коротко; calc не открывали. |
 | **Результат** | На активной Deal зафиксирован early-исход с **этапом** (`contact` или `offered`) и **причиной**; проект и комнаты живы. |
-| **User** | Проект → Сделка → «Отказ» или «Пауза» → этап → причина (напр. `no_need`) → сохранить. |
-| **System** | Пишет Deal.outcome=`early_declined`|`early_paused`, `stageAtOutcome`, `lossReason`; **не** требует Quote; **не** требует calc; при decline → путь к `closed`. |
-| **Состояния** | D3 §5.5 early_* |
+| **User** | Проект → Сделка → «Отказ» **или** «Пауза» (разные CTA) → этап → причина (напр. `no_need`) → сохранить. |
+| **System** | `early_declined` → closed + closedAt; `early_paused` → outcome pause, Deal **active**, `stageAtOutcome`, опц. `nextActionAt`; **не** требует Quote/calc; pause **не** пишет closed. |
+| **Состояния** | D3 §5.5; D5 §1.3 terminal vs nonterminal |
 | **Данные** | Deal.*; Project Active |
-| **Ошибки** | Пустая причина/этап → валидация |
-| **Ответственные** | Sales R; owner A |
-| **AC** | Аналитика воронки показывает потерю **до** quote_created; training-событие не создаёт этот outcome |
-| **Next actions** | При pause — «Возобновить»; при decline+closed — «Новая сделка» только если новый заказ (новый dealId) |
+| **Ошибки** | Пустая причина/этап → валидация; попытка close через «Пауза» → запрещена |
+| **Ответственные** | Sales R; owner A; resume — sales/owner на том же dealId |
+| **AC** | Воронка видит early loss до quote_created; pause resume = тот же dealId; training не создаёт outcome |
+| **Next actions** | Pause → «Возобновить» (+ follow-up); decline+closed → «Новая сделка» только при новом заказе |
 
 ### S-com-02 — Консультация с PM без calc
 
@@ -105,8 +107,8 @@ Project
 | **Начало** | Есть preliminary; клиент: «дорого / не сейчас» — КП не собирали. |
 | **Результат** | early_declined|early_paused, stageAtOutcome=`calculated`, lossReason. |
 | **User** | Сделка → Отказ/Пауза → причина (`expensive`, `postponed_repair`, …). |
-| **System** | Calc на комнате **сохраняется**; Deal закрывается по правилам early decline. |
-| **AC** | Потеря видима StP с этапом calculated; данные calc не удаляются |
+| **System** | Calc на комнате **сохраняется**; при early_declined — Deal closed; при early_paused — Deal active (возобновляема). |
+| **AC** | Потеря/пауза видима StP с этапом calculated; calc не удаляется; pause ≠ closed |
 
 ### S-com-04 — Предварительное КП
 
@@ -220,28 +222,36 @@ Project
 ```mermaid
 flowchart TD
   A[Контакт_проект_или_quick_bind] --> B{Интерес_к_ЗИ}
-  B -->|нет| E1[early_declined_или_paused]
+  B -->|отказ| ED[early_declined_terminal]
+  B -->|пауза| EP[early_paused_nonterminal]
   B -->|да| C{PM}
   C -->|да| D[assessed_профиль]
   C -->|нет| F[calc_optional]
   D --> F
-  F --> G{Отказ_до_КП}
-  G -->|да| E1
-  G -->|нет| H[Quote_created]
+  F --> G{До_КП}
+  G -->|отказ| ED
+  G -->|пауза| EP
+  G -->|продолжить| H[Quote_created]
+  EP -->|Возобновить_тот_же_dealId| F
+  EP -->|явное_закрытие| ED
   H --> I[share_опц]
   I --> J[confirm_sent]
   J --> K{Исход}
-  K -->|accepted_partial| L[roomAssent]
-  K -->|declined_postponed_no_response| M[loss_или_follow_up]
+  K -->|accepted_partial| L[roomAssent_доказанный]
+  K -->|declined| M1[declined_closed]
+  K -->|postponed_no_response| M2[follow_up_той_же_Deal]
   L --> N[tech_ready_ordered]
   N --> O[install_closed_rooms]
-  O --> P[Deal_closed]
+  O --> P[Deal_closed_явный_A06]
   P --> Q{есть_deferred}
   Q -->|да| R[новый_dealId_sequential]
   Q -->|нет| S[Project_может_Done]
   R --> H
-  E1 --> P
+  ED --> P
+  M1 --> P
 ```
+
+**Различие (обязательно):** `early_paused` → resume на том же dealId; `early_declined` → closed. Pause **никогда** не маршрутизируется автоматически в `Deal_closed`.
 
 ---
 
@@ -282,13 +292,16 @@ flowchart TD
 | AC-D8-03 | После confirm_sent revision immutable | Попытка edit → только N+1 |
 | AC-D8-04 | N+1 имеет тот же dealId; новый id revision | Данные |
 | AC-D8-05 | После closed — create нового dealId; reopen запрещён | S-com-08 |
-| AC-D8-06 | Partial assent: crew только ordered | Inbox crew |
+| AC-D8-06 | Partial assent: crew только ordered (не unknown/needs_review) | Inbox crew |
 | AC-D8-07 | Project не Done только из deal_closed при deferred | UX фаза проекта |
 | AC-D8-08 | КП multi-room: нет double-count | Фикстура сумм |
 | AC-D8-09 | declined/early требует lossReason (+ stageAtOutcome для early) | Валидация |
 | AC-D8-10 | Исход только на Deal UI, не как SoT на Quote | UX |
 | AC-D8-11 | Конверсия аналитики = accepted по dealId; сумма accepted отдельно | D10/analytics contract later |
 | AC-D8-12 | Install только после accepted+ordered+tech-ready | S-x-03 |
+| AC-D8-13 | Pause → resume: тот же dealId; closedAt null | S-com-01 |
+| AC-D8-14 | CTA «Пауза» не вызывает close (negative) | UI + API |
+| AC-D8-15 | Sent quote rooms ≠ auto ordered | D5 migration |
 
 ---
 
@@ -306,13 +319,14 @@ flowchart TD
 
 ---
 
-## 9. Assumptions
+## 9. Assumptions / proposals
 
-1. Авто-stage Deal при PM save / calc save (согласовано с D6/D7 Assumptions) vs только ручные переходы — единый выбор в D5; до выбора UI может показывать derived stage.  
-2. Набор snapshot-полей QuoteRevision.  
-3. Жёсткость «способ передачи» при confirm_sent (warning vs block).  
-4. Политика: когда именно закрывать Deal после partial (сразу после closed ordered vs ручное closed) — **Assumption:** sales явно закрывает Deal после завершения монтажа ordered; система предлагает CTA, не авто-closed из последней room.closed.  
-5. Единый справочник lossReason для early и post-sent.
+1. **A-09 (proposed):** hybrid auto-stage — см. [D5 §3.1](./05-data-model-contracts.md); UI может показывать derived до commit.  
+2. Набор snapshot-полей QuoteRevision (A-10).  
+3. Жёсткость «способ передачи» при confirm_sent (warning vs block) — A-07.  
+4. **A-06 (proposed):** sales/owner явно закрывает Deal после монтажа ordered; CTA, не авто из room.closed; accepted ≠ fulfilled install.  
+5. Единый справочник lossReason для early и post-sent (A-08).  
+6. Owner decisions: [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md).
 
 ---
 

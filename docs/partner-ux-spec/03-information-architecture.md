@@ -285,14 +285,16 @@ stateDiagram-v2
     не_меняет_уже_sent_QuoteRevision
   end note
   note right of SavedDetailed
-    detailed_вытесняет_preliminary
-    в_агрегатах_новых_КП
+    detailed_append_revision
+    coalesce_берёт_current_detailed
     tech_ready_для_install
+    conflict_409_не_LWW
   end note
 ```
 
 Стены: WallMode **не** в основном пути.  
 Агрегация: per room `coalesce(detailed, preliminary)`; никогда `preliminary + detailed`.  
+Calc saves = **append-only revisions** + optimistic concurrency (D5 §1.8 / D7); не blind LWW.  
 Изменение calc комнаты **не** переписывает суммы уже `sent_confirmed` QuoteRevision — нужна новая версия (§5.4, ADR-004).
 
 ### 5.4 Quote (lifecycle **документа**; без accept/decline)
@@ -371,13 +373,17 @@ stateDiagram-v2
 - Одна **активная** Deal на проект; после `closed` — **новый `dealId`** (sequential) в том же проекте; закрытая Deal **не reopen**. Параллельный multi-order UI **нет**.  
 - Переход UX «снова contact» = **create** новой Deal, не возврат старой в `contact` ([ADR-008](./adr/008-deal-quote-project-identity.md)).  
 - Ранний исход (`early_declined` / `early_paused`) требует **причину** и **этап** воронки.  
+- **`early_paused` = nonterminal:** Deal остаётся active; resume на **том же** `dealId` (не create, не reopen closed). Follow-up / inbox = «Возобновить».  
+- **`early_declined` = terminal closed:** resume запрещён; новый заказ = новый `dealId`. CTA «Пауза» ≠ close (см. D5/D8, GB-P0-01).  
 - `outcome_accepted` допускает partial assent (не все комнаты ordered).  
-- Передача в install — только после `accepted` **и** tech-ready — D1 §5.6 / D2 S-x-03.  
+- Передача в install — только после `accepted` **и** tech-ready — D1 §5.6 / D2 S-x-03; `roomAssent=ordered` только при доказанном assent (**sent ≠ ordered**).  
 - Система **не** ставит outcome из `room.closed`.  
 - Успешная продажа ≠ завершённый монтаж; **закрытие Deal ≠ завершение Project** при deferred / следующих заказах.  
 - Конверсия = `Deal.outcome=accepted` **по dealId**; отдельно — сумма принятого заказа.
 
 Согласование Quote↔Deal: confirm_sent двигает lifecycle документа **этой** Deal + stage; **исход** только на Deal; на Quote нет accept/decline.
+
+> Gate B sync note (`rev-gate-b-draft-2`): уточнения pause/resume и roomAssent — согласование с D5/D8; архитектура Gate A (Project→Rooms, Deal≠room, ADR-008) сохранена.
 
 ---
 

@@ -1,6 +1,6 @@
 # D6 — Проблемомер для потолочников (кабинет)
 
-**Revision:** `rev-gate-b-draft-1`  
+**Revision:** `rev-gate-b-draft-2` · **NOT approved**  
 **Gate:** B (черновик)  
 **Зависит от:** [D1](./01-product-architecture.md), [D3](./03-information-architecture.md), [ADR-005](./adr/005-ceiling-segment-presets-pm-calc.md), [ADR-007](./adr/007-quick-entry-without-full-client-card.md), [ADR-008](./adr/008-deal-quote-project-identity.md)  
 **Опора (ядро, не UX кабинета):** `apps/web/PRODUCT_SPEC.md`  
@@ -77,7 +77,7 @@
 | **Результат** | На комнате сохранён акустический профиль; пользователь в той же комнате (или calc с тем же `roomId`); Deal.stage может стать `assessed`, если ещё раньше; **outcome не трогаем**. |
 | **User** | Комната → «Диагностика / Проблемомер» → (опц. короткий Start) → анкета Room → Processing → Result → «Сохранить профиль в эту комнату» → далее CTA §5. |
 | **System** | Подставляет пресет потолка; считает модель тем же ядром; пишет profile + answers к `roomId`; сохраняет `projectId`; не создаёт orphan; не ставит Deal.outcome. |
-| **Состояния** | Room: Draft/Measured + profile; Deal: `offered`→`assessed` (если был contact/offered) — **Assumption:** авто-advance stage до `assessed` при первом успешном save профиля, иначе явный «отметить демо» на сделке. |
+| **Состояния** | Room: Draft/Measured + profile; Deal: `offered`→`assessed` (если был contact/offered) — **A-09 proposed:** авто-advance stage ≥ `assessed` при первом успешном save профиля ([D5 §3.1](./05-data-model-contracts.md)); outcome/pause только вручную. |
 | **Данные** | Room profile document, answers snapshot, derived classes/Δ (для UI); без accept на Quote. |
 | **Ошибки** | Сеть mid-save → retry / outbox; модель упала → Result error + «повторить расчёт» без потери answers; offline → локальный draft профиля, pendingSync на комнате. |
 | **Ответственные** | Sales / owner / measurer — R; owner — A. |
@@ -195,7 +195,7 @@
 | Событие PM | Влияет на | Не влияет на |
 |------------|-----------|--------------|
 | Save профиля | Room documents; UX-индикатор «профиль есть» | Deal.outcome; QuoteRevision; Room.status → install |
-| Первый успешный save | **Assumption:** Deal.stage → `assessed` | closed Deal; Project Done |
+| Первый успешный save | **A-09 proposed:** Deal.stage ≥ `assessed` | closed Deal; Project Done |
 | Отказ клиента после демо | Фиксируется на **Deal** (early_declined) — D8 | Не «профиль declined» |
 
 PM **не** создаёт КП и **не** confirm_sent.

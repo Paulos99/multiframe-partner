@@ -1,10 +1,10 @@
 # D7 — Калькулятор для потолочников (кабинет)
 
-**Revision:** `rev-gate-b-draft-1`  
-**Gate:** B (черновик)  
+**Revision:** `rev-gate-b-draft-2`  
+**Gate:** B · **NOT approved**  
 **Зависит от:** [D1](./01-product-architecture.md), [D3](./03-information-architecture.md), [ADR-005](./adr/005-ceiling-segment-presets-pm-calc.md), [ADR-007](./adr/007-quick-entry-without-full-client-card.md), [ADR-004](./adr/004-deal-separate-from-room-status.md), [ADR-008](./adr/008-deal-quote-project-identity.md)  
-**Связь:** [D6](./06-probleмомер-ceiling.md) (опциональный вход), [D8](./08-commercial-process.md) (КП)  
-**Статус:** черновик Gate B; **продукт/UX только** — алгоритмы раскладки и wall-* **не меняем**.
+**Связь:** [D6](./06-probleмомер-ceiling.md) (опциональный вход), [D8](./08-commercial-process.md) (КП), [D5](./05-data-model-contracts.md)  
+**Статус:** черновик Gate B (`rev-gate-b-draft-2`); **продукт/UX только** — алгоритмы раскладки и wall-* **не меняем**.
 
 ---
 
@@ -114,16 +114,16 @@ projectTotal = Σ roomContribution по комнатам (с учётом сос
 | **System** | Не удаляет preliminary молча; UI показывает оба; coalesce переключается на detailed. |
 | **AC** | Сумма проекта не равна sum(both). |
 
-### S-calc-05 — История сохранений и anti-loss
+### S-calc-05 — История сохранений, concurrency и anti-loss (GB-P0-03)
 
 | Поле | Содержание |
 |------|------------|
-| **Начало** | Пользователь пересчитывает / правит; риск потерять прошлый ориентир. |
-| **Результат** | Видна история save; уход без Save не молча теряет draft. |
-| **User** | Комната → «История расчётов» (или блок на E-room-docs); при выходе из calc с грязным draft — confirm. |
-| **System** | Каждое успешное Save = запись в истории слота (тип, at, by, amount/summary); текущий слот = latest; **Assumption:** хранить ≥5 последних save на слот или 30 дней (что раньше исчерпается) — порог не утверждён. |
-| **Ошибки** | Crash mid-edit → восстановить session draft при возврате в tool с тем же roomId. |
-| **AC** | Нельзя потерять последний успешный persist без явного overwrite confirm при конфликте версий (**Assumption:** last-write-wins + warning, если remote newer). |
+| **Начало** | Пользователь пересчитывает / правит; field + manager с разных устройств / offline. |
+| **Результат** | Append-only `CalculationRevision[]`; current = deterministic latest seq; conflict → 409 + обе ветки recoverable. |
+| **User** | Комната → «История расчётов» (E-room-docs); dirty exit → confirm; при конфликте — выбрать «оставить сервер / оставить локальный / сравнить». |
+| **System** | Каждое Save = **новая** revision (`revisionId`, `expectedRevision`/`ETag`, type, at, by, payload); **не** blind LWW; sent Quote **не** перезаписывается; **Assumption A-14:** хранить ≥5 save / 30 дней. |
+| **Ошибки** | Crash → session draft; stale ETag → 409 Conflict UI (не silent overwrite после факта). |
+| **AC** | Two-device: оба save recoverable; 409 без потери; D11 AC-OF-05. |
 
 ### S-calc-06 — Связь с КП после пересчёта
 
@@ -152,8 +152,19 @@ projectTotal = Σ roomContribution по комнатам (с учётом сос
 **Anti-loss черновика:**
 
 - Dirty session → confirm on back/close.  
-- Offline: local draft + pendingSync на комнате после bind.  
-- Повторный postMessage того же save → идемпотентность по draftId (**Assumption:** draftId в session; деталь D5).
+- Offline: local draft + pendingSync на комнате после bind; flush с `expectedRevision`.  
+- Повторный postMessage того же save → идемпотентность по draftId (**Assumption:** draftId в session; деталь D5).  
+- Conflict: показать обе revision; пользователь подтверждает; **запрет** «предупредить после overwrite».
+
+**Тексты UX (высокие ставки):**
+
+| Состояние | Текст (смысл) |
+|-----------|----------------|
+| Offline save queued | «Сохранено локально — отправим на сервер при связи» |
+| Server ack | «Сохранено на сервере» |
+| Preliminary | «Сохранён предварительный ориентир (не схема)» |
+| Detailed | «Сохранена смета со схемой» |
+| 409 conflict | «Есть более новая версия на сервере — сравните, ничего не потеряно» |
 
 ---
 
@@ -212,14 +223,16 @@ stateDiagram-v2
 | AC-D7-09 | После изменения calc sent Quote не меняется | Сравнение revision snapshot |
 | AC-D7-10 | Sales без права detailed не persist схему | RBAC |
 | AC-D7-11 | Возврат после Save — исходная комната | deep-link roomId |
+| AC-D7-12 | Stale expectedRevision → 409; обе revision в истории | Two-device / reconnect |
+| AC-D7-13 | Append-only: предыдущий save читаем после нового | E-room-docs |
 
 ---
 
-## 9. Assumptions
+## 9. Assumptions / proposals
 
-1. Авто-advance Deal.stage → `calculated` при первом usable calc.  
-2. Глубина истории save (N или дни) — порог в D5.  
-3. Conflict resolution last-write-wins + warning.  
+1. **A-09 (proposed):** авто-advance stage ≥ `calculated` при первом usable calc — D5 §3.1.  
+2. Глубина истории save (N или дни) — A-14.  
+3. **A-12 (superseded):** вместо LWW — append-only + optimistic concurrency (D5 §1.8).  
 4. Host calc (iframe vs in-app) может смениться; контракт Save/типов — стабилен.  
 5. Escape hatch стен — не P0.  
 6. Точные лейблы кнопок — D4; смысл CTA здесь каноничен.
