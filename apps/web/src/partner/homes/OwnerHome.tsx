@@ -18,6 +18,8 @@ import { EntryPoints } from '../commercial/EntryPoints';
 import { WorkToday } from '../commercial/WorkToday';
 import { SupportRequestButton } from '../SupportRequestButton';
 import { nextActionsForRole } from '../commercial/nextActions';
+import { CommercialPanel } from '../commercial/CommercialPanel';
+import { useCommercialDeals } from '../commercial/useCommercialDeals';
 
 import {
   roleHeading,
@@ -43,7 +45,15 @@ export function OwnerHome({
   const api = usePartner();
   const user = api.user!;
   const [tab, setTab] = useState<OwnerTab>(() => (consumeReturnToTools() ? 'tools' : 'objects'));
-  const actions = useMemo(() => nextActionsForRole('owner', api.objects, []), [api.objects]);
+  const { deals, projectId, activeDealId, refresh } = useCommercialDeals({
+    user,
+    objects: api.objects,
+    projects: api.projects,
+  });
+  const actions = useMemo(
+    () => nextActionsForRole('owner', api.objects, deals),
+    [api.objects, deals],
+  );
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
   const [city, setCity] = useState(user.org?.city || '');
   const [panelPriceRub, setPanelPriceRub] = useState(
@@ -123,6 +133,16 @@ export function OwnerHome({
               if (route === 'calculator') onOpenCalc();
               else onNavigate('problemomer');
             }}
+          />
+          <CommercialPanel
+            projectId={projectId}
+            dealId={activeDealId}
+            staff={staff.map((s) => ({
+              id: s.id,
+              label: s.displayName || s.login,
+              role: s.role,
+            }))}
+            onDealChanged={refresh}
           />
           <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
         </TabPanel>

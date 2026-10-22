@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { HelpTrainingPanel } from '../HelpTrainingPanel';
 import { RoleWorkspace } from '../RoleOverview';
 import { StaffPanel } from '../StaffPanel';
@@ -13,8 +13,7 @@ import { WorkToday } from '../commercial/WorkToday';
 import { nextActionsForRole } from '../commercial/nextActions';
 import { CommercialPanel } from '../commercial/CommercialPanel';
 import { SupportRequestButton } from '../SupportRequestButton';
-import { apiListDeals, hasRemoteApi, type ApiDeal } from '../apiClient';
-import type { Deal } from '../../../../../packages/shared/deal';
+import { useCommercialDeals } from '../commercial/useCommercialDeals';
 
 import {
   roleHeading,
@@ -25,23 +24,6 @@ import {
   profileOf,
   type CabinetRoute,
 } from './cabinetShared';
-
-function asDeal(row: ApiDeal): Deal {
-  return {
-    id: row.id,
-    orgId: row.orgId,
-    projectId: row.projectId,
-    stage: row.stage as Deal['stage'],
-    ownerUserId: row.ownerUserId,
-    assignments: row.assignments,
-    nextActionAt: row.nextActionAt,
-    outcome: (row.outcome as Deal['outcome']) ?? null,
-    lossReason: (row.lossReason as Deal['lossReason']) ?? null,
-    lossComment: row.lossComment ?? null,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-}
 
 type Route = CabinetRoute;
 export function SalesHome({
@@ -57,32 +39,26 @@ export function SalesHome({
   const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help' | 'tools'>(() =>
     consumeReturnToTools() ? 'tools' : 'deals',
   );
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const projectId = api.objects[0]?.projectId || null;
-  const activeDealId = deals.find((d) => d.projectId === projectId && !d.outcome)?.id || deals[0]?.id || null;
-
-  useEffect(() => {
-    let live = true;
-    if (!hasRemoteApi()) return;
-    void apiListDeals()
-      .then((rows) => {
-        if (live) setDeals(rows.map(asDeal));
-      })
-      .catch(() => {
-        if (live) setDeals([]);
-      });
-    return () => {
-      live = false;
-    };
-  }, [api.objects.length]);
+  const { deals, projectId, activeDealId, refresh } = useCommercialDeals({
+    user,
+    objects: api.objects,
+    projects: api.projects,
+  });
 
   const actions = useMemo(
     () => nextActionsForRole('sales', api.objects, deals),
     [api.objects, deals],
   );
 
+  const openDeals = deals.filter((d) => !d.outcome).length;
+
   const salesNav: SideItem[] = [
-    { id: 'deals', label: `Сделки · ${api.objects.length}`, active: tab === 'deals', onSelect: () => setTab('deals') },
+    {
+      id: 'deals',
+      label: `Сделки · ${openDeals || api.objects.length}`,
+      active: tab === 'deals',
+      onSelect: () => setTab('deals'),
+    },
     { id: 'staff', label: `Сотрудники · ${staff.length}`, active: tab === 'staff', onSelect: () => setTab('staff') },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => setTab('analytics') },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => setTab('help') },
@@ -120,6 +96,7 @@ export function SalesHome({
               label: s.displayName || s.login,
               role: s.role,
             }))}
+            onDealChanged={refresh}
           />
           <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
