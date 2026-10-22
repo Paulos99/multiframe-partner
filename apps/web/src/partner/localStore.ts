@@ -1003,7 +1003,10 @@ export function appendAnalyticsEvent(event: AnalyticsEvent): void {
 }
 
 export function enqueueAnalyticsEvents(events: AnalyticsEvent[]): void {
-  const q = [...events, ...readJsonArray<AnalyticsEvent>(ANALYTICS_QUEUE_KEY)].slice(0, 500);
+  const existing = readJsonArray<AnalyticsEvent>(ANALYTICS_QUEUE_KEY);
+  const seen = new Set(existing.map((e) => e.id).filter(Boolean));
+  const fresh = events.filter((e) => e?.id && !seen.has(e.id));
+  const q = [...fresh, ...existing].slice(0, 500);
   localStorage.setItem(ANALYTICS_QUEUE_KEY, JSON.stringify(q));
 }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
@@ -10,6 +10,9 @@ import { InstallAppButton } from '../../app-shell/InstallAppButton';
 import { CabinetChrome } from '../../app-shell/CabinetChrome';
 import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
+import { EntryPoints } from '../commercial/EntryPoints';
+import { WorkToday } from '../commercial/WorkToday';
+import { nextActionsForRole } from '../commercial/nextActions';
 
 import {
   roleHeading,
@@ -33,11 +36,12 @@ export function MeasurerHome({
   const [view, setView] = useState<'home' | 'tools' | 'help'>(() =>
     consumeReturnToTools() ? 'tools' : 'home',
   );
+  const actions = useMemo(() => nextActionsForRole('measurer', api.objects, []), [api.objects]);
 
   return (
     <CabinetChrome
       title={roleHeading('measurer', user)}
-      lead="Замер за 5–10 минут"
+      lead="Мои замеры · продолжить черновик"
       mode="buttons"
       items={[
         { id: 'objects', label: 'Объекты', active: view === 'home', onSelect: () => setView('home') },
@@ -67,6 +71,13 @@ export function MeasurerHome({
             {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
             {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'}
           </p>
+          <WorkToday title="Мои замеры" actions={actions} />
+          <EntryPoints
+            onSelect={(_id, route) => {
+              if (route === 'calculator') onOpenCalc();
+              else onNavigate('problemomer');
+            }}
+          />
           <RoleWorkspace compact onCreate={() => onNavigate('problemomer')} />
           <details className={styles.hintCard}>
             <summary>Офлайн на телефоне</summary>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { HelpTrainingPanel } from '../HelpTrainingPanel';
 import { RoleWorkspace } from '../RoleOverview';
 import { usePartner } from '../PartnerContext';
@@ -6,6 +6,8 @@ import { InstallAppButton } from '../../app-shell/InstallAppButton';
 import { CabinetChrome } from '../../app-shell/CabinetChrome';
 import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
+import { WorkToday } from '../commercial/WorkToday';
+import { nextActionsForRole } from '../commercial/nextActions';
 
 import {
   roleHeading,
@@ -29,11 +31,12 @@ export function CrewHome({
   const [view, setView] = useState<'home' | 'tools' | 'help'>(() =>
     consumeReturnToTools() ? 'tools' : 'home',
   );
+  const actions = useMemo(() => nextActionsForRole('crew', api.objects, []), [api.objects]);
 
   return (
     <CabinetChrome
       title={roleHeading('crew', user)}
-      lead="Личный кабинет монтажника · смета со схемой и профиль комнаты"
+      lead="Мои задания · смета со схемой и профиль комнаты"
       mode="buttons"
       items={[
         { id: 'tasks', label: 'Задания', active: view === 'home', onSelect: () => setView('home') },
@@ -58,6 +61,7 @@ export function CrewHome({
         <HelpTrainingPanel role="crew" />
       ) : (
         <>
+          <WorkToday title="Мои задания" actions={actions} empty="Нет назначенных монтажей." />
           <RoleWorkspace />
           <details className={styles.hintCard}>
             <summary>Офлайн на телефоне</summary>

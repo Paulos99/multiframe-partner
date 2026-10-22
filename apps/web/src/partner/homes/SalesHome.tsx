@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { HelpTrainingPanel } from '../HelpTrainingPanel';
 import { RoleWorkspace } from '../RoleOverview';
 import { StaffPanel } from '../StaffPanel';
@@ -8,6 +8,10 @@ import { InstallAppButton } from '../../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../../app-shell/CabinetChrome';
 import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
+import { EntryPoints } from '../commercial/EntryPoints';
+import { WorkToday } from '../commercial/WorkToday';
+import { nextActionsForRole } from '../commercial/nextActions';
+import { CommercialPanel } from '../commercial/CommercialPanel';
 
 import {
   roleHeading,
@@ -33,6 +37,10 @@ export function SalesHome({
   const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help' | 'tools'>(() =>
     consumeReturnToTools() ? 'tools' : 'deals',
   );
+  const actions = useMemo(
+    () => nextActionsForRole('sales', api.objects, []),
+    [api.objects],
+  );
 
   const salesNav: SideItem[] = [
     { id: 'deals', label: `Сделки · ${api.objects.length}`, active: tab === 'deals', onSelect: () => setTab('deals') },
@@ -44,7 +52,7 @@ export function SalesHome({
   return (
     <CabinetChrome
       title={roleHeading('sales', user)}
-      lead="Сделки, КП и отправка клиенту"
+      lead="Сегодня в работе · сделки и КП"
       items={withToolsItem(salesNav, tab === 'tools', () => setTab('tools'))}
       extra={
         <>
@@ -57,6 +65,22 @@ export function SalesHome({
       <FrameBody>
       {tab === 'deals' ? (
         <TabPanel>
+          <WorkToday actions={actions} />
+          <EntryPoints
+            onSelect={(_id, route) => {
+              if (route === 'calculator') onOpenCalc();
+              else onNavigate('problemomer');
+            }}
+          />
+          <CommercialPanel
+            projectId={api.objects[0]?.projectId || null}
+            dealId={null}
+            staff={staff.map((s) => ({
+              id: s.id,
+              label: s.displayName || s.login,
+              role: s.role,
+            }))}
+          />
           <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import {
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
@@ -14,6 +14,9 @@ import { InstallAppButton } from '../../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../../app-shell/CabinetChrome';
 import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
+import { EntryPoints } from '../commercial/EntryPoints';
+import { WorkToday } from '../commercial/WorkToday';
+import { nextActionsForRole } from '../commercial/nextActions';
 
 import {
   roleHeading,
@@ -39,6 +42,7 @@ export function OwnerHome({
   const api = usePartner();
   const user = api.user!;
   const [tab, setTab] = useState<OwnerTab>(() => (consumeReturnToTools() ? 'tools' : 'objects'));
+  const actions = useMemo(() => nextActionsForRole('owner', api.objects, []), [api.objects]);
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
   const [city, setCity] = useState(user.org?.city || '');
   const [panelPriceRub, setPanelPriceRub] = useState(
@@ -95,7 +99,7 @@ export function OwnerHome({
       title={roleHeading('owner', user)}
       lead={
         <>
-          Прайс, команда, объекты и воронка компании
+          Сегодня в работе · прайс и команда
           {user.org?.city ? ` · ${user.org.city}` : ''}
         </>
       }
@@ -111,6 +115,13 @@ export function OwnerHome({
       <FrameBody>
       {tab === 'objects' ? (
         <TabPanel>
+          <WorkToday actions={actions} />
+          <EntryPoints
+            onSelect={(_id, route) => {
+              if (route === 'calculator') onOpenCalc();
+              else onNavigate('problemomer');
+            }}
+          />
           <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}
