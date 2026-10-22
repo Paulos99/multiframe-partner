@@ -210,13 +210,18 @@ export function KanbanBoard({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
     };
+    // Close on intentional user scroll (wheel/touch), not on programmatic
+    // scrollIntoView / Lenis settling — those fire `scroll` and would dismiss
+    // the menu the moment Playwright (or the browser) brings the card into view.
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('wheel', close, { passive: true, capture: true });
+    window.addEventListener('touchmove', close, { passive: true, capture: true });
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', close);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('wheel', close, true);
+      window.removeEventListener('touchmove', close, true);
     };
   }, [menu]);
   const snapshot = useRef<JobObject[]>([]);

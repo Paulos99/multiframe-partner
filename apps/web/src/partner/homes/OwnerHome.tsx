@@ -126,8 +126,11 @@ export function OwnerHome({
       <FrameBody>
       {tab === 'objects' ? (
         <TabPanel>
+          {/* Kanban first: objects tab must keep the board in the first viewport
+              (drag/delete e2e and day-to-day use). Commercial blocks follow. */}
           <WorkToday actions={actions} />
           <SupportRequestButton module="owner_home" />
+          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
           <EntryPoints
             onSelect={(_id, route) => {
               if (route === 'calculator') onOpenCalc();
@@ -144,7 +147,6 @@ export function OwnerHome({
             }))}
             onDealChanged={refresh}
           />
-          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}
 

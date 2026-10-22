@@ -14,6 +14,8 @@ async function enter(page: Page, role = 'owner') {
 /** Grabs the card at (+20,+15), drags it and checks the overlay keeps that offset to the pointer. */
 async function expectGrabPointStays(page: Page, id: string) {
   const card = page.locator(`[data-room-id="${id}"]`);
+  // Raw mouse events do not scroll — card must already be in the viewport.
+  await card.scrollIntoViewIfNeeded();
   const box = await card.boundingBox();
   if (!box) throw new Error('no card');
   const start = { x: box.x + 20, y: box.y + 15 };
@@ -72,7 +74,9 @@ test('owner deletes an object via «…» and confirm; it is gone after reload',
   await enter(page);
   const card = page.locator('[data-room-id="ui_room"]');
   await expect(card).toBeVisible();
+  await card.scrollIntoViewIfNeeded();
   await page.getByRole('button', { name: /^Действия с объектом «Спальня»/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Удалить' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Удалить' }).click();
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toContainText('Удалить объект «');

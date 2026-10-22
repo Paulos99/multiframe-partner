@@ -82,6 +82,7 @@ export function SalesHome({
         <TabPanel>
           <WorkToday actions={actions} />
           <SupportRequestButton module="sales_home" />
+          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
           <EntryPoints
             onSelect={(_id, route) => {
               if (route === 'calculator') onOpenCalc();
@@ -98,7 +99,6 @@ export function SalesHome({
             }))}
             onDealChanged={refresh}
           />
-          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}
       {tab === 'staff' ? (
