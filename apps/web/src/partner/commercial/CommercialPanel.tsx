@@ -115,6 +115,12 @@ export function CommercialPanel({
             onCopyText={async () => {
               const current = await ensureQuote();
               if (!current) return;
+              const text = `КП v${current.version} · проект ${current.projectId}`;
+              try {
+                await navigator.clipboard.writeText(text);
+              } catch {
+                /* clipboard may be unavailable offline */
+              }
               if (hasRemoteApi()) {
                 const remote = await apiCopyQuote(current.id);
                 setQuote({ ...current, lifecycle: remote.lifecycle as QuoteRevision['lifecycle'] });

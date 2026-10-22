@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { HelpTrainingPanel } from '../HelpTrainingPanel';
 import { RoleWorkspace } from '../RoleOverview';
 import { StaffPanel } from '../StaffPanel';
@@ -10,9 +10,11 @@ import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
 import { EntryPoints } from '../commercial/EntryPoints';
 import { WorkToday } from '../commercial/WorkToday';
-import { SupportRequestButton } from '../SupportRequestButton';
 import { nextActionsForRole } from '../commercial/nextActions';
 import { CommercialPanel } from '../commercial/CommercialPanel';
+import { SupportRequestButton } from '../SupportRequestButton';
+import { apiListDeals, hasRemoteApi, type ApiDeal } from '../apiClient';
+import type { Deal } from '../../../../../packages/shared/deal';
 
 import {
   roleHeading,
@@ -23,6 +25,23 @@ import {
   profileOf,
   type CabinetRoute,
 } from './cabinetShared';
+
+function asDeal(row: ApiDeal): Deal {
+  return {
+    id: row.id,
+    orgId: row.orgId,
+    projectId: row.projectId,
+    stage: row.stage as Deal['stage'],
+    ownerUserId: row.ownerUserId,
+    assignments: row.assignments,
+    nextActionAt: row.nextActionAt,
+    outcome: (row.outcome as Deal['outcome']) ?? null,
+    lossReason: (row.lossReason as Deal['lossReason']) ?? null,
+    lossComment: row.lossComment ?? null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 type Route = CabinetRoute;
 export function SalesHome({
@@ -38,9 +57,28 @@ export function SalesHome({
   const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help' | 'tools'>(() =>
     consumeReturnToTools() ? 'tools' : 'deals',
   );
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const projectId = api.objects[0]?.projectId || null;
+  const activeDealId = deals.find((d) => d.projectId === projectId && !d.outcome)?.id || deals[0]?.id || null;
+
+  useEffect(() => {
+    let live = true;
+    if (!hasRemoteApi()) return;
+    void apiListDeals()
+      .then((rows) => {
+        if (live) setDeals(rows.map(asDeal));
+      })
+      .catch(() => {
+        if (live) setDeals([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [api.objects.length]);
+
   const actions = useMemo(
-    () => nextActionsForRole('sales', api.objects, []),
-    [api.objects],
+    () => nextActionsForRole('sales', api.objects, deals),
+    [api.objects, deals],
   );
 
   const salesNav: SideItem[] = [
@@ -75,8 +113,8 @@ export function SalesHome({
             }}
           />
           <CommercialPanel
-            projectId={api.objects[0]?.projectId || null}
-            dealId={null}
+            projectId={projectId}
+            dealId={activeDealId}
             staff={staff.map((s) => ({
               id: s.id,
               label: s.displayName || s.login,

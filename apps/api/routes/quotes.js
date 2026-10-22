@@ -11,14 +11,15 @@ function quoteVisible(user, revision, platform) {
   return Boolean(project && project.orgId === user.orgId);
 }
 
-function publicQuote(revision) {
+function publicQuote(revision, role) {
+  const amount = role === 'crew' ? null : revision.amount ?? null;
   return {
     id: revision.id,
     projectId: revision.projectId,
     dealId: revision.dealId || null,
     version: revision.version,
     pdfStorageKey: revision.pdfStorageKey || null,
-    amount: revision.amount ?? null,
+    amount,
     roomObjectIds: revision.roomObjectIds || [],
     createdAt: revision.createdAt,
     createdBy: revision.createdBy || null,
@@ -30,6 +31,14 @@ function publicQuote(revision) {
   };
 }
 
+function canManageQuotes(role) {
+  return role === 'owner' || role === 'sales' || role === 'measurer';
+}
+
+function canConfirmSent(role) {
+  return role === 'owner' || role === 'sales';
+}
+
 export async function handleQuotes(ctx) {
   const { path, method, requireAuth, json, getBody, savePlatform, uid } = ctx;
   if (!path.includes('/quotes')) return null;
@@ -38,13 +47,13 @@ export async function handleQuotes(ctx) {
     const { platform, user } = await requireAuth();
     const list = (platform.quoteRevisions || [])
       .filter((q) => quoteVisible(user, q, platform))
-      .map(publicQuote);
+      .map((q) => publicQuote(q, user.role));
     return json(200, { quotes: list });
   }
 
   if (method === 'POST' && path.endsWith('/quotes')) {
     const { platform, user } = await requireAuth();
-    if (!['owner', 'sales', 'measurer'].includes(user.role)) {
+    if (!canManageQuotes(user.role)) {
       return json(403, { message: 'Недостаточно прав' });
     }
     const body = getBody();
@@ -74,13 +83,14 @@ export async function handleQuotes(ctx) {
     };
     platform.quoteRevisions = [revision, ...(platform.quoteRevisions || [])];
     await savePlatform(platform);
-    return json(200, { quote: publicQuote(revision) });
+    return json(200, { quote: publicQuote(revision, user.role) });
   }
 
   const actionMatch = path.match(/\/quotes\/([^/]+)\/(share|confirm-sent|copy)$/);
   if (actionMatch && method === 'POST') {
     const [, quoteId, action] = actionMatch;
     const { platform, user } = await requireAuth();
+    if (user.role === 'crew') return json(403, { message: 'Недостаточно прав' });
     const idx = (platform.quoteRevisions || []).findIndex((q) => q.id === quoteId);
     if (idx < 0) return json(404, { message: 'КП не найдено' });
     const existing = platform.quoteRevisions[idx];
@@ -89,7 +99,10 @@ export async function handleQuotes(ctx) {
     }
     // copy — no lifecycle change (PRD: копирование ≠ отправка)
     if (action === 'copy') {
-      return json(200, { quote: publicQuote(existing), lifecycleUnchanged: true });
+      return json(200, { quote: publicQuote(existing, user.role), lifecycleUnchanged: true });
+    }
+    if (action === 'confirm-sent' && !canConfirmSent(user.role)) {
+      return json(403, { message: 'Подтверждать отправку может владелец или менеджер' });
     }
     const mapped = action === 'share' ? 'share' : 'confirm_sent';
     const body = getBody();
@@ -99,7 +112,7 @@ export async function handleQuotes(ctx) {
     }
     platform.quoteRevisions[idx] = next;
     await savePlatform(platform);
-    return json(200, { quote: publicQuote(next) });
+    return json(200, { quote: publicQuote(next, user.role) });
   }
 
   return null;

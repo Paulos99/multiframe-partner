@@ -56,10 +56,19 @@ export async function handleAcademy(ctx) {
     const body = getBody();
     const scenarioId = body.scenarioId || 'sell_multiframe';
     const targetUserId = body.userId || user.id;
-    const orgId = body.orgId || user.orgId;
+    let orgId = body.orgId || user.orgId;
+    if (user.role !== 'admin') {
+      orgId = user.orgId;
+    }
     if (!orgId) return json(400, { message: 'Нет организации' });
     if (user.role !== 'admin' && user.role !== 'owner' && targetUserId !== user.id) {
       return json(403, { message: 'Недостаточно прав' });
+    }
+    if (user.role === 'owner' || user.role === 'sales') {
+      const target = (platform.users || []).find((u) => u.id === targetUserId);
+      if (target && target.orgId && target.orgId !== user.orgId) {
+        return json(403, { message: 'Нельзя назначать обучение чужой компании' });
+      }
     }
     const now = new Date().toISOString();
     const attempt = {
@@ -89,8 +98,10 @@ export async function handleAcademy(ctx) {
     const idx = (platform.learningAttempts || []).findIndex((a) => a.id === attemptId);
     if (idx < 0) return json(404, { message: 'Попытка не найдена' });
     const existing = platform.learningAttempts[idx];
-    if (existing.userId !== user.id && user.role !== 'admin' && user.role !== 'owner') {
-      return json(403, { message: 'Недостаточно прав' });
+    if (existing.userId !== user.id && user.role !== 'admin') {
+      if (user.role !== 'owner' || existing.orgId !== user.orgId) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
     }
     const body = getBody();
     const baseScore = Number(body.score);

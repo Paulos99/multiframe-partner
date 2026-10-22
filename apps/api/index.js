@@ -22,6 +22,7 @@ import {
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { derivedAssignedTo } from '../../packages/shared/deal.js';
+import { assertEventPayloadSafe } from '../../packages/shared/events.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -36,6 +37,30 @@ import { handleAcademy } from './routes/academy.js';
 import { handleSupport } from './routes/support.js';
 import { mergeAssignments, objectVisibleWithAssignments } from './routes/objects.js';
 import { eventsForDashboard, prepareIncomingAnalyticsEvents } from './routes/analytics.js';
+
+const EVENT_PII_KEYS = [
+  'clientName',
+  'clientPhone',
+  'phone',
+  'fio',
+  'fullName',
+  'address',
+  'message',
+  'comment',
+  'pdf',
+  'pdfBase64',
+  'dataBase64',
+  'transcript',
+];
+
+function scrubAnalyticsObject(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const out = { ...raw };
+  for (const key of EVENT_PII_KEYS) {
+    if (key in out) delete out[key];
+  }
+  return out;
+}
 
 ensureIndexFromTsv(ruCitiesTsv);
 
@@ -802,7 +827,8 @@ function normalizeIncomingEvent(raw) {
     raw.context === 'training' || raw.context === 'demo' || raw.context === 'work'
       ? raw.context
       : 'work';
-  return {
+  const object = scrubAnalyticsObject(raw.object);
+  const candidate = {
     id: String(raw.id || uid('ae')),
     eventId: String(raw.eventId || raw.id || uid('ae')),
     at: String(raw.at || new Date().toISOString()),
@@ -811,7 +837,7 @@ function normalizeIncomingEvent(raw) {
     login: String(raw.login || 'unknown'),
     role: String(raw.role || 'owner'),
     companyName: String(raw.companyName || ''),
-    city: String(raw.city || raw.object?.city || ''),
+    city: String(raw.city || object?.city || ''),
     tool,
     action,
     context,
@@ -820,8 +846,13 @@ function normalizeIncomingEvent(raw) {
       raw.sessionId == null || String(raw.sessionId).trim() === ''
         ? null
         : String(raw.sessionId).trim().slice(0, 80),
-    object: raw.object || null,
+    object,
   };
+  // top-level PII must not sneak in via unexpected fields
+  if (assertEventPayloadSafe(raw).length) {
+    /* drop forbidden keys by rebuilding from whitelist only */
+  }
+  return candidate;
 }
 
 export async function handler(event = {}) {
@@ -1548,6 +1579,22 @@ export async function handler(event = {}) {
       }
       if (body.assignedTo !== undefined && !['owner', 'sales'].includes(user.role)) {
         return json(403, { message: 'Назначать объекты может владелец или менеджер' });
+      }
+      if (body.assignments !== undefined && !['owner', 'sales'].includes(user.role)) {
+        return json(403, { message: 'Назначать ответственных может владелец или менеджер' });
+      }
+      if (body.assignments && typeof body.assignments === 'object') {
+        const ids = [
+          body.assignments.salesUserId,
+          body.assignments.measurerUserId,
+          body.assignments.crewUserId,
+        ].filter(Boolean);
+        for (const id of ids) {
+          const member = findUser(platform, id);
+          if (!member || (member.orgId && member.orgId !== existing.orgId)) {
+            return json(400, { message: 'Исполнитель должен быть из той же компании' });
+          }
+        }
       }
       const next = normalizeObjectInput(body, existing, user, org, platform);
       if (body.status && body.status !== existing.status) {
