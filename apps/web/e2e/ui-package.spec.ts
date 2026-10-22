@@ -127,15 +127,19 @@ test('reorder within a column persists after reload', async ({ page }) => {
     page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
   ).toBeVisible();
   await expect(card).toHaveCount(1);
-  const target = page.locator('[data-room-id="ui_measured"]');
-  const from = await card.boundingBox(),
-    to = await target.boundingBox();
-  if (!from || !to) throw new Error('Missing card geometry');
-  await page.mouse.move(from.x + 30, from.y + 30);
-  await page.mouse.down();
-  await page.mouse.move(to.x + 30, to.y + to.height - 15, { steps: 20 });
-  await page.mouse.up();
   const column = page.locator('[data-kanban-stage="measured"]');
+  const target = page.locator('[data-room-id="ui_measured"]');
+  await expect(column.locator('[data-room-id="ui_room"]')).toBeVisible();
+  await expect(target).toBeVisible();
+  await card.scrollIntoViewIfNeeded();
+  await target.scrollIntoViewIfNeeded();
+  const from = await card.boundingBox();
+  const to = await target.boundingBox();
+  if (!from || !to) throw new Error('Missing card geometry');
+  await page.mouse.move(from.x + from.width / 2, from.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 25 });
+  await page.mouse.up();
   await expect(column.locator('[data-room-id]').first()).toHaveAttribute(
     'data-room-id',
     'ui_measured',

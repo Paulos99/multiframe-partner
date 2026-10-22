@@ -889,3 +889,77 @@ export function toPartnerProfile(user: SessionUser): PartnerProfile | null {
     companyName: org.companyName,
   };
 }
+
+/** PRD commercial process, quotes, events, academy, support — re-export for callers. */
+export type {
+  Deal,
+  DealOutcome,
+  DealStage,
+  LossReason,
+  ObjectAssignments,
+} from './deal.ts';
+export {
+  EMPTY_ASSIGNMENTS,
+  LOSS_REASON_LABELS,
+  DEAL_OUTCOME_LABELS,
+  derivedAssignedTo,
+  jobClosedImpliesDealAccepted,
+  resolveDealOutcome,
+  applyDealOutcome,
+} from './deal.ts';
+
+export type { QuoteLifecycle, QuoteRevision, QuoteUserAction } from './quote.ts';
+export {
+  copyOrPdfImpliesSent,
+  nextQuoteLifecycle,
+  applyQuoteAction,
+  isSentConfirmed,
+} from './quote.ts';
+
+export type {
+  PlatformEvent,
+  PlatformEventName,
+  EventContext,
+  DealFunnelCounts,
+} from './events.ts';
+export {
+  assertEventPayloadSafe,
+  isEventPayloadSafe,
+  countsTowardSalesKpi,
+  computeDealFunnel,
+  dedupeEventsById,
+  diagnosisConfidence,
+  INSUFFICIENT_OBSERVATIONS_LABEL,
+} from './events.ts';
+
+export type {
+  LearningScenario,
+  LearningScenarioId,
+  LearningAttempt,
+  LearningAttemptStatus,
+  LearningRubric,
+  RubricCriterion,
+} from './learning.ts';
+export {
+  DEFAULT_SALES_RUBRIC,
+  openingCountsAsMastery,
+  isAttemptCompleted,
+  learningAttemptAffectsSalesFunnel,
+  scoreWithFalsePromisePenalty,
+  progressDelta,
+} from './learning.ts';
+
+export type {
+  SupportCase,
+  SupportCategory,
+  SupportCaseStatus,
+  Intervention,
+} from './support.ts';
+export {
+  SUPPORT_CATEGORY_LABELS,
+  assertSupportPayloadSafe,
+  isSupportPayloadSafe,
+  createSupportCase,
+  linkInterventionToSignal,
+  interventionResultFromSamples,
+} from './support.ts';

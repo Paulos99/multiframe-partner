@@ -21,6 +21,8 @@ import {
 } from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
+import { derivedAssignedTo } from '../../packages/shared/deal.js';
+import { assertEventPayloadSafe } from '../../packages/shared/events.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -28,6 +30,37 @@ import {
   partnerBucket,
   putObject,
 } from './objectStore.js';
+import { migratePlatform } from './platformMigrate.js';
+import { handleDeals } from './routes/deals.js';
+import { handleQuotes } from './routes/quotes.js';
+import { handleAcademy } from './routes/academy.js';
+import { handleSupport } from './routes/support.js';
+import { mergeAssignments, objectVisibleWithAssignments } from './routes/objects.js';
+import { eventsForDashboard, prepareIncomingAnalyticsEvents } from './routes/analytics.js';
+
+const EVENT_PII_KEYS = [
+  'clientName',
+  'clientPhone',
+  'phone',
+  'fio',
+  'fullName',
+  'address',
+  'message',
+  'comment',
+  'pdf',
+  'pdfBase64',
+  'dataBase64',
+  'transcript',
+];
+
+function scrubAnalyticsObject(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const out = { ...raw };
+  for (const key of EVENT_PII_KEYS) {
+    if (key in out) delete out[key];
+  }
+  return out;
+}
 
 ensureIndexFromTsv(ruCitiesTsv);
 
@@ -143,7 +176,7 @@ function defaultPlatform() {
     ...o,
     settings: normalizeOrgSettings(o.settings),
   }));
-  return platform;
+  return migratePlatform(platform);
 }
 
 function migrateLegacyPartners(list) {
@@ -283,7 +316,8 @@ async function loadPlatformFallback() {
 }
 
 async function loadPlatform() {
-  return loadStoredDocument(platformDocumentSpec());
+  const platform = await loadStoredDocument(platformDocumentSpec());
+  return migratePlatform(platform);
 }
 
 async function savePlatform(platform) {
@@ -342,21 +376,7 @@ function assertRole(user, roles) {
 }
 
 function objectVisibleTo(user, obj) {
-  if (user.role === 'admin') return true;
-  if (!user.orgId || obj.orgId !== user.orgId) return false;
-  if (user.role === 'owner') return true;
-  if (user.role === 'sales') {
-    // Менеджер видит воронку всей компании (как владелец по объектам).
-    return true;
-  }
-  if (user.role === 'measurer') {
-    return obj.createdBy === user.id || obj.assignedTo === user.id;
-  }
-  if (user.role === 'crew') {
-    // Задание видно только тому монтажнику, на кого его назначили.
-    return obj.assignedTo === user.id;
-  }
-  return false;
+  return objectVisibleWithAssignments(user, obj);
 }
 
 /** Цены видят все роли: смета объекта отдаётся целиком. */
@@ -418,13 +438,18 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     platform,
     existing?.orgId || actor.orgId,
   );
+  const assignments = mergeAssignments(body, existing);
+  const assignedToExplicit =
+    body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null;
+  const assignedTo = assignedToExplicit || derivedAssignedTo(assignments);
   return {
     id: existing?.id || body.id || uid('obj'),
     orgId: existing?.orgId || actor.orgId,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     createdBy: existing?.createdBy || actor.id,
-    assignedTo: body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null,
+    assignments,
+    assignedTo,
     status: allowed.includes(status) ? status : 'draft',
     stageOrder: stageOrderInput(body, existing),
     clientName: String(body.clientName ?? existing?.clientName ?? '').trim(),
@@ -798,23 +823,36 @@ function normalizeIncomingEvent(raw) {
   const action = String(raw.action || '');
   const tool = String(raw.tool || '');
   if (!action || !tool) return null;
-  return {
+  const context =
+    raw.context === 'training' || raw.context === 'demo' || raw.context === 'work'
+      ? raw.context
+      : 'work';
+  const object = scrubAnalyticsObject(raw.object);
+  const candidate = {
     id: String(raw.id || uid('ae')),
+    eventId: String(raw.eventId || raw.id || uid('ae')),
     at: String(raw.at || new Date().toISOString()),
     orgId: raw.orgId ?? null,
     userId: raw.userId ?? null,
     login: String(raw.login || 'unknown'),
     role: String(raw.role || 'owner'),
     companyName: String(raw.companyName || ''),
-    city: String(raw.city || raw.object?.city || ''),
+    city: String(raw.city || object?.city || ''),
     tool,
     action,
+    context,
+    dealId: raw.dealId ? String(raw.dealId) : null,
     sessionId:
       raw.sessionId == null || String(raw.sessionId).trim() === ''
         ? null
         : String(raw.sessionId).trim().slice(0, 80),
-    object: raw.object || null,
+    object,
   };
+  // top-level PII must not sneak in via unexpected fields
+  if (assertEventPayloadSafe(raw).length) {
+    /* drop forbidden keys by rebuilding from whitelist only */
+  }
+  return candidate;
 }
 
 export async function handler(event = {}) {
@@ -872,6 +910,24 @@ export async function handler(event = {}) {
       pushActivity,
     });
     if (projectsResponse) return projectsResponse;
+
+    const routeCtx = {
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      json,
+      getBody: () => getBody(event),
+      savePlatform,
+      uid,
+    };
+    const dealsResponse = await handleDeals(routeCtx);
+    if (dealsResponse) return dealsResponse;
+    const quotesResponse = await handleQuotes(routeCtx);
+    if (quotesResponse) return quotesResponse;
+    const academyResponse = await handleAcademy(routeCtx);
+    if (academyResponse) return academyResponse;
+    const supportResponse = await handleSupport(routeCtx);
+    if (supportResponse) return supportResponse;
 
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
@@ -1524,6 +1580,22 @@ export async function handler(event = {}) {
       if (body.assignedTo !== undefined && !['owner', 'sales'].includes(user.role)) {
         return json(403, { message: 'Назначать объекты может владелец или менеджер' });
       }
+      if (body.assignments !== undefined && !['owner', 'sales'].includes(user.role)) {
+        return json(403, { message: 'Назначать ответственных может владелец или менеджер' });
+      }
+      if (body.assignments && typeof body.assignments === 'object') {
+        const ids = [
+          body.assignments.salesUserId,
+          body.assignments.measurerUserId,
+          body.assignments.crewUserId,
+        ].filter(Boolean);
+        for (const id of ids) {
+          const member = findUser(platform, id);
+          if (!member || (member.orgId && member.orgId !== existing.orgId)) {
+            return json(400, { message: 'Исполнитель должен быть из той же компании' });
+          }
+        }
+      }
       const next = normalizeObjectInput(body, existing, user, org, platform);
       if (body.status && body.status !== existing.status) {
         next.history = [
@@ -1613,14 +1685,14 @@ export async function handler(event = {}) {
     if (method === 'POST' && path.endsWith('/analytics/events')) {
       const body = getBody(event);
       const incoming = Array.isArray(body.events) ? body.events : body.event ? [body.event] : [];
-      const normalized = incoming.map(normalizeIncomingEvent).filter(Boolean);
+      const normalized = prepareIncomingAnalyticsEvents(incoming, normalizeIncomingEvent);
       if (!normalized.length) return json(400, { message: 'No events' });
       const existing = await loadEvents();
-      const ids = new Set(existing.map((e) => e.id));
-      const merged = [...normalized.filter((e) => !ids.has(e.id)), ...existing].slice(
-        0,
-        ANALYTICS_CAP,
-      );
+      const ids = new Set(existing.map((e) => e.eventId || e.id));
+      const merged = [
+        ...normalized.filter((e) => !ids.has(e.eventId || e.id)),
+        ...existing,
+      ].slice(0, ANALYTICS_CAP);
       await saveEvents(merged, existing);
       return json(200, { ok: true, accepted: normalized.length });
     }
@@ -1651,7 +1723,7 @@ export async function handler(event = {}) {
           }
         }
         const platform = auth.platform;
-        const events = await loadEvents();
+        const events = eventsForDashboard(await loadEvents());
         const staffDir = platform.users
           .filter((u) => STAFF_ROLES.includes(normalizeRole(u.role)))
           .map((u) => ({
@@ -1680,7 +1752,7 @@ export async function handler(event = {}) {
           if (key !== ANALYTICS_ADMIN_KEY()) {
             return json(403, { message: 'Admin key required' });
           }
-          const events = await loadEvents();
+          const events = eventsForDashboard(await loadEvents());
           const dash = aggregateAnalyticsDashboard(events, {
             source: 'api',
             from: query.from || null,
@@ -1691,7 +1763,7 @@ export async function handler(event = {}) {
           return json(200, dash);
         }
         if (!orgId) return json(400, { message: 'orgId required' });
-        const events = await loadEvents();
+        const events = eventsForDashboard(await loadEvents());
         const dash = aggregateAnalyticsDashboard(events, {
           source: 'api',
           from: query.from || null,
