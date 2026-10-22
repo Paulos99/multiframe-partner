@@ -1,10 +1,10 @@
 # D10 — StP: поддержка и аналитика
 
-**Revision:** `rev-gate-b-draft-2`  
+**Revision:** `rev-gate-b-final-candidate`  
 **ID:** D10  
-**Зависит от:** [D1 §5.5](./01-product-architecture.md), [D2 S-admin-02 / S-x-04](./02-role-scenarios.md), [D3 §4.2](./03-information-architecture.md), [D9](./09-academy.md), [D6](./06-probleмомер-ceiling.md)  
+**Зависит от:** [D1 §5.5](./01-product-architecture.md), [D2 S-admin-02 / S-x-04](./02-role-scenarios.md), [D3 §4.2](./03-information-architecture.md), [D9](./09-academy.md), [D6](./06-probleмомер-ceiling.md), [D8](./08-commercial-process.md)  
 **Ориентир кода (readonly):** `packages/shared/support.ts`, `funnel.ts`, `events.ts`, `learning.ts`  
-**Статус:** черновик Gate B · **NOT approved** · **не Gate C**
+**Статус:** final-candidate Gate B · **NOT approved** · **не Gate C**
 
 ---
 
@@ -53,9 +53,12 @@
 | `funnel_stall` | Партнёр «застревает» на этапе воронки Deal | `computeDealFunnel` + stop-анализ по стадии |
 | `tool_underuse` | Мало применяют PM/Calc относительно консультаций | tool funnel + события `problemomer_*` / `calculator_*` |
 | `no_multiframe_offer` | Консультации есть, оффера MF нет / редко | `consultation_started` без `multiframe_offered` на dealId |
-| `early_loss_cluster` | Кластер early_declined / early_paused до КП | Deal.outcome + stageAtOutcome |
+| `early_loss_cluster` | Кластер **только** `early_declined` (и post-quote `declined`) до/после КП — **проигранные** сделки | `Deal.outcome=early_declined` (+ declined); **исключить** `early_paused` |
+| `paused_followup` | Отдельный срез: активные `early_paused` + просроченный follow-up | `outcome=early_paused` + `nextActionAt`; **не** входит в lost/decline rate |
 | `support_cta` | Партнёр нажал «Нужна помощь» | SupportCase `open` |
 | `training_gap` | Низкий progress / abandoned trainers | training aggregates (**отдельная** очередь, не sales KPI) |
+
+**C2:** `early_paused` = waiting, не lost. Lost count / decline rate / `early_loss_cluster` считают только terminal losses (`early_declined`, `declined`). Паузы — только в `paused_followup` и inbox «Возобновить».
 
 ### 3.2 «Кто застревает» (who stalls)
 
@@ -80,19 +83,23 @@
 
 **Assumption:** автоматический классификатор гипотез v1 **не** обязателен — admin выбирает hypothesis вручную из справочника; сигнал только подсвечивает паттерн.
 
-#### Observational denominator (обязательно в UI)
+#### Observational denominator + session dedupe (C4)
 
 `multiframe_offered / consultation_started` измеряет **только сессии, зафиксированные в приложении**. Это **не** «все консультации компании» и не «все продажи».
 
 | Понятие | Идентификатор / правило |
 |---------|-------------------------|
-| Logged consultation | Событие `consultation_started` с `context: work` + `orgId` (+ опц. `userId`, `dealId` если уже есть) |
-| Unsaved / abandoned quick-entry | SessionDraft без bind: может эмитить `consultation_started` **только если** пользователь явно начал tool с intent consult; иначе **не** в знаменателе. Discard draft → не считать sale; опц. `consultation_abandoned` (не KPI conversion) |
-| Demo / training | `context: training\|demo` — **exclude** из знаменателя и числителя sales |
-| Early loss pre-Quote | `early_declined` / `early_paused` **представимы** без Quote и без fabricated sale |
-| Coverage warning | UI всегда показывает: `N = consultation_started (work)`, `offered/N`, текст: «Доля среди консультаций **в приложении**; офлайн/незалогированные не входят» |
+| **consultationSessionId** | Стабильный UUID на старте консультационного intent (home quick-entry **или** open PM/Calc с `intent=consult` / room-bound sales consult). Живёт в SessionDraft / client session storage до bind/abandon/timeout |
+| **Dedupe-key** | `consultationSessionId` (primary). Fallback если legacy: `(orgId, userId, dayBucket, dealId\|draftId)` — только для миграции |
+| Logged consultation | Одно событие `consultation_started` **на sessionId** (`context: work`); повторный open того же tool / retry / reopen PM+Calc **в той же session** → **не** +1 к знаменателю; могут писаться child events `tool_opened` с тем же sessionId |
+| End of session | bind persist **или** explicit abandon **или** SessionDraft TTL (A-13) → session closed; следующий старт = новый sessionId |
+| Unsaved / abandoned quick-entry | `consultation_started` только если session создан с consult intent; discard → опц. `consultation_abandoned` (не sale, не conversion); sessionId не переиспользуется |
+| Demo / training | `context: training\|demo` — **exclude** |
+| Early pre-Quote | `early_declined` (lost) и `early_paused` (waiting) представимы без Quote / без fabricated sale |
+| Coverage warning | UI: `N = distinct consultationSessionId (work)`, `offered/N`, текст: «Доля среди консультаций **в приложении**; офлайн/незалогированные не входят» |
 
-**Запрет:** подписывать метрику как «доля всех консультаций партнёра» или «доля реальных продаж».
+**Запрет:** подписывать метрику как «доля всех консультаций партнёра» или «доля реальных продаж».  
+**AC:** одна консультация / несколько tool opens → один знаменатель (AC-D10-12).
 
 ### 3.4 Пороги (черновик цифр)
 
@@ -101,7 +108,8 @@
 | `funnel_stall` | stop-доля на одном этапе ≥ **40%** при N deals ≥ **5** | 28 дней |
 | `tool_underuse` | calc_done / consultation_started < **0.3** при consultations ≥ **5** | 28 дней |
 | `no_multiframe_offer` | offered/consultation < **0.5** при consultations ≥ **5** | 28 дней |
-| `early_loss_cluster` | early_* ≥ **3** за окно | 28 дней |
+| `early_loss_cluster` | **`early_declined` (+ declined)** ≥ **3** за окно (**без** `early_paused`) | 28 дней |
+| `paused_followup` | active `early_paused` с `nextActionAt` просрочен ≥ **3** | 28 дней |
 | Малая выборка | любое N < **5** | UI: «недостаточно наблюдений» (`diagnosisConfidence`, `INSUFFICIENT_OBSERVATIONS_LABEL`) |
 
 **Assumption:** пороги выше — стартовые для Gate B; калибровка по пилоту сети без смены контура шагов.
@@ -242,9 +250,11 @@ SupportCase: open → in_progress → resolved → closed
 | AC-D10-06 | Видны stall-этап и паттерн «нет оффера MF» при достаточных N | signal list |
 | AC-D10-07 | Intervention связана с signalId и reviewAt | `linkInterventionToSignal` |
 | AC-D10-08 | Outcomes Deal считаются по dealId, context=work | `computeDealFunnel` |
-| AC-D10-09 | Offer-rate UI показывает N, ratio и coverage warning | E-analytics / PartnerCard |
+| AC-D10-09 | Offer-rate UI показывает N (distinct sessionId), ratio и coverage warning | E-analytics / PartnerCard |
 | AC-D10-10 | training/demo excluded from consultation denominator | events filter |
-| AC-D10-11 | early_* без Quote видим в early_loss; не создаёт ordered/sale | funnel assert |
+| AC-D10-11 | `early_declined` в early_loss; `early_paused` **не** в lost/decline rate | funnel assert |
+| AC-D10-12 | Одна consultationSessionId + 3 tool opens → знаменатель +1 | fixture dedupe |
+| AC-D10-13 | paused_followup отдельный сигнал; не смешивается с early_loss_cluster | signal list |
 
 Полная матрица — [D11](./11-acceptance-matrix.md).
 

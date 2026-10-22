@@ -1,6 +1,6 @@
 # D8 — Коммерческий процесс (Deal / КП / исходы)
 
-**Revision:** `rev-gate-b-draft-2`  
+**Revision:** `rev-gate-b-final-candidate`  
 **Gate:** B · **NOT approved**  
 **Зависит от:** [D1](./01-product-architecture.md), [D3](./03-information-architecture.md), [ADR-004](./adr/004-deal-separate-from-room-status.md), [ADR-008](./adr/008-deal-quote-project-identity.md), [ADR-005](./adr/005-ceiling-segment-presets-pm-calc.md), [ADR-007](./adr/007-quick-entry-without-full-client-card.md)  
 **Связь:** [D6](./06-probleмомер-ceiling.md), [D7](./07-calculator-ceiling.md), [D2](./02-role-scenarios.md), [D5](./05-data-model-contracts.md)  
@@ -233,25 +233,29 @@ flowchart TD
   G -->|пауза| EP
   G -->|продолжить| H[Quote_created]
   EP -->|Возобновить_тот_же_dealId| F
-  EP -->|явное_закрытие| ED
+  EP -->|явное_закрытие_как_decline| ED
   H --> I[share_опц]
   I --> J[confirm_sent]
   J --> K{Исход}
   K -->|accepted_partial| L[roomAssent_доказанный]
-  K -->|declined| M1[declined_closed]
+  K -->|declined| M1[declined_closed_commercial]
   K -->|postponed_no_response| M2[follow_up_той_же_Deal]
   L --> N[tech_ready_ordered]
   N --> O[install_closed_rooms]
-  O --> P[Deal_closed_явный_A06]
+  O --> P[Deal_closed_after_install_A06]
   P --> Q{есть_deferred}
   Q -->|да| R[новый_dealId_sequential]
   Q -->|нет| S[Project_может_Done]
   R --> H
-  ED --> P
-  M1 --> P
+  ED --> CL[Deal_closed_commercial_loss]
+  M1 --> CL
 ```
 
-**Различие (обязательно):** `early_paused` → resume на том же dealId; `early_declined` → closed. Pause **никогда** не маршрутизируется автоматически в `Deal_closed`.
+**Два разных закрытия (не смешивать узлы):**  
+- **Commercial close:** `early_declined` / `declined` → `Deal_closed_commercial_loss` (проигрыш; без монтажа).  
+- **Fulfillment close (A-06):** после accepted + ordered rooms closed → явный `Deal_closed_after_install_A06`.  
+
+**Pause:** resume = тот же dealId; **никогда** не auto→closed; pause **не** lost sale (D10).
 
 ---
 

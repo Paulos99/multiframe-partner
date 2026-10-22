@@ -1,6 +1,6 @@
 # D5 — Модель данных и контракты
 
-**Revision:** `rev-gate-b-draft-2`  
+**Revision:** `rev-gate-b-final-candidate`  
 **Gate:** B · **NOT approved**  
 **Зависит от:** [D1](./01-product-architecture.md), [D3](./03-information-architecture.md), [ADR-004](./adr/004-deal-separate-from-room-status.md), [ADR-008](./adr/008-deal-quote-project-identity.md)  
 **Опора (readonly gap):** `packages/shared/{partner,deal,quote,events,funnel,support,learning}.ts`, `apps/api/routes/{deals,quotes,support}.js`, `apps/api/projects.js`  
@@ -32,7 +32,7 @@ Org
      │    ├─ blockers[]
      │    └─ status               # draft|measured|tech_ready|install|blocked|closed
      └─ Deal[]                    # история; ровно 0..1 active
-          ├─ roomAssent: {roomId → ordered|deferred|out_of_scope}
+          ├─ roomAssent: {roomId → ordered|deferred|out_of_scope|unknown|needs_review}
           ├─ stage, outcome, stageAtOutcome?, lossReason?
           ├─ assignments
           └─ QuoteRevision[]      # dealId REQUIRED (новые); sent immutable
@@ -182,7 +182,7 @@ Org
 | Тема | Сейчас | Цель Gate B | Миграция |
 |------|--------|-------------|----------|
 | Deal.outcome early_* | нет early_declined/paused | добавить outcome или stageAtOutcome+flags | extend enum; backfill null |
-| Deal.roomAssent | нет | map на Deal | новое поле; default ordered для rooms в quote |
+| Deal.roomAssent | нет | map на Deal (`ordered\|deferred\|out_of_scope\|unknown\|needs_review`) | evidence-only backfill (§4); **запрет** default ordered из sent quote; без evidence → `unknown`/`needs_review` |
 | DealStage quote_accepted… | stage дублирует outcome | оставить compat; UI SoT = outcome | UI ignore stage as outcome |
 | QuoteRevision.dealId | `string \| null` | **required** новые | backfill: привязать к единственной Deal project или создать |
 | Quote accept/decline lifecycle | есть в QuoteLifecycle | deprecate; outcome на Deal | stop writing; read compat |

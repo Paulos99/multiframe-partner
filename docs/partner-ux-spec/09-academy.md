@@ -1,10 +1,10 @@
 # D9 — Академия: instructional + game design
 
-**Revision:** `rev-gate-b-draft-2`  
+**Revision:** `rev-gate-b-final-candidate`  
 **ID:** D9  
 **Зависит от:** [D1 §5.4](./01-product-architecture.md), [D2](./02-role-scenarios.md) (admin/materials), [D3 §4.1](./03-information-architecture.md), [ADR-006](./adr/006-academy-mixed-mechanics.md)  
 **Ориентир кода (readonly):** `packages/shared/learning.ts`, события `training_*` в `packages/shared/events.ts`  
-**Статус:** черновик Gate B · **NOT approved** · **не Gate C** (без wireframes/прототипов)
+**Статус:** final-candidate Gate B · **NOT approved** · **не Gate C** (без wireframes/прототипов)
 
 ---
 
@@ -151,36 +151,49 @@ N3 Завершение
 2. 2–4 карточки: «что сработало» / «что улучшить» с цитатой узла.  
 3. CTA: **Пройти снова** (новая attempt) · **К хабу** · (admin) **Назначить коллеге**.
 
-#### 4.2.1 Полный скриптовый пример `sell_multiframe` / `client_anna` (GB-P1-01)
+#### 4.2.1 Эталонный сценарий `sell_multiframe` / `client_anna` (C3 / GB-P1-01)
 
-Один законченный пример: реплики NPC и игрока, ≥3 траектории, score и feedback. **Не** «кнопки вокруг пустых пузырей» как единственная механика — кнопки = ускорители реплик; free text (если включён) матчится к узлам или → «переформулируйте».
+Один **воспроизводимый** эталон (только Anna). Кнопки = ускорители реплик; free text матчится к ближайшему узлу или → «выберите ближе к смыслу или кнопкой».  
+**Score formula (v1):** среднее арифметическое 7 критериев (0…100, равные веса) − `falsePromisePenalty` (25 если `falsePromise=true`, иначе 0); clamp ≥0. Порог сдачи ≥70 и нет critical false promise.
 
-**Старт (N0)**  
-- NPC Anna: «Здравствуйте, нужен натяжной в спальню, хочется побыстрее.»  
-- Варианты игрока:  
-  - P0a: «Отлично, сразу возьмите MultiFrame — без него шумно.» → **Pushy** (trust−20, non_pushy−)  
-  - P0b: «Расскажите про комнату: соседи сверху, что беспокоит?» → **N1**  
-  - P0c: «Полотно от 400 ₽/м², что ещё?» → **PriceTrap**  
+Критерии: `need_discovery` · `tech_accuracy` · `non_pushy_offer` · `clarity` · `objection_handling` · `next_step` · `no_false_promises`.
 
-**N1 Discovery**  
-- Anna: «Соседи иногда слышны, но я за красотой пришла.»  
-- P1a: «Под полотном можно сделать каркас MultiFrame — давайте посмотрим, зачем это вам.» → **N2** (need_discovery+)  
-- P1b: «Это даёт −35 дБ гарантированно.» → **false_promise** (FailFast)  
-- P1c: длинный жаргон без опоры → **N2b Confusion** (tech_accuracy−)
+##### Узлы и реплики (общий пул)
 
-**N2 Value → N3**  
-- Anna: «И что дальше?»  
-- P2a: «Могу показать профиль в проблемомере и дать ориентир по площади — без обязательства.» → **OfferOk** (next_step+)  
-- P2b: «Решать надо сегодня, иначе цена вырастет.» → **Pressure**  
-- P2c: «Ну ок, думайте.» (без next step) → **Incomplete**
+| Node | NPC Anna | Choices (player) → next |
+|------|----------|-------------------------|
+| **N0** | «Здравствуйте, нужен натяжной в спальню, хочется побыстрее.» | **P0a** «Отлично, сразу MultiFrame — без него у вас будет шумно.» → PushyN1 · **P0b** «Расскажите про комнату: соседи сверху есть, что беспокоит кроме вида?» → N1 · **P0c** «Полотно от 400 ₽/м². Что ещё интересует по цене?» → PriceTrap |
+| **PriceTrap** | «Цену полотна поняла. А зачем вы про что-то ещё?» | **PTfix** «Сначала пойму задачу комнаты — шум, соседи, ожидания — потом сориентирую по составу.» → N1 · **PTbad** «Берите сразу пакет с MultiFrame, иначе переплатите потом.» → PushyN1 |
+| **N1** | «Соседи иногда слышны, но я за красотой пришла.» | **P1a** «Под натяжным можно поставить каркас MultiFrame. Давайте коротко разберём, зачем он вам — без покупки сейчас.» → N2 · **P1b** «Гарантируем −35 дБ и полную тишину.» → FailFast · **P1c** «Это Rw/DnT,w по ISO, демпфер, развязка по периметру…» (без бытового смысла) → N2b |
+| **N2b** | «Я ничего не поняла. Это мне точно нужно?» | **P2b_fix** «Простыми словами: каркас под полотном снижает ударный шум соседей. Могу показать профиль и дать ориентир по площади.» → N2 · **P2b_bad** «Если не разберётесь в терминах — не наш клиент.» → PoorEnd |
+| **PushyN1** | «Вы сразу продаёте допы. Мне просто потолок.» | **PPu_fix** «Извините за напор. Давайте сначала про комнату и ваши ожидания.» → N1 · **PPu_bad** «Без MultiFrame смысла нет, решайте сегодня.» → PoorEnd |
+| **N2** | «И что дальше, если мне это подойдёт?» | **P2a** «Могу открыть проблемомер и дать предварительный ориентир по площади — без обязательства покупать.» → OfferOk · **P2b** «Решать надо сегодня, иначе цена вырастет.» → PressureEnd · **P2c** «Ну ок, думайте сами.» → IncompleteEnd |
+| **FailFast / ends** | (конец попытки) | Feedback + score |
 
-| Trajectory | Path | End state | Score sketch (равные веса − penalty) | Feedback cites |
-|------------|------|-----------|--------------------------------------|----------------|
-| **Successful** | P0b→P1a→P2a | OfferOk completed | ≥70; falsePromise=false | «Выяснили контекст»; «мягкий next step» |
-| **Partial** | P0c→…→P2a или P0b→P1c→P2a | completed с weakness | 50–69 | «PriceTrap / жаргон»; «оффер спасён» |
-| **Poor** | P0a→… или P1b | FailFast / Pressure | <50 или penalty 25 | «Давление»; «ложное обещание дБ» |
+##### Три полных пути
 
-**Runtime UX:** wrong answer → coach tip + retry node (не мгновенный fail, кроме false_promise hard); pause attempt → `abandoned` confirm; a11y: focus order chat → choices; free text unknown → «выберите ближе к смыслу или кнопкой».  
+**Path S — Successful** `N0 → P0b → N1 → P1a → N2 → P2a → OfferOk`
+
+1. Диалог: Anna N0 → Player P0b → Anna N1 → Player P1a → Anna N2 → Player P2a → OfferOk.  
+2. Rubric (0–100): need_discovery **90**, tech_accuracy **85**, non_pushy_offer **90**, clarity **85**, objection_handling **70**, next_step **95**, no_false_promises **100**.  
+3. Average = (90+85+90+85+70+95+100)/7 = **87.86** → **88**. Penalty = 0. **Score = 88** (pass).  
+4. Feedback: «Выяснили контекст комнаты до оффера» (P0b); «Объяснили MultiFrame без давления и дали next step — проблемомер/ориентир» (P1a/P2a).
+
+**Path P — Partial** `N0 → P0c → PriceTrap → PTfix → N1 → P1c → N2b → P2b_fix → N2 → P2a → OfferOk`
+
+1. Диалог: Anna N0 → P0c → PriceTrap → PTfix → N1 → P1c → N2b → P2b_fix → N2 → P2a → OfferOk.  
+2. Rubric: need_discovery **70**, tech_accuracy **45**, non_pushy_offer **75**, clarity **55**, objection_handling **65**, next_step **90**, no_false_promises **100**.  
+3. Average = (70+45+75+55+65+90+100)/7 = **71.43** → **71**. Penalty = 0. **Score = 71** (pass marginal).  
+4. Feedback: «Старт с цены ослабил discovery» (P0c); «Жаргон без бытового смысла» (P1c); «Вернулись к простому языку и мягкому next step» (P2b_fix/P2a).
+
+**Path F — Poor** `N0 → P0b → N1 → P1b → FailFast`
+
+1. Диалог: Anna N0 → P0b → N1 → P1b «Гарантируем −35 дБ и полную тишину.» → FailFast.  
+2. Rubric: need_discovery **80**, tech_accuracy **20**, non_pushy_offer **60**, clarity **40**, objection_handling **30**, next_step **20**, no_false_promises **0**.  
+3. Average = (80+20+60+40+30+20+0)/7 = **35.71** → **36**. `falsePromise=true` → penalty **25**. **Score = 11** (fail).  
+4. Feedback: «Ложное обещание „гарантированной тишины / −35 дБ“ недопустимо» (P1b); «Discovery был хорош, но сорван неверной технической претензией».
+
+**Runtime UX:** wrong (non-fatal) → coach tip + retry узла; false_promise → FailFast без retry; pause → confirm `abandoned`; a11y: focus chat → choices.  
 **Isolation:** `context: training`; **0** записей в Deal/KPI.
 
 ---
@@ -285,7 +298,7 @@ Hub → Lobby(scenario) → Playing → Feedback → (Retry | Hub)
 | AC-D9-05 | Opening ≠ mastery | `openingCountsAsMastery` false |
 | AC-D9-06 | Материалы открываются из E-materials, не подменяют тренажёр | nav IA |
 | AC-D9-07 | Слоты `calc_sandbox` / `install_nodes` существуют в хабе (хотя бы coming_soon) | E-academy-hub |
-| AC-D9-08 | Скрипт §4.2.1: три траектории дают различимый score + feedback с цитатой узла | fixture attempt |
+| AC-D9-08 | Эталон Anna §4.2.1: Path S/P/F воспроизводимы; rubric 7 чисел + вычисленный score (88 / 71 / 11) | fixture attempt |
 | AC-D9-09 | Free-text unknown / retry / pause не пишут Deal | events assert |
 
 Полная матрица приёмки продукта — [D11](./11-acceptance-matrix.md) (блок Training isolation).

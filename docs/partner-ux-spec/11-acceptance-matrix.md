@@ -1,9 +1,9 @@
 # D11 — Матрица приёмки
 
-**Revision:** `rev-gate-b-draft-2`  
+**Revision:** `rev-gate-b-final-candidate`  
 **ID:** D11  
 **Зависит от:** D2–D10 (сценарии, IA, коммерция, академия, StP); SoT Gate A: ADR-001…008  
-**Статус:** черновик Gate B · **NOT approved** · **не Gate C** (доказательства — сценарий/данные/RBAC-тест, не «макет есть»)
+**Статус:** final-candidate Gate B · **NOT approved** · **не Gate C** (доказательства — сценарий/данные/RBAC-тест, не «макет есть»)
 
 ---
 
@@ -49,7 +49,7 @@
 | AC-ID | Измеримый результат | Сценарий | Экран | Данные | Доказательство | Не-доказательство |
 |-------|---------------------|----------|-------|--------|----------------|-------------------|
 | AC-EL-01 | Early decline/pause **до КП** с `lossReason` + `stageAtOutcome` | S-sales-02a | E-deal / inbox CTA | Deal.outcome early_*, lossReason, stageAtOutcome | Сохранить без Quote; пустая причина → блок | «Поле причины есть в форме» |
-| AC-EL-02 | StP/аналитика видит этап потери до КП | S-sales-02a, S-admin-02 | E-analytics, E-partner-card | Aggregates early_* | Запись видна в воронке/сигналах | «CI по API 200» |
+| AC-EL-02 | StP видит `early_declined` в early_loss; `early_paused` **только** в paused_followup (не lost count) | S-sales-02a, S-admin-02, C2 | E-analytics, E-partner-card | early_declined vs early_paused | Pause не увеличивает decline rate | «Все early_* в одном lost графике» |
 | AC-EL-03 | Training-событие не подменяет early outcome | S-sales-02a, D9 | E-analytics vs E-analytics-training | context training excluded | Attempt completed не создаёт Deal.outcome | «Виджет training на том же дашборде» |
 | AC-EL-04 | **Pause ≠ close:** CTA Пауза не пишет closedAt; resume = тот же dealId | S-com-01, GB-P0-01 | E-project-deal | Deal.active + early_paused | Negative: pause path ≠ POST close; resume id equal | «Кнопка Пауза есть» |
 | AC-EL-05 | early_declined → closed; reopen запрещён | S-com-03 | E-project-deal | closedAt set | PATCH reopen → reject | «Статус Отказ в UI» |

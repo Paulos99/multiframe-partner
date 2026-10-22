@@ -1,6 +1,6 @@
 # Assumptions — сводный список (Gate B)
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B NOT approved**  
+**Revision:** `rev-gate-b-final-candidate` · **Gate B NOT approved**  
 **Правило:** не silently adopt. Категории: **resolved/approved** (только Gate A §8 / ADR) · **proposed awaiting owner** · **deferred nonblocking**.  
 Owner table: [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md).
 

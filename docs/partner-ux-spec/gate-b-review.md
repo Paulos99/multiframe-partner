@@ -1,16 +1,17 @@
 # Gate B — резюме для заказчика
 
-**Revision:** `rev-gate-b-draft-2`  
+**Revision:** `rev-gate-b-final-candidate`  
 **Дата:** 2026-10-22  
 **После:** Gate A `rev-gate-a-approved-20261022` (условно, ADR-008)  
-**Статус:** черновик Gate B · **NOT approved**. **Gate C и код не начаты.**  
-**Ответ на:** [CHATGPT_GATE_B_REVIEW_2026-10-22.md](./CHATGPT_GATE_B_REVIEW_2026-10-22.md)
+**Статус:** final-candidate Gate B · **NOT approved**. **Gate C и код не начаты.**  
+**Ответ на:** [CHATGPT_GATE_B_REVIEW_2026-10-22.md](./CHATGPT_GATE_B_REVIEW_2026-10-22.md) + PR re-review C1–C4
 
 ---
 
-## 1. Что сделано в draft-2
+## 1. Что сделано
 
-Исправлены все P0 (GB-P0-01…06) и P1 (GB-P1-01…02) по замечаниям независимого ревью. Детали: [gate-b-changelog-draft-1-to-2.md](./gate-b-changelog-draft-1-to-2.md).
+**draft-2:** GB-P0-01…06, GB-P1-01…02 — [changelog](./gate-b-changelog-draft-1-to-2.md).  
+**final-candidate:** точечные C1–C4 — [changelog](./gate-b-changelog-draft-2-to-final-candidate.md).
 
 | Блок | Суть draft-2 |
 |------|----------------|

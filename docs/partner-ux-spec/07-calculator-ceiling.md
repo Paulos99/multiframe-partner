@@ -1,6 +1,6 @@
 # D7 — Калькулятор для потолочников (кабинет)
 
-**Revision:** `rev-gate-b-draft-2`  
+**Revision:** `rev-gate-b-final-candidate`  
 **Gate:** B · **NOT approved**  
 **Зависит от:** [D1](./01-product-architecture.md), [D3](./03-information-architecture.md), [ADR-005](./adr/005-ceiling-segment-presets-pm-calc.md), [ADR-007](./adr/007-quick-entry-without-full-client-card.md), [ADR-004](./adr/004-deal-separate-from-room-status.md), [ADR-008](./adr/008-deal-quote-project-identity.md)  
 **Связь:** [D6](./06-probleмомер-ceiling.md) (опциональный вход), [D8](./08-commercial-process.md) (КП), [D5](./05-data-model-contracts.md)  
