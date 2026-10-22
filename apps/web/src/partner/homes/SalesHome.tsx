@@ -10,6 +10,7 @@ import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
 import { EntryPoints } from '../commercial/EntryPoints';
 import { WorkToday } from '../commercial/WorkToday';
+import { SupportRequestButton } from '../SupportRequestButton';
 import { nextActionsForRole } from '../commercial/nextActions';
 import { CommercialPanel } from '../commercial/CommercialPanel';
 
@@ -66,6 +67,7 @@ export function SalesHome({
       {tab === 'deals' ? (
         <TabPanel>
           <WorkToday actions={actions} />
+          <SupportRequestButton module="sales_home" />
           <EntryPoints
             onSelect={(_id, route) => {
               if (route === 'calculator') onOpenCalc();

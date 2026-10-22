@@ -4,6 +4,7 @@ import {
 } from '../../../../../packages/shared/partner';
 import { Button } from '../../ui/Button';
 import { AnalyticsDashboard } from '../AnalyticsDashboard';
+import { PartnerCard } from '../PartnerCard';
 import { CityField } from '../CityField';
 import { citiesReady, isKnownCity, loadCities } from '../cityCatalog';
 import { Skeleton } from '../Skeleton';
@@ -46,6 +47,7 @@ export function AdminHome({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [saving, setSaving] = useState(false);
   const [catalogReady, setCatalogReady] = useState(citiesReady());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [cardId, setCardId] = useState<string | null>(null);
   const [editCity, setEditCity] = useState('');
   const [savingCity, setSavingCity] = useState(false);
 
@@ -226,6 +228,14 @@ export function AdminHome({ onNavigate }: { onNavigate: (r: Route) => void }) {
                     <button
                       type="button"
                       className={styles.ghost}
+                      aria-pressed={cardId === p.user.id}
+                      onClick={() => setCardId((cur) => (cur === p.user.id ? null : p.user.id))}
+                    >
+                      Карточка
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.ghost}
                       onClick={() => {
                         setErr(null);
                         setEditingId(p.user.id);
@@ -268,6 +278,19 @@ export function AdminHome({ onNavigate }: { onNavigate: (r: Route) => void }) {
                       Удалить
                     </button>
                   </div>
+                  {cardId === p.user.id ? (
+                    <PartnerCard
+                      partner={{
+                        orgId: p.user.orgId,
+                        companyName: p.org?.settings.companyName || p.user.displayName,
+                        city: cityName,
+                        login: p.user.login,
+                        lastLogin: p.lastLogin,
+                        executorCount: p.executorCount,
+                      }}
+                      onClose={() => setCardId(null)}
+                    />
+                  ) : null}
                   {editingId === p.user.id ? (
                     <div className={styles.cityEdit}>
                       <label className={styles.field}>

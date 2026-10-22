@@ -37,6 +37,8 @@ import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 import { FunnelIcon } from '../icons';
+import { SignalsList } from './signals/SignalsList';
+import { diagnose, toolCountsFromAnalytics } from './signals/diagnose';
 
 const HOUSE_LABELS = Object.fromEntries(
   HOUSE_TYPE_OPTIONS.map((o) => [o.id, o.label]),
@@ -513,6 +515,13 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
             <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
           </div>
+
+          {mode === 'admin' ? (
+            <SignalsList
+              signals={diagnose({ tools: toolCountsFromAnalytics(dash.funnel, dash.events) })}
+              title="Сигналы по инструментам"
+            />
+          ) : null}
 
           <h3 className={styles.dashSub}>Динамика</h3>
           {dash.series.length ? (

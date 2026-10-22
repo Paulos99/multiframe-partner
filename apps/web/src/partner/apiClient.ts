@@ -1,13 +1,17 @@
 /**
  * Remote API client for partner platform (Yandex Cloud Function).
  */
+import { isSupportPayloadSafe } from '../../../../packages/shared/support';
 import type {
+  Intervention,
   JobObject,
   JobObjectDocument,
   OrgSettings,
   Project,
   ProjectInput,
   SessionUser,
+  SupportCase,
+  SupportCategory,
   UserRole,
 } from '../../../../packages/shared/partner';
 import { loadToken, saveToken } from './localStore';
@@ -602,4 +606,49 @@ export async function apiConfirmQuoteSent(id: string, comment?: string): Promise
     { method: 'POST', body: JSON.stringify({ comment: comment || null }) },
   );
   return data.quote;
+}
+
+/* —— PRD support: cases & interventions —— */
+
+export async function apiListSupportCases(): Promise<SupportCase[]> {
+  const data = await request<{ cases: SupportCase[] }>('/support/cases');
+  return data.cases || [];
+}
+
+/** Тело заявки без персональных данных клиента: проверяется до отправки. */
+export async function apiCreateSupportCase(input: {
+  category: SupportCategory;
+  module?: string | null;
+  orgId?: string | null;
+}): Promise<SupportCase> {
+  if (!isSupportPayloadSafe(input as Record<string, unknown>)) {
+    throw new Error('Нельзя прикладывать персональные данные клиента');
+  }
+  const data = await request<{ case: SupportCase }>('/support/cases', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data.case;
+}
+
+export async function apiListInterventions(): Promise<Intervention[]> {
+  const data = await request<{ interventions: Intervention[] }>('/interventions');
+  return data.interventions || [];
+}
+
+export async function apiCreateIntervention(input: {
+  orgId: string;
+  problemType: string;
+  actionType: string;
+  supportCaseId?: string | null;
+  signalId?: string | null;
+  reviewAt?: string | null;
+  beforeCount?: number;
+  afterCount?: number;
+}): Promise<Intervention> {
+  const data = await request<{ intervention: Intervention }>('/interventions', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data.intervention;
 }

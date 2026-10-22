@@ -16,6 +16,7 @@ import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
 import { EntryPoints } from '../commercial/EntryPoints';
 import { WorkToday } from '../commercial/WorkToday';
+import { SupportRequestButton } from '../SupportRequestButton';
 import { nextActionsForRole } from '../commercial/nextActions';
 
 import {
@@ -116,6 +117,7 @@ export function OwnerHome({
       {tab === 'objects' ? (
         <TabPanel>
           <WorkToday actions={actions} />
+          <SupportRequestButton module="owner_home" />
           <EntryPoints
             onSelect={(_id, route) => {
               if (route === 'calculator') onOpenCalc();

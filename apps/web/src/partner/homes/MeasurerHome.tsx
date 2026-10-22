@@ -12,6 +12,7 @@ import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
 import { EntryPoints } from '../commercial/EntryPoints';
 import { WorkToday } from '../commercial/WorkToday';
+import { SupportRequestButton } from '../SupportRequestButton';
 import { nextActionsForRole } from '../commercial/nextActions';
 
 import {
@@ -72,6 +73,7 @@ export function MeasurerHome({
             {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'}
           </p>
           <WorkToday title="Мои замеры" actions={actions} />
+          <SupportRequestButton module="measurer_home" />
           <EntryPoints
             onSelect={(_id, route) => {
               if (route === 'calculator') onOpenCalc();
