@@ -290,6 +290,19 @@ check("GC6-P0-03 ingest pm snapshot", ingP.ok && MFStore.get().sessionDraft.pmDo
 check("GC6-P0-03 PM area 21", MFStore.draftAreaM2(MFStore.get().sessionDraft) === 21);
 check("GC6-P0-03 pm stretch preset", MFStore.get().sessionDraft.answers.plannedCeiling === "stretch");
 
+const qs = MFStore.buildCalcIframeQuery(null);
+check("GC9-P0-01 partner=1", qs.includes("partner=1"));
+check("GC9-P0-01 gateC=1", qs.includes("gateC=1"));
+check("GC9-P0-01 walls=0", qs.includes("walls=0"));
+MFStore.resetAll();
+MFStore.setRole("sales");
+MFStore.ensurePmDraft("");
+const dPm = MFStore.get().sessionDraft;
+dPm.pmDone = true;
+dPm.answers = { ...(dPm.answers || {}), areaM2: 21 };
+const qsHandoff = MFStore.buildCalcIframeQuery(dPm);
+check("GC9-P0-01 PM area handoff", qsHandoff.includes("area=21"));
+
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");
 if (failed.length) {

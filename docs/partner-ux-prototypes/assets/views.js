@@ -329,6 +329,10 @@
       </div>`;
   }
 
+  function calcIframeSrc() {
+    return `tools/calculator/index.html?${MFStore.buildCalcIframeQuery(S().sessionDraft)}`;
+  }
+
   /**
    * GC6-P0-03: host the agreed calculator snapshot (draw / scheme / panels).
    * Thin chrome for hub/bind; tool UI is the original shell.
@@ -337,23 +341,27 @@
     const role = S().role || "—";
     const d = S().sessionDraft;
     const ready = d && (d.pmDone || d.calcDone) && !d.bound;
+    const pending = S().ui.calcSavePending;
     return `
       <div class="tool-host" data-tool="calc">
         <header class="tool-chrome">
           <a class="tool-chrome__back" href="#/tools/hub">← Инстр.</a>
           <div class="tool-chrome__title">
             <strong>Калькулятор</strong>
-            <span class="muted hide-narrow">роль ${esc(role)} · снимок UI</span>
+            <span class="muted hide-narrow">роль ${esc(role)} · partner bridge · потолок (walls=0)</span>
           </div>
           <div class="tool-chrome__actions">
             <a class="btn sm ghost" href="#/tools/pm">PM</a>
-            <a class="btn sm ${ready ? "primary" : "ghost"}" href="#/tools/bind">${
-              ready ? "Сохранить…" : "Bind"
-            }</a>
-            <button type="button" class="btn sm primary hide-narrow" data-action="calc-capture-demo" title="Если PDF/postMessage ещё не сработали">Демо→черновик</button>
+            ${
+              ready
+                ? `<a class="btn sm primary" href="#/tools/bind">В проект…</a>`
+                : `<button type="button" class="btn sm primary" data-action="calc-save-and-bind" ${
+                    pending ? "disabled" : ""
+                  }>${pending ? "Сохраняем…" : "Сохранить расчёт"}</button>`
+            }
           </div>
         </header>
-        <iframe class="tool-frame" title="Калькулятор MultiFRAME" src="tools/calculator/index.html" allow="clipboard-write"></iframe>
+        <iframe class="tool-frame" title="Калькулятор MultiFRAME" src="${esc(calcIframeSrc())}" allow="clipboard-write"></iframe>
       </div>`;
   }
 
@@ -412,11 +420,16 @@
       const r = p?.rooms.find((x) => x.id === rid);
       return p && r ? `${p.name} → ${r.name}` : pickPair || "—";
     })();
+    const calcHint = d.calcMeta?.areaEstimate
+      ? " · ориентир по площади (preliminary)"
+      : d.calcDone
+        ? " · смета из калькулятора (panels+materials)"
+        : "";
     const previewFor = (st) => {
       if (st === "profile") return d.pmDone ? "только профиль PM (без preliminary)" : "—";
       if (st === "preliminary")
-        return `${d.pmDone ? "профиль PM + " : ""}preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
-      if (st === "both") return `профиль PM + preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
+        return `${d.pmDone ? "профиль PM + " : ""}preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²${calcHint}`;
+      if (st === "both") return `профиль PM + preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²${calcHint}`;
       return "—";
     };
     return shell(

@@ -2102,13 +2102,20 @@ function triggerPdfDownload(blob, filename) {
 }
 
 /** Смета (цены, количество и схема раскладки) уходит в кабинет (родительское окно). */
+function isGateCPartner() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('partner') === '1' && params.get('gateC') === '1';
+}
+
 async function publishCalcToCabinet() {
   if (window.parent === window) return;
   if (!state.bom) return;
   if (onboardingDemoActive) return;
-  if (isAreaEstimateMode()) return;
   const params = new URLSearchParams(window.location.search);
   if (params.get('partner') !== '1') return;
+  const gateC = isGateCPartner();
+  const areaEstimate = isAreaEstimateMode();
+  if (areaEstimate && !gateC) return;
   const sig = calcSignature();
   if (sig === lastPublishedSig || publishLock) return;
   publishLock = true;
@@ -2120,6 +2127,30 @@ async function publishCalcToCabinet() {
   try {
     const input = await collectPdfInput();
     if (calcSignature() !== sig) return;
+    if (gateC && areaEstimate) {
+      const areaM2 = state.bom?.ceiling?.area ?? state.areaValue ?? null;
+      const panelsCost = state.bom?.total?.totalCost ?? null;
+      const panels = state.bom?.total?.panelsWithReserve ?? null;
+      const dowels = state.bom?.total?.dowelsWithReserve ?? null;
+      window.parent.postMessage(
+        {
+          type: 'mf-cabinet-calc',
+          objectId: params.get('objectId') || null,
+          inputMode: state.inputMode,
+          areaEstimate: true,
+          hasScheme: false,
+          panels,
+          dowels,
+          areaM2,
+          panelsCost,
+          totalCost: panelsCost,
+        },
+        window.location.origin,
+      );
+      lastPublishedSig = sig;
+      if (statusEl) statusEl.textContent = 'Ориентир отправлен в кабинет';
+      return;
+    }
     if (input.areaEstimate || !input.hasScheme) return;
     const { exportCalculationPDF } = await import('../export/pdf-export.js');
     const fileLabel = params.get('client') || '';
@@ -2132,8 +2163,9 @@ async function publishCalcToCabinet() {
     const pdfBase64 = await blobToBase64(priced.blob);
     const panels = state.bom?.total?.panelsWithReserve ?? null;
     const dowels = state.bom?.total?.dowelsWithReserve ?? null;
-    const areaM2 =
-      (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0) || state.areaValue || null;
+    const areaM2 = gateC
+      ? state.bom?.ceiling?.area ?? state.areaValue ?? null
+      : (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0) || state.areaValue || null;
     const panelsCost = state.bom?.total?.totalCost ?? null;
     window.parent.postMessage(
       {
@@ -2146,6 +2178,7 @@ async function publishCalcToCabinet() {
         dowels,
         areaM2,
         panelsCost,
+        totalCost: panelsCost,
         filename: priced.filename,
         pdfBase64,
       },
@@ -2170,8 +2203,7 @@ async function publishCalcToCabinet() {
 function scheduleCabinetPublish(options = {}) {
   if (options.skipCabinet || onboardingDemoActive) return;
   if (window.parent === window) return;
-  // «По площади» не строит раскладку — объект и PDF не создаём.
-  if (isAreaEstimateMode()) return;
+  if (isAreaEstimateMode() && !isGateCPartner()) return;
   clearTimeout(publishTimer);
   if (options.silent) {
     publishTimer = setTimeout(() => {
@@ -2292,6 +2324,19 @@ function loadFromUrl() {
   }
 
   applyQueryHandoff();
+  applyPartnerGateCDefaults();
+}
+
+/** Gate C: ceiling-primary partner preset (walls off) for dims/draw, not only area handoff */
+function applyPartnerGateCDefaults() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('partner') !== '1' || params.get('gateC') !== '1') return;
+  const ceilingOnly =
+    params.get('walls') === '0' || params.get('surfaces') === 'ceiling';
+  if (!ceilingOnly) return;
+  applyOptionsToForm({ calcCeiling: true, calcWalls: false, selectedWallIds: [] });
+  setAllWallSurfaces(false);
+  state.options = { ...state.options, ...readOptionsFromForm() };
 }
 
 /**
@@ -2432,6 +2477,7 @@ function init() {
   updateLayoutMode();
   updateResultsPreview();
   loadFromUrl();
+  applyPartnerGateCDefaults();
   if (!state.inputMode) updateSchemeModeUi();
 
   const appOnboarding = setupAppOnboarding({
@@ -2523,6 +2569,12 @@ function resetUiAfterOnboarding() {
     onboardingDemoActive = false;
   }
 }
+
+window.addEventListener('message', (ev) => {
+  if (ev.data?.type === 'mf-gate-c-calc-publish') {
+    void publishCalcToCabinet();
+  }
+});
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);

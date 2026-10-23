@@ -1049,26 +1049,76 @@
       render();
       return;
     }
-    if (action === "calc-capture-demo") {
-      MFStore.ingestCalcToolResult({ areaM2: 14, amount: 47600, segment: "comfort" });
-      toast("Калькулятор → черновик", "14 м² · демо (снимок UI)", "ok");
-      render();
+    if (action === "calc-save-and-bind") {
+      const d = MFStore.get().sessionDraft;
+      if (d?.calcDone && !d.bound) {
+        location.hash = "#/tools/bind";
+        return;
+      }
+      const frame = document.querySelector('.tool-host[data-tool="calc"] iframe');
+      if (!frame?.contentWindow) {
+        toast("Калькулятор", "Сначала выполните расчёт в iframe", "warn");
+        return;
+      }
+      const st = MFStore.get();
+      st.ui.calcSavePending = true;
+      st.ui.calcNavigateBindAfterIngest = true;
+      MFStore.save();
+      refreshToolHostChrome();
+      frame.contentWindow.postMessage({ type: "mf-gate-c-calc-publish" }, window.location.origin);
+      toast("Калькулятор", "Запрашиваем смету из инструмента…", "ok");
       return;
     }
 
+  }
+
+  function refreshToolHostChrome() {
+    const d = MFStore.get().sessionDraft;
+    const ready = d && (d.pmDone || d.calcDone) && !d.bound;
+    const pending = MFStore.get().ui.calcSavePending;
+    document.querySelectorAll('.tool-host[data-tool="calc"] .tool-chrome__actions').forEach((wrap) => {
+      const saveBtn = wrap.querySelector('[data-action="calc-save-and-bind"]');
+      if (saveBtn) {
+        saveBtn.disabled = !!pending;
+        saveBtn.textContent = pending ? "Сохраняем…" : "Сохранить расчёт";
+      }
+      const bindLink = wrap.querySelector('a[href="#/tools/bind"]');
+      if (bindLink && ready) bindLink.classList.add("primary");
+    });
+  }
+
+  function ingestCalcFromIframe(data) {
+    const area = Number(data.areaM2) || null;
+    const amount = Number(data.panelsCost) || Number(data.totalCost) || null;
+    if (!area && !amount) return false;
+    MFStore.ingestCalcToolResult({
+      areaM2: area || undefined,
+      amount: amount || undefined,
+      panelsCost: data.panelsCost,
+      inputMode: data.inputMode,
+      areaEstimate: data.areaEstimate,
+      panels: data.panels,
+      hasScheme: data.hasScheme,
+    });
+    const st = MFStore.get();
+    st.ui.calcSavePending = false;
+    MFStore.save();
+    refreshToolHostChrome();
+    const note = data.areaEstimate ? "ориентир по площади" : "смета из расчёта";
+    toast("Смета из Калькулятора", `${area || MFStore.draftAreaM2(st.sessionDraft)} м² · ${note}`, "ok");
+    if (st.ui.calcNavigateBindAfterIngest) {
+      st.ui.calcNavigateBindAfterIngest = false;
+      MFStore.save();
+      location.hash = "#/tools/bind";
+    }
+    return true;
   }
 
   window.addEventListener("message", (ev) => {
     const data = ev.data;
     if (!data || typeof data !== "object") return;
     if (data.type === "mf-cabinet-calc") {
-      const area = Number(data.areaM2) || null;
-      const amount = Number(data.panelsCost) || null;
-      if (area || amount) {
-        MFStore.ingestCalcToolResult({ areaM2: area || 14, amount: amount || undefined });
-        toast("Смета из Калькулятора", `${area || "—"} м² · в черновике`, "ok");
-        render();
-      }
+      ingestCalcFromIframe(data);
       return;
     }
     if (data.type === "mf-gate-c-pm") {

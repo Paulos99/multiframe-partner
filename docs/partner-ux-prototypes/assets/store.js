@@ -1,6 +1,6 @@
 /**
- * Gate C draft-9 store — demo fixtures only. NOT production proof.
- * KEY v7: original tool iframe hosts + richer PM result (GC6-P0-03 remainder).
+ * Gate C draft-10 store — demo fixtures only. NOT production proof.
+ * KEY v8: GC9-P0-01 calc iframe partner bridge.
  */
 (function (global) {
   const KEY = "mf_gate_c_proto_v8";
@@ -276,7 +276,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-9",
+      revision: "rev-gate-c-draft-10",
       role: null,
       offline: false,
       syncState: "online",
@@ -943,15 +943,51 @@
     return { ok: true, consultationSessionId: d.consultationSessionId };
   }
 
+  /** Query string for tools/calculator iframe (GC9-P0-01 partner bridge) */
+  function buildCalcIframeQuery(draft) {
+    const d = draft || state.sessionDraft;
+    const parts = {
+      partner: "1",
+      gateC: "1",
+      walls: "0",
+      surfaces: "ceiling",
+      source: "cabinet",
+      panelPrice: "890",
+      pricePerM2: "3400",
+      installPerM2: "450",
+      dowelPrice: "12",
+      dowelsPerPanel: "4",
+      company: "Gate C demo",
+    };
+    const pmArea = d?.pmDone ? Number(d.answers?.areaM2) : 0;
+    if (pmArea > 0) {
+      parts.area = String(pmArea);
+      parts.mode = "area";
+    }
+    return Object.keys(parts)
+      .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(parts[k])}`)
+      .join("&");
+  }
+
   function ingestCalcToolResult(payload) {
     const area = Number(payload?.areaM2) || 14;
-    const amount = Number(payload?.amount) || Math.round(area * 3400);
+    const amount =
+      Number(payload?.amount) || Number(payload?.panelsCost) || Math.round(area * 3400);
     ensureCalcDraft(area);
     const d = state.sessionDraft;
     d.kind = d.pmDone ? "tool_pm_calc" : "tool_calc";
     d.segment = payload?.segment || d.segment || "comfort";
     finishCalcOnDraft(amount, area);
     d.fromOriginalShell = true;
+    d.calcMeta = {
+      inputMode: payload?.inputMode || null,
+      areaEstimate: !!payload?.areaEstimate,
+      hasScheme: !!payload?.hasScheme,
+      panels: payload?.panels ?? null,
+      amountMeaning: payload?.areaEstimate
+        ? "preliminary_area_estimate"
+        : "panels_materials_totalCost",
+    };
     save();
     return { ok: true, amount, areaM2: area };
   }
@@ -2026,6 +2062,7 @@
     resolveConflict,
     startQuickConsultation,
     ensureCalcDraft,
+    buildCalcIframeQuery,
     ingestCalcToolResult,
     ingestPmToolResult,
     ensureCalcUi,

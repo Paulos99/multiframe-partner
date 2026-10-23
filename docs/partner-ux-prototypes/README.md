@@ -1,11 +1,11 @@
 # Gate C — изолированные HTML-прототипы MultiFrame Партнёр
 
-**Revision:** `rev-gate-c-draft-9`  
-**Статус:** Gate C **in review** (GC6-P0-03 remainder + GC8-P1-01) · Gate B **APPROVED / frozen**  
+**Revision:** `rev-gate-c-draft-10`  
+**Статус:** Gate C **in review** (GC9-P0-01 calc→host bridge) · Gate B **APPROVED / frozen**  
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Changelog: [`CHANGELOG-draft-9.md`](./CHANGELOG-draft-9.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` (41/41) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
+Changelog: [`CHANGELOG-draft-10.md`](./CHANGELOG-draft-10.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` · bridge: `node calc-bridge-e2e.mjs` · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
 
 **Инструменты:** `#/tools/pm` · `#/tools/calc` — full-bleed iframes over `tools/problemomer/` + `tools/calculator/`. Owner ref: https://paulos99.github.io/multiframe-partner/ · Bind — RBAC D5 §1.7.
 
