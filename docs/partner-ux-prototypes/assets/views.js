@@ -303,41 +303,34 @@
   }
 
   /**
-   * GC6-P0-03 remainder: host Problemer outside the dark cabinet shell
-   * (compact StP header + wizard live in tools/problemomer/).
-   * Legacy toolsWrapPm kept below for reference / fallback deep-links.
+   * GC6-P0-03 remainder: host agreed Problemer snapshot full-bleed
+   * (compact logo row + segment progress + full result) — not redrawn cabinet shell.
    */
   function toolsPm() {
     const role = S().role || "—";
     const d = S().sessionDraft;
-    const ready = d && (d.pmDone || d.calcDone) && !d.bound;
+    const ready = d && d.pmDone && !d.bound;
     return `
       <div class="tool-host" data-tool="pm">
-        <header class="tool-chrome tool-chrome--compact">
+        <header class="tool-chrome">
           <a class="tool-chrome__back" href="#/tools/hub">← Инстр.</a>
           <div class="tool-chrome__title">
             <strong>Проблемомер</strong>
-            <span class="muted">роль ${esc(role)} · согласованный wizard · один клик «Начать»</span>
+            <span class="muted hide-narrow">роль ${esc(role)} · снимок UI</span>
           </div>
           <div class="tool-chrome__actions">
             <a class="btn sm ghost" href="#/tools/calc">Калькулятор</a>
-            <a class="btn sm ${ready ? "primary" : ""}" href="#/tools/bind">${
-              ready ? "Сохранить…" : "Bind после итога"
+            <a class="btn sm ${ready ? "primary" : "ghost"}" href="#/tools/bind">${
+              ready ? "Сохранить…" : "Bind"
             }</a>
           </div>
         </header>
-        <iframe class="tool-frame" title="Проблемомер MultiFRAME" src="tools/problemomer/index.html" allow="clipboard-write"></iframe>
+        <iframe class="tool-frame" title="Проблемомер MultiFRAME" src="tools/problemomer/index.html" allow="autoplay"></iframe>
       </div>`;
   }
 
-  function toolsWrapPm() {
-    /* Legacy inline PM removed — primary entry is toolsPm() iframe host. */
-    return toolsPm();
-  }
-
   /**
-   * GC6-P0-03: host the agreed calculator as a readonly snapshot of
-   * apps/web/public/calculator (not a simplified м²×rate mock).
+   * GC6-P0-03: host the agreed calculator snapshot (draw / scheme / panels).
    * Thin chrome for hub/bind; tool UI is the original shell.
    */
   function toolsCalc() {
@@ -347,17 +340,17 @@
     return `
       <div class="tool-host" data-tool="calc">
         <header class="tool-chrome">
-          <a class="tool-chrome__back" href="#/tools/hub">← Инструменты</a>
+          <a class="tool-chrome__back" href="#/tools/hub">← Инстр.</a>
           <div class="tool-chrome__title">
             <strong>Калькулятор</strong>
-            <span class="muted">роль ${esc(role)} · снимок согласованного UI · <a href="tools/calculator/index.html" target="_blank" rel="noopener">открыть отдельно</a></span>
+            <span class="muted hide-narrow">роль ${esc(role)} · снимок UI</span>
           </div>
           <div class="tool-chrome__actions">
-            <a class="btn sm ghost" href="#/tools/pm">Проблемомер</a>
-            <a class="btn sm ${ready ? "primary" : ""}" href="#/tools/bind">${
-              ready ? "Сохранить в проект…" : "Bind после результата"
+            <a class="btn sm ghost" href="#/tools/pm">PM</a>
+            <a class="btn sm ${ready ? "primary" : "ghost"}" href="#/tools/bind">${
+              ready ? "Сохранить…" : "Bind"
             }</a>
-            <button type="button" class="btn sm primary" data-action="calc-capture-demo" title="Если PDF/postMessage ещё не сработали">В черновик (демо 14 м²)</button>
+            <button type="button" class="btn sm primary hide-narrow" data-action="calc-capture-demo" title="Если PDF/postMessage ещё не сработали">Демо→черновик</button>
           </div>
         </header>
         <iframe class="tool-frame" title="Калькулятор MultiFRAME" src="tools/calculator/index.html" allow="clipboard-write"></iframe>

@@ -3,7 +3,7 @@
  * KEY v7: original tool iframe hosts + richer PM result (GC6-P0-03 remainder).
  */
 (function (global) {
-  const KEY = "mf_gate_c_proto_v7";
+  const KEY = "mf_gate_c_proto_v8";
   const CREW_SELF = "u_denis";
   const MEASURER_SELF = "u_pavel";
 
@@ -943,43 +943,6 @@
     return { ok: true, consultationSessionId: d.consultationSessionId };
   }
 
-  function ingestPmToolResult(result) {
-    ensureCalcDraft(result?.areaM2 || result?.answers?.areaM2 || 14);
-    const d = state.sessionDraft;
-    d.kind = "tool_pm";
-    d.answers = {
-      ...(d.answers || {}),
-      ...(result?.answers || {}),
-      areaM2: Number(result?.areaM2) || Number(result?.answers?.areaM2) || draftAreaM2(d),
-      roomType: result?.roomType || result?.answers?.basics || d.answers.roomType,
-      noiseAwareness:
-        result?.answers?.noisyNeighbors === "often_noisy" ||
-        result?.answers?.noisyNeighbors === "sometimes_noisy"
-          ? "bothered"
-          : result?.answers?.noisyNeighbors === "usually_quiet"
-            ? "none"
-            : d.answers.noiseAwareness || "unknown",
-      neighbors:
-        result?.answers?.noisyNeighbors === "often_noisy" ||
-        result?.answers?.noisyNeighbors === "sometimes_noisy"
-          ? "above"
-          : d.answers.neighbors || "unknown",
-    };
-    d.pmResult = {
-      ...computePmResult(d.answers),
-      ...result,
-      illustrativeOnly: true,
-      guaranteedDb: false,
-      fromOriginalShell: true,
-    };
-    d.pmDone = true;
-    state.ui.pmStep = "result";
-    state.ui.pmPhase = "result";
-    state.consultationSessionId = d.consultationSessionId;
-    save();
-    return { ok: true, draft: d };
-  }
-
   function ingestCalcToolResult(payload) {
     const area = Number(payload?.areaM2) || 14;
     const amount = Number(payload?.amount) || Math.round(area * 3400);
@@ -991,6 +954,65 @@
     d.fromOriginalShell = true;
     save();
     return { ok: true, amount, areaM2: area };
+  }
+
+  /** Result from tools/problemomer iframe → sessionDraft for bind */
+  function ingestPmToolResult(payload) {
+    const r = payload?.result || payload || {};
+    const area = Number(r.areaM2) || Number(r.answers?.areaM2) || 14;
+    ensurePmDraft("");
+    const d = state.sessionDraft;
+    const answers = {
+      ...(d.answers || {}),
+      ...(r.answers || {}),
+      areaM2: area,
+      roomType: r.roomType || r.answers?.basics || d.answers?.roomType || "bedroom",
+      plannedCeiling: "stretch",
+      neighbors:
+        r.answers?.noisyNeighbors === "usually_quiet"
+          ? "none"
+          : r.answers?.noisyNeighbors === "sometimes_noisy" || r.answers?.noisyNeighbors === "often_noisy"
+            ? "above"
+            : d.answers?.neighbors || "unknown",
+      noiseAwareness:
+        r.answers?.noisyNeighbors === "usually_quiet"
+          ? "none"
+          : r.answers?.noisyNeighbors === "sometimes_noisy" || r.answers?.noisyNeighbors === "often_noisy"
+            ? "bothered"
+            : d.answers?.noiseAwareness || "unknown",
+    };
+    d.answers = answers;
+    d.pmResult = {
+      plannedCeiling: "stretch",
+      areaM2: area,
+      roomType: answers.roomType,
+      noiseAwareness: answers.noiseAwareness,
+      neighbors: answers.neighbors,
+      purpose: answers.purpose || "living",
+      chain: r.chain || {
+        norms: "Иллюстрация · не измерение",
+        current: "Сейчас · ориентир",
+        withMf: "С MultiFrame · ориентир",
+        difference: "без гарантии дБ",
+        nextStep: "Сохранить профиль",
+      },
+      narrative: r.narrative || "",
+      claimsQualified: true,
+      guaranteedDb: false,
+      illustrativeOnly: true,
+      currentRisk: r.currentRisk || "неясный",
+      withMfComfort: "ориентир комфорта (иллюстрация)",
+      clientPersona: r.clientPersona || "mixed",
+      demo: r.demo || null,
+      fromOriginalShell: true,
+    };
+    d.pmDone = true;
+    d.kind = d.calcDone ? "tool_pm_calc" : "tool_pm";
+    d.fromOriginalShell = true;
+    state.ui.pmPhase = "result";
+    state.ui.pmStep = "result";
+    save();
+    return { ok: true, result: d.pmResult };
   }
 
   function finishCalcOnDraft(amount, areaM2) {
@@ -2004,8 +2026,8 @@
     resolveConflict,
     startQuickConsultation,
     ensureCalcDraft,
-    ingestPmToolResult,
     ingestCalcToolResult,
+    ingestPmToolResult,
     ensureCalcUi,
     defaultCalcUi,
     calcEstimateFromUi,

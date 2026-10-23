@@ -2,12 +2,12 @@
 
 **Revision:** `rev-gate-c-draft-9`  
 **Статус:** Gate C **in review** (GC6-P0-03 remainder + GC8-P1-01) · Gate B **APPROVED / frozen**  
-**Периметр:** только этот каталог. **Не** `apps/*` (кроме readonly calc snapshot), **не** merge/deploy, **не** Gate D.  
+**Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Changelog: [`CHANGELOG-draft-9.md`](./CHANGELOG-draft-9.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
+Changelog: [`CHANGELOG-draft-9.md`](./CHANGELOG-draft-9.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` (40/40) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
 
-**Инструменты:** `#/tools/pm` / `#/tools/calc` — full-bleed iframe hosts of agreed shells (outside dark cabinet). Owner ref: https://paulos99.github.io/multiframe-partner/
+**Инструменты:** `#/tools/pm` · `#/tools/calc` — full-bleed iframes over `tools/problemomer/` + `tools/calculator/`. Owner ref: https://paulos99.github.io/multiframe-partner/ · Bind — RBAC D5 §1.7.
 
 ---
 
@@ -18,7 +18,7 @@ python3 -m http.server 8765 --directory docs/partner-ux-prototypes
 # http://localhost:8765/
 ```
 
-Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v7`** (сброс в nav).
+Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v8`** (сброс в nav).
 
 ---
 

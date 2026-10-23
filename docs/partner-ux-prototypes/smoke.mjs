@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Executable Gate C store smoke — rev-gate-c-draft-8
+ * Executable Gate C store smoke — rev-gate-c-draft-9
  *
  * Usage (from this directory or repo root):
  *   node docs/partner-ux-prototypes/smoke.mjs
@@ -282,6 +282,22 @@ const ingP = MFStore.ingestPmToolResult({
 });
 check("GC6-P0-03 ingest PM iframe", ingP.ok && MFStore.get().sessionDraft.pmDone);
 check("GC6-P0-03 PM area 21", MFStore.draftAreaM2(MFStore.get().sessionDraft) === 21);
+
+MFStore.resetAll();
+MFStore.setRole("sales");
+const ingP = MFStore.ingestPmToolResult({
+  result: {
+    areaM2: 21,
+    roomType: "bedroom",
+    clientPersona: "noise",
+    currentRisk: "повышенный",
+    narrative: "demo",
+    answers: { basics: "bedroom", noisyNeighbors: "often_noisy", plannedCeiling: "stretch", areaM2: 21 },
+    chain: { norms: "n", current: "c", withMf: "m", difference: "d", nextStep: "s" },
+  },
+});
+check("GC6-P0-03 ingest pm snapshot", ingP.ok && MFStore.get().sessionDraft.pmDone && MFStore.get().sessionDraft.pmResult.areaM2 === 21);
+check("GC6-P0-03 pm stretch preset", MFStore.get().sessionDraft.answers.plannedCeiling === "stretch");
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");

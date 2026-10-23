@@ -8226,31 +8226,41 @@ body.theme-dark .sketch-inline-footer {
   color: #c5ccd4;
 }
 
-/* Gate C GC8-P1-01: prevent header logo/title overlap at 360–390px */
-@media (max-width: 420px) {
+/* GC8-P1-01 — Gate C host: no overlapping logos/title/help at 360–390 */
+@media (max-width: 520px) {
   .app-header {
-    flex-wrap: wrap;
-    row-gap: 6px;
-    align-items: center;
+    margin: 6px 6px 0;
     padding: 8px 10px;
+    min-height: auto;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px 10px;
+    border-radius: 12px;
   }
   .app-header__logo {
-    width: 28px;
+    position: static;
+    transform: none;
     height: 28px;
+    order: 1;
   }
   .app-header__text {
-    flex: 1 1 auto;
-    min-width: 0;
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
   }
   .app-header__text h1 {
-    font-size: 0.95rem;
-    letter-spacing: 0.04em;
+    font-size: 1rem;
   }
   .app-header__brand-logo {
-    max-height: 16px;
-    max-width: 96px;
+    height: 16px;
   }
   .app-header__help {
+    position: static;
+    order: 2;
     margin-left: auto;
+    min-width: 36px;
+    min-height: 36px;
   }
 }

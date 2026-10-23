@@ -1061,14 +1061,6 @@
   window.addEventListener("message", (ev) => {
     const data = ev.data;
     if (!data || typeof data !== "object") return;
-    if (data.type === "mf-gate-c-pm" && data.result) {
-      const res = MFStore.ingestPmToolResult(data.result);
-      if (res.ok) {
-        toast("Профиль из Проблемомера", `${data.result.areaM2 || "—"} м² · в черновике`, "ok");
-        render();
-      }
-      return;
-    }
     if (data.type === "mf-cabinet-calc") {
       const area = Number(data.areaM2) || null;
       const amount = Number(data.panelsCost) || null;
@@ -1077,6 +1069,20 @@
         toast("Смета из Калькулятора", `${area || "—"} м² · в черновике`, "ok");
         render();
       }
+      return;
+    }
+    if (data.type === "mf-gate-c-pm") {
+      const res = MFStore.ingestPmToolResult(data);
+      toast(
+        "Профиль из Проблемомера",
+        res.ok ? `${res.result?.areaM2 || "—"} м² · в черновике` : res.error,
+        res.ok ? "ok" : "danger"
+      );
+      if (res.ok) location.hash = "#/tools/bind";
+      return;
+    }
+    if (data.type === "mf-gate-c-nav" && data.hash) {
+      location.hash = data.hash;
     }
   });
 

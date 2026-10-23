@@ -1,14 +1,14 @@
-# Gate C smoke — `rev-gate-c-draft-8`
+# Gate C smoke — `rev-gate-c-draft-9`
 
 **Не user testing.**
 
 | | |
 |--|--|
-| Against | GC6-P0-03 on draft-7 `f4b70ce` (+ keep P0-01/02) |
-| Store smoke | **36/36 PASS** |
+| Against | ChatGPT NOT APPROVED on `aa0d166` (comment 6362406643); tip had `28fd127` calc iframe |
+| Store smoke | **40/40 PASS** |
 | Command | `node docs/partner-ux-prototypes/smoke.mjs` |
-| Visual evidence | store `media/gate-c-original-vs-proto/` |
+| Visual evidence (repo) | `docs/partner-ux-prototypes/media/gate-c-draft9-*.png` |
 
-Includes prior GC3 checks + crew/admin forbidden bind + personal save + bindPickPair retention + draft-8 branded PM/Calc shells.
+Includes GC3 + GC6-P0-01/02 + ingest PM/Calc snapshots.
 
 Human D11 §7 still **NOT observed**.
