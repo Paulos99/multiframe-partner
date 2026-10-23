@@ -1,0 +1,20 @@
+---
+description: Кого из установленных скиллов вызывать в облачном Project MultiFrame Партнёры по типу задачи
+alwaysApply: true
+---
+
+Project MultiFrame Партнёры облачный. На задачу один-два скилла, не весь набор. Имя после `/`.
+
+Глобальные скиллы приходят из синхронизации `~/.cursor/skills`. Скиллы `multiframe-*` лежат в этом репозитории, в `.cursor/skills`. Если файла в выгрузке нет, не выдумывай, что скилл подключён.
+
+Тексты интерфейса, Академии и тренажёров: `humanizer`. Дополнительно `multiframe-content-voice`, если файл есть в проекте. Сроки, статусы и условия не сокращать.
+
+Тренажёры, симуляторы, игровые механики: `needs-analysis`, `learning-objectives`, `scenario-generation`, `assessment-design`, `game-engineering`, `digital-gamification`. Формат сцены отдельно: `storyboard`. Дополнительно `multiframe-training-designer`, если файл есть в проекте.
+
+Продукт до кода: `brainstorming`, `define-problem-statement`, `define-hypothesis`, `discover-journey-map`, `deliver-prd`, `deliver-user-stories`, `deliver-acceptance-criteria`, `writing-plans`. Интервью: `discover-interview-synthesis`. Анкеты: `measure-survey-analysis`. Техническое решение уже выбрано: `develop-adr`. Дополнительно `multiframe-product-architect`, если файл есть в проекте.
+
+Интерфейс: `uxcraft`, `ui-ux-pro-max`, `web-design-guidelines`. Код React: `vercel-react-best-practices`, `vercel-composition-patterns`. Дополнительно `multiframe-ux-quality-gate`, если файл есть в проекте. Для ui-ux-pro-max команда `python`, не `python3`.
+
+Перед сдачей: `verification-before-completion`. Есть план: `executing-plans`. Поломка: `systematic-debugging`.
+
+Не вызывать без отдельной причины: `using-superpowers`, `diagnosing-superpowers`, `dispatching-parallel-agents`, `subagent-driven-development`, `using-git-worktrees`, `requesting-code-review`, `receiving-code-review`, `finishing-a-development-branch`, `writing-skills`.
