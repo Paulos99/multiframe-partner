@@ -358,7 +358,7 @@
         toast("Не создано", res.error === "offline_queued" ? "В очереди офлайн" : "Ошибка", "danger");
         return;
       }
-      toast("Проект создан", `dealId: ${res.dealId}`, "ok");
+      toast("Проект создан", `Сделка ${res.dealId}`, "ok");
       location.hash = `#/sales/project/${res.projectId}`;
       return;
     }
@@ -782,13 +782,13 @@
       a.href = URL.createObjectURL(blob);
       a.download = `quote-mock-${MFStore.get().ui.quotePreview?.revisionId || "demo"}.txt`;
       a.click();
-      toast("Скачан макет", "Не confirm_sent", "ok");
+      toast("Скачан макет", "Не подтверждение отправки", "ok");
       return;
     }
     if (action === "quote-confirm") {
       const res = MFStore.confirmSent(el.getAttribute("data-qid"));
       if (!res.ok) toast("Уже подтверждено", "", "warn");
-      else toast("Отправка подтверждена", "lifecycle → sent_confirmed", "ok");
+      else toast("Отправка подтверждена", "статус: отправка подтверждена", "ok");
       render();
       return;
     }
@@ -820,7 +820,7 @@
     }
     if (action === "resume-deal") {
       const res = MFStore.resumeDeal(el.getAttribute("data-deal"));
-      toast("Возобновлено", `Тот же dealId · этап «${res.stage}»`, "ok");
+      toast("Возобновлено", `та же сделка · этап «${res.stage}»`, "ok");
       render();
       return;
     }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Executable Gate C store smoke — rev-gate-c-draft-13
+ * Executable Gate C store smoke — rev-gate-c-draft-14
  *
  * Usage (from this directory or repo root):
  *   node docs/partner-ux-prototypes/smoke.mjs
@@ -315,7 +315,28 @@ check("GC10-P0-01 ceiling bind totals", calcApp.includes("bomTotalsForPartnerBin
 const bomJs = fs.readFileSync(path.join(__dirname, "tools/calculator/src/calculators/materials-bom.js"), "utf8");
 check("GC11-P1-01 finalizePartnerBomTotals", bomJs.includes("finalizePartnerBomTotals"));
 check("GC11 quick area finalize", calcApp.includes("finalizePartnerBomTotals(state.bom)"));
-check("rev-gate-c-draft-13", MFStore.get().revision === "rev-gate-c-draft-13");
+check("rev-gate-c-draft-14", MFStore.get().revision === "rev-gate-c-draft-14");
+
+const viewsJs = fs.readFileSync(path.join(__dirname, "assets/views.js"), "utf8");
+const appJs = fs.readFileSync(path.join(__dirname, "assets/app.js"), "utf8");
+const gc13Bad = [
+  "Bind при Save",
+  "Показать Result",
+  "Save без bind",
+  "sheet assent",
+  "Adopted / Verified",
+  "Закрытие Deal",
+  "prelim ≠ detailed",
+  "deferred / inbox",
+  ">ordered</option>",
+  'toast("Result"',
+  'toast("Accepted"',
+  "Не confirm_sent",
+];
+for (const s of gc13Bad) {
+  check(`GC13-UX-01 no «${s}» in views/app`, !viewsJs.includes(s) && !appJs.includes(s), s);
+}
+check("GC13-UX-01 quote preview RU", !fs.readFileSync(storePath, "utf8").includes("`Deal: ${q.dealId}`"));
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");

@@ -276,7 +276,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-13",
+      revision: "rev-gate-c-draft-14",
       role: null,
       offline: false,
       syncState: "online",
@@ -1458,16 +1458,22 @@
     if (!q) return { ok: false };
     const deal = state.deals.find((d) => d.dealId === q.dealId);
     const p = deal && project(deal.projectId);
+    const lifecycleRu =
+      q.lifecycle === "sent_confirmed"
+        ? "отправка подтверждена"
+        : q.lifecycle === "draft"
+        ? "черновик"
+        : q.lifecycle;
     const lines = [
       `MultiFrame · демо-КП (НЕ отправлено)`,
       `Проект: ${p ? p.name : "—"}`,
-      `Deal: ${q.dealId}`,
-      `Revision: ${q.revisionId}`,
+      `Сделка: ${q.dealId}`,
+      `Ревизия: ${q.revisionId}`,
       `Сумма: ${q.amount} ₽`,
       `Комнаты: ${(q.rooms || []).join(", ")}`,
-      `lifecycle: ${q.lifecycle}`,
+      `Статус: ${lifecycleRu}`,
       ``,
-      `Copy/PDF ≠ confirm_sent.`,
+      `Копия/PDF ≠ подтверждение отправки клиенту.`,
     ];
     const text = lines.join("\n");
     pushEvent(mode === "pdf" ? "quote_pdf" : "quote_copy", { revisionId, dealId: q.dealId });
