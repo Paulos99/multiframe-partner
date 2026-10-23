@@ -1,11 +1,11 @@
 # Gate C — изолированные HTML-прототипы MultiFrame Партнёр
 
-**Revision:** `rev-gate-c-draft-10`  
+**Revision:** `rev-gate-c-draft-11`  
 **Статус:** Gate C **in review** (GC9-P0-01 calc→bind) · Gate B **APPROVED / frozen**  
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Changelog: [`CHANGELOG-draft-10.md`](./CHANGELOG-draft-10.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` · E2E: `node e2e-gc9.mjs` · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
+Changelog: [`CHANGELOG-draft-11.md`](./CHANGELOG-draft-11.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` · E2E: `node e2e-gc9.mjs` · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
 
 **Инструменты:** `#/tools/pm` · `#/tools/calc` — full-bleed iframes over `tools/problemomer/` + `tools/calculator/`. Owner ref: https://paulos99.github.io/multiframe-partner/ · Bind — RBAC D5 §1.7.
 
@@ -18,7 +18,7 @@ python3 -m http.server 8765 --directory docs/partner-ux-prototypes
 # http://localhost:8765/
 ```
 
-Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v9`** (сброс в nav).
+Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v10`** (сброс в nav).
 
 ---
 

@@ -1,10 +1,10 @@
-# Gate C smoke — `rev-gate-c-draft-10`
+# Gate C smoke — `rev-gate-c-draft-11`
 
 **Не user testing.**
 
 | | |
 |--|--|
-| Against | GC9-P0-01 calc→bind (comment 6362930611) |
+| Against | GC10-P0-01 walls=0 stick + ceiling bind scope (comment 6363117379) |
 | Store smoke | **47/47 PASS** — `node docs/partner-ux-prototypes/smoke.mjs` |
 | Browser E2E | **10/10 PASS** — `cd docs/partner-ux-prototypes && npm install && node e2e-gc9.mjs` |
 

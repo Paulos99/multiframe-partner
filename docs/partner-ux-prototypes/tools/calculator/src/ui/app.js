@@ -826,6 +826,15 @@ function addAreaWall() {
   onExplicitChange();
 }
 
+function wallsExplicitlyNone() {
+  return state.options.calcWalls === false;
+}
+
+/** Gate C partner iframe: empty selectedWallIds means ceiling-only, not «all walls». */
+function shouldRenderNoWallSurfaces() {
+  return wallsExplicitlyNone() || partnerCeilingOnlyHost();
+}
+
 function refreshWallSurfaceCheckboxes() {
   if (state.inputMode === 'area') {
     renderAreaWallsList();
@@ -839,7 +848,9 @@ function refreshWallSurfaceCheckboxes() {
   const prev = new Set(
     state.options.selectedWallIds?.length
       ? state.options.selectedWallIds
-      : state.room.walls.map((w) => w.id)
+      : shouldRenderNoWallSurfaces()
+        ? []
+        : state.room.walls.map((w) => w.id)
   );
 
   list.innerHTML = state.room.walls
@@ -853,6 +864,13 @@ function refreshWallSurfaceCheckboxes() {
     .join('');
 
   state.options.selectedWallIds = readSelectedWallIds();
+  if (shouldRenderNoWallSurfaces()) {
+    list.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+      el.checked = false;
+    });
+    state.options.selectedWallIds = [];
+    state.options.calcWalls = false;
+  }
   updateSurfaceGroupsUi();
 }
 
@@ -861,6 +879,8 @@ function setAllWallSurfaces(checked) {
     el.checked = checked;
   });
   state.options.selectedWallIds = readSelectedWallIds();
+  state.options.calcWalls = checked && state.options.selectedWallIds.length > 0;
+  if (!checked) state.options.calcWalls = false;
   updateSurfaceGroupsUi();
   onAutoRecalcFieldChange();
 }
@@ -1032,6 +1052,7 @@ function setInputMode(mode, { confirmSwitch = false, preserveGeometry = false } 
 
   syncModePanelsUi();
   refreshWallSurfaceCheckboxes();
+  applyGateCCeilingPreset();
   updateSurfaceGroupsUi();
   updateSchemeModeUi();
 
@@ -1900,10 +1921,13 @@ function applyOptionsToForm(options) {
 
   if (options.selectedWallIds?.length) {
     state.options.selectedWallIds = [...options.selectedWallIds];
-  } else if (options.calcWalls === false) {
+    state.options.calcWalls = true;
+  } else if (options.calcWalls === false || partnerCeilingOnlyHost()) {
     state.options.selectedWallIds = [];
+    state.options.calcWalls = false;
   } else {
     state.options.selectedWallIds = state.room.walls.map((w) => w.id);
+    state.options.calcWalls = true;
   }
 
   if (options.ceilingMounting) f.ceilingMounting.value = options.ceilingMounting;
@@ -2131,7 +2155,20 @@ function triggerPdfDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+function partnerBindUsesCeilingScopeOnly() {
+  return partnerCeilingOnlyHost() && !state.options.calcWalls;
+}
+
 function cabinetBindAreaM2() {
+  if (partnerBindUsesCeilingScopeOnly()) {
+    const net = parseFloat(state.ceilingResult?.stats?.netArea);
+    const ceilingArea =
+      (net > 0 ? net : null) ??
+      state.bom?.ceiling?.area ??
+      state.areaValue ??
+      0;
+    if (ceilingArea > 0) return ceilingArea;
+  }
   if (partnerCeilingOnlyHost() && state.bom?.ceiling?.area > 0) {
     return state.bom.ceiling.area;
   }
@@ -2146,18 +2183,46 @@ function cabinetBindAmount() {
   const bom = state.bom;
   if (!bom) return null;
   const area = cabinetBindAreaM2();
-  const panelsOnly = bom.total?.totalCost ?? null;
+  let panelsOnly = bom.total?.totalCost ?? null;
+  if (partnerBindUsesCeilingScopeOnly() && bom.ceiling?.stats) {
+    panelsOnly = bom.ceiling.stats.totalCost ?? panelsOnly;
+  }
   if (PARTNER_PRICING.enabled) {
+    if (partnerBindUsesCeilingScopeOnly()) {
+      const install = partnerInstallCost(area) ?? 0;
+      const dowels = bom.ceiling?.stats?.dowels?.withReserve ?? 0;
+      const dowelCost =
+        PARTNER_PRICING.dowelPrice != null ? Math.round(dowels * PARTNER_PRICING.dowelPrice) : 0;
+      return (panelsOnly ?? 0) + install + dowelCost;
+    }
     const grand = partnerGrandTotal(bom, area, panelsOnly);
     if (grand != null) return grand;
   }
   return panelsOnly;
 }
 
+function cabinetBindPanels() {
+  const bom = state.bom;
+  if (!bom) return null;
+  if (partnerBindUsesCeilingScopeOnly() && bom.ceiling?.stats) {
+    return bom.ceiling.stats.withReserve ?? bom.ceiling.stats.panelsToPurchase ?? null;
+  }
+  return bom.total?.panelsWithReserve ?? bom.total?.panels ?? null;
+}
+
+function cabinetBindDowels() {
+  const bom = state.bom;
+  if (!bom) return null;
+  if (partnerBindUsesCeilingScopeOnly() && bom.ceiling?.stats?.dowels) {
+    return bom.ceiling.stats.dowels.withReserve ?? null;
+  }
+  return bom.total?.dowelsWithReserve ?? null;
+}
+
 function postCabinetCalcPayload(extra = {}) {
   const params = new URLSearchParams(window.location.search);
-  const panels = state.bom?.total?.panelsWithReserve ?? state.bom?.total?.panels ?? null;
-  const dowels = state.bom?.total?.dowelsWithReserve ?? null;
+  const panels = cabinetBindPanels();
+  const dowels = cabinetBindDowels();
   const areaM2 = cabinetBindAreaM2();
   const panelsCost = cabinetBindAmount();
   const targetOrigin =
@@ -2381,11 +2446,11 @@ function applyGateCCeilingPreset() {
     params.get('source') === 'problemomer' ||
     params.get('source') === 'cabinet';
   if (!ceilingOnly) return;
+  state.options.calcWalls = false;
+  state.options.selectedWallIds = [];
   setAllWallSurfaces(false);
   if (els.form?.calcCeiling) els.form.calcCeiling.checked = true;
   state.options.calcCeiling = true;
-  state.options.calcWalls = false;
-  state.options.selectedWallIds = [];
 }
 
 function applyQueryHandoff() {

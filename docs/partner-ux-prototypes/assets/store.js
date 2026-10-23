@@ -1,9 +1,9 @@
 /**
  * Gate C draft-9 store — demo fixtures only. NOT production proof.
- * KEY v9: GC9 calc→host bind via mf-cabinet-calc (partner=1).
+ * KEY v10: GC10 ceiling-only walls=0 stick + calc→bind scope (partner=1).
  */
 (function (global) {
-  const KEY = "mf_gate_c_proto_v9";
+  const KEY = "mf_gate_c_proto_v10";
   const CREW_SELF = "u_denis";
   const MEASURER_SELF = "u_pavel";
 
@@ -276,7 +276,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-10",
+      revision: "rev-gate-c-draft-11",
       role: null,
       offline: false,
       syncState: "online",
