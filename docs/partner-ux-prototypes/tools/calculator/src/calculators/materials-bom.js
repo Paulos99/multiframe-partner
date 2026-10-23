@@ -120,26 +120,51 @@ export function buildBOM({ room, ceilingResult, wallResult, options }) {
       panelsTotal * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels),
     );
   }
+  finalizePartnerBomTotals(bom, {
+    panelsTotal,
+    costTotal,
+    dowelsTotal,
+    dowelsForCost,
+    frame: mergeFrameTotals([bom.ceiling?.frame, bom.walls?.frame].filter(Boolean)),
+    profileLengthM:
+      (bom.ceiling?.frame?.totalProfileLengthM ?? 0) +
+      (bom.walls?.frame?.totalProfileLengthM ?? 0),
+  });
+
+  return bom;
+}
+
+/** Partner install + fasteners on bom.total (stat card, «Смета», bind). */
+export function finalizePartnerBomTotals(bom, partial = null) {
+  if (!bom) return bom;
+  const panelsTotal =
+    partial?.panelsTotal ?? bom.total?.panelsWithReserve ?? 0;
+  const costTotal = partial?.costTotal ?? bom.total?.totalCost ?? 0;
+  const dowelsTotal = partial?.dowelsTotal ?? bom.total?.dowelsWithReserve ?? 0;
+  let dowelsForCost = partial?.dowelsForCost ?? dowelsTotal;
+  if (!(dowelsForCost > 0) && panelsTotal > 0) {
+    dowelsForCost = Math.ceil(
+      panelsTotal * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels),
+    );
+  }
   const areaTotal = resolveCoveredAreaM2(bom);
   const extras = partnerExtras(areaTotal, dowelsForCost);
   const pricing = getPartnerPricing();
-
   const grandTotal = costTotal + (extras.install ?? 0) + (extras.dowelCost ?? 0);
 
   bom.total = {
+    ...(bom.total || {}),
     panelsWithReserve: panelsTotal,
     totalCost: costTotal,
     dowelsWithReserve: dowelsForCost || dowelsTotal,
     installCost: extras.install,
     dowelsCost: extras.dowelCost,
     grandTotal,
-    partnerCompany: pricing.company || PARTNER_PRICING.company || '',
-    frame: mergeFrameTotals([bom.ceiling?.frame, bom.walls?.frame].filter(Boolean)),
-    profileLengthM:
-      (bom.ceiling?.frame?.totalProfileLengthM ?? 0) +
-      (bom.walls?.frame?.totalProfileLengthM ?? 0),
+    partnerCompany:
+      bom.total?.partnerCompany || pricing.company || PARTNER_PRICING.company || '',
+    frame: partial?.frame ?? bom.total?.frame ?? null,
+    profileLengthM: partial?.profileLengthM ?? bom.total?.profileLengthM ?? 0,
   };
-
   return bom;
 }
 

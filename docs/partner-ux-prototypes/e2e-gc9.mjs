@@ -65,6 +65,33 @@ async function wallSurfacesChecked(page) {
   return await f.locator('input[name="wallSurface"]:checked').count();
 }
 
+function parseRub(text) {
+  return Number(String(text || "").replace(/[^\d]/g, "")) || 0;
+}
+
+/** GC11: stat card «Итого» === detailed «Смета» === bind amount. */
+async function readCalcEstimateTotals(page) {
+  const f = calcFrame(page);
+  const card = Number(await f.locator("#partnerTotalCost").getAttribute("data-raw"));
+  const panels = parseRub(await f.locator(".rb-kv").filter({ hasText: "Панели" }).locator("strong").innerText());
+  const install = parseRub(await f.locator(".rb-kv--install strong").innerText());
+  const fasteners = parseRub(
+    await f.locator(".rb-kv").filter({ hasText: "Крепёж" }).locator("strong").innerText()
+  );
+  const detailGrand = parseRub(await f.locator(".rb-kv--total strong").innerText());
+  return { card, panels, install, fasteners, detailGrand };
+}
+
+async function assertGc11Unity(page, draft, label) {
+  const est = await readCalcEstimateTotals(page);
+  check(`GC11 ${label} stat card 156646`, est.card === 156646, String(est.card));
+  check(`GC11 ${label} detailed total`, est.detailGrand === 156646, String(est.detailGrand));
+  check(`GC11 ${label} panels line`, est.panels === 122196, String(est.panels));
+  check(`GC11 ${label} install line`, est.install === 31500, String(est.install));
+  check(`GC11 ${label} fasteners line`, est.fasteners === 2950, String(est.fasteners));
+  check(`GC11 ${label} draft === card`, draft.amount === est.card, `${draft.amount} vs ${est.card}`);
+}
+
 async function readSessionDraft(page) {
   return page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").sessionDraft, STORE_KEY);
 }
@@ -160,6 +187,7 @@ async function bindAndReopen(page, areaExpected, draftBeforeBind) {
   );
   check("room prelim area matches", Math.abs(stored.area - areaExpected) < 0.6, JSON.stringify(stored));
   check("room prelim amount matches draft", stored.amount === draftBeforeBind.amount, String(stored.amount));
+  check("GC11 reopened prelim === bind", stored.amount === draftBeforeBind.amount, String(stored.amount));
 
   await reloadCalcIframe(page);
   const wallsAfter = await wallSurfacesChecked(page);
@@ -210,6 +238,7 @@ check("GC10 dims walls unchecked", wallsChecked === 0, String(wallsChecked));
 await waitCalcDraft(page, 21);
 let draftDims = await assertCeilingOnlyDraft(page, 21, "dims 7×3");
 check("GC10 dims panels ceiling-only", draftDims.calcPanels === CEILING_21_PANELS, String(draftDims.calcPanels));
+await assertGc11Unity(page, draftDims, "dims 7×3");
 
 await f2.locator("#quickLength").fill("7.2");
 await runCalc(page);

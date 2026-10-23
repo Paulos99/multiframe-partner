@@ -11,4 +11,6 @@
 
 **Tests:** `node smoke.mjs` → **50/50** · `node e2e-gc9.mjs` → **33/33** (7×3 → **21 m² / 51 panels / 156 646 ₽** ceiling-only; Г-форма bind→reopen; negative bind)
 
+| **GC11-P1-01** | `runQuickAreaCalc()` → `finalizePartnerBomTotals()` so «Смета» install/fasteners/grand match stat card + bind (7×3: 122 196 + 31 500 + 2 950 = **156 646**) |
+
 Human D11 §7 **NOT observed**.

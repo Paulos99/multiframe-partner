@@ -1,7 +1,7 @@
 import { Room } from '../core/room-model.js';
 import { PolygonPanelCalculator, ceilingLayoutCacheKey } from '../calculators/polygon-ceiling-calculator.js';
 import { WallCalculator } from '../calculators/wall-calculator.js';
-import { buildBOM, renderResultsHtml } from '../calculators/materials-bom.js';
+import { buildBOM, finalizePartnerBomTotals, renderResultsHtml } from '../calculators/materials-bom.js';
 import {
   PANEL,
   PANEL_COVERAGE_AREA,
@@ -500,6 +500,7 @@ function bomTotalsForPartnerBind(bom) {
 
 function partnerGrandTotal(bom, area, panelsCost) {
   if (!PARTNER_PRICING.enabled) return null;
+  if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
   if (partnerCeilingOnlyHost() && state.options.calcWalls === false && bom?.ceiling?.stats) {
     const install = partnerInstallCost(area) ?? 0;
     const scoped = { total: bomTotalsForPartnerBind(bom) };
@@ -508,7 +509,6 @@ function partnerGrandTotal(bom, area, panelsCost) {
       panelsCost ?? bom.ceiling.stats.totalCost ?? bomTotalsForPartnerBind(bom)?.totalCost ?? 0;
     return panels + install + dowelCost;
   }
-  if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
   const install = partnerInstallCost(area) ?? 0;
   const dowelCost = partnerDowelCost(bom) ?? 0;
   return (panelsCost ?? 0) + install + dowelCost;
@@ -1614,6 +1614,7 @@ function runQuickAreaCalc(area) {
     ceilingMounting: 'ceiling_frameless',
     wallMounting: 'wall_frameless',
   };
+  finalizePartnerBomTotals(state.bom);
   state.hasResults = true;
   state.resultsStale = false;
   applyResultsToUi();
