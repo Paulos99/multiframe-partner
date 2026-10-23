@@ -1,0 +1,184 @@
+:root {
+  --accent-color: #01644f;
+  --accent-hover: #015a47;
+  --accent-soft: rgba(1, 100, 79, 0.12);
+  --text-primary: #111111;
+  --text-secondary: #5f6b73;
+  --bg-page: #f4f7f6;
+  --bg-card: #ffffff;
+  --bg-subtle: #f5f7f8;
+  --border-color: #e1e5e8;
+  --success-color: #1a7f5f;
+  --danger-soft: #fef2f2;
+  --warn-soft: #fff7ed;
+  --ok-soft: #ecfdf5;
+
+  --shadow: 0 6px 20px rgba(17, 24, 39, 0.07);
+  --shadow-lg: 0 12px 30px rgba(17, 24, 39, 0.12);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 16px rgba(1, 100, 79, 0.08);
+  --shadow-accent: 0 8px 24px rgba(1, 100, 79, 0.22);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  --touch-min: 44px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --header-h: 64px;
+  --mf-install-h: 0px;
+  --mf-toolbar-h: 0px;
+  /* Sticky CTA clearance: keep SimCompare metrics/chips above «Далее» on phones. */
+  --footer-h: 120px;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --max-w: 720px;
+
+  /*
+   * Кабинет партнёра. Акцент — фирменный зелёный MultiFrame/StP (#01644f):
+   * тот же цвет, что на logo-stp.png / logo-multiframe.png и в --accent-color.
+   * Голубой и лайм из референсов дашбордов не используем: бренд важнее.
+   * Публичный калькулятор эти --cab-* переменные не читает.
+   */
+  --cab-accent: #01644f;
+  --cab-accent-hover: #014e3e;
+  --cab-accent-text: #01644f;
+  --cab-on-accent: #ffffff;
+  --cab-accent-soft: #e6f4ef;
+  --cab-accent-softer: #f4faf7;
+  --cab-page: #f3f4f6;
+  --cab-card: #ffffff;
+  --cab-subtle: #f6f7f9;
+  --cab-field: #ffffff;
+  --cab-ink: #14211c;
+  --cab-ink-soft: #3d4f48;
+  --cab-muted: #4e5d56;
+  --cab-border: #e4e7eb;
+  --cab-border-strong: #d3d8de;
+  --cab-danger: #9f2c24;
+  --cab-danger-soft: #fdecec;
+  --cab-warn: #8a4b08;
+  --cab-warn-soft: #fff4e5;
+  --cab-info: #1a4b8c;
+  --cab-info-soft: #e7f1fb;
+  --cab-ok: #0d5c45;
+  --cab-ok-soft: #e5f4ee;
+  --cab-neutral: #3e4944;
+  --cab-neutral-soft: #eef1f2;
+  --cab-shadow: 0 1px 3px rgba(20, 28, 36, 0.07), 0 10px 30px rgba(20, 28, 36, 0.09);
+  --cab-shadow-md: 0 2px 6px rgba(20, 28, 36, 0.08), 0 18px 44px rgba(20, 28, 36, 0.14);
+  --cab-shadow-sm: 0 1px 2px rgba(20, 28, 36, 0.08), 0 3px 8px rgba(20, 28, 36, 0.06);
+  --cab-radius-sm: 12px;
+  --cab-radius-md: 16px;
+  --cab-radius-lg: 20px;
+  --cab-radius-xl: 24px;
+  --cab-radius-pill: 999px;
+  --cab-space-2: 8px;
+  --cab-space-3: 12px;
+  --cab-space-4: 16px;
+  --cab-space-5: 20px;
+  --cab-space-6: 24px;
+  --cab-space-7: 32px;
+  --cab-title: clamp(1.45rem, 2.2vw, 1.8rem);
+  --cab-kpi: clamp(1.85rem, 3vw, 2.35rem);
+  --cab-track: -0.03em;
+  --cab-font: var(--font);
+  --cab-raised: #ffffff;
+}
+
+/* Wider column on large screens — no zoom (it ballooned buttons/charts). */
+@media (min-width: 900px) {
+  :root {
+    --max-w: 760px;
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --max-w: 800px;
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --max-w: 840px;
+  }
+}
+
+body.theme-dark {
+  --text-primary: #e8eaee;
+  --text-secondary: #b4bcc6;
+  --bg-page: #101318;
+  --bg-card: #171b22;
+  --bg-subtle: #12161c;
+  --border-color: #2a3140;
+  --success-color: #2ab38b;
+  --accent-soft: rgba(42, 179, 139, 0.16);
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-accent: 0 8px 24px rgba(1, 100, 79, 0.35);
+  --danger-soft: #3a2424;
+  --warn-soft: #3a2e22;
+  --ok-soft: #1e2f28;
+
+  /* Тёмная тема кабинета: почти чёрный холст, приподнятые карточки, тот же зелёный акцент. */
+  --cab-accent: #01644f;
+  --cab-accent-hover: #018562;
+  --cab-accent-text: #9ee4cf;
+  --cab-on-accent: #ffffff;
+  --cab-accent-soft: rgba(46, 184, 148, 0.16);
+  --cab-accent-softer: #1a2420;
+  --cab-page: #121418;
+  --cab-card: #1c1f26;
+  --cab-subtle: #171a21;
+  --cab-field: #171a21;
+  --cab-ink: #f3f5f7;
+  --cab-ink-soft: #d5ddd8;
+  --cab-muted: #c5ced6;
+  --cab-border: rgba(255, 255, 255, 0.08);
+  --cab-border-strong: rgba(255, 255, 255, 0.14);
+  --cab-danger: #ffb4ae;
+  --cab-danger-soft: #3a2424;
+  --cab-warn: #f3d2a4;
+  --cab-warn-soft: #3a2e22;
+  --cab-info: #c5daf5;
+  --cab-info-soft: #1c2a3a;
+  --cab-ok: #b7e8d4;
+  --cab-ok-soft: #1a2e28;
+  --cab-neutral: #d5dde4;
+  --cab-neutral-soft: #2a2e34;
+  --cab-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 12px 32px rgba(0, 0, 0, 0.42);
+  --cab-shadow-md: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 20px 48px rgba(0, 0, 0, 0.52);
+  --cab-shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 1px 3px rgba(0, 0, 0, 0.42);
+  --cab-raised: #262b34;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Общие брейкпоинты (см. src/styles/breakpoints.ts). В @media переменные не работают,
+ * поэтому значения продублированы в модулях; держите их синхронными:
+ *   телефон ≤640 px · планшет 641–1024 px · десктоп ≥1025 px.
+ *   «Сенсорный» слой: (max-width: 1024px), (pointer: coarse) — цели ≥44 px, поля ≥16 px.
+ */
+:root {
+  --bp-phone: 640px;
+  --bp-tablet: 1024px;
+}

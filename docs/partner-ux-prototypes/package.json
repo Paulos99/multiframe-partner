@@ -1,0 +1,9 @@
+{
+  "name": "gate-c-prototypes",
+  "private": true,
+  "type": "module",
+  "description": "Optional dev deps for Gate C e2e-gc9.mjs only",
+  "devDependencies": {
+    "playwright-core": "1.49.1"
+  }
+}
