@@ -183,146 +183,515 @@
     );
   }
 
+  /* ---- GC6-P0-03: original-looking PM / Calc shells ---- */
+  const PM_QS = [
+    {
+      id: "houseType",
+      title: "Укажите тип дома",
+      lead: "Вопрос 1 из 7 · Внешние факторы",
+      options: [
+        { id: "panel", label: "Панельный" },
+        { id: "block", label: "Блочный" },
+        { id: "brick", label: "Кирпичный" },
+        { id: "monolith", label: "Монолит (в т.ч. монолит-кирпич)" },
+        { id: "wood", label: "Деревянный / по балкам" },
+        { id: "unknown", label: "Не знаю" },
+      ],
+    },
+    {
+      id: "slabType",
+      title: "Выберите тип перекрытия",
+      lead: "Вопрос 2 из 7 · Внешние факторы",
+      options: [
+        { id: "monolith", label: "Монолит / сплошная ж/б" },
+        { id: "hollow", label: "Многопустотная (ПК)" },
+        { id: "wood", label: "Деревянное / по балкам" },
+        { id: "unknown", label: "Не знаю" },
+      ],
+    },
+    {
+      id: "slabThickness",
+      title: "Выберите толщину перекрытия",
+      lead: "Вопрос 3 из 7 · Внешние факторы",
+      options: [
+        { id: "up_to_160", label: "До ~160 мм" },
+        { id: "about_160_200", label: "Около 160–200 мм" },
+        { id: "about_200_250", label: "Около 200–250 мм" },
+        { id: "over_250", label: "Толще ~250 мм" },
+        { id: "unknown", label: "Не знаю" },
+      ],
+    },
+    {
+      id: "basics",
+      title: "Укажите тип комнаты и площадь",
+      lead: "Вопрос 4 из 7 · Внутренние факторы",
+      roomTypes: [
+        { id: "living", label: "Гостиная" },
+        { id: "bedroom", label: "Спальня" },
+        { id: "kids", label: "Детская" },
+        { id: "kitchen", label: "Кухня" },
+        { id: "office", label: "Кабинет" },
+        { id: "other", label: "Другое" },
+      ],
+    },
+    {
+      id: "objectStage",
+      title: "На какой стадии объект?",
+      lead: "Вопрос 5 из 7 · Внутренние факторы",
+      options: [
+        { id: "newbuild", label: "Новостройка / до заселения" },
+        { id: "renovation", label: "Идёт ремонт" },
+        { id: "occupied", label: "Уже живут" },
+        { id: "unknown", label: "Не знаю" },
+      ],
+    },
+    {
+      id: "noisyNeighbors",
+      title: "Насколько шумно сверху?",
+      lead: "Вопрос 6 из 7 · Внутренние факторы",
+      options: [
+        { id: "no", label: "Тихо / не беспокоит", hint: "Соседей почти не слышно" },
+        { id: "yes", label: "Шумно / слышны соседи", hint: "Есть жалобы или заметный шум" },
+        { id: "unknown", label: "Не знаю / не спрашивали" },
+      ],
+    },
+    {
+      id: "noiseKind",
+      title: "Что именно слышно сверху?",
+      lead: "Вопрос 7 из 7 · Внутренние факторы",
+      options: [
+        { id: "steps", label: "Шаги / топот" },
+        { id: "voices", label: "Голоса / ТВ" },
+        { id: "both", label: "И шаги, и голоса" },
+        { id: "unknown", label: "Не знаю" },
+      ],
+      skipIfQuiet: true,
+    },
+  ];
+
+  function origToolHeader(kind, theme) {
+    const title = kind === "calc" ? "КАЛЬКУЛЯТОР" : "ПРОБЛЕМОМЕР";
+    const logo = kind === "calc" ? "logo-stp-calc.png" : "logo-stp.png";
+    const brand = kind === "calc" ? "logo-multiframe-calc.png" : "logo-multiframe.png";
+    return `
+      <header class="orig-header">
+        <img class="orig-header__logo" src="./assets/img/${logo}" alt="StP" />
+        <h1 class="orig-header__title">${title}</h1>
+        <img class="orig-header__brand" src="./assets/img/${brand}" alt="MultiFRAME" />
+        <div class="orig-header__actions">
+          <button type="button" class="orig-icon-btn" data-action="tool-theme-toggle" title="Тема">${
+            theme === "dark" ? "☀" : "☾"
+          }</button>
+          <a class="orig-icon-btn" href="#/tools/hub" title="К инструментам">✕</a>
+        </div>
+      </header>`;
+  }
+
+  function pmProgress(phase) {
+    const steps = [
+      ["start", "Старт"],
+      ["room", "Объект"],
+      ["result", "Итог"],
+    ];
+    const cur = phase === "intro" ? 0 : phase === "survey" ? 1 : 2;
+    return `<ol class="orig-progress" aria-label="Прогресс">${steps
+      .map(
+        ([, label], i) =>
+          `<li class="${i < cur ? "is-done" : ""} ${i === cur ? "is-active" : ""}"><span class="dot"></span><span>${label}</span></li>`
+      )
+      .join("")}</ol>`;
+  }
+
   function toolsPm() {
     return toolsWrapPm();
   }
 
   function toolsWrapPm() {
-    const d = S().sessionDraft;
-    if (!d) {
-      return shell(
-        "tools/pm",
-        `<div class="page-head"><div><h1>Проблемомер</h1><p class="sub">Самостоятельный инструмент · роль ${esc(
-          S().role || "—"
-        )}</p></div></div>
-         <div class="grid-2">
-           <button class="panel" style="text-align:left;cursor:pointer" data-action="tools-start-pm" data-persona="quiet">
-             <h3>Клиент без жалобы на шум</h3><p class="muted">Опциональный пресет</p>
-           </button>
-           <button class="panel" style="text-align:left;cursor:pointer" data-action="tools-start-pm" data-persona="noise">
-             <h3>Клиент слышит соседей</h3><p class="muted">Опциональный пресет</p>
-           </button>
-         </div>
-         <button class="btn" style="margin-top:12px" data-action="tools-start-pm" data-persona="">Нейтральный старт</button>
-         <p class="muted" style="margin-top:10px"><a href="#/tools/calc">Калькулятор</a> можно открыть отдельно, без PM.</p>`
-      );
-    }
-    // Monkey-patch shell active by calling salesPmQuick content via temporary role-neutral rebuild:
-    // Use same markup paths as salesPmQuick but shell("tools/pm")
-    const a = d.answers || {};
-    if (d.pmDone && d.pmResult && S().ui.pmStep === "result") {
-      const r = d.pmResult;
-      const ch = r.chain;
+    const theme = S().ui.toolTheme === "dark" ? "dark" : "light";
+    let d = S().sessionDraft;
+    const phase =
+      d && d.pmDone && (S().ui.pmPhase === "result" || S().ui.pmStep === "result")
+        ? "result"
+        : S().ui.pmPhase || "intro";
+
+    if (!d || d.bound) {
       return shell(
         "tools/pm",
         `
-      <div class="page-head">
-        <div><h1>Проблемомер · результат</h1><p class="sub">Можно без калькулятора — он не обязателен</p></div>
-        <div class="page-actions">
-          <button class="btn ghost" data-action="pm-resuvey">Изменить ответы</button>
-          <a class="btn" href="#/tools/hub">Инструменты</a>
-        </div>
-      </div>
-      <div class="panel stack-gap">
-        <div class="banner info"><strong>Пресет:</strong> stretch · ${r.areaM2} м² · persona «${esc(r.clientPersona)}»</div>
-        <ol class="list">
-          <li class="list-item"><div><div class="title">1. Нормы / ориентир</div><div class="meta">${esc(ch.norms)}</div></div></li>
-          <li class="list-item"><div><div class="title">2. Сейчас</div><div class="meta">${esc(ch.current)}</div></div></li>
-          <li class="list-item"><div><div class="title">3. С MultiFrame</div><div class="meta">${esc(ch.withMf)}</div></div></li>
-          <li class="list-item"><div><div class="title">4. Разница</div><div class="meta">${esc(ch.difference)}</div></div></li>
-          <li class="list-item"><div><div class="title">5. Следующий шаг</div><div class="meta">${esc(ch.nextStep)}</div></div></li>
-        </ol>
-        <p>${esc(r.narrative)}</p>
-        <div class="row">
-          <a class="btn primary" href="#/tools/bind">Сохранить профиль</a>
-          <a class="btn" href="#/tools/calc">Открыть калькулятор (опционально)</a>
-        </div>
-      </div>`
+        <div class="orig-wrap">
+          <div class="page-actions-inline">
+            <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
+            <span class="pill info">роль ${esc(S().role || "—")}</span>
+          </div>
+          <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
+            ${origToolHeader("pm", theme)}
+            <div class="orig-body">
+              ${pmProgress("intro")}
+              <div class="orig-hero">
+                <h1>Проверьте уровень акустического комфорта на своём объекте</h1>
+                <p>Ответьте на несколько вопросов, Проблемомер оценит уровень шума.</p>
+                <p>Дальше вы увидите, насколько тише станет после монтажа MultiFrame.</p>
+                <div style="position:relative;margin-top:6px;display:flex;flex-direction:column;gap:8px">
+                  <button type="button" class="orig-btn orig-btn--primary" data-action="pm-begin" data-persona="">Начать</button>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px">
+                    <button type="button" class="orig-btn orig-btn--secondary" data-action="pm-begin" data-persona="quiet">Пресет: без жалобы</button>
+                    <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-begin" data-persona="noise">Пресет: слышит соседей</button>
+                  </div>
+                </div>
+              </div>
+              <p class="dim" style="text-align:center;margin-top:16px"><a href="#/tools/calc">Калькулятор</a> можно открыть отдельно</p>
+            </div>
+          </div>
+        </div>`
       );
     }
+
+    if (phase === "intro" && !d.pmDone) {
+      return shell(
+        "tools/pm",
+        `
+        <div class="orig-wrap">
+          <div class="page-actions-inline">
+            <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
+          </div>
+          <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
+            ${origToolHeader("pm", theme)}
+            <div class="orig-body">
+              ${pmProgress("intro")}
+              <div class="orig-hero">
+                <h1>Проверьте уровень акустического комфорта на своём объекте</h1>
+                <p>Ответьте на несколько вопросов, Проблемомер оценит уровень шума.</p>
+                <p>Дальше вы увидите, насколько тише станет после монтажа MultiFrame.</p>
+                <button type="button" class="orig-btn orig-btn--primary" style="position:relative;margin-top:8px" data-action="pm-intro-next">Начать</button>
+              </div>
+            </div>
+          </div>
+        </div>`
+      );
+    }
+
+    if (phase === "result" && d.pmDone && d.pmResult) {
+      const r = d.pmResult;
+      const ch = r.chain;
+      const roomLabel =
+        { bedroom: "Спальня", living: "Гостиная", kids: "Детская", kitchen: "Кухня", office: "Кабинет", other: "Другое" }[
+          r.roomType
+        ] || r.roomType;
+      return shell(
+        "tools/pm",
+        `
+        <div class="orig-wrap">
+          <div class="page-actions-inline">
+            <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
+          </div>
+          <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
+            ${origToolHeader("pm", theme)}
+            <div class="orig-body">
+              ${pmProgress("result")}
+              <div class="orig-result">
+                <h1>Акустический профиль помещения</h1>
+                <p class="muted">${esc(roomLabel)} · ${r.areaM2} м² · потолок: натяжной (пресет сегмента) · demo</p>
+                <div class="orig-disclaimer">Иллюстрация по ответам анкеты · не акустическое измерение, не лабораторный протокол и не гарантия дБ.</div>
+                <section class="orig-section" aria-label="Параметры объекта">
+                  <h3>Параметры объекта</h3>
+                  <p class="muted" style="margin:0">Тип комнаты: ${esc(roomLabel)} · Площадь: ${r.areaM2} м² · Persona: ${esc(
+          r.clientPersona
+        )}</p>
+                </section>
+                <section class="orig-section" aria-label="Ключевые показатели">
+                  <h3>Ключевые показатели</h3>
+                  <div class="orig-kpis">
+                    <div class="orig-kpi"><span class="l">Сейчас · риск</span><span class="n">${esc(r.currentRisk)}</span></div>
+                    <div class="orig-kpi"><span class="l">С MultiFrame</span><span class="n" style="font-size:1rem">${esc(
+                      r.withMfComfort
+                    )}</span></div>
+                    <div class="orig-kpi"><span class="l">Разница</span><span class="n" style="font-size:.95rem">${esc(
+                      ch.difference
+                    )}</span></div>
+                    <div class="orig-kpi"><span class="l">Ориентир</span><span class="n" style="font-size:.95rem">без −N дБ</span></div>
+                  </div>
+                </section>
+                <section class="orig-section" aria-label="Нормы комфорта для жилья">
+                  <h3>Нормы комфорта для жилья</h3>
+                  <p>${esc(ch.norms)}</p>
+                </section>
+                <section class="orig-section" aria-label="Эффективность и сравнение">
+                  <h3>Эффективность и сравнение</h3>
+                  <ol class="orig-chain">
+                    <li><span class="num">1</span><div><strong>Сейчас</strong><div class="muted">${esc(ch.current)}</div></div></li>
+                    <li><span class="num">2</span><div><strong>С MultiFrame</strong><div class="muted">${esc(ch.withMf)}</div></div></li>
+                    <li><span class="num">3</span><div><strong>Разница</strong><div class="muted">${esc(ch.difference)}</div></div></li>
+                  </ol>
+                  <p>${esc(r.narrative)}</p>
+                </section>
+                <section class="orig-section" aria-label="Уникальность системы MultiFrame">
+                  <h3>Уникальность системы MultiFrame</h3>
+                  <div class="orig-pillars">
+                    <div class="orig-pillar"><strong>Звукоизоляция и акустический комфорт</strong><span class="muted">Снижает шум сверху и поглощает звук в комнате — без обещания лабораторных дБ.</span></div>
+                    <div class="orig-pillar"><strong>Быстрый монтаж</strong><span class="muted">Сначала панели, затем натяжное полотно — под сегмент потолочников.</span></div>
+                    <div class="orig-pillar"><strong>Безопасность</strong><span class="muted">Материалы для жилых помещений: спальня, детская, кухня.</span></div>
+                  </div>
+                </section>
+                <section class="orig-section" aria-label="Следующий шаг">
+                  <h3>Следующий шаг</h3>
+                  <p>${esc(ch.nextStep)}</p>
+                  <div class="orig-actions-row">
+                    <a class="orig-btn orig-btn--primary" href="#/tools/bind">Сохранить профиль</a>
+                    <a class="orig-btn orig-btn--secondary" href="#/tools/calc">Рассчитать количество MultiFrame</a>
+                    <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-demo-pdf">Скачать PDF</button>
+                    <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-resuvey">Пройти ещё раз</button>
+                  </div>
+                </section>
+              </div>
+            </div>
+            <div class="orig-footer">
+              <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-resuvey">Назад</button>
+              <a class="orig-btn orig-btn--primary" href="#/tools/bind">Сохранить</a>
+            </div>
+          </div>
+        </div>`
+      );
+    }
+
+    // survey
+    const a = d.answers || {};
+    let q = Number(S().ui.pmQ) || 0;
+    // skip noiseKind when quiet
+    const quietNeighbors = a.noisyNeighbors === "no" || a.noisyNeighbors === "none";
+    const visible = PM_QS.filter((step) => !(step.skipIfQuiet && quietNeighbors));
+    if (q >= visible.length) q = visible.length - 1;
+    if (q < 0) q = 0;
+    const step = visible[q];
+    const pct = Math.round(((q + 1) / visible.length) * 100);
+    const selected = a[step.id];
+    let body = "";
+    if (step.id === "basics") {
+      body = `
+        <div class="orig-cards">
+          ${step.roomTypes
+            .map(
+              (opt) =>
+                `<button type="button" class="orig-choice ${
+                  a.roomType === opt.id ? "is-selected" : ""
+                }" data-action="pm-pick" data-field="roomType" data-value="${opt.id}"><strong>${esc(
+                  opt.label
+                )}</strong></button>`
+            )
+            .join("")}
+        </div>
+        <div class="orig-field">
+          <label for="pm-area-input">Площадь потолка, м²</label>
+          <input id="pm-area-input" type="number" min="1" step="0.1" placeholder="Например, 18" value="${
+            a.areaM2 ?? ""
+          }" data-action-input="pm-area" />
+        </div>`;
+    } else {
+      body = `<div class="orig-cards">${step.options
+        .map(
+          (opt) =>
+            `<button type="button" class="orig-choice ${
+              selected === opt.id ? "is-selected" : ""
+            }" data-action="pm-pick" data-field="${step.id}" data-value="${opt.id}"><strong>${esc(
+              opt.label
+            )}</strong>${opt.hint ? `<span>${esc(opt.hint)}</span>` : ""}</button>`
+        )
+        .join("")}</div>`;
+    }
+    const canNext =
+      step.id === "basics"
+        ? !!(a.roomType && Number(a.areaM2) > 0)
+        : selected != null && selected !== "";
+
     return shell(
       "tools/pm",
       `
-      <div class="page-head">
-        <div><h1>Проблемомер · анкета</h1><p class="sub">Роль: ${esc(S().role)} · consultationSessionId ${esc(
-        d.consultationSessionId
-      )}</p></div>
-        <div class="page-actions"><a class="btn ghost" href="#/tools/hub">Инструменты</a></div>
-      </div>
-      <div class="panel" style="max-width:520px">
-        <div class="field"><label>Тип комнаты</label>
-          <select id="pm-room">
-            <option value="bedroom" ${a.roomType==="bedroom"?"selected":""}>Спальня</option>
-            <option value="living" ${a.roomType==="living"?"selected":""}>Гостиная</option>
-            <option value="kids" ${a.roomType==="kids"?"selected":""}>Детская</option>
-            <option value="kitchen" ${a.roomType==="kitchen"?"selected":""}>Кухня</option>
-          </select>
+      <div class="orig-wrap">
+        <div class="page-actions-inline">
+          <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
+          <span class="pill">${esc(d.consultationSessionId || "")}</span>
         </div>
-        <div class="field"><label>Площадь, м²</label><input id="pm-area" type="number" value="${a.areaM2 ?? 14}"></div>
-        <div class="field"><label>Соседи сверху</label>
-          <select id="pm-neighbors">
-            <option value="unknown" ${a.neighbors==="unknown"?"selected":""}>Не знаю / не спрашивали</option>
-            <option value="none" ${a.neighbors==="none"?"selected":""}>Нет / не беспокоят</option>
-            <option value="above" ${a.neighbors==="above"?"selected":""}>Есть, слышны</option>
-          </select>
+        <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
+          ${origToolHeader("pm", theme)}
+          <div class="orig-body">
+            ${pmProgress("survey")}
+            <div class="orig-survey-head">
+              <p class="eyebrow">${esc((step.lead.split("·")[1] || "Объект").trim())}</p>
+              <h2>${esc(step.title)}</h2>
+              <p class="lead">Вопрос ${q + 1} из ${visible.length}</p>
+            </div>
+            <div class="orig-bar" aria-hidden><i style="width:${pct}%"></i></div>
+            ${body}
+          </div>
+          <div class="orig-footer">
+            <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-back" ${
+              q === 0 ? "" : ""
+            }>Назад</button>
+            <button type="button" class="orig-btn orig-btn--primary" data-action="pm-next" ${
+              canNext ? "" : "disabled"
+            }>Далее</button>
+          </div>
         </div>
-        <div class="field"><label>Осведомлённость о шуме</label>
-          <select id="pm-noise">
-            <option value="unknown" ${a.noiseAwareness==="unknown"?"selected":""}>Не поднимали тему</option>
-            <option value="none" ${a.noiseAwareness==="none"?"selected":""}>Клиент не жалуется</option>
-            <option value="bothered" ${a.noiseAwareness==="bothered"?"selected":""}>Беспокоит шум</option>
-          </select>
-        </div>
-        <div class="field"><label>Цель использования</label>
-          <select id="pm-purpose">
-            <option value="living" ${a.purpose==="living"?"selected":""}>Жилая</option>
-            <option value="sleep" ${a.purpose==="sleep"?"selected":""}>Сон / тишина</option>
-            <option value="work" ${a.purpose==="work"?"selected":""}>Кабинет</option>
-          </select>
-        </div>
-        <button class="btn primary" data-action="pm-run">Показать Result</button>
       </div>`
     );
   }
 
   function toolsCalc() {
+    const theme = S().ui.toolTheme === "dark" ? "dark" : "light";
+    MFStore.ensureCalcUi();
+    const c = S().ui.calcUi;
     let d = S().sessionDraft;
-    if (!d || d.bound) {
-      d = null;
+    if (d && d.bound) d = null;
+    const est = MFStore.calcEstimateFromUi();
+    const entry = c.entry;
+    const ar = c.widthM > 0 ? c.lengthM / c.widthM : 1.25;
+
+    function entryBlock(id, title, desc, secondary) {
+      const open = entry === id;
+      return `
+        <div class="entry-block ${open ? "is-open" : ""}">
+          <button type="button" class="calc-entry-card ${open ? "is-open" : ""} ${
+        secondary ? "calc-entry-card--secondary" : ""
+      }" data-action="calc-entry" data-entry="${id}">
+            <span><span class="t">${title}</span><span class="d">${desc}</span></span>
+            <span class="chev" aria-hidden="true"></span>
+          </button>
+          ${
+            open
+              ? id === "dims"
+                ? `<div class="calc-panel">
+                    <h4>Размеры комнаты</h4>
+                    <div class="calc-grid-3">
+                      <div class="orig-field" style="margin:0"><label>Длина, м</label><input type="number" id="calc-L" step="0.01" min="0.1" value="${c.lengthM}" data-action-input="calc-dim" data-dim="lengthM"></div>
+                      <div class="orig-field" style="margin:0"><label>Ширина, м</label><input type="number" id="calc-W" step="0.01" min="0.1" value="${c.widthM}" data-action-input="calc-dim" data-dim="widthM"></div>
+                      <div class="orig-field" style="margin:0"><label>Высота, м</label><input type="number" id="calc-H" step="0.01" min="0.1" value="${c.heightM}" data-action-input="calc-dim" data-dim="heightM"></div>
+                    </div>
+                    <p class="muted" style="margin:0">Площадь: ${est.areaM2 || "—"} м² · Периметр: ${
+                      c.lengthM && c.widthM
+                        ? Math.round((2 * (Number(c.lengthM) + Number(c.widthM))) * 100) / 100
+                        : "—"
+                    } м</p>
+                  </div>`
+                : id === "draw"
+                  ? `<div class="calc-panel">
+                      <h4>Своя схема</h4>
+                      <div class="orig-field" style="margin:0"><label>Высота стен, м</label><input type="number" value="${c.heightM}" data-action-input="calc-dim" data-dim="heightM"></div>
+                      <p class="muted" style="margin:0">Демо: нарисуйте прямоугольник размерами слева (режим «Ввести размеры») или задайте L×W ниже.</p>
+                      <div class="calc-grid-3">
+                        <div class="orig-field" style="margin:0"><label>Длина, м</label><input type="number" value="${c.lengthM}" data-action-input="calc-dim" data-dim="lengthM"></div>
+                        <div class="orig-field" style="margin:0"><label>Ширина, м</label><input type="number" value="${c.widthM}" data-action-input="calc-dim" data-dim="widthM"></div>
+                      </div>
+                      <div class="orig-actions-row">
+                        <button type="button" class="orig-btn orig-btn--secondary" data-action="calc-demo-photo">Фото плана</button>
+                        <button type="button" class="orig-btn orig-btn--ghost" data-action="calc-clear-scheme">Очистить</button>
+                      </div>
+                    </div>`
+                  : `<div class="calc-panel">
+                      <h4>Оценка по площади</h4>
+                      <p class="muted" style="margin:0">Приблизительный расчёт без схемы — когда нет точных размеров.</p>
+                      <div class="orig-field" style="margin:0"><label>Площадь потолка, м²</label><input type="number" id="calc-area-only" step="0.1" min="0.1" value="${c.areaOnly}" data-action-input="calc-dim" data-dim="areaOnly"></div>
+                    </div>`
+              : ""
+          }
+        </div>`;
     }
-    const area = d ? MFStore.draftAreaM2(d) : 14;
-    const segment = d?.segment || "comfort";
-    const estimate = Math.round(area * (segment === "premium" ? 4200 : segment === "comfort" ? 3400 : 2800));
+
+    const shared =
+      entry && entry !== "area"
+        ? `<div class="calc-panel" style="margin-top:4px">
+            <h4>Что считать</h4>
+            <div class="calc-chips">
+              <button type="button" class="calc-chip ${c.ceiling ? "is-on" : ""}" data-action="calc-surface" data-surface="ceiling">Потолок</button>
+              <button type="button" class="calc-chip ${c.walls ? "is-on" : ""}" data-action="calc-surface" data-surface="walls">Стены (demo)</button>
+            </div>
+            <h4 style="margin-top:8px">Тип монтажа</h4>
+            <div class="calc-chips">
+              <button type="button" class="calc-chip ${
+                c.mounting === "ceiling_frameless" ? "is-on" : ""
+              }" data-action="calc-mount" data-mount="ceiling_frameless">Бескаркасный</button>
+              <button type="button" class="calc-chip ${
+                c.mounting === "ceiling_framed" ? "is-on" : ""
+              }" data-action="calc-mount" data-mount="ceiling_framed">Каркасный</button>
+            </div>
+            <button type="button" class="orig-btn orig-btn--primary" style="margin-top:8px" data-action="calc-run">Рассчитать</button>
+          </div>`
+        : entry === "area"
+          ? `<div class="calc-panel" style="margin-top:4px">
+              <h4>Что считать</h4>
+              <div class="calc-chips">
+                <button type="button" class="calc-chip is-on" disabled>Потолок</button>
+              </div>
+              <button type="button" class="orig-btn orig-btn--primary" style="margin-top:8px" data-action="calc-run">Рассчитать</button>
+            </div>`
+          : "";
+
+    const schemeInner =
+      entry && est.areaM2 > 0
+        ? `<div class="calc-room-rect" style="--room-ar:${Math.max(0.5, Math.min(2.2, ar))}">
+             <span class="dim dim-l">${c.entry === "area" ? est.areaM2 + " м²" : c.lengthM + " м"}</span>
+             ${c.entry !== "area" ? `<span class="dim dim-w">${c.widthM} м</span>` : ""}
+           </div>`
+        : `<div class="calc-room-empty">Выберите способ ввода слева — здесь появится схема монтажа</div>`;
+
+    const results = c.showResults
+      ? `<div class="calc-results">
+          <div class="calc-stats">
+            <div class="calc-stat"><div class="l">Площадь</div><div class="n">${est.areaM2} м²</div></div>
+            <div class="calc-stat"><div class="l">Панели</div><div class="n">${est.panels} шт</div></div>
+            <div class="calc-stat"><div class="l">Ориентир</div><div class="n">${money(est.total)}</div></div>
+          </div>
+          ${
+            c.expanded
+              ? `<ul class="calc-lines">
+                  <li><span>Панели MultiFrame × ${est.panels}</span><strong>${money(est.panels * 890)}</strong></li>
+                  <li><span>Клипсы × ${est.clips}</span><strong>${money(est.clips * 12)}</strong></li>
+                  <li><span>Материалы${est.mounting === "ceiling_framed" ? " (каркас +12%)" : ""}</span><strong>${money(
+                    est.materials
+                  )}</strong></li>
+                  <li><span>Монтаж (ориентир)</span><strong>${money(est.work)}</strong></li>
+                  <li class="total"><span>Итого</span><strong>${money(est.total)}</strong></li>
+                </ul>`
+              : `<button type="button" class="orig-btn orig-btn--ghost" data-action="calc-expand">Развернуть смету</button>`
+          }
+          <div class="calc-export">
+            <button type="button" class="orig-btn orig-btn--secondary" data-action="calc-demo-pdf">PDF</button>
+            <button type="button" class="orig-btn orig-btn--ghost" data-action="calc-demo-share">Поделиться</button>
+            <button type="button" class="orig-btn orig-btn--primary" data-action="calc-save-bind">Сохранить → привязка</button>
+          </div>
+          <p class="muted" style="margin:0;font-size:.8rem">Демо-цифры Gate C · не production BOM. ${
+            d?.pmDone ? "В черновике есть PM Result." : "PM не обязателен."
+          }</p>
+        </div>`
+      : "";
+
     return shell(
       "tools/calc",
       `
-      <div class="page-head">
-        <div>
-          <h1>Калькулятор · предварительный</h1>
-          <p class="sub">Самостоятельный инструмент · PM не обязателен · роль ${esc(S().role || "—")}</p>
+      <div class="orig-wrap">
+        <div class="page-actions-inline">
+          <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
+          <span class="pill info">роль ${esc(S().role || "—")}</span>
+          <a class="btn sm" href="#/tools/pm">Проблемомер</a>
         </div>
-        <div class="page-actions"><a class="btn ghost" href="#/tools/hub">Инструменты</a></div>
-      </div>
-      <div class="panel" style="max-width:520px">
-        <div class="field"><label>Площадь, м²</label>
-          <input id="tools-calc-area" type="number" value="${area}">
+        <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
+          ${origToolHeader("calc", theme)}
+          <div class="orig-body">
+            <div class="calc-workspace">
+              <aside class="calc-side">
+                <h2 class="calc-entry-title">Что вы знаете о помещении?</h2>
+                <p class="calc-entry-lead">Выберите способ — от него зависит, как считать материалы</p>
+                ${entryBlock("dims", "Ввести размеры", "Знаю длину и ширину — прямоугольная комната")}
+                ${entryBlock("draw", "Нарисовать схему", "Сложная форма или есть чертёж — рисуем с нуля")}
+                ${entryBlock("area", "По площади", "Нет размеров стен — примерная оценка в м²", true)}
+                ${shared}
+              </aside>
+              <section class="calc-scheme" aria-label="Схема монтажа">
+                <h3>Схема монтажа</h3>
+                <div class="calc-scheme-canvas">${schemeInner}</div>
+                ${results}
+              </section>
+            </div>
+          </div>
         </div>
-        <div class="field"><label>Сегмент</label>
-          <select id="tools-calc-seg">
-            <option value="standard" ${segment==="standard"?"selected":""}>standard</option>
-            <option value="comfort" ${segment==="comfort"?"selected":""}>comfort</option>
-            <option value="premium" ${segment==="premium"?"selected":""}>premium</option>
-          </select>
-        </div>
-        <div class="stat" style="margin-top:12px"><div class="n">${money(estimate)}</div><div class="l">Ориентир · обновится после «Пересчитать»</div></div>
-        <div class="row" style="margin-top:14px">
-          <button class="btn" data-action="tools-calc-recalc">Пересчитать</button>
-          <button class="btn primary" data-action="tools-calc-save" data-amount="${estimate}" data-area="${area}">Сохранить ориентир → привязка</button>
-        </div>
-        <p class="muted" style="margin-top:10px">${
-          d?.pmDone ? "В черновике уже есть PM Result — можно сохранить both на bind." : "PM не пройден — это нормально для прямого входа в calc."
-        }</p>
-        <p class="dim"><a href="#/tools/pm">Открыть проблемомер</a> (опционально, с переносом площади при желании).</p>
       </div>`
     );
   }

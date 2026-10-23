@@ -3,7 +3,7 @@
  * KEY bumped to v6: GC6 bind RBAC + bind form persistence.
  */
 (function (global) {
-  const KEY = "mf_gate_c_proto_v6";
+  const KEY = "mf_gate_c_proto_v7";
   const CREW_SELF = "u_denis";
   const MEASURER_SELF = "u_pavel";
 
@@ -276,7 +276,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-7",
+      revision: "rev-gate-c-draft-8",
       role: null,
       offline: false,
       syncState: "online",
@@ -298,6 +298,22 @@
         loadingDemo: false,
         bindMode: "pick",
         pmStep: "survey",
+        /** GC6-P0-03: intro | survey | result */
+        pmPhase: "intro",
+        pmQ: 0,
+        toolTheme: "light",
+        calcUi: {
+          entry: null,
+          lengthM: 5,
+          widthM: 4,
+          heightM: 2.7,
+          areaOnly: 20,
+          ceiling: true,
+          walls: false,
+          mounting: "ceiling_frameless",
+          showResults: false,
+          expanded: false,
+        },
         showAnswerKey: false,
         conflictDemo: null,
         quotePreview: null,
@@ -747,6 +763,8 @@
   function startQuickConsultation(personaHint) {
     state.consultationSessionId = uid("csess");
     state.ui.pmStep = "survey";
+    state.ui.pmPhase = "intro";
+    state.ui.pmQ = 0;
     state.sessionDraft = {
       kind: "quick",
       consultationSessionId: state.consultationSessionId,
@@ -759,6 +777,14 @@
         noiseAwareness: "unknown",
         purpose: "living",
         personaHint: personaHint || null,
+        // GC6-P0-03 stepped survey (ceiling preset: stretch — no plannedCeiling Q)
+        houseType: null,
+        slabType: null,
+        slabThickness: null,
+        objectStage: null,
+        noisyNeighbors: "unknown",
+        noiseKind: "unknown",
+        plannedCeiling: "stretch",
       },
       segment: "comfort",
       pmDone: false,
@@ -774,16 +800,68 @@
     if (personaHint === "quiet") {
       state.sessionDraft.answers.noiseAwareness = "none";
       state.sessionDraft.answers.neighbors = "none";
+      state.sessionDraft.answers.noisyNeighbors = "no";
     } else if (personaHint === "noise") {
       state.sessionDraft.answers.noiseAwareness = "bothered";
       state.sessionDraft.answers.neighbors = "above";
+      state.sessionDraft.answers.noisyNeighbors = "yes";
     }
     save();
     return state.sessionDraft;
   }
 
+  function defaultCalcUi() {
+    return {
+      entry: null,
+      lengthM: 5,
+      widthM: 4,
+      heightM: 2.7,
+      areaOnly: 20,
+      ceiling: true,
+      walls: false,
+      mounting: "ceiling_frameless",
+      showResults: false,
+      expanded: false,
+    };
+  }
+
+  function ensureCalcUi() {
+    if (!state.ui.calcUi) state.ui.calcUi = defaultCalcUi();
+    return state.ui.calcUi;
+  }
+
+  /** Demo BOM / estimate from L×W or area-only (illustrative, not production algorithm) */
+  function calcEstimateFromUi() {
+    const c = ensureCalcUi();
+    let area =
+      c.entry === "area"
+        ? Number(c.areaOnly) || 0
+        : (Number(c.lengthM) || 0) * (Number(c.widthM) || 0);
+    if (!(area > 0)) area = 0;
+    const panels = Math.max(0, Math.ceil(area / 0.48));
+    const panelRub = 890;
+    const clipRub = 12;
+    const clips = panels * 4;
+    const mountFactor = c.mounting === "ceiling_framed" ? 1.12 : 1;
+    const materials = Math.round(panels * panelRub * mountFactor + clips * clipRub);
+    const work = Math.round(area * 450);
+    const total = materials + work;
+    return {
+      areaM2: Math.round(area * 100) / 100,
+      panels,
+      clips,
+      materials,
+      work,
+      total,
+      mounting: c.mounting,
+      ceiling: !!c.ceiling,
+      walls: !!c.walls,
+    };
+  }
+
   /** Owner clarification: Calc may start without PM / project */
   function ensureCalcDraft(areaM2) {
+    ensureCalcUi();
     if (state.sessionDraft && !state.sessionDraft.bound) {
       if (areaM2 != null) {
         state.sessionDraft.answers = state.sessionDraft.answers || {};
@@ -804,6 +882,7 @@
         noiseAwareness: "unknown",
         purpose: "living",
         personaHint: null,
+        plannedCeiling: "stretch",
       },
       segment: "comfort",
       pmDone: false,
@@ -1875,6 +1954,9 @@
     resolveConflict,
     startQuickConsultation,
     ensureCalcDraft,
+    ensureCalcUi,
+    defaultCalcUi,
+    calcEstimateFromUi,
     ensurePmDraft,
     canWriteProjects,
     canCreateProjects,

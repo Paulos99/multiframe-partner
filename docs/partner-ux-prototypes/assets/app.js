@@ -208,6 +208,48 @@
       el.addEventListener("change", onAction);
       el.addEventListener("blur", onAction);
     });
+    document.querySelectorAll("[data-action-input]").forEach((el) => {
+      el.addEventListener("input", onActionInput);
+      el.addEventListener("change", (e) => onActionInput(e, true));
+    });
+  }
+
+  function syncNeighborsFromSurvey(a) {
+    const nn = a.noisyNeighbors;
+    if (nn === "yes") {
+      a.neighbors = "above";
+      a.noiseAwareness = "bothered";
+    } else if (nn === "no" || nn === "none") {
+      a.neighbors = "none";
+      a.noiseAwareness = "none";
+    } else if (nn === "unknown") {
+      a.neighbors = "unknown";
+      if (a.noiseAwareness === "bothered") a.noiseAwareness = "unknown";
+    }
+  }
+
+  function onActionInput(ev, doRender) {
+    const el = ev.currentTarget;
+    const kind = el.getAttribute("data-action-input");
+    if (kind === "pm-area") {
+      const v = Number(el.value);
+      MFStore.updatePmAnswers({ areaM2: Number.isFinite(v) && v > 0 ? v : null });
+      const btn = document.querySelector('[data-action="pm-next"]');
+      if (btn) {
+        const a = MFStore.get().sessionDraft?.answers || {};
+        btn.disabled = !(a.roomType && Number(a.areaM2) > 0);
+      }
+      return;
+    }
+    if (kind === "calc-dim") {
+      const dim = el.getAttribute("data-dim");
+      const c = MFStore.ensureCalcUi();
+      c[dim] = Number(el.value);
+      if (c.showResults) c.showResults = true;
+      MFStore.save();
+      if (doRender) render();
+      return;
+    }
   }
 
   function persistBindFormFromDom() {
@@ -279,10 +321,181 @@
       location.hash = "#/sales/pm-quick";
       return;
     }
-    if (action === "tools-start-pm") {
+    if (action === "tools-start-pm" || action === "pm-begin") {
       MFStore.startQuickConsultation(el.getAttribute("data-persona") || "");
+      MFStore.get().ui.pmPhase = "intro";
+      MFStore.get().ui.pmQ = 0;
+      MFStore.save();
       toast("Проблемомер", "самостоятельный старт", "ok");
       location.hash = "#/tools/pm";
+      render();
+      return;
+    }
+    if (action === "tool-theme-toggle") {
+      const ui = MFStore.get().ui;
+      ui.toolTheme = ui.toolTheme === "dark" ? "light" : "dark";
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "pm-intro-next") {
+      MFStore.get().ui.pmPhase = "survey";
+      MFStore.get().ui.pmQ = 0;
+      MFStore.get().ui.pmStep = "survey";
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "pm-pick") {
+      const field = el.getAttribute("data-field");
+      const value = el.getAttribute("data-value");
+      const patch = { [field]: value };
+      if (field === "noisyNeighbors") {
+        if (value === "yes") {
+          patch.neighbors = "above";
+          patch.noiseAwareness = "bothered";
+        } else if (value === "no") {
+          patch.neighbors = "none";
+          patch.noiseAwareness = "none";
+        } else {
+          patch.neighbors = "unknown";
+          patch.noiseAwareness = "unknown";
+        }
+      }
+      MFStore.updatePmAnswers(patch);
+      render();
+      return;
+    }
+    if (action === "pm-back") {
+      const ui = MFStore.get().ui;
+      const a = MFStore.get().sessionDraft?.answers || {};
+      if (ui.pmPhase === "result") {
+        ui.pmPhase = "survey";
+        ui.pmStep = "survey";
+        MFStore.get().sessionDraft.pmDone = false;
+        MFStore.save();
+        render();
+        return;
+      }
+      if ((ui.pmQ || 0) <= 0) {
+        ui.pmPhase = "intro";
+        MFStore.save();
+        render();
+        return;
+      }
+      ui.pmQ = (ui.pmQ || 0) - 1;
+      // if we skipped noiseKind going forward, stay consistent
+      const quiet = a.noisyNeighbors === "no" || a.noisyNeighbors === "none";
+      if (quiet && ui.pmQ > 5) ui.pmQ = 5;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "pm-next") {
+      const ui = MFStore.get().ui;
+      const d = MFStore.get().sessionDraft;
+      if (!d) return;
+      const a = d.answers || {};
+      const quiet = a.noisyNeighbors === "no" || a.noisyNeighbors === "none";
+      const total = quiet ? 6 : 7;
+      const q = Number(ui.pmQ) || 0;
+      // persist area from input if present
+      const areaEl = document.getElementById("pm-area-input");
+      if (areaEl) {
+        const v = Number(areaEl.value);
+        if (Number.isFinite(v) && v > 0) MFStore.updatePmAnswers({ areaM2: v });
+      }
+      syncNeighborsFromSurvey(d.answers);
+      if (q >= total - 1) {
+        d.answers.plannedCeiling = "stretch";
+        const res = MFStore.runPmOnDraft();
+        ui.pmPhase = "result";
+        ui.pmStep = "result";
+        MFStore.save();
+        toast("Итог", `persona ${res.result.clientPersona}`, "ok");
+        render();
+        return;
+      }
+      ui.pmQ = q + 1;
+      ui.pmPhase = "survey";
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "pm-demo-pdf") {
+      toast("PDF", "Демо: профиль акустического комфорта (не скачивается в Gate C)", "info");
+      return;
+    }
+    if (action === "calc-entry") {
+      const c = MFStore.ensureCalcUi();
+      const next = el.getAttribute("data-entry");
+      c.entry = c.entry === next ? null : next;
+      c.showResults = false;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "calc-surface") {
+      const c = MFStore.ensureCalcUi();
+      const s = el.getAttribute("data-surface");
+      if (s === "ceiling") c.ceiling = !c.ceiling;
+      if (s === "walls") c.walls = !c.walls;
+      if (!c.ceiling && !c.walls) c.ceiling = true;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "calc-mount") {
+      const c = MFStore.ensureCalcUi();
+      c.mounting = el.getAttribute("data-mount");
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "calc-run") {
+      const est = MFStore.calcEstimateFromUi();
+      if (!(est.areaM2 > 0)) {
+        toast("Нет площади", "Введите размеры или м²", "warn");
+        return;
+      }
+      const c = MFStore.ensureCalcUi();
+      c.showResults = true;
+      c.expanded = false;
+      MFStore.ensureCalcDraft(est.areaM2);
+      MFStore.save();
+      toast("Расчёт", `${est.areaM2} м² · ${est.panels} панелей`, "ok");
+      render();
+      return;
+    }
+    if (action === "calc-expand") {
+      MFStore.ensureCalcUi().expanded = true;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "calc-demo-pdf" || action === "calc-demo-share" || action === "calc-demo-photo") {
+      toast(
+        action === "calc-demo-pdf" ? "PDF" : action === "calc-demo-share" ? "Поделиться" : "Фото плана",
+        "Демо UI Gate C — действие симулировано",
+        "info"
+      );
+      return;
+    }
+    if (action === "calc-clear-scheme") {
+      const c = MFStore.ensureCalcUi();
+      c.lengthM = 5;
+      c.widthM = 4;
+      c.showResults = false;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "calc-save-bind") {
+      const est = MFStore.calcEstimateFromUi();
+      MFStore.ensureCalcDraft(est.areaM2);
+      MFStore.finishCalcOnDraft(est.total, est.areaM2);
+      toast("Ориентир в черновике", `${est.areaM2} м² · ${est.total} ₽`, "ok");
+      location.hash = "#/tools/bind";
       return;
     }
     if (action === "tools-calc-recalc") {
@@ -359,7 +572,12 @@
     }
     if (action === "pm-resuvey") {
       MFStore.get().ui.pmStep = "survey";
-      MFStore.get().sessionDraft.pmDone = false;
+      MFStore.get().ui.pmPhase = "intro";
+      MFStore.get().ui.pmQ = 0;
+      if (MFStore.get().sessionDraft) {
+        MFStore.get().sessionDraft.pmDone = false;
+        MFStore.get().sessionDraft.pmResult = null;
+      }
       MFStore.save();
       render();
       return;

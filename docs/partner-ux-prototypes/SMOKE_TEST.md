@@ -1,4 +1,4 @@
-# Gate C smoke — `rev-gate-c-draft-7`
+# Gate C smoke — `rev-gate-c-draft-8`
 
 **Не user testing.**
 

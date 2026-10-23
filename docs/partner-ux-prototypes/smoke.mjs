@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Executable Gate C store smoke — rev-gate-c-draft-7
+ * Executable Gate C store smoke — rev-gate-c-draft-8
  *
  * Usage (from this directory or repo root):
  *   node docs/partner-ux-prototypes/smoke.mjs

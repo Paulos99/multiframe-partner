@@ -1,13 +1,13 @@
 # Gate C — изолированные HTML-прототипы MultiFrame Партнёр
 
-**Revision:** `rev-gate-c-draft-7`  
-**Статус:** Gate C **in review** (GC6 bind RBAC) · Gate B **APPROVED / frozen**  
+**Revision:** `rev-gate-c-draft-8`  
+**Статус:** Gate C **in review** (GC6-P0-03 original tool shells) · Gate B **APPROVED / frozen**  
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Changelog: [`CHANGELOG-draft-7.md`](./CHANGELOG-draft-7.md) · Smoke: `node smoke.mjs` (36/36) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
+Changelog: [`CHANGELOG-draft-8.md`](./CHANGELOG-draft-8.md) · prior [`CHANGELOG-draft-7.md`](./CHANGELOG-draft-7.md) · Smoke: `node smoke.mjs` (36/36) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
 
-**Инструменты (все роли):** `#/tools/pm` · `#/tools/calc` · hub `#/tools/hub`. Bind в Project — только sales/owner/measurer (crew/admin → личный результат).
+**Инструменты (все роли):** `#/tools/pm` · `#/tools/calc` · hub `#/tools/hub` — branded original shells (draft-8). Bind в Project — только sales/owner/measurer (crew/admin → личный результат).
 
 ---
 
@@ -18,7 +18,7 @@ python3 -m http.server 8765 --directory docs/partner-ux-prototypes
 # http://localhost:8765/
 ```
 
-Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v6`** (сброс в nav).
+Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v7`** (сброс в nav).
 
 ---
 
