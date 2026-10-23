@@ -4,7 +4,7 @@
 **ID:** D10  
 **Зависит от:** [D1 §5.5](./01-product-architecture.md), [D2 S-admin-02 / S-x-04](./02-role-scenarios.md), [D3 §4.2](./03-information-architecture.md), [D9](./09-academy.md), [D6](./06-probleмомер-ceiling.md), [D8](./08-commercial-process.md)  
 **Ориентир кода (readonly):** `packages/shared/support.ts`, `funnel.ts`, `events.ts`, `learning.ts`  
-**Статус:** Gate B **APPROVED** 2026-10-23 · Gate C: изолированные прототипы
+**Статус:** final-candidate Gate B · **APPROVED 2026-10-23** · **не Gate C**
 
 ---
 

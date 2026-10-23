@@ -4,7 +4,7 @@
 **ID:** D9  
 **Зависит от:** [D1 §5.4](./01-product-architecture.md), [D2](./02-role-scenarios.md) (admin/materials), [D3 §4.1](./03-information-architecture.md), [ADR-006](./adr/006-academy-mixed-mechanics.md)  
 **Ориентир кода (readonly):** `packages/shared/learning.ts`, события `training_*` в `packages/shared/events.ts`  
-**Статус:** Gate B **APPROVED** 2026-10-23 · Gate C: изолированные прототипы в `docs/partner-ux-prototypes/`
+**Статус:** final-candidate Gate B · **APPROVED 2026-10-23** · **не Gate C** (без wireframes/прототипов)
 
 ---
 

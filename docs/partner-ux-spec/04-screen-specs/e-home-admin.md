@@ -1,6 +1,6 @@
 # E-home-admin — Home StP admin
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23** · aliases: часть `E-home`
+**Revision:** `rev-gate-b-draft-2` · **Gate B · APPROVED 2026-10-23** · aliases: часть `E-home`
 
 ## Кто / зачем
 StP admin: сигналы сети → PartnerCard / case; не полевой CRM партнёра.

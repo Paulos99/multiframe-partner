@@ -2,7 +2,7 @@
 
 - **package id:** `rev-gate-b-final-candidate` (+ Gate A `rev-gate-a-approved-20261022`)
 - **date:** 2026-10-22
-- **status:** Gate B **APPROVED by owner 2026-10-23**; Gate C authorized (isolated prototypes only)
+- **status:** Gate B **APPROVED 2026-10-23**
 - **purpose:** независимая экспертиза; итерации через PR #78
 - **entry:** [CHATGPT_REVIEW_BRIEF.md](./CHATGPT_REVIEW_BRIEF.md)
 - **prior reviews:** [CHATGPT_GATE_B_REVIEW_2026-10-22.md](./CHATGPT_GATE_B_REVIEW_2026-10-22.md) · PR comments on draft-2

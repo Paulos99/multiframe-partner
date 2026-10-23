@@ -1,6 +1,6 @@
 # E-quote-deal — Сделка: КП и follow-up
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23** · aliases: `E-project-deal`, `E-deal`, `E-quote`  
+**Revision:** `rev-gate-b-draft-2` · **Gate B · APPROVED 2026-10-23** · aliases: `E-project-deal`, `E-deal`, `E-quote`  
 **Зависит от:** [D3](../03-information-architecture.md), [D8](../08-commercial-process.md), [D5](../05-data-model-contracts.md)
 
 ## Кто

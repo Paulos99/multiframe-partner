@@ -1,6 +1,6 @@
 # E-analytics-training — Срез обучения (отдельно от продаж)
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23**  
+**Revision:** `rev-gate-b-draft-2` · **Gate B · APPROVED 2026-10-23**  
 **Alias:** не смешивать с `E-analytics`
 
 ## Кто

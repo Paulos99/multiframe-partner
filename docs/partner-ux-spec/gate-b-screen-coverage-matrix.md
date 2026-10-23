@@ -1,6 +1,6 @@
 # Gate B — Screen coverage matrix (D3 E-* → D4)
 
-**Revision:** `rev-gate-b-draft-2` · **NOT approved**  
+**Revision:** `rev-gate-b-draft-2` · **APPROVED 2026-10-23**  
 **Источник инвентаря:** [03-information-architecture.md](./03-information-architecture.md) §2  
 **Индекс спек:** [04-screen-specs/00-index.md](./04-screen-specs/00-index.md)
 

@@ -1,6 +1,6 @@
 # E-analytics — Аналитика партнёра / сети
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23** · зависит от [D3](../03-information-architecture.md), [D10](../10-stp-support-analytics.md)
+**Revision:** `rev-gate-b-draft-2` · **Gate B · APPROVED 2026-10-23** · зависит от [D3](../03-information-architecture.md), [D10](../10-stp-support-analytics.md)
 
 ## Кто
 admin (сеть); owner/sales (компания).

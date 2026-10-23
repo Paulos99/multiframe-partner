@@ -58,7 +58,9 @@ D4 (каталог экранов) · D5 · D6 · D7 · D8 · D9 · D10 · D11 �
 
 ---
 
-## 5. Экраны для прототипирования Gate C (**без** прототипов сейчас)
+## 5. Экраны для прототипирования Gate C
+
+> **Update 2026-10-23:** Gate B APPROVED · Gate C AUTHORIZED. Живые прототипы: [`docs/partner-ux-prototypes/`](../partner-ux-prototypes/).
 
 Приоритет golden path (desktop + mobile где указано):
 
@@ -82,12 +84,13 @@ D4 (каталог экранов) · D5 · D6 · D7 · D8 · D9 · D10 · D11 �
 | Утверждение | Статус |
 |-------------|--------|
 | Продуктовый код не менялся | **Да** |
-| Gate C не начат | **Да** |
+| Gate B APPROVED владельцем | **Да** (2026-10-23) |
+| Gate C AUTHORIZED (isolated prototypes) | **Да** → [`docs/partner-ux-prototypes/`](../partner-ux-prototypes/) |
 | Gate A snapshot создан | **Да** |
-| СТОП — ждём заказчика | **Да** |
+| Gate D / merge / deploy | **Не** authorized |
 
 ---
 
-## 7. СТОП
+## 7. Статус после owner OK
 
-Автономная работа пакета Gate B завершена. Дальше — ревью заказчика. Gate C / код только по явному OK.
+Gate B закрыт утверждением. Gate C ведётся только в изолированном HTML-контуре PR #78. Production / Gate D — стоп.

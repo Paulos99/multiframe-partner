@@ -1,801 +1,453 @@
-/* Gate C isolated prototype — NOT production. localStorage only. */
-(() => {
-  const STORAGE = 'mf-gate-c-proto-v1';
+/**
+ * Gate C router + interactions
+ */
+(function () {
+  const root = () => document.getElementById("app");
 
-  const defaultState = () => ({
-    role: null,
-    route: 'home',
-    sync: 'online',
-    toast: '',
-    projects: [
-      {
-        id: 'p1', name: 'Спальня · Ивановы', client: 'Анна',
-        rooms: [
-          { id: 'r1', name: 'Спальня', status: 'measured', prelim: 48000, detailed: null, revision: 1, history: [] },
-          { id: 'r2', name: 'Гостиная', status: 'draft', prelim: null, detailed: null, revision: 0, history: [] },
-        ],
-        deal: {
-          id: 'd1', stage: 'calculated', outcome: null, paused: false, stageAtOutcome: null,
-          quotes: [{ id: 'q1', version: 1, lifecycle: 'created', amount: 48000 }],
-          assent: { r1: null, r2: null },
-        },
-      },
-      {
-        id: 'p2', name: 'Дозаказ · Петровы', client: 'Игорь',
-        rooms: [{ id: 'r3', name: 'Кабинет', status: 'tech_ready', prelim: 22000, detailed: 26500, revision: 2, history: [] }],
-        deal: {
-          id: 'd2', stage: 'quote_sent_confirmed', outcome: 'accepted', paused: false,
-          quotes: [{ id: 'q2', version: 1, lifecycle: 'sent_confirmed', amount: 26500 }],
-          assent: { r3: 'ordered' },
-        },
-      },
-    ],
-    sessionDraft: null,
-    consultationSessionId: null,
-    toolOpensInSession: 0,
-    calcConflict: null,
-    academy: { node: 'N0', path: [], score: null, ended: false },
-    checklist: { scheme: false, materials: false, hangers: false, finish: false },
-    blocker: null,
-    signals: [
-      { id: 's1', type: 'funnel_stall', org: 'Потолки Север', stage: 'quote_sent_confirmed', n: 8 },
-      { id: 's2', type: 'paused_followup', org: 'Акустика Плюс', count: 3 },
-    ],
-  });
+  function toast(title, detail, kind) {
+    const host = document.getElementById("toasts");
+    if (!host) return;
+    const el = document.createElement("div");
+    el.className = "toast";
+    el.innerHTML = `<strong>${title}</strong>${detail ? `<span class="muted">${detail}</span>` : ""}`;
+    if (kind === "warn") el.style.borderColor = "rgba(212,163,92,.5)";
+    if (kind === "danger") el.style.borderColor = "rgba(208,107,92,.5)";
+    if (kind === "ok") el.style.borderColor = "rgba(92,184,138,.5)";
+    host.appendChild(el);
+    setTimeout(() => el.remove(), 4200);
+  }
 
-  let state = load();
+  function parseHash() {
+    const raw = location.hash.replace(/^#\/?/, "") || "";
+    const [pathPart, query = ""] = raw.split("?");
+    const parts = pathPart.split("/").filter(Boolean);
+    const params = Object.fromEntries(new URLSearchParams(query));
+    return { parts, params };
+  }
 
-  function load() {
-    try {
-      const raw = localStorage.getItem(STORAGE);
-      return raw ? { ...defaultState(), ...JSON.parse(raw) } : defaultState();
-    } catch {
-      return defaultState();
+  function requireRole(role) {
+    const st = MFStore.get();
+    if (!st.role) {
+      location.hash = "#/login";
+      return false;
     }
-  }
-  function save() {
-    localStorage.setItem(STORAGE, JSON.stringify(state));
-  }
-  function toast(msg) {
-    state.toast = msg;
-    render();
-    setTimeout(() => { if (state.toast === msg) { state.toast = ''; renderToastOnly(); } }, 3200);
-  }
-  function uid(p) { return p + Math.random().toString(36).slice(2, 8); }
-
-  function setRole(role) {
-    state.role = role;
-    state.route = 'home';
-    save(); render();
-  }
-  function go(route, params = {}) {
-    state.route = route;
-    state.params = params;
-    save(); render();
-  }
-
-  function activeProject() {
-    const id = state.params?.projectId || 'p1';
-    return state.projects.find((p) => p.id === id) || state.projects[0];
-  }
-
-  function startConsultSession() {
-    if (!state.consultationSessionId) {
-      state.consultationSessionId = uid('cs_');
-      state.toolOpensInSession = 0;
+    if (role && st.role !== role) {
+      location.hash = `#/${st.role}/home`;
+      return false;
     }
-    state.toolOpensInSession += 1;
+    return true;
   }
 
-  /* ---------- Views ---------- */
-  function viewLogin() {
-    return `
-      <div class="demo-banner">GATE C PROTOTYPE · не production · localStorage</div>
-      <div class="login-hero">
-        <div class="login-card">
-          <p class="badge">MultiFrame Партнёр</p>
-          <h1 class="brand-hero">MultiFrame</h1>
-          <p class="lede">Кабинет потолочной компании: проект → комнаты, сделка отдельно, расчёт с сохранением.</p>
-          <p class="muted">Выберите роль для демо (D11 §7):</p>
-          <div class="role-grid">
-            ${[['sales','Продажи — inquiry, КП, пауза'],['owner','Владелец — вмешательство, назначения'],['measurer','Замерщик — detailed save'],['crew','Бригада — монтаж и blocker'],['admin','StP admin — сигналы партнёра']].map(([id,label]) =>
-              `<button data-role="${id}"><strong>${label.split('—')[0]}</strong><br><span class="muted">${label.split('—')[1]||''}</span></button>`
-            ).join('')}
-          </div>
-        </div>
-      </div>`;
-  }
-
-  function chrome() {
-    return `
-      <div class="demo-banner">GATE C PROTOTYPE · роль: ${state.role} · sync: ${state.sync}</div>
-      <header class="chrome">
-        <div class="brand">MultiFrame</div>
-        <div class="meta">${labelRole(state.role)}</div>
-        <div class="spacer"></div>
-        <select id="syncSelect">
-          <option value="online" ${state.sync==='online'?'selected':''}>Online</option>
-          <option value="offline" ${state.sync==='offline'?'selected':''}>Offline</option>
-        </select>
-        <button type="button" id="btnReset">Сброс демо</button>
-        <button type="button" id="btnLogout">Сменить роль</button>
-      </header>`;
-  }
-
-  function nav() {
-    const items = navForRole(state.role);
-    return `<nav class="nav">${items.map(([r,t]) =>
-      `<button type="button" data-nav="${r}" class="${state.route===r?'active':''}">${t}</button>`
-    ).join('')}</nav>`;
-  }
-
-  function navForRole(role) {
-    const common = [['home','Сегодня'],['projects','Проекты'],['tools','Инструменты'],['academy','Академия']];
-    if (role === 'crew') return [['home','Задания'],['install','Монтаж']];
-    if (role === 'admin') return [['home','Сигналы'],['partner','PartnerCard'],['analytics','Аналитика'],['academy','Академия']];
-    if (role === 'owner') return [...common, ['staff','Сотрудники'], ['deal','Сделка']];
-    return [...common, ['deal','Сделка']];
-  }
-
-  function labelRole(r) {
-    return ({sales:'Продажи',owner:'Владелец',measurer:'Замерщик',crew:'Бригада',admin:'StP admin'})[r] || r;
-  }
-
-  function viewHome() {
-    if (state.role === 'sales') return homeSales();
-    if (state.role === 'owner') return homeOwner();
-    if (state.role === 'measurer') return homeMeasurer();
-    if (state.role === 'crew') return homeCrew();
-    return homeAdmin();
-  }
-
-  function homeSales() {
-    const p = state.projects[0];
-    const paused = p.deal.paused;
-    return `
-      <h1>Сегодня · Продажи</h1>
-      <p class="lede">Inbox next actions — без стека модулей. Пауза ≠ новая сделка.</p>
-      <div class="cta-row">
-        <button class="btn" data-go="inquiry">Новый проект</button>
-        <button class="btn secondary" data-go="tools" data-intent="consult">Быстрая консультация</button>
-        <button class="btn secondary" data-go="tools" data-intent="calc">Быстрый расчёт</button>
-      </div>
-      <div class="panel">
-        <div class="inbox-item">
-          <div>
-            <div class="title">${paused ? 'Возобновить сделку' : 'Подтвердить отправку КП'} · ${p.name}</div>
-            <div class="sub">${paused ? 'early_paused · тот же dealId '+p.deal.id : 'Quote v'+p.deal.quotes[0].version+' · '+p.deal.quotes[0].lifecycle}</div>
-          </div>
-          <button class="btn ghost" data-go="deal" data-project="${p.id}">Открыть</button>
-        </div>
-        <div class="inbox-item">
-          <div>
-            <div class="title">Зафиксировать исход · ${state.projects[1].name}</div>
-            <div class="sub">sent_confirmed · roomAssent ordered</div>
-          </div>
-          <button class="btn ghost" data-go="deal" data-project="p2">Открыть</button>
-        </div>
-      </div>`;
-  }
-
-  function homeOwner() {
-    return `
-      <h1>Сегодня · Компания</h1>
-      <p class="lede">Что требует вмешательства: blockers, без assignee, паузы.</p>
-      <div class="cta-row"><button class="btn" data-go="inquiry">Новый проект</button></div>
-      <div class="panel">
-        <div class="inbox-item">
-          <div><div class="title">Нет crew на accepted · ${state.projects[1].name}</div><div class="sub">Назначить ответственность</div></div>
-          <button class="btn ghost" data-go="deal" data-project="p2">Назначить</button>
-        </div>
-        ${state.blocker ? `<div class="inbox-item"><div><div class="title">Blocker от бригады</div><div class="sub">${state.blocker}</div></div><button class="btn ghost" data-go="install">Открыть</button></div>` : ''}
-      </div>`;
-  }
-
-  function homeMeasurer() {
-    const room = state.projects[0].rooms[0];
-    return `
-      <h1>Мои замеры</h1>
-      <p class="lede">Назначенная комната → detailed → сохранить → назад.</p>
-      <div class="cta-row"><button class="btn" data-go="room" data-project="p1" data-room="r1">Продолжить «${room.name}»</button></div>
-      <div class="panel">
-        <div class="inbox-item">
-          <div><div class="title">${room.name} · ${state.projects[0].name}</div>
-          <div class="sub">status ${room.status} · revision ${room.revision} ${room.detailed?'· detailed есть':'· нужен detailed'}</div></div>
-          <button class="btn ghost" data-go="calc" data-project="p1" data-room="r1">Расчёт</button>
-        </div>
-      </div>`;
-  }
-
-  function homeCrew() {
-    const ok = state.projects[1];
-    return `
-      <h1>Мои задания</h1>
-      <p class="lede">Только ordered + tech-ready. Без сумм КП и deferred.</p>
-      <div class="panel">
-        <div class="inbox-item">
-          <div><div class="title">${ok.rooms[0].name} · ${ok.name}</div>
-          <div class="sub"><span class="badge ok">ordered</span> <span class="badge ok">tech-ready</span></div></div>
-          <button class="btn" data-go="install">Открыть монтаж</button>
-        </div>
-      </div>
-      <p class="muted">Спальня Ивановых (только preliminary / не ordered) скрыта из inbox.</p>`;
-  }
-
-  function homeAdmin() {
-    return `
-      <h1>Сеть · Сигналы</h1>
-      <p class="lede">Агрегаты и контур помощи — не полевой CRM.</p>
-      <div class="panel">
-        ${state.signals.map(s => `
-          <div class="inbox-item">
-            <div>
-              <div class="title">${s.org}</div>
-              <div class="sub">${s.type}${s.stage?' · stage '+s.stage:''}${s.n?' · N='+s.n:''}${s.count?' · paused '+s.count:''}</div>
-            </div>
-            <button class="btn ghost" data-go="partner" data-org="${s.org}">PartnerCard</button>
-          </div>`).join('')}
-      </div>`;
-  }
-
-  function viewProjects() {
-    return `
-      <h1>Проекты</h1>
-      <p class="lede">Иерархия Project → Rooms. Не плоский ObjectsPanel.</p>
-      <div class="panel">
-        ${state.projects.map(p => `
-          <div class="row-card">
-            <div>
-              <div class="title">${p.name}</div>
-              <div class="sub">${p.rooms.length} комн. · Deal ${p.deal.id} · ${p.deal.paused?'<span class="badge pause">пауза</span>':p.deal.outcome||p.deal.stage}</div>
-            </div>
-            <button class="btn ghost" data-go="project" data-project="${p.id}">Открыть</button>
-          </div>`).join('')}
-      </div>`;
-  }
-
-  function viewProject() {
-    const p = activeProject();
-    const total = p.rooms.reduce((s,r) => s + (r.detailed ?? r.prelim ?? 0), 0);
-    return `
-      <h1>${p.name}</h1>
-      <p class="lede">Клиент: ${p.client}. Итог ориентир: ${money(total)} <span class="muted">(coalesce, не prelim+detailed)</span></p>
-      <div class="cta-row">
-        <button class="btn secondary" data-go="deal" data-project="${p.id}">Сделка</button>
-        <button class="btn ghost" data-go="projects">← К списку</button>
-      </div>
-      <div class="panel">
-        ${p.rooms.map(r => `
-          <div class="row-card">
-            <div>
-              <div class="title">${r.name}</div>
-              <div class="sub">${r.status}
-                ${r.prelim!=null?` · <span class="badge warn">предварительно ${money(r.prelim)}</span>`:''}
-                ${r.detailed!=null?` · <span class="badge ok">со схемой ${money(r.detailed)}</span>`:''}
-              </div>
-            </div>
-            <button class="btn ghost" data-go="room" data-project="${p.id}" data-room="${r.id}">Комната</button>
-          </div>`).join('')}
-      </div>`;
-  }
-
-  function viewRoom() {
-    const p = activeProject();
-    const r = p.rooms.find(x => x.id === (state.params?.roomId || p.rooms[0].id));
-    return `
-      <h1>${r.name}</h1>
-      <p class="lede">${p.name} · status ${r.status} · calc revision ${r.revision}</p>
-      <div class="cta-row">
-        ${(state.role!=='crew')?`<button class="btn" data-go="calc" data-project="${p.id}" data-room="${r.id}">Рассчитать</button>`:''}
-        <button class="btn ghost" data-go="project" data-project="${p.id}">← Проект</button>
-      </div>
-      <div class="panel">
-        <p>Preliminary: ${r.prelim!=null?money(r.prelim):'—'}</p>
-        <p>Detailed: ${r.detailed!=null?money(r.detailed):'—'}</p>
-        <p class="muted">История save: ${r.history.length ? r.history.map(h=>`#${h.rev} ${h.type} ${money(h.amount)}`).join(' · ') : 'пусто'}</p>
-      </div>`;
-  }
-
-  function viewTools() {
-    return `
-      <h1>Инструменты</h1>
-      <p class="lede">Quick-entry: результат → Save → bind. Session: <code>${state.consultationSessionId || '—'}</code> · opens: ${state.toolOpensInSession}</p>
-      <div class="cta-row">
-        <button class="btn" id="btnOpenPm">Проблемомер (consult)</button>
-        <button class="btn secondary" id="btnOpenCalcQuick">Калькулятор площади</button>
-      </div>
-      <div class="panel muted">Повторное открытие tool в той же consultationSessionId не увеличивает знаменатель аналитики (C4).</div>`;
-  }
-
-  function viewCalc() {
-    const p = activeProject();
-    const r = p.rooms.find(x => x.id === (state.params?.roomId || 'r1')) || null;
-    const bound = !!r;
-    const draft = state.sessionDraft;
-    return `
-      <h1>Калькулятор</h1>
-      <p class="lede">${bound ? `Комната «${r.name}»` : 'Нет комнаты — после Save откроется bind'} · ${state.sync==='offline'?'<span class="badge warn">offline</span>':'<span class="badge ok">online</span>'}</p>
-      <div class="panel">
-        <div class="field"><label>Площадь, м²</label><input id="areaInput" type="number" min="1" value="${draft?.area || 18}"></div>
-        <div class="field"><label>Тип сохранения</label>
-          <select id="calcType"><option value="preliminary">Предварительный ориентир</option><option value="detailed">Со схемой (detailed)</option></select>
-        </div>
-        <div class="scheme-box" id="schemePreview">Превью ${draft?.type==='detailed'?'схемы':'площади'}</div>
-        <div class="cta-row">
-          <button class="btn" id="btnSaveCalc">Сохранить</button>
-          <button class="btn ghost" data-go="${bound?'room':'tools'}" data-project="${p.id}" data-room="${r?.id||''}">Назад</button>
-        </div>
-        <p class="muted" id="saveHint">Тексты: «Сохранено локально» vs «на сервере» различаются.</p>
-      </div>
-      ${state.calcConflict ? conflictPanel() : ''}`;
-  }
-
-  function conflictPanel() {
-    const c = state.calcConflict;
-    return `
-      <div class="panel">
-        <h2>Конфликт 409</h2>
-        <p>На сервере revision ${c.remote.rev}, локально пытались записать от ${c.expected}. Обе ветки recoverable — не LWW.</p>
-        <div class="cta-row">
-          <button class="btn" id="keepRemote">Оставить сервер</button>
-          <button class="btn secondary" id="keepLocal">Оставить локальный как новую revision</button>
-        </div>
-      </div>`;
-  }
-
-  function viewBind() {
-    const d = state.sessionDraft;
-    if (!d) return `<p>Нет draft. <button class="btn" data-go="tools">К инструментам</button></p>`;
-    return `
-      <h1>Куда сохранить?</h1>
-      <p class="lede">Тип: ${d.type} · оценка ${money(d.amount)} · draft ${d.id}</p>
-      <div class="panel">
-        <h2>Выбрать существующие</h2>
-        ${state.projects.map(p => p.rooms.map(r => `
-          <div class="row-card">
-            <div><div class="title">${p.name} / ${r.name}</div><div class="sub">rev ${r.revision}</div></div>
-            <button class="btn ghost" data-bind-existing="${p.id}:${r.id}">Сохранить сюда</button>
-          </div>`).join('')).join('')}
-      </div>
-      <div class="panel">
-        <h2>Создать проект + комнату + Deal</h2>
-        <div class="field"><label>Ярлык проекта</label><input id="newProjectName" placeholder="Напр. Кухня · Сидоровы"></div>
-        <div class="field"><label>Комната</label><input id="newRoomName" value="Основная"></div>
-        <button class="btn" id="btnCreateBind">Создать и сохранить</button>
-        <button class="btn ghost" id="btnCancelBind">Отмена (draft жив)</button>
-      </div>`;
-  }
-
-  function viewInquiry() {
-    return `
-      <h1>Новый проект</h1>
-      <p class="lede">Atomic Project+Room+Deal (A-11). Idempotency-Key демо.</p>
-      <div class="panel">
-        <div class="field"><label>Название / ярлык</label><input id="inqName" placeholder="Объект клиента"></div>
-        <div class="field"><label>Комната</label><input id="inqRoom" value="Комната 1"></div>
-        <div class="field"><label>Телефон (опц.)</label><input id="inqPhone" placeholder="+7…"></div>
-        <div class="cta-row">
-          <button class="btn" id="btnCreateInquiry">Создать</button>
-          <button class="btn ghost" data-go="home">Отмена</button>
-        </div>
-      </div>`;
-  }
-
-  function viewDeal() {
-    const p = activeProject();
-    const d = p.deal;
-    const q = d.quotes[d.quotes.length - 1];
-    return `
-      <h1>Сделка · ${p.name}</h1>
-      <p class="lede">dealId <code>${d.id}</code> · stage <strong>${d.stage}</strong>
-        ${d.paused?' · <span class="badge pause">early_paused</span>':''}
-        ${d.outcome?` · outcome ${d.outcome}`:''}
-      </p>
-      <div class="panel">
-        <h2>КП</h2>
-        <p>v${q.version} · lifecycle <strong>${q.lifecycle}</strong> · ${money(q.amount)}</p>
-        <div class="cta-row">
-          <button class="btn ghost" id="btnCopyQuote">Copy / PDF</button>
-          <button class="btn" id="btnConfirmSent" ${q.lifecycle==='sent_confirmed'?'disabled':''}>Подтвердить отправку</button>
-          <button class="btn secondary" id="btnQuoteN1">Новая версия N+1</button>
-        </div>
-        <p class="muted">Copy ≠ sent. После sent revision immutable.</p>
-      </div>
-      <div class="panel">
-        <h2>Исход / пауза</h2>
-        <div class="cta-row">
-          <button class="btn secondary" id="btnPause" ${d.paused||d.outcome?'disabled':''}>Пауза</button>
-          <button class="btn" id="btnResume" ${d.paused?'':'disabled'}>Возобновить (тот же dealId)</button>
-          <button class="btn danger" id="btnDecline" ${d.outcome?'disabled':''}>Отказ (closed)</button>
-          <button class="btn" id="btnAccept" ${q.lifecycle!=='sent_confirmed'||d.outcome?'disabled':''}>Согласился</button>
-        </div>
-        <p class="muted">Пауза не пишет closedAt. Отказ → commercial close. После монтажа ordered — отдельный A-06 close.</p>
-      </div>
-      <div class="panel">
-        <h2>roomAssent</h2>
-        ${p.rooms.map(r => `<p>${r.name}: <strong>${d.assent[r.id] ?? '—'}</strong></p>`).join('')}
-      </div>
-      <button class="btn ghost" data-go="project" data-project="${p.id}">← Проект</button>`;
-  }
-
-  function viewInstall() {
-    const c = state.checklist;
-    return `
-      <h1>Монтаж · Кабинет</h1>
-      <p class="lede">Петровы · ordered + tech-ready. Суммы КП скрыты.</p>
-      <div class="scheme-box">Схема раскладки (help)</div>
-      <div class="panel">
-        <h2>Чек-лист</h2>
-        ${[['scheme','Схема сверена'],['materials','Материалы на объекте'],['hangers','Крепления'],['finish','Финиш / уборка']].map(([k,l]) =>
-          `<label class="row-card"><span>${l}</span><input type="checkbox" data-check="${k}" ${c[k]?'checked':''}></label>`
-        ).join('')}
-        <div class="cta-row">
-          <button class="btn" id="btnCloseRoom">Закрыть комнату</button>
-          <button class="btn danger" id="btnBlocker">Зафиксировать препятствие</button>
-        </div>
-        ${state.blocker?`<p class="badge danger">Blocker: ${state.blocker}</p>`:''}
-      </div>`;
-  }
-
-  function viewAcademy() {
-    const a = state.academy;
-    const lines = academyLines(a);
-    return `
-      <h1>Академия · Предложить MultiFrame</h1>
-      <p class="lede">context: training · не пишет Deal. Эталон Anna (D9 §4.2.1).</p>
-      <div class="chat">${lines}</div>
-      ${a.ended ? `<div class="panel"><h2>Score: ${a.score}</h2><p>${a.feedback}</p>
-        <button class="btn" id="btnAcademyRetry">Пройти снова</button></div>` :
-        `<div class="choices panel">${academyChoices(a.node).map((c,i)=>
-          `<button class="btn secondary" data-academy="${c.id}">${c.text}</button>`).join('')}</div>`}`;
-  }
-
-  function academyLines(a) {
-    const map = {
-      N0: ['Anna: Здравствуйте, нужен натяжной в спальню, хочется побыстрее.'],
-      N1: ['Anna: Соседи иногда слышны, но я за красотой пришла.'],
-      N2: ['Anna: И что дальше, если мне это подойдёт?'],
-      FailFast: ['Anna: −35 дБ гарантированно? Звучит как реклама.'],
-      OfferOk: ['Система: OfferOk — мягкий next step зафиксирован.'],
-    };
-    let html = '';
-    const path = a.path;
-    // reconstruct simple
-    html += `<div class="bubble npc">${map.N0[0]}</div>`;
-    path.forEach((step) => {
-      html += `<div class="bubble me">${step.player}</div>`;
-      if (map[step.to]) html += `<div class="bubble npc">${map[step.to][0]}</div>`;
-    });
-    return html;
-  }
-
-  function academyChoices(node) {
-    const tree = {
-      N0: [
-        { id: 'P0b', text: 'Расскажите про комнату: соседи сверху, что беспокоит?', to: 'N1', player: 'Расскажите про комнату…' },
-        { id: 'P1b_early', text: 'Гарантируем −35 дБ и полную тишину.', to: 'FailFast', player: 'Гарантируем −35 дБ…', fail: true },
-      ],
-      N1: [
-        { id: 'P1a', text: 'Под натяжным — каркас MultiFrame. Разберём зачем, без покупки сейчас.', to: 'N2', player: 'Под натяжным можно поставить каркас…' },
-        { id: 'P1b', text: 'Гарантируем −35 дБ и полную тишину.', to: 'FailFast', player: 'Гарантируем −35 дБ…', fail: true },
-      ],
-      N2: [
-        { id: 'P2a', text: 'Могу открыть проблемомер и дать ориентир по площади — без обязательства.', to: 'OfferOk', player: 'Могу открыть проблемомер…', win: true },
-      ],
-    };
-    return tree[node] || [];
-  }
-
-  function viewPartner() {
-    const org = state.params?.org || 'Потолки Север';
-    return `
-      <h1>PartnerCard · ${org}</h1>
-      <p class="lede">Сигнал → диагностика → intervention. Без списка ФИО клиентов.</p>
-      <div class="panel">
-        <p><span class="badge warn">funnel_stall</span> stop на quote_sent_confirmed · N=8 · confidence reliable</p>
-        <p><span class="badge pause">paused_followup</span> отдельно от lost count</p>
-        <p class="muted">Offer rate: 3/8 = 38% · «среди консультаций в приложении; офлайн не входят»</p>
-      </div>
-      <div class="cta-row">
-        <button class="btn" id="btnIntervention">Создать intervention</button>
-        <button class="btn ghost" data-go="home">← Сигналы</button>
-      </div>`;
-  }
-
-  function viewAnalytics() {
-    return `
-      <h1>Аналитика</h1>
-      <div class="panel">
-        <p>Конверсия = accepted по dealId</p>
-        <p>Early loss = только early_declined / declined</p>
-        <p>Consultation N = distinct consultationSessionId (сейчас демо: ${state.consultationSessionId?1:0}, tool opens в session: ${state.toolOpensInSession})</p>
-        <p class="badge warn">Coverage warning активен</p>
-      </div>
-      <p class="muted">Обучение — отдельный срез, не на этом виджете.</p>`;
-  }
-
-  function viewStaff() {
-    return `
-      <h1>Сотрудники</h1>
-      <div class="panel">
-        <div class="row-card"><div><div class="title">Мария · sales</div><div class="sub">active</div></div></div>
-        <div class="row-card"><div><div class="title">Олег · measurer</div><div class="sub">active</div></div></div>
-      </div>
-      <p class="muted">${state.role==='sales'?'Sales: только assign, без create.':'Owner: create/reset credentials.'}</p>
-      ${state.role==='owner'?`<button class="btn secondary" id="btnFakeStaff">Добавить (демо)</button>`:
-        `<button class="btn secondary" disabled title="403">Добавить (403)</button>`}`;
-  }
-
-  function money(n) {
-    if (n == null) return '—';
-    return new Intl.NumberFormat('ru-RU').format(n) + ' ₽';
-  }
-
-  /* ---------- Actions ---------- */
-  function saveCalc() {
-    const type = document.getElementById('calcType').value;
-    const area = Number(document.getElementById('areaInput').value || 0);
-    if (area <= 0) { toast('Укажите площадь > 0'); return; }
-    const amount = type === 'detailed' ? Math.round(area * 3200) : Math.round(area * 2600);
-    const p = activeProject();
-    const roomId = state.params?.roomId;
-    const room = p.rooms.find(r => r.id === roomId);
-
-    if (!room) {
-      state.sessionDraft = { id: uid('dr_'), type, area, amount, expectedRevision: 0 };
-      startConsultSession();
-      save();
-      toast(state.sync === 'offline' ? 'Сохранено локально — нужен bind' : 'Черновик готов — привяжите комнату');
-      go('bind');
-      return;
-    }
-
-    // optimistic concurrency demo: if offline then online with stale expected
-    const expected = room.revision;
-    if (state.params?.forceConflict || (room.revision >= 1 && state.sync === 'online' && state.params?.simulateConflict)) {
-      state.calcConflict = {
-        roomId: room.id, projectId: p.id, expected,
-        local: { type, amount, area },
-        remote: { rev: room.revision, type: room.detailed ? 'detailed' : 'preliminary', amount: room.detailed ?? room.prelim },
-      };
-      save(); toast('409 Conflict — сравните версии'); render(); return;
-    }
-
-    applyCalcSave(p, room, type, amount, area, expected);
-  }
-
-  function applyCalcSave(p, room, type, amount, area, expected) {
-    if (expected !== room.revision) {
-      state.calcConflict = {
-        roomId: room.id, projectId: p.id, expected,
-        local: { type, amount, area },
-        remote: { rev: room.revision, amount: room.detailed ?? room.prelim },
-      };
-      save(); toast('409 Conflict'); render(); return;
-    }
-    room.revision += 1;
-    room.history.push({ rev: room.revision, type, amount, at: Date.now() });
-    if (type === 'detailed') { room.detailed = amount; room.status = 'tech_ready'; }
-    else { room.prelim = amount; if (room.status === 'draft') room.status = 'measured'; }
-    // A-09 hybrid stage
-    if (!p.deal.paused && !p.deal.outcome && ['contact','offered','assessed'].includes(p.deal.stage)) {
-      p.deal.stage = 'calculated';
-    }
-    state.sessionDraft = null;
-    state.calcConflict = null;
-    save();
-    toast(state.sync === 'offline' ? 'Сохранено локально — отправим при связи' : 'Сохранено на сервере');
-    go('room', { projectId: p.id, roomId: room.id });
-  }
-
-  function bindExisting(projectId, roomId) {
-    const p = state.projects.find(x => x.id === projectId);
-    const r = p.rooms.find(x => x.id === roomId);
-    const d = state.sessionDraft;
-    applyCalcSave(p, r, d.type, d.amount, d.area, r.revision);
-  }
-
-  function bindCreate() {
-    const name = document.getElementById('newProjectName').value.trim();
-    const roomName = document.getElementById('newRoomName').value.trim();
-    if (!name || !roomName) { toast('Нужны ярлык проекта и комната'); return; }
-    const d = state.sessionDraft;
-    const p = {
-      id: uid('p'), name, client: 'Быстрый клиент',
-      rooms: [{ id: uid('r'), name: roomName, status: 'draft', prelim: null, detailed: null, revision: 0, history: [] }],
-      deal: { id: uid('d'), stage: 'contact', outcome: null, paused: false, quotes: [], assent: {} },
-    };
-    state.projects.unshift(p);
-    applyCalcSave(p, p.rooms[0], d.type, d.amount, d.area, 0);
-    toast('Созданы проект, комната и сделка (atomic)');
-  }
-
-  function createInquiry() {
-    const name = document.getElementById('inqName').value.trim();
-    const room = document.getElementById('inqRoom').value.trim() || 'Комната 1';
-    if (!name) { toast('Укажите название'); return; }
-    const key = 'inq_' + name;
-    if (state._lastInqKey === key) { toast('Idempotent: тот же triple ids'); go('project', { projectId: state._lastInqId }); return; }
-    const p = {
-      id: uid('p'), name, client: name,
-      rooms: [{ id: uid('r'), name: room, status: 'draft', prelim: null, detailed: null, revision: 0, history: [] }],
-      deal: { id: uid('d'), stage: 'contact', outcome: null, paused: false, quotes: [{ id: uid('q'), version: 1, lifecycle: 'created', amount: 0 }], assent: {} },
-    };
-    p.deal.assent[p.rooms[0].id] = null;
-    state.projects.unshift(p);
-    state._lastInqKey = key;
-    state._lastInqId = p.id;
-    save(); toast('Проект + комната + Deal созданы');
-    go('project', { projectId: p.id });
-  }
-
-  /* ---------- Render ---------- */
   function render() {
-    const root = document.getElementById('app');
-    if (!state.role) {
-      root.innerHTML = viewLogin();
-      root.querySelectorAll('[data-role]').forEach((b) => b.addEventListener('click', () => setRole(b.dataset.role)));
-      renderToastOnly();
+    const { parts, params } = parseHash();
+    const st = MFStore.get();
+    let html = "";
+
+    try {
+      if (!parts.length || parts[0] === "login") {
+        html = MFViews.login();
+      } else if (!st.role) {
+        location.hash = "#/login";
+        return;
+      } else {
+        const [zone, screen, a, b] = parts;
+        if (zone === "sales") {
+          if (!requireRole("sales")) return;
+          if (screen === "home") html = MFViews.salesHome();
+          else if (screen === "inquiry") html = MFViews.salesInquiry();
+          else if (screen === "quick") html = MFViews.salesQuick();
+          else if (screen === "pm-quick") html = MFViews.salesPmQuick();
+          else if (screen === "calc-quick") html = MFViews.salesCalcQuick();
+          else if (screen === "bind") html = MFViews.salesBind();
+          else if (screen === "projects") html = MFViews.salesProjects();
+          else if (screen === "project") html = MFViews.salesProject(a, params.tab);
+          else if (screen === "room") html = MFViews.salesRoom(a, b);
+          else if (screen === "calc") html = MFViews.salesCalc(a, b, params.kind);
+          else if (screen === "analytics") html = MFViews.salesAnalytics();
+          else if (screen === "academy-hub") html = MFViews.salesAcademyHub();
+          else if (screen === "academy") html = MFViews.salesAcademy();
+          else html = MFViews.salesHome();
+        } else if (zone === "measurer") {
+          if (!requireRole("measurer")) return;
+          if (screen === "home") html = MFViews.measurerHome();
+          else if (screen === "projects") html = MFViews.measurerProjects();
+          else if (screen === "room") html = MFViews.measurerRoom(a, b);
+          else if (screen === "calc") html = MFViews.measurerCalc(a, b);
+          else html = MFViews.measurerHome();
+        } else if (zone === "crew") {
+          if (!requireRole("crew")) return;
+          if (screen === "install") html = MFViews.crewInstall(a, b);
+          else html = MFViews.crewHome();
+        } else if (zone === "owner") {
+          if (!requireRole("owner")) return;
+          if (screen === "home") html = MFViews.ownerHome();
+          else if (screen === "projects") html = MFViews.ownerProjects();
+          else if (screen === "project") html = MFViews.ownerProject(a);
+          else if (screen === "assign") html = MFViews.ownerAssign(a, b);
+          else if (screen === "staff") html = MFViews.ownerStaff();
+          else html = MFViews.ownerHome();
+        } else if (zone === "admin") {
+          if (!requireRole("admin")) return;
+          if (screen === "home") html = MFViews.adminHome();
+          else if (screen === "partners") html = MFViews.adminPartners();
+          else if (screen === "partner") html = MFViews.adminPartner(a);
+          else if (screen === "analytics") html = MFViews.adminAnalytics();
+          else if (screen === "training") html = MFViews.adminTraining();
+          else html = MFViews.adminHome();
+        } else {
+          html = MFViews.errorView("Неизвестный маршрут");
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      html = MFViews.errorView(e.message || "render failed");
+    }
+
+    root().innerHTML = html;
+    bindGlobal();
+  }
+
+  function openSheet(dealId, mode) {
+    const host = document.getElementById("deal-sheet");
+    if (!host) return;
+    const title = mode === "pause" ? "Пауза сделки" : "Отказ (early decline)";
+    host.innerHTML = `
+      <div class="modal-back" data-action="close-sheet">
+        <div class="modal" onclick="event.stopPropagation()">
+          <h3>${title}</h3>
+          <p class="muted">${
+            mode === "pause"
+              ? "Нетерминально: Deal остаётся active, resume на тот же этап."
+              : "Терминально: Deal закрывается, reopen запрещён."
+          }</p>
+          <div class="field"><label>Причина (обязательно)</label>
+            <input id="sheet-reason" placeholder="Почему…" value="${
+              mode === "pause" ? "Клиент уехал на 2 недели" : "Выбрали другого подрядчика"
+            }">
+          </div>
+          <div class="row">
+            <button class="btn ghost" data-action="close-sheet">Отмена</button>
+            <button class="btn ${mode === "pause" ? "primary" : "danger"}" data-action="confirm-sheet" data-mode="${mode}" data-deal="${dealId}">
+              ${mode === "pause" ? "Поставить на паузу" : "Зафиксировать отказ"}
+            </button>
+          </div>
+        </div>
+      </div>`;
+    bindGlobal();
+  }
+
+  function bindGlobal() {
+    document.querySelectorAll("[data-action]").forEach((el) => {
+      el.addEventListener("click", onAction);
+    });
+    // checkbox change
+    document.querySelectorAll('input[data-action="toggle-check"]').forEach((el) => {
+      el.addEventListener("change", onAction);
+    });
+    document.querySelectorAll('input[data-action="na-reason"]').forEach((el) => {
+      el.addEventListener("change", onAction);
+    });
+  }
+
+  function onAction(ev) {
+    const el = ev.currentTarget;
+    const action = el.getAttribute("data-action");
+    if (!action) return;
+
+    if (action === "login") {
+      MFStore.setRole(el.getAttribute("data-role"));
+      location.hash = `#/${el.getAttribute("data-role")}/home`;
       return;
     }
-
-    const body = ({
-      home: viewHome,
-      projects: viewProjects,
-      project: viewProject,
-      room: viewRoom,
-      tools: viewTools,
-      calc: viewCalc,
-      bind: viewBind,
-      inquiry: viewInquiry,
-      deal: viewDeal,
-      install: viewInstall,
-      academy: viewAcademy,
-      partner: viewPartner,
-      analytics: viewAnalytics,
-      staff: viewStaff,
-    }[state.route] || viewHome)();
-
-    root.innerHTML = `
-      <div class="app-shell">
-        ${chrome()}
-        <div class="layout">${nav()}<main class="workspace">${body}</main></div>
-      </div>
-      <div class="toast ${state.toast?'show':''}" id="toast">${state.toast||''}</div>`;
-
-    wire();
-  }
-
-  function renderToastOnly() {
-    let t = document.getElementById('toast');
-    if (!t) {
-      t = document.createElement('div');
-      t.id = 'toast';
-      t.className = 'toast';
-      document.body.appendChild(t);
+    if (action === "logout") {
+      MFStore.setRole(null);
+      location.hash = "#/login";
+      return;
     }
-    t.textContent = state.toast || '';
-    t.classList.toggle('show', !!state.toast);
-  }
-
-  function wire() {
-    document.getElementById('btnLogout')?.addEventListener('click', () => { state.role = null; save(); render(); });
-    document.getElementById('btnReset')?.addEventListener('click', () => { localStorage.removeItem(STORAGE); state = defaultState(); render(); toast('Демо сброшено'); });
-    document.getElementById('syncSelect')?.addEventListener('change', (e) => { state.sync = e.target.value; save(); toast('Sync: '+state.sync); });
-
-    document.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => go(b.dataset.nav)));
-    document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
-      const params = {};
-      if (b.dataset.project) params.projectId = b.dataset.project;
-      if (b.dataset.room) params.roomId = b.dataset.room;
-      if (b.dataset.org) params.org = b.dataset.org;
-      if (b.dataset.intent) { startConsultSession(); }
-      go(b.dataset.go, params);
-    }));
-
-    document.getElementById('btnOpenPm')?.addEventListener('click', () => {
-      startConsultSession();
-      state.sessionDraft = { id: uid('dr_'), type: 'preliminary', area: 16, amount: 41600, expectedRevision: 0, from: 'pm' };
-      save(); toast('PM result в draft · opens='+state.toolOpensInSession); go('bind');
-    });
-    document.getElementById('btnOpenCalcQuick')?.addEventListener('click', () => {
-      startConsultSession();
-      go('calc', {});
-    });
-    document.getElementById('btnSaveCalc')?.addEventListener('click', saveCalc);
-    document.getElementById('btnCancelBind')?.addEventListener('click', () => { toast('Draft сохранён локально'); go('tools'); });
-    document.getElementById('btnCreateBind')?.addEventListener('click', bindCreate);
-    document.querySelectorAll('[data-bind-existing]').forEach((b) => b.addEventListener('click', () => {
-      const [p,r] = b.dataset.bindExisting.split(':'); bindExisting(p,r);
-    }));
-    document.getElementById('btnCreateInquiry')?.addEventListener('click', createInquiry);
-
-    document.getElementById('btnCopyQuote')?.addEventListener('click', () => toast('Скопировано / PDF готов — это ещё не «КП отправлено»'));
-    document.getElementById('btnConfirmSent')?.addEventListener('click', () => {
-      const d = activeProject().deal; const q = d.quotes.at(-1);
-      q.lifecycle = 'sent_confirmed'; d.stage = 'quote_sent_confirmed'; save(); toast('Отправка подтверждена'); render();
-    });
-    document.getElementById('btnQuoteN1')?.addEventListener('click', () => {
-      const d = activeProject().deal; const prev = d.quotes.at(-1);
-      d.quotes.push({ id: uid('q'), version: prev.version+1, lifecycle: 'created', amount: prev.amount });
-      save(); toast('Новая версия КП на том же dealId'); render();
-    });
-    document.getElementById('btnPause')?.addEventListener('click', () => {
-      const d = activeProject().deal;
-      d.paused = true; d.stageAtOutcome = d.stage; d.outcome = 'early_paused';
-      save(); toast('Сделка на паузе — можно возобновить · dealId '+d.id); render();
-    });
-    document.getElementById('btnResume')?.addEventListener('click', () => {
-      const d = activeProject().deal; const id = d.id;
-      d.paused = false; d.outcome = null; d.stage = d.stageAtOutcome || 'calculated';
-      save(); toast('Возобновлено · тот же dealId '+id); render();
-    });
-    document.getElementById('btnDecline')?.addEventListener('click', () => {
-      const d = activeProject().deal;
-      d.paused = false; d.outcome = 'early_declined'; d.stage = 'closed'; d.closedAt = Date.now();
-      save(); toast('Сделка закрыта отказом (commercial close)'); render();
-    });
-    document.getElementById('btnAccept')?.addEventListener('click', () => {
-      const p = activeProject(); const d = p.deal;
-      d.outcome = 'accepted';
-      p.rooms.forEach((r,i) => { d.assent[r.id] = i===0 ? 'ordered' : 'deferred'; });
-      save(); toast('accepted + roomAssent'); render();
-    });
-
-    document.querySelectorAll('[data-check]').forEach((c) => c.addEventListener('change', () => {
-      state.checklist[c.dataset.check] = c.checked; save();
-    }));
-    document.getElementById('btnCloseRoom')?.addEventListener('click', () => {
-      const vals = Object.values(state.checklist);
-      if (state.blocker) { toast('Open blocker блокирует closed'); return; }
-      if (vals.some(v => !v)) { toast('Чек-лист неполный'); return; }
-      toast('Комната closed · Deal не авто-closed (A-06)');
-    });
-    document.getElementById('btnBlocker')?.addEventListener('click', () => {
-      state.blocker = 'no_materials'; save(); toast('Blocker зафиксирован'); render();
-    });
-
-    document.querySelectorAll('[data-academy]').forEach((b) => b.addEventListener('click', () => {
-      const node = state.academy.node;
-      const choice = academyChoices(node).find(c => c.id === b.dataset.academy);
-      if (!choice) return;
-      state.academy.path.push({ player: choice.player, to: choice.to, id: choice.id });
-      state.academy.node = choice.to;
-      if (choice.fail) {
-        state.academy.ended = true; state.academy.score = 11;
-        state.academy.feedback = 'Ложное обещание «гарантированной тишины / −35 дБ» недопустимо (Path F).';
-      } else if (choice.win) {
-        state.academy.ended = true; state.academy.score = 88;
-        state.academy.feedback = 'Выяснили контекст до оффера; мягкий next step (Path S). context:training ∉ KPI.';
+    if (action === "reset") {
+      if (confirm("Сбросить все демо-данные прототипа?")) {
+        MFStore.resetAll();
+        location.hash = "#/login";
+        toast("Сброшено", "Демо-данные восстановлены", "ok");
       }
-      save(); render();
-    }));
-    document.getElementById('btnAcademyRetry')?.addEventListener('click', () => {
-      state.academy = { node: 'N0', path: [], score: null, ended: false }; save(); render();
-    });
-
-    document.getElementById('btnIntervention')?.addEventListener('click', () => toast('Intervention создан · reviewAt +14д'));
-    document.getElementById('btnFakeStaff')?.addEventListener('click', () => toast('One-time password показан один раз (демо)'));
-
-    document.getElementById('keepRemote')?.addEventListener('click', () => {
-      state.calcConflict = null; save(); toast('Оставили серверную revision'); go('room', { projectId: activeProject().id, roomId: state.params?.roomId || 'r1' });
-    });
-    document.getElementById('keepLocal')?.addEventListener('click', () => {
-      const c = state.calcConflict; const p = state.projects.find(x => x.id === c.projectId);
-      const r = p.rooms.find(x => x.id === c.roomId);
-      // append as new rev on top of remote
-      applyCalcSave(p, r, c.local.type, c.local.amount, c.local.area, r.revision);
-    });
-
-    // Dirty leave confirm for calc
-    document.querySelectorAll('[data-go]').forEach((b) => {
-      if (state.route !== 'calc') return;
-      b.addEventListener('click', (e) => {
-        if (b.id === 'btnSaveCalc') return;
-        if (!confirm('Есть несохранённый черновик. Уйти?')) e.stopImmediatePropagation();
-      }, true);
-    });
+      return;
+    }
+    if (action === "toggle-offline") {
+      MFStore.setOffline(!MFStore.get().offline);
+      toast(MFStore.get().offline ? "Офлайн" : "Онлайн", MFStore.get().offline ? "Создание/bind блокируются" : "Синхронизация ок", "warn");
+      render();
+      return;
+    }
+    if (action === "goto") {
+      location.hash = el.getAttribute("data-href");
+      return;
+    }
+    if (action === "create-inquiry") {
+      const res = MFStore.createInquiry({
+        client: document.getElementById("inq-client").value,
+        address: document.getElementById("inq-addr").value,
+        roomName: document.getElementById("inq-room").value,
+        areaM2: document.getElementById("inq-area").value,
+      });
+      if (!res.ok) {
+        toast("Не создано", res.error === "offline" ? "Офлайн — подождите reconnect" : "Ошибка", "danger");
+        return;
+      }
+      toast("Проект создан", `Deal ${res.dealId}`, "ok");
+      location.hash = `#/sales/project/${res.projectId}`;
+      return;
+    }
+    if (action === "start-quick") {
+      MFStore.startQuickConsultation();
+      toast("Консультация", "consultationSessionId выдан", "ok");
+      render();
+      return;
+    }
+    if (action === "save-quick-fields") {
+      const d = MFStore.get().sessionDraft;
+      d.areaM2 = Number(document.getElementById("q-area").value) || d.areaM2;
+      d.segment = document.getElementById("q-seg").value;
+      d.noise = document.getElementById("q-noise").value;
+      MFStore.save();
+      toast("Черновик", "Обновлён", "ok");
+      render();
+      return;
+    }
+    if (action === "offer-mf") {
+      const res = MFStore.markMultiframeOffered();
+      toast("multiframe_offered", `session ${res.consultationSessionId} · без dealId`, "ok");
+      render();
+      return;
+    }
+    if (action === "pm-done") {
+      MFStore.finishPmOnDraft();
+      toast("PM", "Оценка зафиксирована", "ok");
+      location.hash = "#/sales/calc-quick";
+      return;
+    }
+    if (action === "calc-done") {
+      MFStore.finishCalcOnDraft(Number(el.getAttribute("data-amount")));
+      toast("Ориентир в черновике", "Теперь привяжите к проекту", "ok");
+      location.hash = "#/sales/bind";
+      return;
+    }
+    if (action === "do-bind") {
+      const res = MFStore.bindDraft({
+        projectName: document.getElementById("bind-proj").value,
+        roomName: document.getElementById("bind-room").value,
+        client: document.getElementById("bind-client").value,
+      });
+      if (!res.ok) {
+        toast("Bind не выполнен", res.error === "offline" ? "Офлайн" : res.error, "danger");
+        return;
+      }
+      toast("Привязано", `project ${res.projectId} · deal ${res.dealId}`, "ok");
+      location.hash = `#/sales/project/${res.projectId}?tab=deal`;
+      return;
+    }
+    if (action === "save-room-calc") {
+      const pid = el.getAttribute("data-pid");
+      const rid = el.getAttribute("data-rid");
+      const kind = el.getAttribute("data-kind");
+      const amount = Number(el.getAttribute("data-amount"));
+      const res = MFStore.saveCalcToRoom(pid, rid, kind, amount);
+      toast("Сохранено", `${kind} · ${res.revisionId}`, "ok");
+      const back = el.getAttribute("data-back");
+      location.hash = back || `#/sales/room/${pid}/${rid}`;
+      return;
+    }
+    if (action === "create-quote") {
+      const res = MFStore.createQuote(el.getAttribute("data-deal"));
+      if (!res.ok) toast("КП", "Не создано", "danger");
+      else toast("КП создано", res.revisionId, "ok");
+      render();
+      return;
+    }
+    if (action === "quote-copy" || action === "quote-pdf") {
+      const mode = action === "quote-pdf" ? "pdf" : "copy";
+      const res = MFStore.shareQuote(el.getAttribute("data-qid"), mode);
+      toast(res.message || "Готово", "Статус КП не изменился (≠ sent)", "ok");
+      return;
+    }
+    if (action === "quote-confirm") {
+      const res = MFStore.confirmSent(el.getAttribute("data-qid"));
+      if (!res.ok) toast("Уже подтверждено", "", "warn");
+      else toast("Отправка подтверждена", "lifecycle → sent_confirmed", "ok");
+      render();
+      return;
+    }
+    if (action === "open-pause") {
+      openSheet(el.getAttribute("data-deal"), "pause");
+      return;
+    }
+    if (action === "open-decline") {
+      openSheet(el.getAttribute("data-deal"), "decline");
+      return;
+    }
+    if (action === "close-sheet") {
+      const host = document.getElementById("deal-sheet");
+      if (host) host.innerHTML = "";
+      return;
+    }
+    if (action === "confirm-sheet") {
+      const mode = el.getAttribute("data-mode");
+      const dealId = el.getAttribute("data-deal");
+      const reason = document.getElementById("sheet-reason").value;
+      const res = mode === "pause" ? MFStore.pauseDeal(dealId, reason) : MFStore.declineDeal(dealId, reason);
+      if (!res.ok) {
+        toast("Нужна причина", "", "danger");
+        return;
+      }
+      toast(mode === "pause" ? "На паузе" : "Отказ зафиксирован", dealId, "ok");
+      render();
+      return;
+    }
+    if (action === "resume-deal") {
+      const res = MFStore.resumeDeal(el.getAttribute("data-deal"));
+      toast("Возобновлено", `Тот же dealId · этап «${res.stage}»`, "ok");
+      render();
+      return;
+    }
+    if (action === "accept-deal") {
+      MFStore.acceptDeal(el.getAttribute("data-deal"));
+      toast("Принято", "roomAssent → ordered где есть расчёт", "ok");
+      render();
+      return;
+    }
+    if (action === "academy-choice") {
+      const st = MFStore.get();
+      const node = el.getAttribute("data-node");
+      const text = el.getAttribute("data-text");
+      const next = el.getAttribute("data-next");
+      st.ui.academyPath = st.ui.academyPath || [];
+      st.ui.academyPath.push({ node, text });
+      st.ui.academyNode = next;
+      if (MFViews.ANNA[next]?.end) st.ui.academyDone = next;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "academy-reset") {
+      const st = MFStore.get();
+      st.ui.academyNode = "N0";
+      st.ui.academyPath = [];
+      st.ui.academyDone = null;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "install-tab") {
+      MFStore.get().ui.installMode = el.getAttribute("data-tab");
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "toggle-check") {
+      MFStore.toggleChecklist(el.getAttribute("data-pid"), el.getAttribute("data-rid"), el.getAttribute("data-cid"), {
+        done: el.checked,
+        na: false,
+      });
+      return;
+    }
+    if (action === "mark-na") {
+      const reason = prompt("Причина N/A", "Не применимо на объекте") || "";
+      MFStore.toggleChecklist(el.getAttribute("data-pid"), el.getAttribute("data-rid"), el.getAttribute("data-cid"), {
+        done: false,
+        na: true,
+        reason,
+      });
+      render();
+      return;
+    }
+    if (action === "na-reason") {
+      MFStore.toggleChecklist(el.getAttribute("data-pid"), el.getAttribute("data-rid"), el.getAttribute("data-cid"), {
+        reason: el.value,
+        na: !!el.value.trim(),
+      });
+      return;
+    }
+    if (action === "set-blocker") {
+      MFStore.setBlocker(
+        el.getAttribute("data-pid"),
+        el.getAttribute("data-rid"),
+        document.getElementById("blk-type").value,
+        document.getElementById("blk-note").value
+      );
+      toast("Blocker", "Закрытие комнаты заблокировано", "warn");
+      MFStore.get().ui.installMode = "checklist";
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "clear-blocker") {
+      MFStore.clearBlocker(el.getAttribute("data-pid"), el.getAttribute("data-rid"));
+      toast("Blocker снят", "", "ok");
+      render();
+      return;
+    }
+    if (action === "close-install") {
+      const res = MFStore.tryCloseInstall(el.getAttribute("data-pid"), el.getAttribute("data-rid"));
+      if (!res.ok) {
+        toast(
+          "Нельзя закрыть",
+          res.error === "blocker" ? "Открыт blocker" : "Чек-лист неполный",
+          "danger"
+        );
+        return;
+      }
+      toast("Комната закрыта", "Checklist выполнен", "ok");
+      location.hash = "#/crew/home";
+      return;
+    }
+    if (action === "save-assign") {
+      const pid = el.getAttribute("data-pid");
+      const rid = el.getAttribute("data-rid");
+      MFStore.assignRoom(pid, rid, "assigneeMeasurer", document.getElementById("asg-m").value || null);
+      MFStore.assignRoom(pid, rid, "assigneeCrew", document.getElementById("asg-c").value || null);
+      MFStore.setMaterials(pid, rid, document.getElementById("asg-mat").checked);
+      // clear assign inbox item
+      MFStore.get().ownerInbox = MFStore.get().ownerInbox.filter(
+        (i) => !(i.kind === "assign" && i.roomId === rid)
+      );
+      MFStore.save();
+      toast("Назначение сохранено", "", "ok");
+      location.hash = "#/owner/home";
+      return;
+    }
+    if (action === "admin-step") {
+      MFStore.get().ui.adminStep = el.getAttribute("data-step");
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "create-intervention") {
+      const partnerId = el.getAttribute("data-partner");
+      const existing = MFStore.get().partners.find((p) => p.id === partnerId)?.intervention;
+      if (existing) {
+        MFStore.get().ui.adminStep = "intervene";
+        MFStore.save();
+        render();
+        return;
+      }
+      const hyp = document.getElementById("hyp")?.value || "Stall follow-up";
+      const res = MFStore.createIntervention(partnerId, hyp, "quote_followup");
+      toast("Intervention", res.id, "ok");
+      MFStore.get().ui.adminStep = "intervene";
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "verify-int") {
+      MFStore.verifyIntervention(el.getAttribute("data-iid"), el.getAttribute("data-result"));
+      toast("Verify", el.getAttribute("data-result"), "ok");
+      render();
+      return;
+    }
   }
 
-  document.addEventListener('DOMContentLoaded', render);
+  window.addEventListener("hashchange", render);
+  window.addEventListener("DOMContentLoaded", () => {
+    if (!location.hash) location.hash = "#/login";
+    render();
+  });
 })();

@@ -1,6 +1,6 @@
 # Gate B self-review — rev-gate-b-final-candidate
 
-**Status:** Gate B **APPROVED** 2026-10-23 (owner) · expert PASS on `d57ac530` · C1–C4 closed
+**Status:** APPROVED 2026-10-23 · responds to ChatGPT C1–C4 on SHA `347b392`
 
 | # | Check | Result | Evidence |
 |---|--------|--------|----------|
@@ -10,8 +10,8 @@
 | C4 | consultationSessionId dedupe; multi-open → +1 | **PASS** | D10 §3.3; AC-D10-12 |
 | Prior GB-P0/P1 | Still held from draft-2 | **PASS** | changelog draft-1→2 |
 | Assumptions | Not silently approved | **PASS** | decisions-for-owner |
-| No Gate C / code | Docs only | **PASS** | |
+| No product code | Docs + later isolated prototypes only | **PASS** | no `apps/*` |
 
-## Residual owner
+## Owner residual after 2026-10-23
 
-A-06, A-09, A-11, A-12, pause, migration assent, A-05, A-07, A-28 — **proposed**.
+Six decisions **approved**. Still open (not in OK): **A-05**, **A-07**, **A-28**.

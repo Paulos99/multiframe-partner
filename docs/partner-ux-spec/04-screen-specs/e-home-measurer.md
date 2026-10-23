@@ -1,6 +1,6 @@
 # E-home-measurer — Home замерщика
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23** · aliases: часть `E-home`
+**Revision:** `rev-gate-b-draft-2` · **Gate B · APPROVED 2026-10-23** · aliases: часть `E-home`
 
 ## Кто / зачем
 Measurer: найти назначенную комнату, сделать detailed, сохранить и вернуться.

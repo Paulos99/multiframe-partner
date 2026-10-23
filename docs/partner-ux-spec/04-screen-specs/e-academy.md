@@ -1,6 +1,6 @@
 # E-academy-hub — Академия (хаб)
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23** · alias: `E-academy`  
+**Revision:** `rev-gate-b-draft-2` · **Gate B · APPROVED 2026-10-23** · alias: `E-academy`  
 **Зависит от:** [D3](../03-information-architecture.md), [D9](../09-academy.md)
 
 ## Кто

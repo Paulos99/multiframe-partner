@@ -3,7 +3,7 @@
 **Revision:** `rev-gate-b-final-candidate`  
 **ID:** D11  
 **Зависит от:** D2–D10 (сценарии, IA, коммерция, академия, StP); SoT Gate A: ADR-001…008  
-**Статус:** Gate B **APPROVED** 2026-10-23 · §7 UX usability → наблюдения в Gate C прототипах (не production)
+**Статус:** final-candidate · Gate B **APPROVED 2026-10-23** · Gate C AUTHORIZED (прототипы ≠ proof data AC; observed UX = Gate C)
 
 ---
 

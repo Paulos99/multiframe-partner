@@ -3,7 +3,7 @@
 **Revision:** `rev-gate-b-final-candidate`  
 **Дата:** 2026-10-22  
 **После:** Gate A `rev-gate-a-approved-20261022` (условно, ADR-008)  
-**Статус:** **APPROVED** владельцем 2026-10-23 · ChatGPT expert PASS. Gate C: только изолированные HTML-прототипы. Product code / merge — нет.  
+**Статус:** final-candidate · ChatGPT expert **PASS** · **APPROVED** владельцем 2026-10-23 ([запись](./gate-b-owner-approval-2026-10-23.md)). Gate C **AUTHORIZED** (изолированные HTML-прототипы) · production / Gate D **не** начаты.  
 **Ответ на:** [CHATGPT_GATE_B_REVIEW_2026-10-22.md](./CHATGPT_GATE_B_REVIEW_2026-10-22.md) + C1–C4 · [acceptance 2026-10-23](./gate-b-chatgpt-acceptance-2026-10-23.md)
 
 ---
@@ -30,17 +30,16 @@ Project→Rooms; Deal≠room; sequential dealId; Quote sent immutable; ADR-008 �
 
 ---
 
-## 3. Нужны решения владельца (не approved)
+## 3. Решения владельца
 
-Таблица: [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md)  
-Ключевые: A-06 close policy, A-09 stage hybrid, A-11 atomic create, confirm A-12 (no LWW), pause canon, migration assent.
+Шесть canonical решений (**A-06 / A-09 / A-11 / A-12 / Pause / M-assent**) — **resolved / owner-approved** 2026-10-23.  
+A-05 / A-07 / A-28 — **не** входили в утверждение (см. [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md)).
 
 ---
 
-## 4. Просьба
+## 4. Дальше
 
-1. Ревью draft-2 (ChatGPT / заказчик) по changelog.  
-2. Отметить OK/правки по owner decisions — **молчание ≠ согласование**.  
-3. Gate C / код — только после явного OK на Gate B.
+1. Gate C: изолированные прототипы в [`docs/partner-ux-prototypes/`](../partner-ux-prototypes/) · PR #78.  
+2. Gate D / `apps/*` / merge / deploy — только по отдельному OK владельца.
 
-Ссылки: [README](./README.md) · [self-review](./gate-b-self-review.md) · PR #78
+Ссылки: [README](./README.md) · [self-review](./gate-b-self-review.md) · [owner approval](./gate-b-owner-approval-2026-10-23.md) · PR #78

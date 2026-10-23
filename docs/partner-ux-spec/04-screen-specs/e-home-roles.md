@@ -1,6 +1,6 @@
 # E-home — индекс домашних экранов по ролям
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23**  
+**Revision:** `rev-gate-b-draft-2` · **Gate B · APPROVED 2026-10-23**  
 **Зависит от:** [D3](../03-information-architecture.md)
 
 Каждая роль — **отдельная спека** (GB-P0-05). Общий запрет ADR-003: не стековать Inbox + каталог + CommercialPanel + EntryPoints.

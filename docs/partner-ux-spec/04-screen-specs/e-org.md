@@ -1,6 +1,6 @@
 # E-org — Компания / прайс
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23**  
+**Revision:** `rev-gate-b-draft-2` · **Gate B · APPROVED 2026-10-23**  
 **Alias:** «Компания» в nav owner
 
 ## Кто

@@ -1,6 +1,6 @@
 # E-calc-save — Сохранение расчёта и bind (quick)
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23** · зависит от [D3](../03-information-architecture.md), [D5](../05-data-model-contracts.md), [D7](../07-calculator-ceiling.md)
+**Revision:** `rev-gate-b-draft-2` · **Gate B · APPROVED 2026-10-23** · зависит от [D3](../03-information-architecture.md), [D5](../05-data-model-contracts.md), [D7](../07-calculator-ceiling.md)
 
 ## Кто
 sales, owner, measurer.

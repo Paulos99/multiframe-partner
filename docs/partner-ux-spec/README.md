@@ -25,7 +25,7 @@
 |------|--------|----------|
 | **A** | Согласован условно (3 правки ADR-008) | `rev-gate-a-approved-20261022` |
 | **B** | **APPROVED** владельцем 2026-10-23 | `rev-gate-b-final-candidate` |
-| **C** | **AUTHORIZED**: изолированные HTML-прототипы и UX-тестирование | — |
+| **C** | **AUTHORIZED** · прототипы [`docs/partner-ux-prototypes/`](../partner-ux-prototypes/) · ready for review | isolated HTML only |
 | Код / Gate D+ | Не начат | — |
 
 ---
