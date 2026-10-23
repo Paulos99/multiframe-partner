@@ -41,7 +41,7 @@
         <div class="login-card">
           <div class="pill info" style="margin-bottom:12px">Gate C · HTML-прототип · не production</div>
           <h1><span style="color:var(--accent)">MultiFrame</span> Партнёр</h1>
-          <p class="muted">Демо-орг «Неболайн» — натяжные потолки, СПб. Выберите роль и пройдите сценарий без инструктажа.</p>
+          <p class="muted">Демо-орг «Неболайн» — натяжные потолки, СПб. Выберите роль и попробуйте сценарий — без долгого инструктажа.</p>
           <div class="role-grid">
             ${Object.values(MFStore.ROLES)
               .map(
@@ -87,7 +87,7 @@
         ["#/sales/home", "Сегодня", "①"],
         ["#/sales/projects", "Проекты", "②"],
         ["#/tools/hub", "Инстр.", "③"],
-        ["#/sales/academy", "Ещё", "④"],
+        ["#/sales/academy-hub", "Академия", "④"],
       ],
       owner: [
         ["#/owner/home", "Сегодня", "①"],
@@ -108,7 +108,7 @@
         ["#/admin/home", "Сигналы", "①"],
         ["#/admin/partners", "Партнёры", "②"],
         ["#/tools/hub", "Инстр.", "③"],
-        ["#/admin/training", "Обучение", "④"],
+        ["#/admin/training", "Тренинг", "④"],
       ],
     }[role] || [];
 
@@ -136,10 +136,10 @@
             return `<a href="${href}" class="${isActive ? "active" : ""}">${label}</a>`;
           })
           .join("")}
-        <p class="dim" style="padding:4px 12px;font-size:.72rem">Прямой доступ · без обязательного PM↔Calc · bind при Save</p>
+        <p class="dim" style="padding:4px 12px;font-size:.72rem">Открываются сами · привязка к проекту — при сохранении</p>
         <div class="nav-section">Прототип</div>
-        <button class="nav-link" data-action="reset">Сбросить демо-данные (v5)</button>
-        <button class="nav-link" data-action="toggle-loading">Demo loading</button>
+        <button class="nav-link" data-action="reset">Сбросить демо-данные</button>
+        <button class="nav-link" data-action="toggle-loading">Показать загрузку</button>
       </nav>
       <nav class="bottom-nav" aria-label="Мобильная навигация">
         ${items
@@ -159,25 +159,25 @@
       <div class="page-head">
         <div>
           <h1>Инструменты</h1>
-          <p class="sub">Владелец: проблемомер и калькулятор — самостоятельные инструменты для всех сотрудников. Вид согласован; не редизайн.</p>
+          <p class="sub">Проблемомер и калькулятор — для всей команды. Можно открыть по отдельности.</p>
         </div>
       </div>
       <div class="grid-2">
         <a class="panel" style="text-align:left;display:block;text-decoration:none;color:inherit" href="#/tools/pm">
           <h3>Проблемомер</h3>
-          <p class="muted">Анкета + Result. Без проекта и без обязательного calc.</p>
+          <p class="muted">Анкета и результат. Без проекта и без обязательного калькулятора.</p>
           <span class="btn primary sm" style="margin-top:8px">Открыть</span>
         </a>
         <a class="panel" style="text-align:left;display:block;text-decoration:none;color:inherit" href="#/tools/calc">
           <h3>Калькулятор</h3>
-          <p class="muted">Предварительный ориентир. Без обязательного PM и без проекта до Save.</p>
+          <p class="muted">Предварительный ориентир. Без обязательного проблемомера; проект — только при сохранении.</p>
           <span class="btn primary sm" style="margin-top:8px">Открыть</span>
         </a>
       </div>
-      <p class="muted" style="margin-top:14px">Привязка к проекту/комнате — только при сохранении результата (с учётом прав роли на данные).</p>
+      <p class="muted" style="margin-top:14px">К проекту и комнате привязываем только когда сохраняете результат.</p>
       ${
         S().role === "sales"
-          ? `<p class="dim">Опционально: <a href="#/sales/quick">сессия PM→Calc с переносом данных</a>.</p>`
+          ? `<p class="dim">Можно подряд: <a href="#/sales/quick">проблемомер → калькулятор с переносом ответов</a>.</p>`
           : ""
       }`
     );
@@ -217,7 +217,7 @@
         "tools/pm",
         `
       <div class="page-head">
-        <div><h1>Проблемомер · Result</h1><p class="sub">Самостоятельный инструмент · без обязательного calc</p></div>
+        <div><h1>Проблемомер · результат</h1><p class="sub">Можно без калькулятора — он не обязателен</p></div>
         <div class="page-actions">
           <button class="btn ghost" data-action="pm-resuvey">Изменить ответы</button>
           <a class="btn" href="#/tools/hub">Инструменты</a>
@@ -443,7 +443,7 @@
       <div class="page-head">
         <div>
           <h1>Сегодня</h1>
-          <p class="sub">Inbox продаж: что требует действия. Один фокус — не стек панелей.</p>
+          <p class="sub">Что сделать по сделкам сегодня. Один фокус — без кучи панелей.</p>
         </div>
         <div class="page-actions">
           <a class="btn" href="#/sales/inquiry">Новый проект</a>
@@ -493,7 +493,7 @@
       <div class="page-head">
         <div>
           <h1>Новый проект</h1>
-          <p class="sub">Атомарно: Project + Room + active Deal. Без полной карточки клиента.</p>
+          <p class="sub">Сразу: проект, первая комната и активная сделка (Deal). Полную карточку клиента не заполняем.</p>
         </div>
         <div class="page-actions"><a class="btn ghost" href="#/sales/home">Назад</a></div>
       </div>
@@ -517,20 +517,20 @@
       <div class="page-head">
         <div>
           <h1>Быстрая консультация</h1>
-          <p class="sub">GC-P0-01: выберите контрастного клиента, затем анкета PM. Шум <strong>не</strong> pre-filled.</p>
+          <p class="sub">Выберите тип клиента, затем анкета проблемомера. Жалобу на шум не подставляем заранее.</p>
         </div>
       </div>
       <div class="grid-2">
         <button class="panel" style="text-align:left;cursor:pointer" data-action="start-quick" data-persona="quiet">
           <h3>Клиент A · без жалобы на шум</h3>
-          <p class="muted">Пришёл за натяжным «побыстрее». Потребность в ЗИ формируем.</p>
+          <p class="muted">Пришёл за натяжным «побыстрее». Про звукоизоляцию ещё не думал.</p>
         </button>
         <button class="panel" style="text-align:left;cursor:pointer" data-action="start-quick" data-persona="noise">
           <h3>Клиент B · слышит соседей</h3>
-          <p class="muted">Есть сигнал о шуме — Result будет другим.</p>
+          <p class="muted">Есть сигнал о шуме — результат анкеты будет другим.</p>
         </button>
       </div>
-      <button class="btn" style="margin-top:12px" data-action="start-quick" data-persona="">Нейтральный старт (все ответы unknown)</button>`
+      <button class="btn" style="margin-top:12px" data-action="start-quick" data-persona="">Нейтральный старт</button>`
       );
     }
     return shell(
@@ -1076,13 +1076,13 @@
     return shell(
       "sales/analytics",
       `
-      <div class="page-head"><div><h1>Аналитика продаж</h1><p class="sub">Только воронка Deal. Обучение — отдельно в Академии / training.</p></div></div>
+      <div class="page-head"><div><h1>Аналитика продаж</h1><p class="sub">Только воронка сделок (Deal). Тренировки — в Академии, сюда не попадают.</p></div></div>
       <div class="grid-3">
         <div class="stat"><div class="n">7</div><div class="l">accepted (месяц)</div></div>
         <div class="stat"><div class="n">5</div><div class="l">early_declined</div></div>
         <div class="stat"><div class="n">3</div><div class="l">early_paused (не lost)</div></div>
       </div>
-      <div class="banner info" style="margin-top:14px">Training attempts здесь не показываются — см. Академию. Isolation AC-TI-*.</div>`
+      <div class="banner info" style="margin-top:14px">Попытки из Академии здесь не считаются — они отдельно от воронки.</div>`
     );
   }
 
@@ -1091,22 +1091,22 @@
     N0: {
       npc: "Здравствуйте, нужен натяжной в спальню, хочется побыстрее.",
       choices: [
-        { id: "P0a", text: "Отлично, сразу MultiFrame — без него у вас будет шумно.", next: "PushyN1" },
-        { id: "P0b", text: "Расскажите про комнату: соседи сверху есть, что беспокоит кроме вида?", next: "N1" },
+        { id: "P0a", text: "Отлично — сразу MultiFrame, без него у вас будет шумно.", next: "PushyN1" },
+        { id: "P0b", text: "Расскажите про комнату: соседи сверху есть? Что беспокоит кроме вида?", next: "N1" },
         { id: "P0c", text: "Полотно от 400 ₽/м². Что ещё интересует по цене?", next: "PriceTrap" },
       ],
     },
     PriceTrap: {
       npc: "Цену полотна поняла. А зачем вы про что-то ещё?",
       choices: [
-        { id: "PTfix", text: "Сначала пойму задачу комнаты — шум, соседи, ожидания — потом сориентирую по составу.", next: "N1" },
-        { id: "PTbad", text: "Берите сразу пакет с MultiFrame, иначе переплатите потом.", next: "PushyN1" },
+        { id: "PTfix", text: "Сначала про комнату: шум, соседи, что важно. Потом соберу состав и цены.", next: "N1" },
+        { id: "PTbad", text: "Берите сразу пакет с MultiFrame — иначе потом переплатите.", next: "PushyN1" },
       ],
     },
     N1: {
       npc: "Соседи иногда слышны, но я за красотой пришла.",
       choices: [
-        { id: "P1a", text: "Под натяжным можно поставить каркас MultiFrame. Давайте коротко разберём, зачем он вам — без покупки сейчас.", next: "N2" },
+        { id: "P1a", text: "Под полотном можно поставить каркас MultiFrame. Коротко покажу, зачем он вам — без покупки сейчас.", next: "N2" },
         { id: "P1b", text: "Гарантируем −35 дБ и полную тишину.", next: "FailFast" },
         { id: "P1c", text: "Это Rw/DnT,w по ISO, демпфер, развязка по периметру…", next: "N2b" },
       ],
@@ -1114,7 +1114,7 @@
     N2b: {
       npc: "Я ничего не поняла. Это мне точно нужно?",
       choices: [
-        { id: "P2b_fix", text: "Простыми словами: каркас под полотном снижает ударный шум соседей. Могу показать профиль и дать ориентир по площади.", next: "N2" },
+        { id: "P2b_fix", text: "Проще: каркас под полотном снижает ударный шум соседей. Могу показать профиль и дать ориентир по площади.", next: "N2" },
         { id: "P2b_bad", text: "Если не разберётесь в терминах — не наш клиент.", next: "PoorEnd" },
       ],
     },
@@ -1122,13 +1122,13 @@
       npc: "Вы сразу продаёте допы. Мне просто потолок.",
       choices: [
         { id: "PPu_fix", text: "Извините за напор. Давайте сначала про комнату и ваши ожидания.", next: "N1" },
-        { id: "PPu_bad", text: "Без MultiFrame смысла нет, решайте сегодня.", next: "PoorEnd" },
+        { id: "PPu_bad", text: "Без MultiFrame смысла нет — решайте сегодня.", next: "PoorEnd" },
       ],
     },
     N2: {
       npc: "И что дальше, если мне это подойдёт?",
       choices: [
-        { id: "P2a", text: "Могу открыть проблемомер и дать предварительный ориентир по площади — без обязательства покупать.", next: "OfferOk" },
+        { id: "P2a", text: "Могу открыть проблемомер и дать ориентир по площади — без обязательства покупать.", next: "OfferOk" },
         { id: "P2b", text: "Решать надо сегодня, иначе цена вырастет.", next: "PressureEnd" },
         { id: "P2c", text: "Ну ок, думайте сами.", next: "IncompleteEnd" },
       ],
@@ -1145,17 +1145,17 @@
     if (ui.academyDone && ui.academyScore) {
       const e = ui.academyScore;
       return shell(
-        "sales/academy",
+        "sales/academy-hub",
         `
-        <div class="page-head"><div><h1>Разбор попытки</h1><p class="sub">context: training · не в sales KPI</p></div></div>
+        <div class="page-head"><div><h1>Разбор</h1><p class="sub">Тренировка · на воронку сделок (Deal) не влияет</p></div></div>
         <div class="panel">
-          <div class="stat"><div class="n">${e.score}</div><div class="l">${esc(e.title)} · path ${esc(e.path)} · sell_multiframe</div></div>
+          <div class="stat"><div class="n">${e.score}</div><div class="l">${esc(e.title)} · ветка ${esc(e.path)}</div></div>
           <ul>${(e.feedback || []).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
-          <p class="muted">Выборы: ${(ui.academyChoices || []).map((c) => c.id).join(" → ")}</p>
+          ${e.nextJob ? `<div class="banner ok" style="margin-top:12px"><strong>На объекте дальше:</strong> ${esc(e.nextJob)}</div>` : ""}
           <div class="row" style="margin-top:14px">
-            <button class="btn primary" data-action="academy-reset">Пройти снова</button>
-            <a class="btn" href="#/sales/academy-hub">К хабу</a>
-            <a class="btn ghost" href="#/sales/analytics">Аналитика продаж (без training)</a>
+            <button class="btn primary" data-action="academy-reset">Ещё раз</button>
+            <a class="btn" href="#/sales/academy-hub">К тренажёрам</a>
+            <a class="btn ghost" href="#/sales/analytics">К аналитике сделок</a>
           </div>
         </div>`
       );
@@ -1164,18 +1164,18 @@
     const node = ANNA[nodeId];
     if (node.end) {
       // scoring happens in action handler
-      return shell("sales/academy", `<div class="skeleton"></div>`);
+      return shell("sales/academy-hub", `<div class="skeleton"></div>`);
     }
     const path = ui.academyPath || [];
     return shell(
-      "sales/academy",
+      "sales/academy-hub",
       `
       <div class="page-head">
         <div>
-          <h1>Тренажёр · клиент Анна</h1>
-          <p class="sub">Диалог · оценивается по вашим репликам. Training ≠ Deal KPI.</p>
+          <h1>Анна · спальня</h1>
+          <p class="sub">Цель: понять задачу комнаты и предложить MultiFrame без давления. Тренировка — на сделки не влияет.</p>
         </div>
-        <div class="page-actions"><a class="btn ghost" href="#/sales/academy-hub">Хабу</a></div>
+        <div class="page-actions"><a class="btn ghost" href="#/sales/academy-hub">К списку</a></div>
       </div>
       <div class="panel">
         <div class="chat">
@@ -1204,29 +1204,29 @@
 
   function salesAcademyHub() {
     return shell(
-      "sales/academy",
+      "sales/academy-hub",
       `
-      <div class="page-head"><div><h1>Академия</h1><p class="sub">Хаб механик · отдельно от аналитики продаж</p></div></div>
+      <div class="page-head"><div><h1>Академия</h1><p class="sub">Тренировки для смены — на воронку сделок не влияют</p></div></div>
       <div class="grid-2">
         <button class="panel" style="text-align:left;cursor:pointer" data-action="goto" data-href="#/sales/academy">
-          <h3>Продажи MultiFrame</h3>
-          <p class="muted">Чат · sell_multiframe · Anna</p>
-          <span class="pill info">P0</span>
+          <h3>Предложить MultiFrame</h3>
+          <p class="muted">Диалог с Анной · как завести разговор про каркас</p>
+          <span class="pill info">Начать</span>
         </button>
         <div class="panel">
           <h3>Возражения</h3>
-          <p class="muted">Чат · coming soon в прототипе</p>
-          <span class="pill">P0 slot</span>
+          <p class="muted">Диалог · скоро в прототипе</p>
+          <span class="pill">Скоро</span>
         </div>
         <div class="panel">
-          <h3>Расчёты / практика</h3>
-          <p class="muted">Не-чат · calc_sandbox</p>
-          <span class="pill">слот</span>
+          <h3>Практика расчёта</h3>
+          <p class="muted">Песочница калькулятора · скоро</p>
+          <span class="pill">Скоро</span>
         </div>
         <div class="panel">
-          <h3>Монтаж / узлы</h3>
-          <p class="muted">Не-чат · install_nodes</p>
-          <span class="pill">слот</span>
+          <h3>Узлы монтажа</h3>
+          <p class="muted">Чек-лист на объекте · скоро</p>
+          <span class="pill">Скоро</span>
         </div>
       </div>`
     );
@@ -1766,7 +1766,7 @@
     } else if (step === "diagnose") {
       body = `
         <p>Гипотеза: партнёр застревает на этапе <strong>${esc(p.signal?.stage || "—")}</strong> — слабый next step после КП / низкий offer rate.</p>
-        <p class="muted">Модуль: quote follow-up · Academy Anna</p>
+        <p class="muted">Что потренировать: follow-up после КП · диалог с Анной</p>
         <div class="field"><label>Гипотеза (правка)</label>
           <input id="hyp" value="Stall после quote_sent_confirmed: нет follow-up ритуала">
         </div>
@@ -1822,9 +1822,9 @@
                 <div class="stat"><div class="n">${p.funnel.early_declined}</div><div class="l">early_declined</div></div>
                 <div class="stat"><div class="n">${p.funnel.early_paused}</div><div class="l">paused (не lost)</div></div>
               </div>
-              <div class="banner info" style="margin-top:12px">Training: attempts ${p.training.attempts}, pass ${(
+              <div class="banner info" style="margin-top:12px">Академия: ${p.training.attempts} попыток, сдали ${(
                 p.training.passRate * 100
-              ).toFixed(0)}% — <strong>отдельный блок</strong>, не в conversion.</div>`
+              ).toFixed(0)}% — <strong>отдельный блок</strong>, не в конверсии сделок.</div>`
             : body
         }
       </div>
@@ -1836,7 +1836,7 @@
     return shell(
       "admin/analytics",
       `
-      <div class="page-head"><div><h1>Сеть · продажи</h1><p class="sub">Агрегаты Deal. Обучение — вкладка «Обучение».</p></div></div>
+      <div class="page-head"><div><h1>Сеть · продажи</h1><p class="sub">Сводка по сделкам (Deal). Тренировки — вкладка «Обучение».</p></div></div>
       <div class="grid-3">
         <div class="stat"><div class="n">17</div><div class="l">accepted / сеть</div></div>
         <div class="stat"><div class="n">8</div><div class="l">early_declined</div></div>
@@ -1849,12 +1849,12 @@
     return shell(
       "admin/training",
       `
-      <div class="page-head"><div><h1>Обучение сети</h1><p class="sub">E-analytics-training · изолировано от sales funnel</p></div></div>
+      <div class="page-head"><div><h1>Тренировки сети</h1><p class="sub">Отдельно от воронки продаж — сюда не смешан Deal KPI</p></div></div>
       <div class="grid-2">
-        <div class="stat"><div class="n">21</div><div class="l">LearningAttempt (training)</div></div>
-        <div class="stat"><div class="n">71</div><div class="l">Anna avg score</div></div>
+        <div class="stat"><div class="n">21</div><div class="l">Попыток в Академии</div></div>
+        <div class="stat"><div class="n">71</div><div class="l">Средний балл · Анна</div></div>
       </div>
-      <div class="banner ok" style="margin-top:12px">Эти цифры не входят в countsTowardSalesKpi.</div>`
+      <div class="banner ok" style="margin-top:12px">В KPI сделок эти цифры не входят.</div>`
     );
   }
 
