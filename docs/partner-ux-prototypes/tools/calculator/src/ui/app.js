@@ -502,6 +502,7 @@ function partnerGrandTotal(bom, area, panelsCost) {
   if (!PARTNER_PRICING.enabled) return null;
   if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
   if (partnerCeilingOnlyHost() && state.options.calcWalls === false && bom?.ceiling?.stats) {
+    if (bom.total?.grandTotal != null) return bom.total.grandTotal;
     const install = partnerInstallCost(area) ?? 0;
     const scoped = { total: bomTotalsForPartnerBind(bom) };
     const dowelCost = partnerDowelCost(scoped) ?? 0;

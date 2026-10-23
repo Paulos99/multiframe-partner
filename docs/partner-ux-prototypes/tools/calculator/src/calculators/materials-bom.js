@@ -120,6 +120,7 @@ export function buildBOM({ room, ceilingResult, wallResult, options }) {
       panelsTotal * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels),
     );
   }
+<<<<<<< HEAD
   finalizePartnerBomTotals(bom, {
     panelsTotal,
     costTotal,
@@ -152,11 +153,14 @@ export function finalizePartnerBomTotals(bom, partial = null) {
   const pricing = getPartnerPricing();
   const grandTotal = costTotal + (extras.install ?? 0) + (extras.dowelCost ?? 0);
 
+=======
+>>>>>>> 17ceb14 (fix(gate-c): GC11-P1-01 unify quick-area partner smeta totals)
   bom.total = {
     ...(bom.total || {}),
     panelsWithReserve: panelsTotal,
     totalCost: costTotal,
     dowelsWithReserve: dowelsForCost || dowelsTotal,
+<<<<<<< HEAD
     installCost: extras.install,
     dowelsCost: extras.dowelCost,
     grandTotal,
@@ -165,6 +169,41 @@ export function finalizePartnerBomTotals(bom, partial = null) {
     frame: partial?.frame ?? bom.total?.frame ?? null,
     profileLengthM: partial?.profileLengthM ?? bom.total?.profileLengthM ?? 0,
   };
+=======
+    frame: mergeFrameTotals([bom.ceiling?.frame, bom.walls?.frame].filter(Boolean)),
+    profileLengthM:
+      (bom.ceiling?.frame?.totalProfileLengthM ?? 0) +
+      (bom.walls?.frame?.totalProfileLengthM ?? 0),
+  };
+
+  return finalizePartnerBomTotals(bom);
+}
+
+/** Partner «Смета», stat card, and bind share one grand total (install + dowels on bom.total). */
+export function finalizePartnerBomTotals(bom) {
+  if (!bom?.total) return bom;
+  if (!getPartnerPricing().enabled) return bom;
+
+  const costTotal = bom.total.totalCost ?? 0;
+  let dowelsForCost = bom.total.dowelsWithReserve ?? 0;
+  const panelsTotal = bom.total.panelsWithReserve ?? 0;
+  if (!(dowelsForCost > 0) && panelsTotal > 0) {
+    dowelsForCost = Math.ceil(
+      panelsTotal * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels),
+    );
+    bom.total.dowelsWithReserve = dowelsForCost;
+  }
+
+  const areaTotal = resolveCoveredAreaM2(bom);
+  const extras = partnerExtras(areaTotal, dowelsForCost);
+  const pricing = getPartnerPricing();
+  const grandTotal = costTotal + (extras.install ?? 0) + (extras.dowelCost ?? 0);
+
+  bom.total.installCost = extras.install;
+  bom.total.dowelsCost = extras.dowelCost;
+  bom.total.grandTotal = grandTotal;
+  bom.total.partnerCompany = pricing.company || PARTNER_PRICING.company || '';
+>>>>>>> 17ceb14 (fix(gate-c): GC11-P1-01 unify quick-area partner smeta totals)
   return bom;
 }
 

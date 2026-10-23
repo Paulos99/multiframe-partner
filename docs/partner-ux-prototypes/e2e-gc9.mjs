@@ -3,6 +3,7 @@
  * Run: node docs/partner-ux-prototypes/e2e-gc9.mjs
  */
 import { chromium } from "playwright-core";
+import { execSync } from "node:child_process";
 import { createServer } from "http";
 import { readFile } from "fs/promises";
 import { join, extname } from "path";
@@ -26,14 +27,17 @@ function mime(p) {
   return m[extname(p)] || "application/octet-stream";
 }
 
+let staticServer = null;
+
 async function ensureServer() {
+  if (staticServer) return;
   try {
-    const r = await fetch(`http://127.0.0.1:${PORT}/`);
-    if (r.ok) return;
+    execSync(`lsof -ti:${PORT} | xargs -r kill -9`, { stdio: "ignore" });
+    await new Promise((r) => setTimeout(r, 600));
   } catch {
-    /* start */
+    /* port free */
   }
-  const server = createServer(async (req, res) => {
+  staticServer = createServer(async (req, res) => {
     const path = (req.url || "/").split("?")[0];
     const file = join(ROOT, path === "/" ? "index.html" : path.replace(/^\//, ""));
     try {
@@ -45,7 +49,7 @@ async function ensureServer() {
       res.end("not found");
     }
   });
-  await new Promise((r) => server.listen(PORT, "127.0.0.1", r));
+  await new Promise((r) => staticServer.listen(PORT, "127.0.0.1", r));
 }
 
 async function loginSales(page) {
@@ -112,21 +116,72 @@ async function waitCalcDraft(page, areaExpected, timeout = 20000) {
   );
 }
 
+async function waitCalcIframeReady(page) {
+  await page.waitForFunction(
+    () => {
+      const src = document.querySelector("iframe.tool-frame")?.src || "";
+      return src.includes("partner=1") && src.includes("walls=0");
+    },
+    { timeout: 25000 }
+  );
+  await page.waitForFunction(
+    () =>
+      document.querySelector("iframe.tool-frame")?.contentDocument?.body?.classList.contains(
+        "partner-calc-mode"
+      ),
+    { timeout: 25000 }
+  );
+}
+
+async function openEntryMode(page, mode) {
+  const btnId = mode === "area" ? "entryAreaBtn" : mode === "dims" ? "entryDimsBtn" : "entryDrawBtn";
+  await waitCalcIframeReady(page);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.evaluate((id) => {
+      const doc = document.querySelector("iframe.tool-frame")?.contentDocument;
+      doc?.getElementById(id)?.click();
+    }, btnId);
+    const opened = await page.waitForFunction(
+      (id) =>
+        document.querySelector("iframe.tool-frame")?.contentDocument?.getElementById(id)?.getAttribute(
+          "aria-expanded"
+        ) === "true",
+      btnId,
+      { timeout: 5000 }
+    ).catch(() => false);
+    if (opened) break;
+    if (attempt === 2) throw new Error(`entry mode ${mode} did not open`);
+  }
+  await calcFrame(page).locator("#calculateBtn").waitFor({ state: "visible", timeout: 15000 });
+}
+
 async function runCalc(page) {
   const f = calcFrame(page);
-  const btn = f.getByRole("button", { name: /Рассчитать|Пересчитать/i }).first();
+  const btn = f.locator("#calculateBtn").first();
+  await btn.waitFor({ state: "visible", timeout: 20000 });
   await btn.click();
   await page.waitForTimeout(900);
 }
 
 async function reloadCalcIframe(page) {
-  await page.goto(`http://127.0.0.1:${PORT}/#/tools/calc`);
-  await page.waitForTimeout(600);
-  await page.evaluate(() => {
-    const f = document.querySelector("iframe.tool-frame");
-    if (f?.src) f.src = f.src;
-  });
-  await page.waitForTimeout(1200);
+  await page.goto(`http://127.0.0.1:8765/#/tools/calc`, { waitUntil: "domcontentloaded" });
+  await waitCalcIframeReady(page);
+}
+
+/** GC11-P1-01: detailed «Смета» Итого must match partner stat card / bind. */
+async function assertSmetaMatchesPartnerTotal(frame, label) {
+  const cardRaw = await frame.locator("#partnerTotalCost").getAttribute("data-raw");
+  const detailText = await frame.locator(".rb-kv--total strong").innerText();
+  const card = Number(cardRaw);
+  const detail = Number(detailText.replace(/[^\d]/g, ""));
+  check(`GC11 ${label} smeta matches card`, card > 0 && card === detail, `${card} vs ${detail}`);
+  const installText = await frame.locator(".rb-kv--install strong").innerText();
+  const install = Number(installText.replace(/[^\d]/g, ""));
+  check(`GC11 ${label} smeta shows install`, install >= 30000, String(install));
+  const fastenerText = await frame.locator(".rb-kv", { hasText: "Крепёж" }).locator("strong").innerText();
+  const fasteners = Number(fastenerText.replace(/[^\d]/g, ""));
+  check(`GC11 ${label} smeta shows fasteners`, fasteners >= 2000, String(fasteners));
+  return card;
 }
 
 /** GC10: ceiling-only payload — area, panels, amount same scope; walls unchecked. */
@@ -194,7 +249,7 @@ async function bindAndReopen(page, areaExpected, draftBeforeBind) {
   check("GC10 reopen calc walls still off", wallsAfter === 0, String(wallsAfter));
 }
 
-const context = await chromium.launchPersistentContext("/tmp/gc9-e2e", {
+const context = await chromium.launchPersistentContext(`/tmp/gc9-e2e-${Date.now()}`, {
   executablePath: "/usr/local/bin/google-chrome",
   headless: true,
   args: ["--no-sandbox", "--disable-dev-shm-usage"],
@@ -218,7 +273,7 @@ const src = await page.locator("iframe.tool-frame").getAttribute("src");
 check("calc iframe partner=1 walls=0", (src || "").includes("partner=1") && (src || "").includes("walls=0"), src || "");
 
 const f = calcFrame(page);
-await f.locator("#entryAreaBtn").click();
+await openEntryMode(page, "area");
 await f.locator("#areaOnlyInput").fill("21");
 await runCalc(page);
 await waitCalcDraft(page, 21);
@@ -229,12 +284,13 @@ await bindAndReopen(page, 21, draft21);
 await loginSales(page);
 await reloadCalcIframe(page);
 const f2 = calcFrame(page);
-await f2.locator("#entryDimsBtn").click();
+await openEntryMode(page, "dims");
 await f2.locator("#quickLength").fill("7");
 await f2.locator("#quickWidth").fill("3");
 await runCalc(page);
 const wallsChecked = await f2.locator('input[name="wallSurface"]:checked').count();
 check("GC10 dims walls unchecked", wallsChecked === 0, String(wallsChecked));
+await assertSmetaMatchesPartnerTotal(f2, "dims 7×3");
 await waitCalcDraft(page, 21);
 let draftDims = await assertCeilingOnlyDraft(page, 21, "dims 7×3");
 check("GC10 dims panels ceiling-only", draftDims.calcPanels === CEILING_21_PANELS, String(draftDims.calcPanels));
@@ -253,7 +309,7 @@ await loginSales(page);
 await page.setViewportSize({ width: 1280, height: 800 });
 await reloadCalcIframe(page);
 const f3 = calcFrame(page);
-await f3.locator("#entryDrawBtn").click();
+await openEntryMode(page, "draw");
 await page.waitForTimeout(500);
 await f3.getByRole("button", { name: /Шаблоны/ }).click();
 await f3.getByRole("button", { name: "Г-форма", exact: true }).click();

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Executable Gate C store smoke — rev-gate-c-draft-11
+ * Executable Gate C store smoke — rev-gate-c-draft-12
  *
  * Usage (from this directory or repo root):
  *   node docs/partner-ux-prototypes/smoke.mjs
@@ -312,7 +312,10 @@ check("GC9-P0-01 PM area handoff", qsHandoff.includes("area=21"));
 const calcApp = fs.readFileSync(path.join(__dirname, "tools/calculator/src/ui/app.js"), "utf8");
 check("GC10-P0-01 walls unset helper", calcApp.includes("defaultWallSurfaceIdsWhenUnset"));
 check("GC10-P0-01 ceiling bind totals", calcApp.includes("bomTotalsForPartnerBind"));
-check("rev-gate-c-draft-11", MFStore.get().revision === "rev-gate-c-draft-11");
+const bomJs = fs.readFileSync(path.join(__dirname, "tools/calculator/src/calculators/materials-bom.js"), "utf8");
+check("GC11-P1-01 finalizePartnerBomTotals", bomJs.includes("finalizePartnerBomTotals"));
+check("GC11 quick area finalize", calcApp.includes("finalizePartnerBomTotals(state.bom)"));
+check("rev-gate-c-draft-12", MFStore.get().revision === "rev-gate-c-draft-12");
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");
