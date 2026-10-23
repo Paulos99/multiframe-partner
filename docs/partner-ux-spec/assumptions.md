@@ -1,8 +1,8 @@
 # Assumptions — сводный список (Gate B)
 
-**Revision:** `rev-gate-b-final-candidate` · **Gate B NOT approved**  
-**Правило:** не silently adopt. Категории: **resolved/approved** (только Gate A §8 / ADR) · **proposed awaiting owner** · **deferred nonblocking**.  
-Owner table: [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md).
+**Revision:** `rev-gate-b-final-candidate` · **Gate B APPROVED 2026-10-23**  
+**Правило:** не silently adopt. Категории: **resolved/approved** (Gate A и шесть Gate B решений) · **proposed awaiting owner** · **deferred nonblocking**.  
+Owner table: [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md). [Owner approval](./gate-b-owner-approval-2026-10-23.md).
 
 ---
 
@@ -18,16 +18,22 @@ Owner table: [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md).
 
 ---
 
-## Proposed awaiting owner (implementation-defining)
+## Resolved / approved (Gate B · 2026-10-23)
 
-| ID | Assumption / proposal | Статус | AC / ссылка |
-|----|----------------------|--------|-------------|
-| A-06 | Sales/owner явно закрывает Deal после монтажа ordered; не авто из room.closed; accepted ≠ fulfilled | **proposed** | D5 §3.1 AC-A06-* |
-| A-09 | Hybrid auto-stage (assessed/calculated/sent); outcome/pause/decline manual only | **proposed** | D5 §3.1 AC-A09-* |
-| A-11 | Atomic Project+Room+Deal + Idempotency-Key; draft≠Deal | **proposed** | D5 §3.1 AC-A11-* |
-| A-12 | **Superseded LWW:** append-only CalculationRevision + expectedRevision/409 | **proposed** | D5 §1.8, D7, AC-D5-09 |
-| Pause-canon | early_paused nonterminal; early_declined terminal; resume≠new dealId | **proposed** (канон ревью) | D5/D8/D11 |
-| M-assent | Migration: sent≠ordered; unknown/needs_review | **proposed** | D5 §4 |
+| ID | Утверждённое правило | Статус | AC / ссылка |
+|---|---|---|---|
+| A-06 | Sales/owner явно закрывает Deal после монтажа ordered; не авто из room.closed; accepted ≠ fulfilled | **approved 2026-10-23** | D5 §3.1 AC-A06-* |
+| A-09 | Hybrid auto-stage (assessed/calculated/sent); outcome/pause/decline manual only | **approved 2026-10-23** | D5 §3.1 AC-A09-* |
+| A-11 | Atomic Project+Room+Deal + Idempotency-Key; draft≠Deal | **approved 2026-10-23** | D5 §3.1 AC-A11-* |
+| A-12 | **Superseded LWW:** append-only CalculationRevision + expectedRevision/409 | **approved 2026-10-23** | D5 §1.8, D7, AC-D5-09 |
+| Pause-canon | early_paused nonterminal; early_declined terminal; resume≠new dealId | **approved 2026-10-23** | D5/D8/D11 |
+| M-assent | Migration: sent≠ordered; unknown/needs_review | **approved 2026-10-23** | D5 §4 |
+
+---
+
+## Proposed awaiting owner (пока не утверждены)
+
+A-05 (waive checklist) и A-07 (confirm_sent channel) требуют отдельного решения до имплементации. A-28 — калибровка на пилоте. Другие proposals/deferred указаны ниже.
 
 ---
 
