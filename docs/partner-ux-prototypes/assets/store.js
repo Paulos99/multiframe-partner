@@ -943,6 +943,19 @@
     return { ok: true, consultationSessionId: d.consultationSessionId };
   }
 
+  function ingestCalcToolResult(payload) {
+    const area = Number(payload?.areaM2) || 14;
+    const amount = Number(payload?.amount) || Math.round(area * 3400);
+    ensureCalcDraft(area);
+    const d = state.sessionDraft;
+    d.kind = d.pmDone ? "tool_pm_calc" : "tool_calc";
+    d.segment = payload?.segment || d.segment || "comfort";
+    finishCalcOnDraft(amount, area);
+    d.fromOriginalShell = true;
+    save();
+    return { ok: true, amount, areaM2: area };
+  }
+
   function finishCalcOnDraft(amount, areaM2) {
     if (!state.sessionDraft) return;
     state.sessionDraft.calcDone = true;
@@ -1954,6 +1967,7 @@
     resolveConflict,
     startQuickConsultation,
     ensureCalcDraft,
+    ingestCalcToolResult,
     ensureCalcUi,
     defaultCalcUi,
     calcEstimateFromUi,

@@ -5,9 +5,9 @@
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Changelog: [`CHANGELOG-draft-8.md`](./CHANGELOG-draft-8.md) · prior [`CHANGELOG-draft-7.md`](./CHANGELOG-draft-7.md) · Smoke: `node smoke.mjs` (36/36) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
+Changelog: [`CHANGELOG-draft-8.md`](./CHANGELOG-draft-8.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` (38/38) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
 
-**Инструменты (все роли):** `#/tools/pm` · `#/tools/calc` · hub `#/tools/hub` — branded original shells (draft-8). Bind в Project — только sales/owner/measurer (crew/admin → личный результат).
+**Инструменты:** `#/tools/pm` (фирменный wizard) · `#/tools/calc` (iframe-снимок согласованного калькулятора) · hub `#/tools/hub`. Owner ref: https://paulos99.github.io/multiframe-partner/ · Bind — RBAC D5 §1.7.
 
 ---
 

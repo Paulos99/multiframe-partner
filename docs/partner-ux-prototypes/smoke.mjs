@@ -268,6 +268,12 @@ check(
   !!MFStore.room("prj_nv_soroka", "room_sor_living").acousticProfile
 );
 
+MFStore.resetAll();
+MFStore.setRole("sales");
+const ingC = MFStore.ingestCalcToolResult({ areaM2: 20, amount: 68000 });
+check("GC6-P0-03 ingest calc snapshot", ingC.ok && MFStore.get().sessionDraft.calcDone && MFStore.get().sessionDraft.amount === 68000);
+check("GC6-P0-03 calc draft area 20", MFStore.draftAreaM2(MFStore.get().sessionDraft) === 20);
+
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");
 if (failed.length) {

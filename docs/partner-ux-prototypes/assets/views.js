@@ -535,165 +535,33 @@
     );
   }
 
+  /**
+   * GC6-P0-03: host the agreed calculator as a readonly snapshot of
+   * apps/web/public/calculator (not a simplified м²×rate mock).
+   * Thin chrome for hub/bind; tool UI is the original shell.
+   */
   function toolsCalc() {
-    const theme = S().ui.toolTheme === "dark" ? "dark" : "light";
-    MFStore.ensureCalcUi();
-    const c = S().ui.calcUi;
-    let d = S().sessionDraft;
-    if (d && d.bound) d = null;
-    const est = MFStore.calcEstimateFromUi();
-    const entry = c.entry;
-    const ar = c.widthM > 0 ? c.lengthM / c.widthM : 1.25;
-
-    function entryBlock(id, title, desc, secondary) {
-      const open = entry === id;
-      return `
-        <div class="entry-block ${open ? "is-open" : ""}">
-          <button type="button" class="calc-entry-card ${open ? "is-open" : ""} ${
-        secondary ? "calc-entry-card--secondary" : ""
-      }" data-action="calc-entry" data-entry="${id}">
-            <span><span class="t">${title}</span><span class="d">${desc}</span></span>
-            <span class="chev" aria-hidden="true"></span>
-          </button>
-          ${
-            open
-              ? id === "dims"
-                ? `<div class="calc-panel">
-                    <h4>Размеры комнаты</h4>
-                    <div class="calc-grid-3">
-                      <div class="orig-field" style="margin:0"><label>Длина, м</label><input type="number" id="calc-L" step="0.01" min="0.1" value="${c.lengthM}" data-action-input="calc-dim" data-dim="lengthM"></div>
-                      <div class="orig-field" style="margin:0"><label>Ширина, м</label><input type="number" id="calc-W" step="0.01" min="0.1" value="${c.widthM}" data-action-input="calc-dim" data-dim="widthM"></div>
-                      <div class="orig-field" style="margin:0"><label>Высота, м</label><input type="number" id="calc-H" step="0.01" min="0.1" value="${c.heightM}" data-action-input="calc-dim" data-dim="heightM"></div>
-                    </div>
-                    <p class="muted" style="margin:0">Площадь: ${est.areaM2 || "—"} м² · Периметр: ${
-                      c.lengthM && c.widthM
-                        ? Math.round((2 * (Number(c.lengthM) + Number(c.widthM))) * 100) / 100
-                        : "—"
-                    } м</p>
-                  </div>`
-                : id === "draw"
-                  ? `<div class="calc-panel">
-                      <h4>Своя схема</h4>
-                      <div class="orig-field" style="margin:0"><label>Высота стен, м</label><input type="number" value="${c.heightM}" data-action-input="calc-dim" data-dim="heightM"></div>
-                      <p class="muted" style="margin:0">Демо: нарисуйте прямоугольник размерами слева (режим «Ввести размеры») или задайте L×W ниже.</p>
-                      <div class="calc-grid-3">
-                        <div class="orig-field" style="margin:0"><label>Длина, м</label><input type="number" value="${c.lengthM}" data-action-input="calc-dim" data-dim="lengthM"></div>
-                        <div class="orig-field" style="margin:0"><label>Ширина, м</label><input type="number" value="${c.widthM}" data-action-input="calc-dim" data-dim="widthM"></div>
-                      </div>
-                      <div class="orig-actions-row">
-                        <button type="button" class="orig-btn orig-btn--secondary" data-action="calc-demo-photo">Фото плана</button>
-                        <button type="button" class="orig-btn orig-btn--ghost" data-action="calc-clear-scheme">Очистить</button>
-                      </div>
-                    </div>`
-                  : `<div class="calc-panel">
-                      <h4>Оценка по площади</h4>
-                      <p class="muted" style="margin:0">Приблизительный расчёт без схемы — когда нет точных размеров.</p>
-                      <div class="orig-field" style="margin:0"><label>Площадь потолка, м²</label><input type="number" id="calc-area-only" step="0.1" min="0.1" value="${c.areaOnly}" data-action-input="calc-dim" data-dim="areaOnly"></div>
-                    </div>`
-              : ""
-          }
-        </div>`;
-    }
-
-    const shared =
-      entry && entry !== "area"
-        ? `<div class="calc-panel" style="margin-top:4px">
-            <h4>Что считать</h4>
-            <div class="calc-chips">
-              <button type="button" class="calc-chip ${c.ceiling ? "is-on" : ""}" data-action="calc-surface" data-surface="ceiling">Потолок</button>
-              <button type="button" class="calc-chip ${c.walls ? "is-on" : ""}" data-action="calc-surface" data-surface="walls">Стены (demo)</button>
-            </div>
-            <h4 style="margin-top:8px">Тип монтажа</h4>
-            <div class="calc-chips">
-              <button type="button" class="calc-chip ${
-                c.mounting === "ceiling_frameless" ? "is-on" : ""
-              }" data-action="calc-mount" data-mount="ceiling_frameless">Бескаркасный</button>
-              <button type="button" class="calc-chip ${
-                c.mounting === "ceiling_framed" ? "is-on" : ""
-              }" data-action="calc-mount" data-mount="ceiling_framed">Каркасный</button>
-            </div>
-            <button type="button" class="orig-btn orig-btn--primary" style="margin-top:8px" data-action="calc-run">Рассчитать</button>
-          </div>`
-        : entry === "area"
-          ? `<div class="calc-panel" style="margin-top:4px">
-              <h4>Что считать</h4>
-              <div class="calc-chips">
-                <button type="button" class="calc-chip is-on" disabled>Потолок</button>
-              </div>
-              <button type="button" class="orig-btn orig-btn--primary" style="margin-top:8px" data-action="calc-run">Рассчитать</button>
-            </div>`
-          : "";
-
-    const schemeInner =
-      entry && est.areaM2 > 0
-        ? `<div class="calc-room-rect" style="--room-ar:${Math.max(0.5, Math.min(2.2, ar))}">
-             <span class="dim dim-l">${c.entry === "area" ? est.areaM2 + " м²" : c.lengthM + " м"}</span>
-             ${c.entry !== "area" ? `<span class="dim dim-w">${c.widthM} м</span>` : ""}
-           </div>`
-        : `<div class="calc-room-empty">Выберите способ ввода слева — здесь появится схема монтажа</div>`;
-
-    const results = c.showResults
-      ? `<div class="calc-results">
-          <div class="calc-stats">
-            <div class="calc-stat"><div class="l">Площадь</div><div class="n">${est.areaM2} м²</div></div>
-            <div class="calc-stat"><div class="l">Панели</div><div class="n">${est.panels} шт</div></div>
-            <div class="calc-stat"><div class="l">Ориентир</div><div class="n">${money(est.total)}</div></div>
+    const role = S().role || "—";
+    const d = S().sessionDraft;
+    const ready = d && (d.pmDone || d.calcDone) && !d.bound;
+    return `
+      <div class="tool-host" data-tool="calc">
+        <header class="tool-chrome">
+          <a class="tool-chrome__back" href="#/tools/hub">← Инструменты</a>
+          <div class="tool-chrome__title">
+            <strong>Калькулятор</strong>
+            <span class="muted">роль ${esc(role)} · снимок согласованного UI · <a href="tools/calculator/index.html" target="_blank" rel="noopener">открыть отдельно</a></span>
           </div>
-          ${
-            c.expanded
-              ? `<ul class="calc-lines">
-                  <li><span>Панели MultiFrame × ${est.panels}</span><strong>${money(est.panels * 890)}</strong></li>
-                  <li><span>Клипсы × ${est.clips}</span><strong>${money(est.clips * 12)}</strong></li>
-                  <li><span>Материалы${est.mounting === "ceiling_framed" ? " (каркас +12%)" : ""}</span><strong>${money(
-                    est.materials
-                  )}</strong></li>
-                  <li><span>Монтаж (ориентир)</span><strong>${money(est.work)}</strong></li>
-                  <li class="total"><span>Итого</span><strong>${money(est.total)}</strong></li>
-                </ul>`
-              : `<button type="button" class="orig-btn orig-btn--ghost" data-action="calc-expand">Развернуть смету</button>`
-          }
-          <div class="calc-export">
-            <button type="button" class="orig-btn orig-btn--secondary" data-action="calc-demo-pdf">PDF</button>
-            <button type="button" class="orig-btn orig-btn--ghost" data-action="calc-demo-share">Поделиться</button>
-            <button type="button" class="orig-btn orig-btn--primary" data-action="calc-save-bind">Сохранить → привязка</button>
+          <div class="tool-chrome__actions">
+            <a class="btn sm ghost" href="#/tools/pm">Проблемомер</a>
+            <a class="btn sm ${ready ? "primary" : ""}" href="#/tools/bind">${
+              ready ? "Сохранить в проект…" : "Bind после результата"
+            }</a>
+            <button type="button" class="btn sm primary" data-action="calc-capture-demo" title="Если PDF/postMessage ещё не сработали">В черновик (демо 14 м²)</button>
           </div>
-          <p class="muted" style="margin:0;font-size:.8rem">Демо-цифры Gate C · не production BOM. ${
-            d?.pmDone ? "В черновике есть PM Result." : "PM не обязателен."
-          }</p>
-        </div>`
-      : "";
-
-    return shell(
-      "tools/calc",
-      `
-      <div class="orig-wrap">
-        <div class="page-actions-inline">
-          <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
-          <span class="pill info">роль ${esc(S().role || "—")}</span>
-          <a class="btn sm" href="#/tools/pm">Проблемомер</a>
-        </div>
-        <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
-          ${origToolHeader("calc", theme)}
-          <div class="orig-body">
-            <div class="calc-workspace">
-              <aside class="calc-side">
-                <h2 class="calc-entry-title">Что вы знаете о помещении?</h2>
-                <p class="calc-entry-lead">Выберите способ — от него зависит, как считать материалы</p>
-                ${entryBlock("dims", "Ввести размеры", "Знаю длину и ширину — прямоугольная комната")}
-                ${entryBlock("draw", "Нарисовать схему", "Сложная форма или есть чертёж — рисуем с нуля")}
-                ${entryBlock("area", "По площади", "Нет размеров стен — примерная оценка в м²", true)}
-                ${shared}
-              </aside>
-              <section class="calc-scheme" aria-label="Схема монтажа">
-                <h3>Схема монтажа</h3>
-                <div class="calc-scheme-canvas">${schemeInner}</div>
-                ${results}
-              </section>
-            </div>
-          </div>
-        </div>
-      </div>`
-    );
+        </header>
+        <iframe class="tool-frame" title="Калькулятор MultiFRAME" src="tools/calculator/index.html" allow="clipboard-write"></iframe>
+      </div>`;
   }
 
   function bindFormFields(d, shellActive) {

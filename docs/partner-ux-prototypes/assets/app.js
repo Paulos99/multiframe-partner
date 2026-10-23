@@ -1049,8 +1049,28 @@
       render();
       return;
     }
+    if (action === "calc-capture-demo") {
+      MFStore.ingestCalcToolResult({ areaM2: 14, amount: 47600, segment: "comfort" });
+      toast("Калькулятор → черновик", "14 м² · демо (снимок UI)", "ok");
+      render();
+      return;
+    }
 
   }
+
+  window.addEventListener("message", (ev) => {
+    const data = ev.data;
+    if (!data || typeof data !== "object") return;
+    if (data.type === "mf-cabinet-calc") {
+      const area = Number(data.areaM2) || null;
+      const amount = Number(data.panelsCost) || null;
+      if (area || amount) {
+        MFStore.ingestCalcToolResult({ areaM2: area || 14, amount: amount || undefined });
+        toast("Смета из Калькулятора", `${area || "—"} м² · в черновике`, "ok");
+        render();
+      }
+    }
+  });
 
   window.addEventListener("hashchange", render);
   window.addEventListener("DOMContentLoaded", () => {
