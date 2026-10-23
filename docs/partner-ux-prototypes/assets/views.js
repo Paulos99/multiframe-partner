@@ -331,19 +331,7 @@
 
   /** GC9-P0-01: partner=1 enables mf-cabinet-calc; optional PM area handoff once. */
   function calcToolIframeSrc() {
-    const d = S().sessionDraft;
-    const q = new URLSearchParams();
-    q.set("partner", "1");
-    q.set("walls", "0");
-    q.set("surfaces", "ceiling");
-    if (d?.pmDone && !d?.calcDone) {
-      const area = MFStore.draftAreaM2(d);
-      if (area > 0) {
-        q.set("area", String(area));
-        q.set("source", "problemomer");
-      }
-    }
-    return `tools/calculator/index.html?${q}`;
+    return MFStore.calcToolIframePath(S().sessionDraft);
   }
 
   function pmToolIframeSrc() {

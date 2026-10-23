@@ -943,6 +943,27 @@
     return { ok: true, consultationSessionId: d.consultationSessionId };
   }
 
+  function buildCalcIframeQuery(draft) {
+    const d = draft || state.sessionDraft;
+    const q = new URLSearchParams();
+    q.set("partner", "1");
+    q.set("gateC", "1");
+    q.set("walls", "0");
+    q.set("surfaces", "ceiling");
+    if (d?.pmDone && !d?.calcDone) {
+      const area = draftAreaM2(d);
+      if (area > 0) {
+        q.set("area", String(area));
+        q.set("source", "problemomer");
+      }
+    }
+    return q.toString();
+  }
+
+  function calcToolIframePath(draft) {
+    return `tools/calculator/index.html?${buildCalcIframeQuery(draft)}`;
+  }
+
   function ingestCalcToolResult(payload) {
     const area = Number(payload?.areaM2);
     const amount = Number(payload?.panelsCost ?? payload?.amount);
@@ -2032,6 +2053,8 @@
     resolveConflict,
     startQuickConsultation,
     ensureCalcDraft,
+    buildCalcIframeQuery,
+    calcToolIframePath,
     ingestCalcToolResult,
     ingestPmToolResult,
     ensureCalcUi,
