@@ -5,7 +5,7 @@
 | | |
 |--|--|
 | Against | ChatGPT NOT APPROVED on `aa0d166` (comment 6362406643); tip had `28fd127` calc iframe |
-| Store smoke | **40/40 PASS** |
+| Store smoke | **41/41 PASS** |
 | Command | `node docs/partner-ux-prototypes/smoke.mjs` |
 | Visual evidence (repo) | `docs/partner-ux-prototypes/media/gate-c-draft9-*.png` |
 

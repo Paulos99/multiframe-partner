@@ -5,7 +5,7 @@
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Changelog: [`CHANGELOG-draft-9.md`](./CHANGELOG-draft-9.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` (40/40) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
+Changelog: [`CHANGELOG-draft-9.md`](./CHANGELOG-draft-9.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` (41/41) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
 
 **Инструменты:** `#/tools/pm` · `#/tools/calc` — full-bleed iframes over `tools/problemomer/` + `tools/calculator/`. Owner ref: https://paulos99.github.io/multiframe-partner/ · Bind — RBAC D5 §1.7.
 

@@ -276,16 +276,6 @@ check("GC6-P0-03 calc draft area 20", MFStore.draftAreaM2(MFStore.get().sessionD
 MFStore.resetAll();
 MFStore.setRole("sales");
 const ingP = MFStore.ingestPmToolResult({
-  areaM2: 21,
-  roomType: "bedroom",
-  answers: { basics: "bedroom", noisyNeighbors: "sometimes_noisy", noiseKind: "impact", areaM2: 21 },
-});
-check("GC6-P0-03 ingest PM iframe", ingP.ok && MFStore.get().sessionDraft.pmDone);
-check("GC6-P0-03 PM area 21", MFStore.draftAreaM2(MFStore.get().sessionDraft) === 21);
-
-MFStore.resetAll();
-MFStore.setRole("sales");
-const ingP = MFStore.ingestPmToolResult({
   result: {
     areaM2: 21,
     roomType: "bedroom",
@@ -297,6 +287,7 @@ const ingP = MFStore.ingestPmToolResult({
   },
 });
 check("GC6-P0-03 ingest pm snapshot", ingP.ok && MFStore.get().sessionDraft.pmDone && MFStore.get().sessionDraft.pmResult.areaM2 === 21);
+check("GC6-P0-03 PM area 21", MFStore.draftAreaM2(MFStore.get().sessionDraft) === 21);
 check("GC6-P0-03 pm stretch preset", MFStore.get().sessionDraft.answers.plannedCeiling === "stretch");
 
 const failed = results.filter((r) => !r.ok);

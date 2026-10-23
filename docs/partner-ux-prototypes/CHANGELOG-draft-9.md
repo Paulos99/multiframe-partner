@@ -25,6 +25,6 @@
 Evidence (PR repo): `docs/partner-ux-prototypes/media/gate-c-draft9-*.png`  
 Map: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md)
 
-Smoke: `node docs/partner-ux-prototypes/smoke.mjs` → **40/40 PASS**.
+Smoke: `node docs/partner-ux-prototypes/smoke.mjs` → **41/41 PASS**.
 
 Human D11 §7 **NOT observed**.
