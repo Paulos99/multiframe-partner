@@ -164,7 +164,7 @@ const draft21 = await page.evaluate((key) => JSON.parse(localStorage.getItem(key
 check("GC9 area draft not 14 fixture", draft21.amount !== 47600 || draft21.answers.areaM2 === 21, JSON.stringify(draft21));
 await bindAndReopen(page, 21);
 
-// Dims 7×3
+// Dims 7×3 — GC10: walls stay off; bind amount ceiling-only (not full shell ~178k)
 await loginSales(page);
 await reloadCalcIframe(page);
 const f2 = calcFrame(page);
@@ -172,8 +172,32 @@ await f2.locator("#entryDimsBtn").click();
 await f2.locator("#quickLength").fill("7");
 await f2.locator("#quickWidth").fill("3");
 await runCalc(page);
+const wallsChecked = await f2.locator('input[name="wallSurface"]:checked').count();
+check("GC10 dims walls unchecked", wallsChecked === 0, String(wallsChecked));
 await waitCalcDraft(page, 21);
+const draftDims = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).sessionDraft, STORE_KEY);
+check(
+  "GC10 dims amount ceiling scope",
+  draftDims.amount > 0 &&
+    draftDims.amount < 175000 &&
+    (draftDims.calcPanels ?? 0) > 0 &&
+    (draftDims.calcPanels ?? 0) < 120,
+  JSON.stringify({
+    amount: draftDims.amount,
+    area: draftDims.answers?.areaM2,
+    panels: draftDims.calcPanels,
+  })
+);
 await bindAndReopen(page, 21);
+const dimsStored = await page.evaluate(
+  ({ key, projectId, roomId }) => {
+    const st = JSON.parse(localStorage.getItem(key) || "{}");
+    const r = st.projects?.find((p) => p.id === projectId)?.rooms?.find((x) => x.id === roomId);
+    return { amount: r?.preliminary?.amount };
+  },
+  { key: STORE_KEY, projectId: BIND_PAIR.split("::")[0], roomId: BIND_PAIR.split("::")[1] }
+);
+check("GC10 bind amount not full BOM", dimsStored.amount < 175000, String(dimsStored.amount));
 
 // G-contour draw
 await loginSales(page);

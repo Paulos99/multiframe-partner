@@ -484,8 +484,30 @@ function partnerDowelCost(bom) {
   return Math.round(dowels * PARTNER_PRICING.dowelPrice);
 }
 
+function bomTotalsForPartnerBind(bom) {
+  if (!bom) return null;
+  if (partnerCeilingOnlyHost() && bom.ceiling?.stats) {
+    const stats = bom.ceiling.stats;
+    return {
+      panelsWithReserve: stats.withReserve ?? stats.total ?? 0,
+      panels: stats.panelsToPurchase ?? stats.total ?? 0,
+      totalCost: stats.totalCost ?? 0,
+      dowelsWithReserve: stats.dowels?.withReserve ?? 0,
+    };
+  }
+  return bom.total;
+}
+
 function partnerGrandTotal(bom, area, panelsCost) {
   if (!PARTNER_PRICING.enabled) return null;
+  if (partnerCeilingOnlyHost() && bom?.ceiling?.stats) {
+    const install = partnerInstallCost(area) ?? 0;
+    const scoped = { total: bomTotalsForPartnerBind(bom) };
+    const dowelCost = partnerDowelCost(scoped) ?? 0;
+    const panels =
+      panelsCost ?? bom.ceiling.stats.totalCost ?? bomTotalsForPartnerBind(bom)?.totalCost ?? 0;
+    return panels + install + dowelCost;
+  }
   if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
   const install = partnerInstallCost(area) ?? 0;
   const dowelCost = partnerDowelCost(bom) ?? 0;
@@ -503,9 +525,13 @@ function updateStatCards() {
     return;
   }
 
-  const panels = bom.total.panelsWithReserve ?? 0;
-  const area = (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
-  const cost = bom.total.totalCost ?? 0;
+  const scoped = bomTotalsForPartnerBind(bom);
+  const panels = scoped?.panelsWithReserve ?? 0;
+  const area =
+    partnerCeilingOnlyHost() && bom.ceiling?.area > 0
+      ? bom.ceiling.area
+      : (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
+  const cost = scoped?.totalCost ?? 0;
   animateStatValue($('totalPanels'), panels, formatStatPanels);
   animateStatValue($('coverageArea'), area, formatStatArea);
   animateStatValue($('totalCost'), cost, formatStatCost);
@@ -826,6 +852,11 @@ function addAreaWall() {
   onExplicitChange();
 }
 
+function defaultWallSurfaceIdsWhenUnset() {
+  if (partnerCeilingOnlyHost() || state.options.calcWalls === false) return [];
+  return state.room.walls.map((w) => w.id);
+}
+
 function refreshWallSurfaceCheckboxes() {
   if (state.inputMode === 'area') {
     renderAreaWallsList();
@@ -839,7 +870,7 @@ function refreshWallSurfaceCheckboxes() {
   const prev = new Set(
     state.options.selectedWallIds?.length
       ? state.options.selectedWallIds
-      : state.room.walls.map((w) => w.id)
+      : defaultWallSurfaceIdsWhenUnset()
   );
 
   list.innerHTML = state.room.walls
@@ -1900,7 +1931,7 @@ function applyOptionsToForm(options) {
 
   if (options.selectedWallIds?.length) {
     state.options.selectedWallIds = [...options.selectedWallIds];
-  } else if (options.calcWalls === false) {
+  } else if (options.calcWalls === false || partnerCeilingOnlyHost()) {
     state.options.selectedWallIds = [];
   } else {
     state.options.selectedWallIds = state.room.walls.map((w) => w.id);
@@ -2146,7 +2177,8 @@ function cabinetBindAmount() {
   const bom = state.bom;
   if (!bom) return null;
   const area = cabinetBindAreaM2();
-  const panelsOnly = bom.total?.totalCost ?? null;
+  const scoped = bomTotalsForPartnerBind(bom);
+  const panelsOnly = scoped?.totalCost ?? null;
   if (PARTNER_PRICING.enabled) {
     const grand = partnerGrandTotal(bom, area, panelsOnly);
     if (grand != null) return grand;
@@ -2156,8 +2188,9 @@ function cabinetBindAmount() {
 
 function postCabinetCalcPayload(extra = {}) {
   const params = new URLSearchParams(window.location.search);
-  const panels = state.bom?.total?.panelsWithReserve ?? state.bom?.total?.panels ?? null;
-  const dowels = state.bom?.total?.dowelsWithReserve ?? null;
+  const scoped = bomTotalsForPartnerBind(state.bom);
+  const panels = scoped?.panelsWithReserve ?? scoped?.panels ?? null;
+  const dowels = scoped?.dowelsWithReserve ?? null;
   const areaM2 = cabinetBindAreaM2();
   const panelsCost = cabinetBindAmount();
   const targetOrigin =
