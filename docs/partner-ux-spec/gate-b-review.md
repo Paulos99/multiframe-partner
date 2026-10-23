@@ -3,7 +3,7 @@
 **Revision:** `rev-gate-b-final-candidate`  
 **Дата:** 2026-10-22  
 **После:** Gate A `rev-gate-a-approved-20261022` (условно, ADR-008)  
-**Статус:** final-candidate · ChatGPT expert **PASS** · **NOT approved** владельцем. **Gate C и код не начаты.**  
+**Статус:** **APPROVED** владельцем 2026-10-23 · ChatGPT expert PASS. Gate C: только изолированные HTML-прототипы. Product code / merge — нет.  
 **Ответ на:** [CHATGPT_GATE_B_REVIEW_2026-10-22.md](./CHATGPT_GATE_B_REVIEW_2026-10-22.md) + C1–C4 · [acceptance 2026-10-23](./gate-b-chatgpt-acceptance-2026-10-23.md)
 
 ---

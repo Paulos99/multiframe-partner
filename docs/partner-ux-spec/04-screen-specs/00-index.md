@@ -2,7 +2,7 @@
 
 **Revision:** `rev-gate-b-draft-2`  
 **Зависит от:** [D3](../03-information-architecture.md), Gate A approved  
-**Статус:** черновик Gate B · **NOT approved**  
+**Статус:** Gate B **APPROVED** 2026-10-23 · реализация UX → Gate C prototypes  
 **Покрытие:** [gate-b-screen-coverage-matrix.md](../gate-b-screen-coverage-matrix.md)
 
 Каждый файл = один экран/кластер с каркасом: кто / зачем / вход / иерархия / CTA / данные / переходы / loading·empty·error·offline / mobile / RBAC / AC.

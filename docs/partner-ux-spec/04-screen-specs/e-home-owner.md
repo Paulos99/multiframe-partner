@@ -1,6 +1,6 @@
 # E-home-owner — Home владельца компании
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B · NOT approved** · aliases: часть `E-home`
+**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23** · aliases: часть `E-home`
 
 ## Кто / зачем
 Owner: вмешательство в сделки/назначения + быстрый старт проекта; обзор «что требует решения».

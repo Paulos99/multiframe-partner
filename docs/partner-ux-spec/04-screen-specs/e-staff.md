@@ -1,6 +1,6 @@
 # E-staff — Сотрудники организации
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B · NOT approved**
+**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23**
 
 ## Кто
 owner: create / reset credentials / roles.  

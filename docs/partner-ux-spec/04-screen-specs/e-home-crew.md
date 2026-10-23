@@ -1,6 +1,6 @@
 # E-home-crew — Home бригады
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B · NOT approved** · aliases: часть `E-home`
+**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23** · aliases: часть `E-home`
 
 ## Кто / зачем
 Crew: найти своё задание (ordered + tech-ready), схему/чек-лист, зафиксировать blocker.

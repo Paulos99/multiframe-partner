@@ -1,6 +1,6 @@
 # E-login — Вход
 
-**Revision:** `rev-gate-b-draft-1` · **Gate B** · зависит от [D3](../03-information-architecture.md)
+**Revision:** `rev-gate-b-draft-1` · **Gate B APPROVED 2026-10-23** · зависит от [D3](../03-information-architecture.md)
 
 ## Кто
 Все роли (и демо-переключатель в demo-режиме).

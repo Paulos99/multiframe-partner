@@ -1,7 +1,7 @@
 # D5 — Модель данных и контракты
 
 **Revision:** `rev-gate-b-final-candidate`  
-**Gate:** B · **NOT approved**  
+**Gate:** B · **APPROVED** owner 2026-10-23  
 **Зависит от:** [D1](./01-product-architecture.md), [D3](./03-information-architecture.md), [ADR-004](./adr/004-deal-separate-from-room-status.md), [ADR-008](./adr/008-deal-quote-project-identity.md)  
 **Опора (readonly gap):** `packages/shared/{partner,deal,quote,events,funnel,support,learning}.ts`, `apps/api/routes/{deals,quotes,support}.js`, `apps/api/projects.js`  
 **Статус:** черновик Gate B (`rev-gate-b-draft-2`). Продуктовый код **не** менялся в этой фазе.
@@ -230,7 +230,7 @@ Homes стекают ObjectsPanel/CommercialPanel; ProjectDetail существ�
 
 ### 3.1 Канонические proposal-правила A-06 / A-09 / A-11 (GB-P0-04)
 
-> **Статус:** `proposed awaiting owner` — см. [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md). Не помечены approved.
+> **Статус:** A-06 / A-09 / A-11 **owner-approved 2026-10-23** — см. [gate-b-owner-approval-2026-10-23.md](./gate-b-owner-approval-2026-10-23.md).
 
 | ID | Каноническое правило (proposal) | Rationale | Recovery / UX | Executable AC |
 |----|--------------------------------|-----------|---------------|---------------|

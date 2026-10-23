@@ -1,6 +1,6 @@
 # E-home-sales — Home менеджера продаж
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B · NOT approved** · aliases: часть `E-home`  
+**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23** · aliases: часть `E-home`  
 **Зависит от:** [D3](../03-information-architecture.md), [D8](../08-commercial-process.md)
 
 ## Кто / зачем

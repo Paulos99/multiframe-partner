@@ -1,6 +1,6 @@
 # Gate B self-review — rev-gate-b-final-candidate
 
-**Status:** NOT approved · responds to ChatGPT C1–C4 on SHA `347b392`
+**Status:** Gate B **APPROVED** 2026-10-23 (owner) · expert PASS on `d57ac530` · C1–C4 closed
 
 | # | Check | Result | Evidence |
 |---|--------|--------|----------|

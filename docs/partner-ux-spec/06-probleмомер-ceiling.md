@@ -1,6 +1,6 @@
 # D6 — Проблемомер для потолочников (кабинет)
 
-**Revision:** `rev-gate-b-final-candidate` · **NOT approved**  
+**Revision:** `rev-gate-b-final-candidate` · **APPROVED** owner 2026-10-23  
 **Gate:** B (черновик)  
 **Зависит от:** [D1](./01-product-architecture.md), [D3](./03-information-architecture.md), [ADR-005](./adr/005-ceiling-segment-presets-pm-calc.md), [ADR-007](./adr/007-quick-entry-without-full-client-card.md), [ADR-008](./adr/008-deal-quote-project-identity.md)  
 **Опора (ядро, не UX кабинета):** `apps/web/PRODUCT_SPEC.md`  

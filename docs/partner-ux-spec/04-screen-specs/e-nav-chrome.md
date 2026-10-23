@@ -1,6 +1,6 @@
 # E-nav — Chrome и навигация
 
-**Revision:** `rev-gate-b-draft-1` · **Gate B** · зависит от [D3](../03-information-architecture.md)
+**Revision:** `rev-gate-b-draft-1` · **Gate B APPROVED 2026-10-23** · зависит от [D3](../03-information-architecture.md)
 
 ## Кто
 Все авторизованные роли.

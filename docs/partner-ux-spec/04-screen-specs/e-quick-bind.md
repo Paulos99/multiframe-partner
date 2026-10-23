@@ -1,6 +1,6 @@
 # E-quick-bind — Привязка draft после tool
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B · NOT approved**  
+**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23**  
 **Зависит от:** [D3 §3b](../03-information-architecture.md), [ADR-007](../adr/007-quick-entry-without-full-client-card.md), [D5 A-11](../05-data-model-contracts.md)
 
 ## Кто

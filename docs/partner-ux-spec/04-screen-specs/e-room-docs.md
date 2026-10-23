@@ -1,6 +1,6 @@
 # E-room-docs — Документы и версии комнаты
 
-**Revision:** `rev-gate-b-draft-2` · **Gate B · NOT approved**  
+**Revision:** `rev-gate-b-draft-2` · **Gate B APPROVED 2026-10-23**  
 **Alias:** часть документов с E-room; канон ID = `E-room-docs`
 
 ## Кто
