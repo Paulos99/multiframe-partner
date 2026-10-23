@@ -77,39 +77,48 @@
 
   function nav(active) {
     const role = S().role;
+    // Owner clarification: Проблемомер + Калькулятор — самостоятельные инструменты для всех сотрудников
+    const toolLinks = [
+      ["#/tools/pm", "Проблемомер"],
+      ["#/tools/calc", "Калькулятор"],
+    ];
     const items = {
       sales: [
         ["#/sales/home", "Сегодня", "①"],
         ["#/sales/projects", "Проекты", "②"],
-        ["#/sales/quick", "Расчёт", "③"],
+        ["#/tools/hub", "Инстр.", "③"],
         ["#/sales/academy", "Ещё", "④"],
       ],
       owner: [
         ["#/owner/home", "Сегодня", "①"],
         ["#/owner/projects", "Проекты", "②"],
-        ["#/owner/staff", "Сотрудн.", "③"],
+        ["#/tools/hub", "Инстр.", "③"],
+        ["#/owner/staff", "Сотрудн.", "④"],
       ],
       measurer: [
         ["#/measurer/home", "Замеры", "①"],
         ["#/measurer/projects", "Проекты", "②"],
+        ["#/tools/hub", "Инстр.", "③"],
       ],
       crew: [
         ["#/crew/home", "Задания", "①"],
+        ["#/tools/hub", "Инстр.", "②"],
       ],
       admin: [
         ["#/admin/home", "Сигналы", "①"],
         ["#/admin/partners", "Партнёры", "②"],
-        ["#/admin/analytics", "Сеть", "③"],
+        ["#/tools/hub", "Инстр.", "③"],
         ["#/admin/training", "Обучение", "④"],
       ],
     }[role] || [];
 
     const desktopExtra = {
-      sales: [["#/sales/analytics", "Аналитика"]],
-      admin: [],
+      sales: [["#/sales/analytics", "Аналитика"], ["#/sales/quick", "Сессия PM→Calc"]],
+      admin: [["#/admin/analytics", "Сеть"]],
     }[role] || [];
 
     const allDesktop = items.concat(desktopExtra);
+    const toolsActive = active && String(active).startsWith("tools");
 
     return `
       <nav class="nav desktop-nav" aria-label="Основная навигация">
@@ -120,8 +129,16 @@
             return `<a href="${href}" class="${isActive ? "active" : ""}">${label}</a>`;
           })
           .join("")}
+        <div class="nav-section">Инструменты</div>
+        ${toolLinks
+          .map(([href, label]) => {
+            const isActive = toolsActive && href.includes(active);
+            return `<a href="${href}" class="${isActive ? "active" : ""}">${label}</a>`;
+          })
+          .join("")}
+        <p class="dim" style="padding:4px 12px;font-size:.72rem">Прямой доступ · без обязательного PM↔Calc · bind при Save</p>
         <div class="nav-section">Прототип</div>
-        <button class="nav-link" data-action="reset">Сбросить демо-данные (v4)</button>
+        <button class="nav-link" data-action="reset">Сбросить демо-данные (v5)</button>
         <button class="nav-link" data-action="toggle-loading">Demo loading</button>
       </nav>
       <nav class="bottom-nav" aria-label="Мобильная навигация">
@@ -132,6 +149,256 @@
           })
           .join("")}
       </nav>`;
+  }
+
+  /** Shared tools hub — one tap each to PM or Calc (all roles) */
+  function toolsHub() {
+    return shell(
+      "tools/hub",
+      `
+      <div class="page-head">
+        <div>
+          <h1>Инструменты</h1>
+          <p class="sub">Владелец: проблемомер и калькулятор — самостоятельные инструменты для всех сотрудников. Вид согласован; не редизайн.</p>
+        </div>
+      </div>
+      <div class="grid-2">
+        <a class="panel" style="text-align:left;display:block;text-decoration:none;color:inherit" href="#/tools/pm">
+          <h3>Проблемомер</h3>
+          <p class="muted">Анкета + Result. Без проекта и без обязательного calc.</p>
+          <span class="btn primary sm" style="margin-top:8px">Открыть</span>
+        </a>
+        <a class="panel" style="text-align:left;display:block;text-decoration:none;color:inherit" href="#/tools/calc">
+          <h3>Калькулятор</h3>
+          <p class="muted">Предварительный ориентир. Без обязательного PM и без проекта до Save.</p>
+          <span class="btn primary sm" style="margin-top:8px">Открыть</span>
+        </a>
+      </div>
+      <p class="muted" style="margin-top:14px">Привязка к проекту/комнате — только при сохранении результата (с учётом прав роли на данные).</p>
+      ${
+        S().role === "sales"
+          ? `<p class="dim">Опционально: <a href="#/sales/quick">сессия PM→Calc с переносом данных</a>.</p>`
+          : ""
+      }`
+    );
+  }
+
+  function toolsPm() {
+    return toolsWrapPm();
+  }
+
+  function toolsWrapPm() {
+    const d = S().sessionDraft;
+    if (!d) {
+      return shell(
+        "tools/pm",
+        `<div class="page-head"><div><h1>Проблемомер</h1><p class="sub">Самостоятельный инструмент · роль ${esc(
+          S().role || "—"
+        )}</p></div></div>
+         <div class="grid-2">
+           <button class="panel" style="text-align:left;cursor:pointer" data-action="tools-start-pm" data-persona="quiet">
+             <h3>Клиент без жалобы на шум</h3><p class="muted">Опциональный пресет</p>
+           </button>
+           <button class="panel" style="text-align:left;cursor:pointer" data-action="tools-start-pm" data-persona="noise">
+             <h3>Клиент слышит соседей</h3><p class="muted">Опциональный пресет</p>
+           </button>
+         </div>
+         <button class="btn" style="margin-top:12px" data-action="tools-start-pm" data-persona="">Нейтральный старт</button>
+         <p class="muted" style="margin-top:10px"><a href="#/tools/calc">Калькулятор</a> можно открыть отдельно, без PM.</p>`
+      );
+    }
+    // Monkey-patch shell active by calling salesPmQuick content via temporary role-neutral rebuild:
+    // Use same markup paths as salesPmQuick but shell("tools/pm")
+    const a = d.answers || {};
+    if (d.pmDone && d.pmResult && S().ui.pmStep === "result") {
+      const r = d.pmResult;
+      const ch = r.chain;
+      return shell(
+        "tools/pm",
+        `
+      <div class="page-head">
+        <div><h1>Проблемомер · Result</h1><p class="sub">Самостоятельный инструмент · без обязательного calc</p></div>
+        <div class="page-actions">
+          <button class="btn ghost" data-action="pm-resuvey">Изменить ответы</button>
+          <a class="btn" href="#/tools/hub">Инструменты</a>
+        </div>
+      </div>
+      <div class="panel stack-gap">
+        <div class="banner info"><strong>Пресет:</strong> stretch · ${r.areaM2} м² · persona «${esc(r.clientPersona)}»</div>
+        <ol class="list">
+          <li class="list-item"><div><div class="title">1. Нормы / ориентир</div><div class="meta">${esc(ch.norms)}</div></div></li>
+          <li class="list-item"><div><div class="title">2. Сейчас</div><div class="meta">${esc(ch.current)}</div></div></li>
+          <li class="list-item"><div><div class="title">3. С MultiFrame</div><div class="meta">${esc(ch.withMf)}</div></div></li>
+          <li class="list-item"><div><div class="title">4. Разница</div><div class="meta">${esc(ch.difference)}</div></div></li>
+          <li class="list-item"><div><div class="title">5. Следующий шаг</div><div class="meta">${esc(ch.nextStep)}</div></div></li>
+        </ol>
+        <p>${esc(r.narrative)}</p>
+        <div class="row">
+          <a class="btn primary" href="#/tools/bind">Сохранить профиль</a>
+          <a class="btn" href="#/tools/calc">Открыть калькулятор (опционально)</a>
+        </div>
+      </div>`
+      );
+    }
+    return shell(
+      "tools/pm",
+      `
+      <div class="page-head">
+        <div><h1>Проблемомер · анкета</h1><p class="sub">Роль: ${esc(S().role)} · consultationSessionId ${esc(
+        d.consultationSessionId
+      )}</p></div>
+        <div class="page-actions"><a class="btn ghost" href="#/tools/hub">Инструменты</a></div>
+      </div>
+      <div class="panel" style="max-width:520px">
+        <div class="field"><label>Тип комнаты</label>
+          <select id="pm-room">
+            <option value="bedroom" ${a.roomType==="bedroom"?"selected":""}>Спальня</option>
+            <option value="living" ${a.roomType==="living"?"selected":""}>Гостиная</option>
+            <option value="kids" ${a.roomType==="kids"?"selected":""}>Детская</option>
+            <option value="kitchen" ${a.roomType==="kitchen"?"selected":""}>Кухня</option>
+          </select>
+        </div>
+        <div class="field"><label>Площадь, м²</label><input id="pm-area" type="number" value="${a.areaM2 ?? 14}"></div>
+        <div class="field"><label>Соседи сверху</label>
+          <select id="pm-neighbors">
+            <option value="unknown" ${a.neighbors==="unknown"?"selected":""}>Не знаю / не спрашивали</option>
+            <option value="none" ${a.neighbors==="none"?"selected":""}>Нет / не беспокоят</option>
+            <option value="above" ${a.neighbors==="above"?"selected":""}>Есть, слышны</option>
+          </select>
+        </div>
+        <div class="field"><label>Осведомлённость о шуме</label>
+          <select id="pm-noise">
+            <option value="unknown" ${a.noiseAwareness==="unknown"?"selected":""}>Не поднимали тему</option>
+            <option value="none" ${a.noiseAwareness==="none"?"selected":""}>Клиент не жалуется</option>
+            <option value="bothered" ${a.noiseAwareness==="bothered"?"selected":""}>Беспокоит шум</option>
+          </select>
+        </div>
+        <div class="field"><label>Цель использования</label>
+          <select id="pm-purpose">
+            <option value="living" ${a.purpose==="living"?"selected":""}>Жилая</option>
+            <option value="sleep" ${a.purpose==="sleep"?"selected":""}>Сон / тишина</option>
+            <option value="work" ${a.purpose==="work"?"selected":""}>Кабинет</option>
+          </select>
+        </div>
+        <button class="btn primary" data-action="pm-run">Показать Result</button>
+      </div>`
+    );
+  }
+
+  function toolsCalc() {
+    let d = S().sessionDraft;
+    if (!d || d.bound) {
+      d = null;
+    }
+    const area = d ? MFStore.draftAreaM2(d) : 14;
+    const segment = d?.segment || "comfort";
+    const estimate = Math.round(area * (segment === "premium" ? 4200 : segment === "comfort" ? 3400 : 2800));
+    return shell(
+      "tools/calc",
+      `
+      <div class="page-head">
+        <div>
+          <h1>Калькулятор · предварительный</h1>
+          <p class="sub">Самостоятельный инструмент · PM не обязателен · роль ${esc(S().role || "—")}</p>
+        </div>
+        <div class="page-actions"><a class="btn ghost" href="#/tools/hub">Инструменты</a></div>
+      </div>
+      <div class="panel" style="max-width:520px">
+        <div class="field"><label>Площадь, м²</label>
+          <input id="tools-calc-area" type="number" value="${area}">
+        </div>
+        <div class="field"><label>Сегмент</label>
+          <select id="tools-calc-seg">
+            <option value="standard" ${segment==="standard"?"selected":""}>standard</option>
+            <option value="comfort" ${segment==="comfort"?"selected":""}>comfort</option>
+            <option value="premium" ${segment==="premium"?"selected":""}>premium</option>
+          </select>
+        </div>
+        <div class="stat" style="margin-top:12px"><div class="n">${money(estimate)}</div><div class="l">Ориентир · обновится после «Пересчитать»</div></div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn" data-action="tools-calc-recalc">Пересчитать</button>
+          <button class="btn primary" data-action="tools-calc-save" data-amount="${estimate}" data-area="${area}">Сохранить ориентир → привязка</button>
+        </div>
+        <p class="muted" style="margin-top:10px">${
+          d?.pmDone ? "В черновике уже есть PM Result — можно сохранить both на bind." : "PM не пройден — это нормально для прямого входа в calc."
+        }</p>
+        <p class="dim"><a href="#/tools/pm">Открыть проблемомер</a> (опционально, с переносом площади при желании).</p>
+      </div>`
+    );
+  }
+
+  function toolsBind() {
+    // Duplicate bind UI with tools/bind active (GC3 preview live)
+    const d = S().sessionDraft;
+    if (!d) return shell("tools/bind", `<div class="banner warn">Нет черновика</div>`);
+    if (!d.pmDone && !d.calcDone) {
+      return shell(
+        "tools/bind",
+        `<div class="banner warn">Нужен Result PM <em>или</em> calc.</div>
+         <a class="btn" href="#/tools/pm">Проблемомер</a> <a class="btn" href="#/tools/calc">Калькулятор</a>`
+      );
+    }
+    if (d.bound) {
+      return shell(
+        "tools/bind",
+        `<div class="banner ok">Сохранено (${esc(d.saveType || "—")}) → ${esc(d.projectId)} / ${esc(d.roomId)}</div>
+         <a class="btn primary" href="#/${S().role === "sales" ? "sales" : S().role}/home">На home роли</a>`
+      );
+    }
+    const mode = S().ui.bindMode || "pick";
+    const projects = S().projects.filter((p) => p.rooms && p.rooms.length);
+    const saveTypeDefault = d.pmDone && d.calcDone ? "both" : d.calcDone ? "preliminary" : "profile";
+    const selected = S().ui.bindSaveType || saveTypeDefault;
+    const areaPrompt = S().ui.bindAreaPrompt;
+    const previewFor = (st) => {
+      if (st === "profile") return d.pmDone ? "только профиль PM (без preliminary)" : "—";
+      if (st === "preliminary")
+        return `${d.pmDone ? "профиль PM + " : ""}preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
+      if (st === "both") return `профиль PM + preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
+      return "—";
+    };
+    return shell(
+      "tools/bind",
+      `
+      <div class="page-head"><div><h1>Куда сохранить?</h1><p class="sub">Bind при Save · роль ${esc(S().role)}</p></div></div>
+      ${
+        areaPrompt
+          ? `<div class="banner warn"><strong>Площадь не совпадает</strong>: комната ${areaPrompt.roomArea} vs консультация ${areaPrompt.draftArea} м²
+              <div class="row" style="margin-top:10px">
+                <button class="btn primary" data-action="bind-resolve-area" data-resolution="adopt_consultation">Площадь консультации</button>
+                <button class="btn" data-action="bind-resolve-area" data-resolution="keep_room_recalc">Площадь комнаты + пересчёт</button>
+                <button class="btn ghost" data-action="bind-cancel-area">Отмена</button>
+              </div></div>`
+          : ""
+      }
+      <div class="tabs">
+        <button class="tab ${mode==="pick"?"active":""}" data-action="bind-mode" data-mode="pick">Существующие</button>
+        <button class="tab ${mode==="create"?"active":""}" data-action="bind-mode" data-mode="create">Создать</button>
+      </div>
+      <div class="panel">
+        <div class="field"><label>Тип сохранения</label>
+          <select id="bind-savetype" data-action="bind-savetype-change">
+            <option value="profile" ${selected==="profile"?"selected":""} ${d.pmDone?"":"disabled"}>Только профиль PM</option>
+            <option value="preliminary" ${selected==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>Preliminary${d.pmDone?" (+профиль)":""}</option>
+            <option value="both" ${selected==="both"?"selected":""} ${d.pmDone && d.calcDone?"":"disabled"}>Профиль + preliminary</option>
+          </select>
+        </div>
+        ${
+          mode === "pick"
+            ? `<div class="field"><label>Проект + комната</label>
+                <select id="bind-pair">${projects
+                  .flatMap((p) =>
+                    p.rooms.map((r) => `<option value="${p.id}::${r.id}">${esc(p.name)} → ${esc(r.name)} (${r.areaM2} м²)</option>`)
+                  )
+                  .join("")}</select></div>`
+            : `<div class="field"><label>Проект</label><input id="bind-proj" value="Новый клиент · консультация"></div>
+               <div class="field"><label>Комната</label><input id="bind-room" value="Спальня"></div>
+               <div class="field"><label>Клиент</label><input id="bind-client" value=""></div>`
+        }
+        <div class="banner info">Будет сохранено («${esc(selected)}»): ${esc(previewFor(selected))}</div>
+        <button class="btn primary" data-action="do-bind" ${areaPrompt ? "disabled" : ""}>Сохранить в комнату</button>
+      </div>`
+    );
   }
 
   function shell(activeNav, body) {
@@ -428,6 +695,7 @@
     const projects = S().projects.filter((p) => p.rooms && p.rooms.length);
     // GC2-P0-04: default both when PM+Calc ready
     const saveTypeDefault = d.pmDone && d.calcDone ? "both" : d.calcDone ? "preliminary" : "profile";
+    const selected = S().ui.bindSaveType || saveTypeDefault;
     const areaPrompt = S().ui.bindAreaPrompt;
     const previewFor = (st) => {
       if (st === "profile") return d.pmDone ? "только профиль PM (без preliminary)" : "—";
@@ -468,10 +736,10 @@
       }
       <div class="panel">
         <div class="field"><label>Тип сохранения</label>
-          <select id="bind-savetype">
-            <option value="profile" ${saveTypeDefault==="profile"?"selected":""} ${d.pmDone?"":"disabled"}>Только акустический профиль PM${d.pmDone?"":" (нужен PM)"}</option>
-            <option value="preliminary" ${saveTypeDefault==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>Preliminary calc${d.pmDone?" (+профиль, если есть PM)":""}${d.calcDone?"":" — сначала calc"}</option>
-            <option value="both" ${saveTypeDefault==="both"?"selected":""} ${d.pmDone && d.calcDone?"":"disabled"}>Профиль PM + preliminary calc</option>
+          <select id="bind-savetype" data-action="bind-savetype-change">
+            <option value="profile" ${selected==="profile"?"selected":""} ${d.pmDone?"":"disabled"}>Только акустический профиль PM${d.pmDone?"":" (нужен PM)"}</option>
+            <option value="preliminary" ${selected==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>Preliminary calc${d.pmDone?" (+профиль, если есть PM)":""}${d.calcDone?"":" — сначала calc"}</option>
+            <option value="both" ${selected==="both"?"selected":""} ${d.pmDone && d.calcDone?"":"disabled"}>Профиль PM + preliminary calc</option>
           </select>
         </div>
         ${
@@ -489,8 +757,8 @@
                <div class="field"><label>Комната</label><input id="bind-room" value="Спальня"></div>
                <div class="field"><label>Клиент</label><input id="bind-client" value=""></div>`
         }
-        <div class="banner info" style="margin:10px 0">Будет сохранено при текущем типе «${esc(saveTypeDefault)}»: ${esc(
-          previewFor(saveTypeDefault)
+        <div class="banner info" style="margin:10px 0">Будет сохранено («${esc(selected)}»): ${esc(
+          previewFor(selected)
         )}. «Только профиль» не обещает preliminary.</div>
         <button class="btn primary" data-action="do-bind" ${areaPrompt ? "disabled" : ""}>Сохранить в комнату</button>
       </div>`
@@ -1607,6 +1875,10 @@
 
   global.MFViews = {
     login,
+    toolsHub,
+    toolsPm,
+    toolsCalc,
+    toolsBind,
     salesHome,
     salesInquiry,
     salesQuick,

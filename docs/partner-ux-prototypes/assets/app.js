@@ -38,6 +38,16 @@
     return true;
   }
 
+  /** Shared tools: any logged-in employee role */
+  function requireStaff() {
+    const st = MFStore.get();
+    if (!st.role) {
+      location.hash = "#/login";
+      return false;
+    }
+    return true;
+  }
+
   function render() {
     const { parts, params } = parseHash();
     const st = MFStore.get();
@@ -51,7 +61,14 @@
         return;
       } else {
         const [zone, screen, a, b] = parts;
-        if (zone === "sales") {
+        if (zone === "tools") {
+          if (!requireStaff()) return;
+          if (screen === "hub") html = MFViews.toolsHub();
+          else if (screen === "pm") html = MFViews.toolsPm();
+          else if (screen === "calc") html = MFViews.toolsCalc();
+          else if (screen === "bind") html = MFViews.toolsBind();
+          else html = MFViews.toolsHub();
+        } else if (zone === "sales") {
           if (!requireRole("sales")) return;
           if (screen === "home") html = MFViews.salesHome();
           else if (screen === "inquiry") html = MFViews.salesInquiry();
@@ -184,6 +201,9 @@
     document.querySelectorAll('input[data-action="na-reason"]').forEach((el) => {
       el.addEventListener("change", onAction);
     });
+    document.querySelectorAll("select[data-action]").forEach((el) => {
+      el.addEventListener("change", onAction);
+    });
   }
 
   function onAction(ev) {
@@ -240,6 +260,40 @@
       location.hash = "#/sales/pm-quick";
       return;
     }
+    if (action === "tools-start-pm") {
+      MFStore.startQuickConsultation(el.getAttribute("data-persona") || "");
+      toast("Проблемомер", "самостоятельный старт", "ok");
+      location.hash = "#/tools/pm";
+      return;
+    }
+    if (action === "tools-calc-recalc") {
+      const area = Number(document.getElementById("tools-calc-area")?.value) || 14;
+      const seg = document.getElementById("tools-calc-seg")?.value || "comfort";
+      MFStore.ensureCalcDraft(area);
+      MFStore.get().sessionDraft.segment = seg;
+      MFStore.save();
+      toast("Пересчитано", `${area} м² · ${seg}`, "ok");
+      render();
+      return;
+    }
+    if (action === "tools-calc-save") {
+      const area = Number(document.getElementById("tools-calc-area")?.value) || Number(el.getAttribute("data-area")) || 14;
+      const seg = document.getElementById("tools-calc-seg")?.value || "comfort";
+      MFStore.ensureCalcDraft(area);
+      MFStore.get().sessionDraft.segment = seg;
+      const rate = seg === "premium" ? 4200 : seg === "comfort" ? 3400 : 2800;
+      const amount = Math.round(area * rate);
+      MFStore.finishCalcOnDraft(amount, area);
+      toast("Ориентир в черновике", `${area} м² · ${amount} ₽`, "ok");
+      location.hash = "#/tools/bind";
+      return;
+    }
+    if (action === "bind-savetype-change") {
+      MFStore.get().ui.bindSaveType = el.value;
+      MFStore.save();
+      render();
+      return;
+    }
     if (action === "abandon-quick") {
       MFStore.get().sessionDraft = null;
       MFStore.save();
@@ -247,6 +301,9 @@
       return;
     }
     if (action === "pm-run") {
+      if (!MFStore.get().sessionDraft || MFStore.get().sessionDraft.bound) {
+        MFStore.ensurePmDraft("");
+      }
       MFStore.updatePmAnswers({
         roomType: document.getElementById("pm-room").value,
         areaM2: Number(document.getElementById("pm-area").value),
@@ -328,7 +385,10 @@
         return;
       }
       toast("Сохранено", `${res.saveType} → ${res.roomId}${res.amount != null ? " · " + res.amount + " ₽" : ""}`, "ok");
-      location.hash = `#/sales/room/${res.projectId}/${res.roomId}`;
+      location.hash =
+        MFStore.get().role === "sales"
+          ? `#/sales/room/${res.projectId}/${res.roomId}`
+          : `#/tools/bind`;
       return;
     }
     if (action === "bind-resolve-area") {
@@ -348,7 +408,10 @@
         return;
       }
       toast("Сохранено", `${res.areaM2} м² · ${res.amount} ₽`, "ok");
-      location.hash = `#/sales/room/${res.projectId}/${res.roomId}`;
+      location.hash =
+        MFStore.get().role === "sales"
+          ? `#/sales/room/${res.projectId}/${res.roomId}`
+          : `#/tools/bind`;
       return;
     }
     if (action === "bind-cancel-area") {

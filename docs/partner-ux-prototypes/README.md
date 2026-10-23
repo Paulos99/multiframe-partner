@@ -1,11 +1,13 @@
 # Gate C — изолированные HTML-прототипы MultiFrame Партнёр
 
-**Revision:** `rev-gate-c-draft-4`  
-**Статус:** Gate C **in review** (GC3 fixes after `16a90c0`) · Gate B **APPROVED / frozen**  
+**Revision:** `rev-gate-c-draft-5`  
+**Статус:** Gate C **in review** (shared tools + 409 retry after `5188bf1`) · Gate B **APPROVED / frozen**  
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Changelog: [`CHANGELOG-draft-4.md`](./CHANGELOG-draft-4.md) · Smoke: `node smoke.mjs` · prior draft-3/2 changelogs retained.
+Changelog: [`CHANGELOG-draft-5.md`](./CHANGELOG-draft-5.md) · Smoke: `node smoke.mjs` (26/26).
+
+**Инструменты (все роли):** `#/tools/pm` · `#/tools/calc` · hub `#/tools/hub` — прямые входы, PM и Calc независимы.
 
 ---
 
@@ -16,7 +18,7 @@ python3 -m http.server 8765 --directory docs/partner-ux-prototypes
 # http://localhost:8765/
 ```
 
-Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v4`** (сброс в nav).
+Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v5`** (сброс в nav).
 
 ---
 

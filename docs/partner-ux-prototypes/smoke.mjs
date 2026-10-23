@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Executable Gate C store smoke — rev-gate-c-draft-4
+ * Executable Gate C store smoke — rev-gate-c-draft-5
  *
- * Usage (from this directory):
- *   node smoke.mjs
+ * Usage (from this directory or repo root):
+ *   node docs/partner-ux-prototypes/smoke.mjs
+ *   cd docs/partner-ux-prototypes && node smoke.mjs
  *
  * Exit 0 = all PASS. Not human UX testing.
  */
@@ -142,6 +143,51 @@ check(
 const applied = MFStore.resolveConflict("prj_nv_volkova", "room_vol_bed", "apply_incoming");
 check("P1-02 apply incoming", applied.ok && MFStore.room("prj_nv_volkova", "room_vol_bed").lengthM === 7, JSON.stringify(applied));
 check("P1-02 pending cleared", !MFStore.get().pendingConflicts.room_vol_bed);
+
+// GC3-P1-02 retry → pendingConflicts.retryPrefill (view source)
+MFStore.resetAll();
+MFStore.saveDetailedCalc("prj_nv_volkova", "room_vol_bed", {
+  lengthM: 7,
+  widthM: 4,
+  cutouts: 2,
+  forceConflict: true,
+  expectedRevision: "stale",
+  bom: [{ sku: "R", name: "RetryBOM", qty: 3, unit: "шт" }],
+  schemeLabel: "retry-scheme",
+});
+const retry = MFStore.resolveConflict("prj_nv_volkova", "room_vol_bed", "retry");
+const pref = MFStore.get().pendingConflicts.room_vol_bed?.retryPrefill;
+check("P1-02 retry ok", retry.ok && retry.choice === "retry", JSON.stringify(retry));
+check("P1-02 retryPrefill on pending", pref && pref.lengthM === 7 && pref.cutouts === 2, JSON.stringify(pref));
+check("P1-02 current still untouched after retry", MFStore.room("prj_nv_volkova", "room_vol_bed").lengthM !== 7);
+// save without 409 after retry prefill
+const savedRetry = MFStore.saveDetailedCalc("prj_nv_volkova", "room_vol_bed", {
+  lengthM: pref.lengthM,
+  widthM: pref.widthM,
+  cutouts: pref.cutouts,
+  schemeLabel: pref.schemeLabel,
+  bom: pref.bom,
+  forceConflict: false,
+  expectedRevision: MFStore.room("prj_nv_volkova", "room_vol_bed").detailed.revisionId,
+});
+check("P1-02 retry save ok", savedRetry.ok && savedRetry.scheme, savedRetry.error);
+check("P1-02 pending cleared after save", !MFStore.get().pendingConflicts.room_vol_bed);
+check("P1-02 room length=7 after retry save", MFStore.room("prj_nv_volkova", "room_vol_bed").lengthM === 7);
+
+// Shared tools: calc-only draft without PM
+MFStore.resetAll();
+MFStore.ensureCalcDraft(19);
+MFStore.get().sessionDraft.segment = "comfort";
+MFStore.finishCalcOnDraft(19 * 3400, 19);
+check("tools calc-only draft", MFStore.get().sessionDraft.calcDone && !MFStore.get().sessionDraft.pmDone, "ok");
+const calcBind = MFStore.bindDraft({
+  mode: "create",
+  saveType: "preliminary",
+  projectName: "Calc Only",
+  roomName: "Комната",
+  client: "X",
+});
+check("tools calc-only bind", calcBind.ok && MFStore.room(calcBind.projectId, calcBind.roomId).preliminary?.areaM2 === 19);
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");

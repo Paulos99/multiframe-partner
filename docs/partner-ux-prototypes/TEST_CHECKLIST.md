@@ -1,14 +1,14 @@
-# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-4`
+# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-5`
 
 **Честно:** ячейки «Observed» ниже — **agent walkthrough / store smoke**, **не** human usability lab.  
 GC-P1-05: финальный Gate C OK требует незаполненный человеком прогон без подсказок. Не ставить UX PASS по зелёному smoke.
 
 | Поле | Значение |
 |------|----------|
-| Revision | `rev-gate-c-draft-4` |
+| Revision | `rev-gate-c-draft-5` |
 | Device agent | desktop Chromium + store VM |
 | Human observed | **NOT observed** |
-| Agent smoke GC3 | **18/18 PASS** (`node smoke.mjs`) |
+| Agent smoke | **26/26 PASS** (`node smoke.mjs`) |
 
 Протокол §7.1: first-click · confusion · re-entry · clarity 1–5 · recovery · device · comments.
 
@@ -69,6 +69,18 @@ GC-P1-05: финальный Gate C OK требует незаполненный
 ### GC3-P1-02 — 409 compare / restore
 - Steps: detailed 409 → compare → apply incoming or keep; dismiss keeps pending  
 - Agent: PASS · Human: NOT observed  
+
+### GC3-P1-02 remainder — retry prefill
+- Steps: 409 → «Повторить с актуальной revision» → L/W/BOM = incoming → save without 409  
+- Agent: PASS (`smoke.mjs`) · Human: NOT observed  
+
+### Owner shared tools — all roles
+- Steps: login owner/crew/admin/measurer/sales → desktop Проблемомер + Калькулятор OR mobile Инстр. hub → open each without the other  
+- Agent: routes wired · Human: NOT observed  
+
+### Bind preview follows select
+- Steps: PM+Calc bind → change saveType to profile-only → banner text updates  
+- Agent: wired (`bind-savetype-change`) · Human: NOT observed  
 
 ---
 

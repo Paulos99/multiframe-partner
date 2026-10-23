@@ -1,9 +1,9 @@
 /**
- * Gate C draft-4 store — demo fixtures only. NOT production proof.
- * KEY bumped to v4 after GC3-P0/P1 fixes (ChatGPT re-review on 16a90c0).
+ * Gate C draft-5 store — demo fixtures only. NOT production proof.
+ * KEY bumped to v5: shared tools access + 409 retry fix (owner clarification).
  */
 (function (global) {
-  const KEY = "mf_gate_c_proto_v4";
+  const KEY = "mf_gate_c_proto_v5";
   const CREW_SELF = "u_denis";
   const MEASURER_SELF = "u_pavel";
 
@@ -267,7 +267,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-4",
+      revision: "rev-gate-c-draft-5",
       role: null,
       offline: false,
       syncState: "online",
@@ -293,6 +293,7 @@
         quotePreview: null,
         oneTimeCred: null,
         bindAreaPrompt: null,
+        bindSaveType: null,
       },
       org: {
         id: "org_neboline",
@@ -769,6 +770,55 @@
     return state.sessionDraft;
   }
 
+  /** Owner clarification: Calc may start without PM / project */
+  function ensureCalcDraft(areaM2) {
+    if (state.sessionDraft && !state.sessionDraft.bound) {
+      if (areaM2 != null) {
+        state.sessionDraft.answers = state.sessionDraft.answers || {};
+        state.sessionDraft.answers.areaM2 = Number(areaM2) || draftAreaM2(state.sessionDraft);
+      }
+      save();
+      return state.sessionDraft;
+    }
+    state.consultationSessionId = uid("csess");
+    state.sessionDraft = {
+      kind: "calc_only",
+      consultationSessionId: state.consultationSessionId,
+      saveType: null,
+      answers: {
+        roomType: "bedroom",
+        areaM2: Number(areaM2) || 14,
+        neighbors: "unknown",
+        noiseAwareness: "unknown",
+        purpose: "living",
+        personaHint: null,
+      },
+      segment: "comfort",
+      pmDone: false,
+      pmResult: null,
+      calcDone: false,
+      amount: null,
+      multiframeOffered: false,
+      bound: false,
+      projectId: null,
+      roomId: null,
+    };
+    save();
+    return state.sessionDraft;
+  }
+
+  /** Owner clarification: PM may start without calc / project */
+  function ensurePmDraft(personaHint) {
+    if (state.sessionDraft && !state.sessionDraft.bound && !state.sessionDraft.pmDone) {
+      return state.sessionDraft;
+    }
+    if (state.sessionDraft && !state.sessionDraft.bound && state.sessionDraft.pmDone) {
+      // reopen survey on existing unbound draft
+      return state.sessionDraft;
+    }
+    return startQuickConsultation(personaHint || "");
+  }
+
   function updatePmAnswers(patch) {
     if (!state.sessionDraft) return;
     Object.assign(state.sessionDraft.answers, patch);
@@ -1145,6 +1195,9 @@
     });
     const deal = activeDeal(projectId);
     if (deal && !deal.paused) deal.stage = "calculated";
+    // successful save clears pending 409 for this room
+    if (state.pendingConflicts[roomId]) delete state.pendingConflicts[roomId];
+    if (state.ui.conflictDemo?.roomId === roomId) state.ui.conflictDemo = null;
     pushEvent("detailed_saved", { projectId, roomId, revisionId, schemeId: scheme.id });
     save();
     return { ok: true, revisionId, amount, scheme, bom, area };
@@ -1335,24 +1388,28 @@
     }
 
     if (choice === "retry") {
-      // Restore form fields from incoming for re-edit; keep current on room; clear force path
+      // GC3-P1-02 remainder: write retryPrefill onto pendingConflicts (view reads that first)
       const inc = conflict.incomingPreview;
-      state.ui.conflictDemo = {
+      const retryPrefill = inc
+        ? {
+            lengthM: inc.lengthM,
+            widthM: inc.widthM,
+            cutouts: inc.geometry?.cutouts || 0,
+            schemeLabel: inc.scheme?.label,
+            bom: JSON.parse(JSON.stringify(inc.bom || [])),
+          }
+        : null;
+      const next = {
         ...conflict,
         dismissed: false,
-        retryPrefill: inc
-          ? {
-              lengthM: inc.lengthM,
-              widthM: inc.widthM,
-              cutouts: inc.geometry?.cutouts || 0,
-              schemeLabel: inc.scheme?.label,
-              bom: inc.bom,
-            }
-          : null,
-        message: "Retry: поля заполнены вашим вариантом. Сохраните без 409 — expectedRevision = current.",
+        retryPrefill,
+        message:
+          "Retry: поля заполнены вашим входящим вариантом. Снимите «Симулировать 409» и сохраните — expectedRevision = current.",
       };
+      state.pendingConflicts[roomId] = next;
+      state.ui.conflictDemo = next;
       save();
-      return { ok: true, choice: "retry", prefill: state.ui.conflictDemo.retryPrefill, current: conflict.current };
+      return { ok: true, choice: "retry", prefill: retryPrefill, current: conflict.current };
     }
 
     return { ok: false, error: "bad_choice" };
@@ -1760,6 +1817,8 @@
     dismissConflictBanner,
     resolveConflict,
     startQuickConsultation,
+    ensureCalcDraft,
+    ensurePmDraft,
     updatePmAnswers,
     runPmOnDraft,
     markMultiframeOffered,
