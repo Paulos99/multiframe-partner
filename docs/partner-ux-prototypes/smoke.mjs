@@ -309,6 +309,11 @@ dPm.answers = { ...(dPm.answers || {}), areaM2: 21 };
 const qsHandoff = MFStore.buildCalcIframeQuery(dPm);
 check("GC9-P0-01 PM area handoff", qsHandoff.includes("area=21"));
 
+const calcApp = fs.readFileSync(path.join(__dirname, "tools/calculator/src/ui/app.js"), "utf8");
+check("GC10-P0-01 walls unset helper", calcApp.includes("defaultWallSurfaceIdsWhenUnset"));
+check("GC10-P0-01 ceiling bind totals", calcApp.includes("bomTotalsForPartnerBind"));
+check("rev-gate-c-draft-11", MFStore.get().revision === "rev-gate-c-draft-11");
+
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");
 if (failed.length) {

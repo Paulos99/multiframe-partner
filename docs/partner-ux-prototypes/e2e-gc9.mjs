@@ -205,6 +205,8 @@ await f2.locator("#entryDimsBtn").click();
 await f2.locator("#quickLength").fill("7");
 await f2.locator("#quickWidth").fill("3");
 await runCalc(page);
+const wallsChecked = await f2.locator('input[name="wallSurface"]:checked').count();
+check("GC10 dims walls unchecked", wallsChecked === 0, String(wallsChecked));
 await waitCalcDraft(page, 21);
 let draftDims = await assertCeilingOnlyDraft(page, 21, "dims 7×3");
 check("GC10 dims panels ceiling-only", draftDims.calcPanels === CEILING_21_PANELS, String(draftDims.calcPanels));
