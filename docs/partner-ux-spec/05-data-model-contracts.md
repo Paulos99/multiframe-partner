@@ -228,9 +228,9 @@ Homes стекают ObjectsPanel/CommercialPanel; ProjectDetail существ�
 | `POST /rooms/{id}/checklist` | items; close room only if complete/na |
 | Analytics queries | filter context≠training для sales KPI |
 
-### 3.1 Канонические proposal-правила A-06 / A-09 / A-11 (GB-P0-04)
+### 3.1 Канонические правила A-06 / A-09 / A-11 (GB-P0-04)
 
-> **Статус:** `proposed awaiting owner` — см. [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md). Не помечены approved.
+> **Статус:** **owner-approved 2026-10-23** — [gate-b-owner-approval-2026-10-23.md](./gate-b-owner-approval-2026-10-23.md).
 
 | ID | Каноническое правило (proposal) | Rationale | Recovery / UX | Executable AC |
 |----|--------------------------------|-----------|---------------|---------------|
@@ -292,7 +292,7 @@ Homes стекают ObjectsPanel/CommercialPanel; ProjectDetail существ�
 
 ## 6. Assumptions
 
-- A-06 / A-09 / A-11 / A-12 — **proposed** (см. §3.1 и [assumptions.md](./assumptions.md)); не owner-approved.  
-- Waive checklist — только owner, редкий, с reason.  
+- A-06 / A-09 / A-11 / A-12 / Pause / M-assent — **owner-approved 2026-10-23**.  
+- A-05 (waive checklist) / A-07 — ещё не утверждены; waive в спеках = только owner + reason (proposal).  
 - Quote version numbering resets per dealId (не глобально на project).  
 - Admin repair closed Deal — не P0.
