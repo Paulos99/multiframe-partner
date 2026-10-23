@@ -21,7 +21,7 @@ function copyPair(name) {
 
 async function shot(page, file, url, w, h, waitMs = 800) {
   await page.setViewportSize({ width: w, height: h });
-  await page.goto(url, { waitUntil: "networkidle", timeout: 120000 });
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForTimeout(waitMs);
   await page.screenshot({ path: path.join(outRepo, file), fullPage: false });
   copyPair(file);
