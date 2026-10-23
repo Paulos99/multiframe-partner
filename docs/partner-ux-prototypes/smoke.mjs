@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Executable Gate C store smoke — rev-gate-c-draft-14
+ * Executable Gate C store smoke — rev-gate-c-visual-baseline-1
  *
  * Usage (from this directory or repo root):
  *   node docs/partner-ux-prototypes/smoke.mjs
@@ -315,7 +315,7 @@ check("GC10-P0-01 ceiling bind totals", calcApp.includes("bomTotalsForPartnerBin
 const bomJs = fs.readFileSync(path.join(__dirname, "tools/calculator/src/calculators/materials-bom.js"), "utf8");
 check("GC11-P1-01 finalizePartnerBomTotals", bomJs.includes("finalizePartnerBomTotals"));
 check("GC11 quick area finalize", calcApp.includes("finalizePartnerBomTotals(state.bom)"));
-check("rev-gate-c-draft-14", MFStore.get().revision === "rev-gate-c-draft-14");
+check("rev-gate-c-visual-baseline-1", MFStore.get().revision === "rev-gate-c-visual-baseline-1");
 
 const viewsJs = fs.readFileSync(path.join(__dirname, "assets/views.js"), "utf8");
 const appJs = fs.readFileSync(path.join(__dirname, "assets/app.js"), "utf8");

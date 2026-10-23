@@ -121,18 +121,25 @@
   }
 
   /* ---------- SHELL ---------- */
-  function chrome() {
+  function cabBrand() {
+    return `<div class="cab-brand">
+      <img class="cab-brand__stp" src="./assets/img/logo-stp.png" width="32" height="32" alt="StP">
+      <img class="cab-brand__mf" src="./assets/img/logo-multiframe.png" alt="MultiFrame">
+    </div>`;
+  }
+
+  function cabTopbar() {
     const st = S();
     const role = MFStore.ROLES[st.role];
     return `
-      <header class="chrome">
-        <div class="brand">Multi<span>Frame</span></div>
-        <span class="brand-sub">StP</span>
-        <span class="pill">${esc(role.org)}</span>
-        <div class="chrome-meta">
+      <header class="cab-topbar">
+        <div class="cab-topbar__titles">
+          <p class="cab-caption">${esc(role.org)}</p>
+          <p class="cab-lead">${esc(role.person)} · ${esc(role.label)}</p>
+        </div>
+        <div class="cab-topbar__actions">
           <span class="pill ${st.offline ? "warn" : "ok"}">${st.offline ? "Офлайн" : "Синхр. ок"}</span>
-          <span class="hide-sm muted">${esc(role.person)} · ${esc(role.label)}</span>
-          <button class="btn sm ghost" data-action="toggle-offline">${st.offline ? "Вернуться онлайн" : "Симуляция офлайн"}</button>
+          <button class="btn sm ghost" data-action="toggle-offline">${st.offline ? "Онлайн" : "Офлайн"}</button>
           <button class="btn sm ghost" data-action="logout">Сменить роль</button>
         </div>
       </header>`;
@@ -147,31 +154,31 @@
     ];
     const items = {
       sales: [
-        ["#/sales/home", "Сегодня", "①"],
-        ["#/sales/projects", "Проекты", "②"],
-        ["#/tools/hub", "Инстр.", "③"],
-        ["#/sales/academy-hub", "Академия", "④"],
+        ["#/sales/home", "Сегодня"],
+        ["#/sales/projects", "Проекты"],
+        ["#/tools/hub", "Инструменты"],
+        ["#/sales/academy-hub", "Академия"],
       ],
       owner: [
-        ["#/owner/home", "Сегодня", "①"],
-        ["#/owner/projects", "Проекты", "②"],
-        ["#/tools/hub", "Инстр.", "③"],
-        ["#/owner/staff", "Сотрудн.", "④"],
+        ["#/owner/home", "Сегодня"],
+        ["#/owner/projects", "Проекты"],
+        ["#/tools/hub", "Инструменты"],
+        ["#/owner/staff", "Сотрудники"],
       ],
       measurer: [
-        ["#/measurer/home", "Замеры", "①"],
-        ["#/measurer/projects", "Проекты", "②"],
-        ["#/tools/hub", "Инстр.", "③"],
+        ["#/measurer/home", "Замеры"],
+        ["#/measurer/projects", "Проекты"],
+        ["#/tools/hub", "Инструменты"],
       ],
       crew: [
-        ["#/crew/home", "Задания", "①"],
-        ["#/tools/hub", "Инстр.", "②"],
+        ["#/crew/home", "Задания"],
+        ["#/tools/hub", "Инструменты"],
       ],
       admin: [
-        ["#/admin/home", "Сигналы", "①"],
-        ["#/admin/partners", "Партнёры", "②"],
-        ["#/tools/hub", "Инстр.", "③"],
-        ["#/admin/training", "Тренинг", "④"],
+        ["#/admin/home", "Сигналы"],
+        ["#/admin/partners", "Партнёры"],
+        ["#/tools/hub", "Инструменты"],
+        ["#/admin/training", "Тренинг"],
       ],
     }[role] || [];
 
@@ -206,9 +213,9 @@
       </nav>
       <nav class="bottom-nav" aria-label="Мобильная навигация">
         ${items
-          .map(([href, label, ico]) => {
+          .map(([href, label]) => {
             const isActive = active && href.includes(active);
-            return `<a href="${href}" class="${isActive ? "active" : ""}"><span class="ico">${ico}</span>${label}</a>`;
+            return `<a href="${href}" class="${isActive ? "active" : ""}">${esc(label)}</a>`;
           })
           .join("")}
       </nav>`;
@@ -592,7 +599,22 @@
           <button class="btn primary" data-action="dismiss-cred">Скопировал — скрыть</button>
         </div></div>`
       : "";
-    return `${chrome()}<div class="shell">${nav(activeNav)}<main class="workspace">${loading}</main></div>
+    const navHtml = nav(activeNav);
+    const bottomMatch = navHtml.match(/<nav class="bottom-nav"[\s\S]*<\/nav>/);
+    const sideMatch = navHtml.match(/<nav class="nav desktop-nav"[\s\S]*<\/nav>/);
+    const sideNav = sideMatch ? sideMatch[0] : "";
+    const bottomNav = bottomMatch ? bottomMatch[0] : "";
+    return `<div class="cab-frame">
+        <aside class="cab-side desktop-nav-wrap">
+          ${cabBrand()}
+          <div class="cab-side-scroll">${sideNav}</div>
+        </aside>
+        <div class="cab-main">
+          ${cabTopbar()}
+          <main class="cab-work workspace">${loading}</main>
+        </div>
+        ${bottomNav}
+      </div>
       ${preview}${cred}
       <div class="toast-host" id="toasts"></div>`;
   }
@@ -619,7 +641,7 @@
         <button class="tab active" data-tab="inbox">Входящие</button>
         <button class="tab" data-action="goto" data-href="#/sales/projects">Все проекты</button>
       </div>
-      <div class="panel">
+      <div class="panel cab-queue">
         <h2>Требуют действия</h2>
         <ul class="list">
           ${active
