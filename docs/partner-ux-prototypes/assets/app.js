@@ -107,6 +107,38 @@
     bindGlobal();
   }
 
+  function openAcceptSheet(dealId) {
+    const host = document.getElementById("deal-sheet");
+    if (!host) return;
+    const deal = MFStore.get().deals.find((d) => d.dealId === dealId);
+    const p = MFStore.project(deal.projectId);
+    const q = MFStore.quotesForDeal(dealId).find((x) => x.lifecycle === "sent_confirmed") || MFStore.quotesForDeal(dealId)[0];
+    const rooms = p.rooms.filter((r) => !q || (q.rooms || []).includes(r.id) || r.preliminary || r.detailed);
+    host.innerHTML = `
+      <div class="modal-back" data-action="close-sheet">
+        <div class="modal" style="width:min(560px,100%)" onclick="event.stopPropagation()">
+          <h3>Принято — согласие по комнатам</h3>
+          <p class="muted">GC-P0-03: явно ordered / deferred / out_of_scope. ≥1 ordered. Сумма = только ordered.</p>
+          ${rooms
+            .map((r) => {
+              const amt = r.detailed?.amount || r.preliminary?.amount || 0;
+              return `<div class="field"><label>${r.name} · ${amt} ₽</label>
+                <select data-assent-room="${r.id}">
+                  <option value="ordered">ordered</option>
+                  <option value="deferred">deferred</option>
+                  <option value="out_of_scope">out_of_scope</option>
+                </select></div>`;
+            })
+            .join("")}
+          <div class="row">
+            <button class="btn ghost" data-action="close-sheet">Отмена</button>
+            <button class="btn ok" data-action="confirm-accept" data-deal="${dealId}">Подтвердить accepted</button>
+          </div>
+        </div>
+      </div>`;
+    bindGlobal();
+  }
+
   function openSheet(dealId, mode) {
     const host = document.getElementById("deal-sheet");
     if (!host) return;
@@ -190,7 +222,7 @@
         areaM2: document.getElementById("inq-area").value,
       });
       if (!res.ok) {
-        toast("Не создано", res.error === "offline" ? "Офлайн — подождите reconnect" : "Ошибка", "danger");
+        toast("Не создано", res.error === "offline_queued" ? "В outbox (офлайн)" : "Ошибка", "danger");
         return;
       }
       toast("Проект создан", `Deal ${res.dealId}`, "ok");
@@ -198,8 +230,40 @@
       return;
     }
     if (action === "start-quick") {
-      MFStore.startQuickConsultation();
-      toast("Консультация", "consultationSessionId выдан", "ok");
+      MFStore.startQuickConsultation(el.getAttribute("data-persona") || "");
+      toast("Консультация", "session + анкета (шум не pre-filled)", "ok");
+      location.hash = "#/sales/pm-quick";
+      return;
+    }
+    if (action === "abandon-quick") {
+      MFStore.get().sessionDraft = null;
+      MFStore.save();
+      location.hash = "#/sales/quick";
+      return;
+    }
+    if (action === "pm-run") {
+      MFStore.updatePmAnswers({
+        roomType: document.getElementById("pm-room").value,
+        areaM2: Number(document.getElementById("pm-area").value),
+        neighbors: document.getElementById("pm-neighbors").value,
+        noiseAwareness: document.getElementById("pm-noise").value,
+        purpose: document.getElementById("pm-purpose").value,
+      });
+      const res = MFStore.runPmOnDraft();
+      toast("Result", `persona ${res.result.clientPersona}`, "ok");
+      render();
+      return;
+    }
+    if (action === "pm-resuvey") {
+      MFStore.get().ui.pmStep = "survey";
+      MFStore.get().sessionDraft.pmDone = false;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "bind-mode") {
+      MFStore.get().ui.bindMode = el.getAttribute("data-mode");
+      MFStore.save();
       render();
       return;
     }
@@ -232,17 +296,26 @@
       return;
     }
     if (action === "do-bind") {
-      const res = MFStore.bindDraft({
-        projectName: document.getElementById("bind-proj").value,
-        roomName: document.getElementById("bind-room").value,
-        client: document.getElementById("bind-client").value,
-      });
+      const mode = MFStore.get().ui.bindMode || "pick";
+      const saveType = document.getElementById("bind-savetype")?.value || "profile";
+      let opts = { mode, saveType };
+      if (mode === "create") {
+        opts.projectName = document.getElementById("bind-proj").value;
+        opts.roomName = document.getElementById("bind-room").value;
+        opts.client = document.getElementById("bind-client").value;
+      } else {
+        const pair = (document.getElementById("bind-pair")?.value || "").split("::");
+        opts.projectId = pair[0];
+        opts.roomId = pair[1];
+      }
+      const res = MFStore.bindDraft(opts);
       if (!res.ok) {
-        toast("Bind не выполнен", res.error === "offline" ? "Офлайн" : res.error, "danger");
+        toast("Save не выполнен", res.error === "offline_queued" ? "В outbox (офлайн)" : res.error, "danger");
+        render();
         return;
       }
-      toast("Привязано", `project ${res.projectId} · deal ${res.dealId}`, "ok");
-      location.hash = `#/sales/project/${res.projectId}?tab=deal`;
+      toast("Сохранено", `${res.saveType} → ${res.roomId}`, "ok");
+      location.hash = `#/sales/room/${res.projectId}/${res.roomId}`;
       return;
     }
     if (action === "save-room-calc") {
@@ -266,7 +339,30 @@
     if (action === "quote-copy" || action === "quote-pdf") {
       const mode = action === "quote-pdf" ? "pdf" : "copy";
       const res = MFStore.shareQuote(el.getAttribute("data-qid"), mode);
-      toast(res.message || "Готово", "Статус КП не изменился (≠ sent)", "ok");
+      toast(res.message || "Готово", "lifecycle не изменился (≠ sent)", "ok");
+      render();
+      return;
+    }
+    if (action === "close-quote-preview") {
+      MFStore.get().ui.quotePreview = null;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "clipboard-quote") {
+      const t = MFStore.get().ui.quotePreview?.text || "";
+      if (navigator.clipboard?.writeText) navigator.clipboard.writeText(t);
+      toast("В буфере", "Всё ещё ≠ sent", "ok");
+      return;
+    }
+    if (action === "download-quote-pdf") {
+      const t = MFStore.get().ui.quotePreview?.text || "";
+      const blob = new Blob([t], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `quote-mock-${MFStore.get().ui.quotePreview?.revisionId || "demo"}.txt`;
+      a.click();
+      toast("Скачан макет", "Не confirm_sent", "ok");
       return;
     }
     if (action === "quote-confirm") {
@@ -308,9 +404,35 @@
       render();
       return;
     }
-    if (action === "accept-deal") {
-      MFStore.acceptDeal(el.getAttribute("data-deal"));
-      toast("Принято", "roomAssent → ordered где есть расчёт", "ok");
+    if (action === "open-accept") {
+      openAcceptSheet(el.getAttribute("data-deal"));
+      return;
+    }
+    if (action === "confirm-accept") {
+      const dealId = el.getAttribute("data-deal");
+      const map = {};
+      document.querySelectorAll("[data-assent-room]").forEach((sel) => {
+        map[sel.getAttribute("data-assent-room")] = sel.value;
+      });
+      const res = MFStore.acceptDeal(dealId, map);
+      if (!res.ok) {
+        toast("Не принято", res.error === "need_one_ordered" ? "Нужна ≥1 ordered" : res.error, "danger");
+        return;
+      }
+      toast("Accepted", `ordered ${res.ordered.length} · ${res.acceptedAmount} ₽`, "ok");
+      render();
+      return;
+    }
+    if (action === "close-accepted") {
+      MFStore.closeAcceptedDeal(el.getAttribute("data-deal"));
+      toast("Deal закрыта", "Можно sequential", "ok");
+      render();
+      return;
+    }
+    if (action === "sequential-deal") {
+      const res = MFStore.createSequentialDeal(el.getAttribute("data-pid"));
+      if (!res.ok) toast("Нет", res.error, "danger");
+      else toast("Новая Deal", res.dealId, "ok");
       render();
       return;
     }
@@ -319,20 +441,21 @@
       const node = el.getAttribute("data-node");
       const text = el.getAttribute("data-text");
       const next = el.getAttribute("data-next");
+      const cid = el.getAttribute("data-cid");
       st.ui.academyPath = st.ui.academyPath || [];
+      st.ui.academyChoices = st.ui.academyChoices || [];
       st.ui.academyPath.push({ node, text });
+      st.ui.academyChoices.push({ id: cid, text });
       st.ui.academyNode = next;
-      if (MFViews.ANNA[next]?.end) st.ui.academyDone = next;
       MFStore.save();
+      if (MFViews.ANNA[next]?.end) {
+        MFStore.completeAcademy(st.ui.academyChoices);
+      }
       render();
       return;
     }
     if (action === "academy-reset") {
-      const st = MFStore.get();
-      st.ui.academyNode = "N0";
-      st.ui.academyPath = [];
-      st.ui.academyDone = null;
-      MFStore.save();
+      MFStore.resetAcademy();
       render();
       return;
     }
@@ -390,7 +513,11 @@
       if (!res.ok) {
         toast(
           "Нельзя закрыть",
-          res.error === "blocker" ? "Открыт blocker" : "Чек-лист неполный",
+          res.error === "blocker"
+            ? "Открыт blocker"
+            : res.error === "checklist_missing"
+            ? "Чек-лист отсутствует"
+            : "Чек-лист неполный",
           "danger"
         );
         return;
@@ -438,11 +565,75 @@
       return;
     }
     if (action === "verify-int") {
-      MFStore.verifyIntervention(el.getAttribute("data-iid"), el.getAttribute("data-result"));
-      toast("Verify", el.getAttribute("data-result"), "ok");
+      const res = MFStore.verifyIntervention(el.getAttribute("data-iid"), el.getAttribute("data-result"));
+      toast("Verify", `${el.getAttribute("data-result")} · before/after adoption`, "ok");
       render();
       return;
     }
+
+    if (action === "save-detailed") {
+      const pid = el.getAttribute("data-pid");
+      const rid = el.getAttribute("data-rid");
+      const bomMeta = JSON.parse(document.getElementById("bom-json").textContent);
+      bomMeta.forEach((b, i) => {
+        const inp = document.querySelector(`[data-bom-qty="${i}"]`);
+        if (inp) b.qty = Number(inp.value);
+      });
+      const res = MFStore.saveDetailedCalc(pid, rid, {
+        lengthM: document.getElementById("det-L").value,
+        widthM: document.getElementById("det-W").value,
+        cutouts: document.getElementById("det-cut").value,
+        schemeLabel: document.getElementById("det-sch").value,
+        bom: bomMeta,
+        forceConflict: document.getElementById("det-409")?.checked,
+        expectedRevision: "stale_other_device",
+      });
+      if (!res.ok && res.error === "conflict_409") {
+        toast("409 Conflict", "Обе revision в истории", "warn");
+        render();
+        return;
+      }
+      toast("Detailed сохранён", `${res.revisionId} · схема ${res.scheme.id}`, "ok");
+      location.hash = `#/measurer/room/${pid}/${rid}`;
+      return;
+    }
+    if (action === "clear-conflict") {
+      MFStore.get().ui.conflictDemo = null;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "ensure-checklist") {
+      MFStore.ensureChecklist(el.getAttribute("data-pid"), el.getAttribute("data-rid"));
+      toast("Чек-лист создан", "Заполните пункты", "ok");
+      render();
+      return;
+    }
+    if (action === "create-staff") {
+      const name = document.getElementById("st-name").value.trim();
+      if (!name) { toast("Имя обязательно", "", "danger"); return; }
+      MFStore.createStaff({ name, role: document.getElementById("st-role").value });
+      toast("Сотрудник", "one-time пароль на экране", "ok");
+      render();
+      return;
+    }
+    if (action === "reset-staff") {
+      MFStore.resetStaffCredentials(el.getAttribute("data-uid"));
+      toast("Пароль сброшен", "показан один раз", "ok");
+      render();
+      return;
+    }
+    if (action === "dismiss-cred") {
+      MFStore.dismissOneTimeCred();
+      render();
+      return;
+    }
+    if (action === "toggle-loading") {
+      MFStore.setLoadingDemo(!MFStore.get().ui.loadingDemo);
+      render();
+      return;
+    }
+
   }
 
   window.addEventListener("hashchange", render);

@@ -1,127 +1,104 @@
-# Gate C — TEST_CHECKLIST (D11 §7 по ролям)
+# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-2`
 
-**Назначение:** прогон usability-задач [D11 §7](../partner-ux-spec/11-acceptance-matrix.md) на изолированном HTML-прототипе.  
-**Не является** формальным user testing с респондентами — фиксируйте наблюдения вручную при прогоне.  
-**Прототип ≠ production proof.**
-
-Протокол (§7.1): first-click Y/N · blocking confusion · re-entry of data · clarity 1–5 · recovery · device · comments.
+**Честно:** ячейки «Observed» ниже — **agent walkthrough / store smoke**, **не** human usability lab.  
+GC-P1-05: финальный Gate C OK требует незаполненный человеком прогон без подсказок. Не ставить UX PASS по зелёному smoke.
 
 | Поле | Значение |
 |------|----------|
-| Дата прогона | |
-| Кто | |
-| Device | desktop / mobile |
-| SHA / ветка | `cursor/partner-ux-spec-gate-b-chatgpt` |
+| Revision | `rev-gate-c-draft-2` |
+| Device agent | desktop Chromium + store VM |
+| Human observed | **NOT observed** |
+| Agent smoke P0 | **25/25 PASS** (см. SMOKE_TEST) |
+
+Протокол §7.1: first-click · confusion · re-entry · clarity 1–5 · recovery · device · comments.
 
 ---
 
 ## Sales
 
-### AC-UX-S01 — Новый inquiry / проект
-- [ ] С home найти «Новый проект» без подсказки  
-- [ ] После submit есть project + room + ощущение «сделка начата»  
-- First-click: __ · Confusion: __ · Clarity: __/5 · Notes: __
+### AC-UX-S01 — Новый inquiry
+- Steps: login sales → Новый проект → submit  
+- Fixture: default form  
+- Agent: path exists · Human: NOT observed  
 
-### AC-UX-S02 — Preliminary → правильная комната
-- [ ] Путь: Быстрый расчёт **или** комната → Calc → Save/Bind  
-- [ ] Результат виден на нужной комнате / проекте (нет «безымянного» объекта)  
-- [ ] Нет повторного ввода площади после успешного save  
-- First-click: __ · Re-entry: Y/N · Clarity: __/5 · Notes: __
+### AC-UX-S02 — Preliminary / PM save в правильную комнату
+- Steps: Быстрый расчёт → persona → PM Result → `#/sales/bind` → pick existing **или** create; допускается **PM-only**  
+- Fixture: quiet/noise; `prj_nv_soroka`  
+- Agent: PASS (PM-only pick) · Human: NOT observed  
 
-### AC-UX-S03 — КП: share / confirm_sent (copy ≠ sent)
-- [ ] Copy или PDF → тост **не** «КП отправлено»  
-- [ ] «Подтвердить отправку» → lifecycle `sent_confirmed` / этап сделки обновлён  
-- First-click: __ · Confusion copy vs confirm: Y/N · Clarity: __/5 · Notes: __
+### AC-UX-S03 — КП copy ≠ confirm_sent
+- Steps: Deal → Копировать/PDF (preview+clipboard/download) → отдельно «Подтвердить отправку»  
+- Agent: PASS (preview, lifecycle unchanged until confirm) · Human: NOT observed  
 
-### AC-UX-S04 — Пауза и возобновление
-- [ ] Пауза требует причину; сделка **не** выглядит закрытой навсегда  
-- [ ] Resume: **тот же** dealId; этап = исходный `stageAtOutcome`  
-- First-click: __ · Clarity: __/5 · Notes: __
+### AC-UX-S04 — Пауза / resume
+- Steps: Парк Хаус deal → Возобновить на stageAtOutcome  
+- Agent: PASS (prior) · Human: NOT observed  
 
-### Доп. sales (канон C)
-- [ ] `multiframe_offered` на unsaved quick-entry показывает `consultationSessionId`, не требует dealId  
-- [ ] Офлайн блокирует create/bind с понятным сообщением  
+### GC-P0-03 partial assent (extra)
+- Steps: `#/sales/project/prj_nv_volkova?tab=deal` → Принято → sheet ordered/deferred/out_of_scope → close → sequential Deal  
+- Agent: PASS · Human: NOT observed  
 
 ---
 
 ## Measurer
 
-### AC-UX-M01 — Найти назначенную комнату
-- [ ] С home ≤2 осмысленных перехода до комнаты  
-- First-click: __ · Transitions: __ · Clarity: __/5 · Notes: __
+### AC-UX-M01 — Найти комнату ≤2 перехода
+- Steps: home → Открыть  
+- Agent: path OK · Human: NOT observed  
 
-### AC-UX-M02 — Detailed → save → та же комната
-- [ ] Detailed сохранён; возврат в ту же комнату; revision/сумма на месте  
-- [ ] Нет повторного ввода геометрии  
-- Re-entry: Y/N · Clarity: __/5 · Notes: __
+### AC-UX-M02 — Detailed → save → same room
+- Steps: Detailed → L/W/cutouts/BOM → Сохранить → комната со схемой  
+- Agent: PASS · Human: NOT observed  
 
 ---
 
 ## Crew
 
-### AC-UX-C01 — Найти своё задание
-- [ ] В inbox только ordered + tech-ready  
-- [ ] Комната с `deferred` / без tech-ready **не** видна  
-- First-click: __ · Clarity: __/5 · Notes: __
+### AC-UX-C01 — Своё задание
+- Steps: home; чужой `room_vas_bath` скрыт; deferred кухня скрыта  
+- Agent: PASS · Human: NOT observed  
 
-### AC-UX-C02 — Чек-лист / blocker
-- [ ] Чек-лист: done или N/A+причина  
-- [ ] Blocker с типом создаётся; close при open blocker — блок  
-- [ ] Коммерческая сумма КП **не** показана  
-- Next step ясен: Y/N · Clarity: __/5 · Notes: __
+### AC-UX-C02 — Checklist / blocker
+- Steps: Зал checklist; Коридор без checklist → close forbidden → Init checklist  
+- Agent: PASS · Human: NOT observed  
 
 ---
 
 ## Owner
 
-### AC-UX-O01 — Что требует вмешательства
-- [ ] Inbox item ведёт к правильной сущности (assign / проект / пауза)  
-- First-click: __ · Clarity: __/5 · Notes: __
-
-### AC-UX-O02 — Назначить ответственность
-- [ ] Назначение measurer/crew сохраняется и отражается  
-- Clarity: __/5 · Notes: __
+### AC-UX-O01 / O02
+- Steps: inbox → assign; staff create/reset one-time password  
+- Agent: path OK · Human: NOT observed  
 
 ---
 
 ## StP admin
 
-### AC-UX-A01 — Stalled stage партнёра
-- [ ] Сигнал → Partner card показывает **фактический этап** stall  
-- First-click: __ · Clarity: __/5 · Notes: __
-
-### AC-UX-A02 — Support / intervention
-- [ ] Diagnose → создать Intervention → Verify (adoption ≠ conversion widget)  
-- [ ] Training / «Обучение» отделено от «Сеть · продажи»  
-- Clarity: __/5 · Notes: __
+### AC-UX-A01 / A02
+- Steps: Сигналы → partner → diagnose → intervention → verify before/after  
+- Training: `#/admin/training` отдельно от `#/admin/analytics`  
+- Agent: path OK · Human: NOT observed  
 
 ---
 
-## Academy (изоляция)
+## Academy
 
-- [ ] Anna path (`sell_multiframe`) проходим end-to-end  
-- [ ] Score/feedback; `context: training` не смешивается с sales analytics  
-- Path chosen: S / P / F / other · Score shown: __ · Notes: __
-
----
-
-## ADR-003 / anti-patterns
-
-- [ ] Нет вертикального стека ObjectsPanel + Commercial + EntryPoints на одном scroll  
-- [ ] Homes не перегружены вторичным маркетингом / статистикой вместо inbox  
+- Paths S/P/F → scores **88 / 71 / 11**; no answer-key subtitle; funnel unchanged  
+- Agent: PASS · Human: NOT observed  
 
 ---
 
-## Итог прогона
+## ADR-003
 
-| Блок | Pass / Fail / Blocked | Комментарий |
-|------|----------------------|-------------|
-| Sales S01–S04 | | |
-| Measurer M01–M02 | | |
-| Crew C01–C02 | | |
-| Owner O01–O02 | | |
-| Admin A01–A02 | | |
-| Academy isolation | | |
-| ADR-003 | | |
+- Tabs / one work panel; no ObjectsPanel+Commercial stack  
+- Agent: code/visual review · Human: NOT observed  
 
-**Вердикт для ревью Gate C:** ready for review / needs fixes · (не Gate D)
+---
+
+## Итог
+
+| Блок | Agent smoke | Human UX |
+|------|-------------|----------|
+| P0-01…06 | PASS | NOT observed |
+| D11 §7 tasks | paths wired | NOT observed — **blocking for final Gate C OK** |
+| Verdict now | **ready for re-review of P0 clickability** | final approval pending human evidence |

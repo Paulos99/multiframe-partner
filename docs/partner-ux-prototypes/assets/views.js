@@ -79,48 +79,89 @@
     const role = S().role;
     const items = {
       sales: [
-        ["#/sales/home", "Сегодня"],
-        ["#/sales/projects", "Проекты"],
-        ["#/sales/quick", "Быстрый расчёт"],
-        ["#/sales/academy", "Академия"],
-        ["#/sales/analytics", "Аналитика"],
+        ["#/sales/home", "Сегодня", "①"],
+        ["#/sales/projects", "Проекты", "②"],
+        ["#/sales/quick", "Расчёт", "③"],
+        ["#/sales/academy", "Ещё", "④"],
       ],
       owner: [
-        ["#/owner/home", "Сегодня"],
-        ["#/owner/projects", "Проекты"],
-        ["#/owner/staff", "Сотрудники"],
+        ["#/owner/home", "Сегодня", "①"],
+        ["#/owner/projects", "Проекты", "②"],
+        ["#/owner/staff", "Сотрудн.", "③"],
       ],
       measurer: [
-        ["#/measurer/home", "Мои замеры"],
-        ["#/measurer/projects", "Проекты"],
+        ["#/measurer/home", "Замеры", "①"],
+        ["#/measurer/projects", "Проекты", "②"],
       ],
       crew: [
-        ["#/crew/home", "Мои задания"],
+        ["#/crew/home", "Задания", "①"],
       ],
       admin: [
-        ["#/admin/home", "Сигналы"],
-        ["#/admin/partners", "Партнёры"],
-        ["#/admin/analytics", "Сеть"],
-        ["#/admin/training", "Обучение"],
+        ["#/admin/home", "Сигналы", "①"],
+        ["#/admin/partners", "Партнёры", "②"],
+        ["#/admin/analytics", "Сеть", "③"],
+        ["#/admin/training", "Обучение", "④"],
       ],
     }[role] || [];
 
+    const desktopExtra = {
+      sales: [["#/sales/analytics", "Аналитика"]],
+      admin: [],
+    }[role] || [];
+
+    const allDesktop = items.concat(desktopExtra);
+
     return `
-      <nav class="nav" aria-label="Основная навигация">
+      <nav class="nav desktop-nav" aria-label="Основная навигация">
         <div class="nav-section">Навигация</div>
-        ${items
+        ${allDesktop
           .map(([href, label]) => {
             const isActive = active && href.includes(active);
             return `<a href="${href}" class="${isActive ? "active" : ""}">${label}</a>`;
           })
           .join("")}
         <div class="nav-section">Прототип</div>
-        <button class="nav-link" data-action="reset">Сбросить демо-данные</button>
+        <button class="nav-link" data-action="reset">Сбросить демо-данные (v2)</button>
+        <button class="nav-link" data-action="toggle-loading">Demo loading</button>
+      </nav>
+      <nav class="bottom-nav" aria-label="Мобильная навигация">
+        ${items
+          .map(([href, label, ico]) => {
+            const isActive = active && href.includes(active);
+            return `<a href="${href}" class="${isActive ? "active" : ""}"><span class="ico">${ico}</span>${label}</a>`;
+          })
+          .join("")}
       </nav>`;
   }
 
   function shell(activeNav, body) {
-    return `${chrome()}<div class="shell">${nav(activeNav)}<main class="workspace">${body}</main></div>
+    const loading = S().ui.loadingDemo
+      ? `<div class="banner info">Demo loading…</div><div class="panel"><div class="skeleton"></div><div class="skeleton"></div></div>`
+      : body;
+    const preview = S().ui.quotePreview
+      ? `<div class="modal-back" data-action="close-quote-preview"><div class="modal" onclick="event.stopPropagation()">
+          <h3>${S().ui.quotePreview.mode === "pdf" ? "Макет PDF КП" : "Текст для копирования"}</h3>
+          <p class="muted">lifecycle: ${esc(S().ui.quotePreview.lifecycle)} · это ≠ sent</p>
+          <pre class="mono" style="white-space:pre-wrap;background:var(--bg1);padding:10px;border-radius:8px;max-height:240px;overflow:auto">${esc(
+            S().ui.quotePreview.text
+          )}</pre>
+          <div class="row" style="margin-top:10px">
+            <button class="btn primary" data-action="clipboard-quote">Копировать в буфер</button>
+            <button class="btn" data-action="download-quote-pdf">Скачать .txt макет</button>
+            <button class="btn ghost" data-action="close-quote-preview">Закрыть</button>
+          </div>
+        </div></div>`
+      : "";
+    const cred = S().ui.oneTimeCred
+      ? `<div class="modal-back"><div class="modal">
+          <h3>Одноразовый пароль</h3>
+          <p>Покажется <strong>один раз</strong>.</p>
+          <p class="mono">${esc(S().ui.oneTimeCred.name)} · <strong>${esc(S().ui.oneTimeCred.password)}</strong></p>
+          <button class="btn primary" data-action="dismiss-cred">Скопировал — скрыть</button>
+        </div></div>`
+      : "";
+    return `${chrome()}<div class="shell">${nav(activeNav)}<main class="workspace">${loading}</main></div>
+      ${preview}${cred}
       <div class="toast-host" id="toasts"></div>`;
   }
 
@@ -206,16 +247,23 @@
       return shell(
         "sales/quick",
         `
-        <div class="page-head">
-          <div>
-            <h1>Быстрый расчёт</h1>
-            <p class="sub">Консультация без Deal. Save потребует bind. <span class="mono">multiframe_offered</span> → consultationSessionId.</p>
-          </div>
+      <div class="page-head">
+        <div>
+          <h1>Быстрая консультация</h1>
+          <p class="sub">GC-P0-01: выберите контрастного клиента, затем анкета PM. Шум <strong>не</strong> pre-filled.</p>
         </div>
-        <div class="panel">
-          <p class="muted">Начните консультацию — появится session id, затем PM и Calc.</p>
-          <button class="btn primary" data-action="start-quick">Начать консультацию</button>
-        </div>`
+      </div>
+      <div class="grid-2">
+        <button class="panel" style="text-align:left;cursor:pointer" data-action="start-quick" data-persona="quiet">
+          <h3>Клиент A · без жалобы на шум</h3>
+          <p class="muted">Пришёл за натяжным «побыстрее». Потребность в ЗИ формируем.</p>
+        </button>
+        <button class="panel" style="text-align:left;cursor:pointer" data-action="start-quick" data-persona="noise">
+          <h3>Клиент B · слышит соседей</h3>
+          <p class="muted">Есть сигнал о шуме — Result будет другим.</p>
+        </button>
+      </div>
+      <button class="btn" style="margin-top:12px" data-action="start-quick" data-persona="">Нейтральный старт (все ответы unknown)</button>`
       );
     }
     return shell(
@@ -228,44 +276,29 @@
         </div>
         <div class="page-actions">
           ${d.bound ? `<a class="btn primary" href="#/sales/project/${d.projectId}">К проекту</a>` : ""}
+          <button class="btn ghost" data-action="abandon-quick">Сбросить черновик</button>
         </div>
       </div>
-      <div class="seg-bar" role="tablist">
-        <button class="active">Контекст</button>
+      <div class="seg-bar">
+        <button class="active">Сессия</button>
         <button data-action="goto" data-href="#/sales/pm-quick">Проблемомер</button>
         <button data-action="goto" data-href="#/sales/calc-quick">Калькулятор</button>
         <button data-action="goto" data-href="#/sales/bind">Сохранить</button>
       </div>
       <div class="panel">
-        <div class="grid-2">
-          <div class="field"><label>Площадь, м²</label><input id="q-area" type="number" value="${d.areaM2}"></div>
-          <div class="field"><label>Сегмент</label>
-            <select id="q-seg">
-              <option value="standard" ${d.segment === "standard" ? "selected" : ""}>Standard</option>
-              <option value="comfort" ${d.segment === "comfort" ? "selected" : ""}>Comfort</option>
-              <option value="premium" ${d.segment === "premium" ? "selected" : ""}>Premium</option>
-            </select>
-          </div>
-        </div>
-        <div class="field"><label>Что беспокоит</label><input id="q-noise" value="${esc(d.noise)}"></div>
         <div class="row">
-          <button class="btn" data-action="save-quick-fields">Обновить черновик</button>
-          <button class="btn ${d.multiframeOffered ? "ok" : "primary"}" data-action="offer-mf">
-            ${d.multiframeOffered ? "MultiFrame предложен ✓" : "Зафиксировать: предложили MultiFrame"}
-          </button>
+          <span class="pill ${d.pmDone ? "ok" : ""}">PM ${d.pmDone ? "готов · " + esc(d.pmResult?.clientPersona || "") : "не пройден"}</span>
+          <span class="pill ${d.calcDone ? "ok" : ""}">Calc ${d.calcDone ? money(d.amount) : "опционально"}</span>
+          <span class="pill ${d.bound ? "ok" : "warn"}">${d.bound ? "Привязан" : "Не сохранён"}</span>
         </div>
+        <p class="muted" style="margin-top:10px">Можно сохранить <strong>только профиль PM</strong> без calc (GC-P0-02).</p>
         ${
           d.multiframeOffered
-            ? `<div class="banner ok">Событие <span class="mono">multiframe_offered</span> привязано к <span class="mono">${esc(
+            ? `<div class="banner ok">multiframe_offered → <span class="mono">${esc(
                 d.consultationSessionId
-              )}</span> — <strong>без dealId</strong> (unsaved quick-entry).</div>`
-            : ""
+              )}</span> · без dealId</div>`
+            : `<button class="btn" data-action="offer-mf">Зафиксировать: предложили MultiFrame</button>`
         }
-        <div class="row" style="margin-top:14px">
-          <span class="pill ${d.pmDone ? "ok" : ""}">PM ${d.pmDone ? "готов" : "не пройден"}</span>
-          <span class="pill ${d.calcDone ? "ok" : ""}">Calc ${d.calcDone ? money(d.amount) : "нет"}</span>
-          <span class="pill ${d.bound ? "ok" : "warn"}">${d.bound ? "Привязан" : "Не сохранён в проект"}</span>
-        </div>
       </div>`
     );
   }
@@ -273,20 +306,73 @@
   function salesPmQuick() {
     const d = S().sessionDraft;
     if (!d) return salesQuick();
+    const a = d.answers || {};
+    if (d.pmDone && d.pmResult && S().ui.pmStep === "result") {
+      const r = d.pmResult;
+      const ch = r.chain;
+      return shell(
+        "sales/quick",
+        `
+      <div class="page-head">
+        <div><h1>Result · проблемомер</h1><p class="sub">Цепочка: нормы → сейчас → MultiFrame → разница → next step. Без гарантии дБ.</p></div>
+        <div class="page-actions"><button class="btn ghost" data-action="pm-resuvey">Изменить ответы</button></div>
+      </div>
+      <div class="panel stack-gap">
+        <div class="banner info"><strong>Пресет:</strong> натяжной потолок (stretch) · площадь ${r.areaM2} м² · persona «${esc(r.clientPersona)}»</div>
+        <ol class="list">
+          <li class="list-item"><div><div class="title">1. Нормы / ориентир</div><div class="meta">${esc(ch.norms)}</div></div></li>
+          <li class="list-item"><div><div class="title">2. Сейчас</div><div class="meta">${esc(ch.current)}</div></div></li>
+          <li class="list-item"><div><div class="title">3. С MultiFrame</div><div class="meta">${esc(ch.withMf)}</div></div></li>
+          <li class="list-item"><div><div class="title">4. Разница</div><div class="meta">${esc(ch.difference)}</div></div></li>
+          <li class="list-item"><div><div class="title">5. Следующий шаг</div><div class="meta">${esc(ch.nextStep)}</div></div></li>
+        </ol>
+        <p>${esc(r.narrative)}</p>
+        <p class="dim">Qualified claims only · guaranteedDb=${r.guaranteedDb}</p>
+        <div class="row">
+          <a class="btn primary" href="#/sales/bind">Сохранить профиль (PM-only OK)</a>
+          <a class="btn" href="#/sales/calc-quick">К калькулятору</a>
+        </div>
+      </div>`
+      );
+    }
     return shell(
       "sales/quick",
       `
       <div class="page-head">
-        <div><h1>Проблемомер</h1><p class="sub">Сегментный пресет для потолков · результат → next steps.</p></div>
-        <div class="page-actions"><a class="btn ghost" href="#/sales/quick">К консультации</a></div>
+        <div><h1>Анкета комнаты</h1><p class="sub">Короткий опрос. Жалоба на шум необязательна (P1 D6).</p></div>
       </div>
-      <div class="panel">
-        <h2>Диагностика · ${esc(d.segment)}</h2>
-        <ul class="list">
-          <li class="list-item"><div><div class="title">Ударный шум</div><div class="meta">${esc(d.noise)}</div></div><div class="aside">релевантно</div></li>
-          <li class="list-item"><div><div class="title">Рекомендация</div><div class="meta">Каркас MultiFrame под полотном · сегмент Comfort</div></div></li>
-        </ul>
-        <button class="btn primary" data-action="pm-done">Зафиксировать оценку PM</button>
+      <div class="panel" style="max-width:520px">
+        <div class="field"><label>Тип комнаты</label>
+          <select id="pm-room">
+            <option value="bedroom" ${a.roomType==="bedroom"?"selected":""}>Спальня</option>
+            <option value="living" ${a.roomType==="living"?"selected":""}>Гостиная</option>
+            <option value="kids" ${a.roomType==="kids"?"selected":""}>Детская</option>
+            <option value="kitchen" ${a.roomType==="kitchen"?"selected":""}>Кухня</option>
+          </select>
+        </div>
+        <div class="field"><label>Площадь, м²</label><input id="pm-area" type="number" value="${a.areaM2 ?? 14}"></div>
+        <div class="field"><label>Соседи сверху</label>
+          <select id="pm-neighbors">
+            <option value="unknown" ${a.neighbors==="unknown"?"selected":""}>Не знаю / не спрашивали</option>
+            <option value="none" ${a.neighbors==="none"?"selected":""}>Нет / не беспокоят</option>
+            <option value="above" ${a.neighbors==="above"?"selected":""}>Есть, слышны</option>
+          </select>
+        </div>
+        <div class="field"><label>Осведомлённость о шуме</label>
+          <select id="pm-noise">
+            <option value="unknown" ${a.noiseAwareness==="unknown"?"selected":""}>Не поднимали тему</option>
+            <option value="none" ${a.noiseAwareness==="none"?"selected":""}>Клиент не жалуется</option>
+            <option value="bothered" ${a.noiseAwareness==="bothered"?"selected":""}>Беспокоит шум</option>
+          </select>
+        </div>
+        <div class="field"><label>Цель использования</label>
+          <select id="pm-purpose">
+            <option value="living" ${a.purpose==="living"?"selected":""}>Жилая</option>
+            <option value="sleep" ${a.purpose==="sleep"?"selected":""}>Сон / тишина</option>
+            <option value="work" ${a.purpose==="work"?"selected":""}>Кабинет</option>
+          </select>
+        </div>
+        <button class="btn primary" data-action="pm-run">Показать Result</button>
       </div>`
     );
   }
@@ -316,32 +402,57 @@
   function salesBind() {
     const d = S().sessionDraft;
     if (!d) return salesQuick();
-    if (!d.calcDone) {
+    if (!d.pmDone && !d.calcDone) {
       return shell(
         "sales/quick",
-        `<div class="banner warn">Сначала получите ориентир в калькуляторе — Save без результата запрещён (anti-loss).</div>
-         <a class="btn primary" href="#/sales/calc-quick">К калькулятору</a>`
+        `<div class="banner warn">Нужен хотя бы Result PM <em>или</em> calc — сохранять нечего.</div>
+         <a class="btn primary" href="#/sales/pm-quick">К проблемомеру</a>`
       );
     }
     if (d.bound) {
       return shell(
         "sales/quick",
-        `<div class="banner ok">Уже привязано к проекту. Deal ${esc(d.dealId)}.</div>
-         <a class="btn primary" href="#/sales/project/${d.projectId}">Открыть проект</a>`
+        `<div class="banner ok">Сохранено (${esc(d.saveType || "—")}) → ${esc(d.projectId)} / ${esc(d.roomId)}</div>
+         <a class="btn primary" href="#/sales/room/${d.projectId}/${d.roomId}">Открыть комнату</a>`
       );
     }
+    const mode = S().ui.bindMode || "pick";
+    const projects = S().projects.filter((p) => p.rooms && p.rooms.length);
+    const saveTypeDefault = d.calcDone ? "preliminary" : "profile";
     return shell(
       "sales/quick",
       `
       <div class="page-head">
-        <div><h1>Сохранить и привязать</h1><p class="sub">Имена обязательны. Повтор с тем же ключом не создаёт дубликат (в прототипе — явный bind один раз).</p></div>
+        <div><h1>Куда сохранить?</h1><p class="sub">GC-P0-02: PM-only OK · pick existing OR create · без orphan.</p></div>
       </div>
-      <div class="panel" style="max-width:480px">
-        <div class="banner info">Сумма черновика: <strong>${money(d.amount)}</strong> · session ${esc(d.consultationSessionId)}</div>
-        <div class="field"><label>Название проекта</label><input id="bind-proj" value="Крылова · Лесная 5"></div>
-        <div class="field"><label>Комната</label><input id="bind-room" value="Спальня"></div>
-        <div class="field"><label>Клиент</label><input id="bind-client" value="Елена Крылова"></div>
-        <button class="btn primary" data-action="do-bind">Привязать и создать Deal</button>
+      <div class="tabs">
+        <button class="tab ${mode==="pick"?"active":""}" data-action="bind-mode" data-mode="pick">Выбрать существующие</button>
+        <button class="tab ${mode==="create"?"active":""}" data-action="bind-mode" data-mode="create">Создать новые</button>
+      </div>
+      <div class="panel">
+        <div class="field"><label>Тип сохранения</label>
+          <select id="bind-savetype">
+            <option value="profile" ${saveTypeDefault==="profile"?"selected":""}>Акустический профиль PM${d.pmDone?"":" (нужен PM)"}</option>
+            <option value="preliminary" ${saveTypeDefault==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>Preliminary calc${d.calcDone?"":" — сначала calc"}</option>
+          </select>
+        </div>
+        ${
+          mode === "pick"
+            ? `<div class="field"><label>Проект + комната</label>
+                <select id="bind-pair">${projects
+                  .flatMap((p) =>
+                    p.rooms.map(
+                      (r) =>
+                        `<option value="${p.id}::${r.id}">${esc(p.name)} → ${esc(r.name)}</option>`
+                    )
+                  )
+                  .join("")}</select></div>`
+            : `<div class="field"><label>Название проекта</label><input id="bind-proj" value="Новый клиент · консультация"></div>
+               <div class="field"><label>Комната</label><input id="bind-room" value="Спальня"></div>
+               <div class="field"><label>Клиент</label><input id="bind-client" value=""></div>`
+        }
+        <button class="btn primary" data-action="do-bind">Сохранить в комнату</button>
+        <p class="muted" style="margin-top:8px">Preview: ${d.pmDone ? "профиль PM" : "—"} ${d.calcDone ? "· " + money(d.amount) : ""}</p>
       </div>`
     );
   }
@@ -426,34 +537,31 @@
   }
 
   function renderDealPanel(deal, p) {
-    if (!deal) return `<div class="empty"><strong>Нет активной Deal</strong><p>Создайте inquiry или bind.</p></div>`;
+    if (!deal) return `<div class="empty"><strong>Нет активной Deal</strong></div>`;
     const quotes = MFStore.quotesForDeal(deal.dealId);
+    const sheet = S().ui.dealSheet;
+    const closedDeals = S().deals.filter((d) => d.projectId === p.id && !d.active);
     return `
       <div class="row" style="margin-bottom:12px">
         <span class="pill info">dealId ${esc(deal.dealId)}</span>
         <span class="pill">этап «${esc(stageLabel(deal.stage))}»</span>
         ${deal.paused ? `<span class="pill warn">Пауза · resume → ${esc(stageLabel(deal.stageAtOutcome))}</span>` : ""}
         ${deal.outcome && !deal.paused ? `<span class="pill">${esc(deal.outcome)}</span>` : ""}
+        ${deal.acceptedAmount != null ? `<span class="pill ok">accepted ${money(deal.acceptedAmount)}</span>` : ""}
       </div>
       ${
         deal.paused
-          ? `<div class="banner warn">
-              Сделка на паузе (не закрыта). Причина: ${esc(deal.lossReason)}.
-              <div class="row" style="margin-top:8px">
-                <button class="btn primary" data-action="resume-deal" data-deal="${deal.dealId}">Возобновить на «${esc(
-                stageLabel(deal.stageAtOutcome)
-              )}»</button>
-              </div>
-            </div>`
+          ? `<div class="banner warn">Сделка на паузе. <button class="btn primary sm" data-action="resume-deal" data-deal="${deal.dealId}">Возобновить на «${esc(
+              stageLabel(deal.stageAtOutcome)
+            )}»</button></div>`
           : ""
       }
       <h3>КП этой Deal</h3>
       ${
         !quotes.length
-          ? `<div class="empty"><strong>Пока нет КП</strong><p>Это нормально до отправки.</p>
-              <button class="btn primary" data-action="create-quote" data-deal="${deal.dealId}" ${
-                deal.paused ? "disabled" : ""
-              }>Создать КП</button></div>`
+          ? `<div class="empty"><button class="btn primary" data-action="create-quote" data-deal="${deal.dealId}" ${
+              deal.paused ? "disabled" : ""
+            }>Создать КП</button></div>`
           : quotes
               .map(
                 (q) => `
@@ -461,48 +569,62 @@
               <div class="row">
                 <strong>${esc(q.label)}</strong>
                 <span class="pill ${q.lifecycle === "sent_confirmed" ? "ok" : ""}">${esc(q.lifecycle)}</span>
-                <span class="aside muted">${money(q.amount)}</span>
+                <span class="muted">${money(q.amount)}</span>
               </div>
               <div class="row" style="margin-top:10px">
-                <button class="btn sm" data-action="quote-copy" data-qid="${q.revisionId}" ${
-                  q.lifecycle === "sent_confirmed" ? "disabled" : ""
-                }>Копировать</button>
-                <button class="btn sm" data-action="quote-pdf" data-qid="${q.revisionId}">PDF</button>
+                <button class="btn sm" data-action="quote-copy" data-qid="${q.revisionId}">Копировать</button>
+                <button class="btn sm" data-action="quote-pdf" data-qid="${q.revisionId}">PDF макет</button>
                 <button class="btn sm primary" data-action="quote-confirm" data-qid="${q.revisionId}" ${
                   q.lifecycle === "sent_confirmed" || deal.paused ? "disabled" : ""
                 }>Подтвердить отправку</button>
               </div>
-              <p class="dim" style="margin:8px 0 0;font-size:.8rem">Copy/PDF ≠ sent. Только «Подтвердить отправку» → sent_confirmed.</p>
+              <p class="dim" style="margin:8px 0 0;font-size:.8rem">Copy/PDF открывают превью · ≠ sent_confirmed</p>
             </div>`
               )
-              .join("") +
-            (deal.paused
-              ? ""
-              : `<button class="btn sm" style="margin-top:8px" data-action="create-quote" data-deal="${deal.dealId}">Ещё версия КП (N+1)</button>`)
+              .join("")
       }
-      <h3 style="margin-top:18px">Согласие по комнатам</h3>
+      <h3 style="margin-top:18px">Согласие по комнатам (roomAssent)</h3>
       <ul class="list">
         ${p.rooms
           .map(
-            (r) => `<li class="list-item">
-            <div class="title">${esc(r.name)}</div>
-            <div class="aside"><span class="pill">${esc(r.roomAssent || "—")}</span></div>
-          </li>`
+            (r) => `<li class="list-item"><div class="title">${esc(r.name)}</div>
+            <div class="aside"><span class="pill">${esc(r.roomAssent || "—")}</span>
+            ${money(r.detailed?.amount || r.preliminary?.amount)}</div></li>`
           )
           .join("")}
       </ul>
       ${
-        !deal.paused && deal.active
+        !deal.paused && deal.active && deal.outcome !== "accepted"
           ? `<h3 style="margin-top:18px">Исход</h3>
         <div class="row">
-          <button class="btn ok" data-action="accept-deal" data-deal="${deal.dealId}">Принято</button>
+          <button class="btn ok" data-action="open-accept" data-deal="${deal.dealId}">Принято (sheet assent)</button>
           <button class="btn" data-action="open-pause" data-deal="${deal.dealId}">Пауза</button>
           <button class="btn danger" data-action="open-decline" data-deal="${deal.dealId}">Отказ</button>
         </div>
-        <p class="dim" style="font-size:.8rem;margin-top:8px">Пауза ≠ отказ ≠ закрытие. Resume сохраняет dealId.</p>`
+        <p class="dim" style="font-size:.8rem">GC-P0-03: не auto-order из calc. Нужен sheet ordered/deferred/out_of_scope.</p>`
           : ""
       }
-      <div id="deal-sheet"></div>`;
+      ${
+        deal.outcome === "accepted" && deal.active
+          ? `<div class="banner ok">Accepted · сумма по ordered: ${money(deal.acceptedAmount)}
+             <div class="row" style="margin-top:8px">
+               <button class="btn" data-action="close-accepted" data-deal="${deal.dealId}">Закрыть Deal (sales/owner)</button>
+             </div></div>`
+          : ""
+      }
+      ${
+        !deal.active
+          ? ""
+          : ""
+      }
+      ${
+        closedDeals.length && !S().deals.some((d) => d.projectId === p.id && d.active)
+          ? `<button class="btn primary" data-action="sequential-deal" data-pid="${p.id}">Создать следующую Deal (новый dealId)</button>`
+          : !MFStore.activeDeal(p.id) && closedDeals.length
+          ? `<button class="btn primary" data-action="sequential-deal" data-pid="${p.id}">Создать следующую Deal</button>`
+          : ""
+      }
+      <div id="deal-sheet">${sheet === "accept" ? "" : ""}</div>`;
   }
 
   function salesRoom(projectId, roomId) {
@@ -621,27 +743,29 @@
         { id: "P2c", text: "Ну ок, думайте сами.", next: "IncompleteEnd" },
       ],
     },
-    OfferOk: { end: true, score: 88, title: "Успех", feedback: "Выяснили контекст до оффера; мягкий next step — проблемомер." },
-    FailFast: { end: true, score: 11, title: "Провал", feedback: "Ложное обещание «−35 дБ / полная тишина» — FailFast. context: training, 0 Deal." },
-    PoorEnd: { end: true, score: 36, title: "Слабо", feedback: "Давление / отталкивание клиента." },
-    PressureEnd: { end: true, score: 40, title: "Давление", feedback: "Ультиматум по сроку снижает доверие." },
-    IncompleteEnd: { end: true, score: 45, title: "Нет next step", feedback: "Нет конкретного следующего шага." },
+    OfferOk: { end: true },
+    FailFast: { end: true },
+    PoorEnd: { end: true },
+    PressureEnd: { end: true },
+    IncompleteEnd: { end: true },
   };
 
   function salesAcademy() {
     const ui = S().ui;
-    if (ui.academyDone) {
-      const e = ANNA[ui.academyDone];
+    if (ui.academyDone && ui.academyScore) {
+      const e = ui.academyScore;
       return shell(
         "sales/academy",
         `
-        <div class="page-head"><div><h1>Академия · разбор</h1><p class="sub">context: training · не влияет на sales KPI</p></div></div>
+        <div class="page-head"><div><h1>Разбор попытки</h1><p class="sub">context: training · не в sales KPI</p></div></div>
         <div class="panel">
-          <div class="stat"><div class="n">${e.score}</div><div class="l">${esc(e.title)} · sell_multiframe / Anna</div></div>
-          <p style="margin-top:12px">${esc(e.feedback)}</p>
+          <div class="stat"><div class="n">${e.score}</div><div class="l">${esc(e.title)} · path ${esc(e.path)} · sell_multiframe</div></div>
+          <ul>${(e.feedback || []).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+          <p class="muted">Выборы: ${(ui.academyChoices || []).map((c) => c.id).join(" → ")}</p>
           <div class="row" style="margin-top:14px">
             <button class="btn primary" data-action="academy-reset">Пройти снова</button>
             <a class="btn" href="#/sales/academy-hub">К хабу</a>
+            <a class="btn ghost" href="#/sales/analytics">Аналитика продаж (без training)</a>
           </div>
         </div>`
       );
@@ -649,9 +773,8 @@
     const nodeId = ui.academyNode || "N0";
     const node = ANNA[nodeId];
     if (node.end) {
-      S().ui.academyDone = nodeId;
-      MFStore.save();
-      return salesAcademy();
+      // scoring happens in action handler
+      return shell("sales/academy", `<div class="skeleton"></div>`);
     }
     const path = ui.academyPath || [];
     return shell(
@@ -659,8 +782,8 @@
       `
       <div class="page-head">
         <div>
-          <h1>Тренажёр · Анна</h1>
-          <p class="sub">sell_multiframe / client_anna · Path S ориентир: P0b → P1a → P2a</p>
+          <h1>Тренажёр · клиент Анна</h1>
+          <p class="sub">Диалог · оценивается по вашим репликам. Training ≠ Deal KPI.</p>
         </div>
         <div class="page-actions"><a class="btn ghost" href="#/sales/academy-hub">Хабу</a></div>
       </div>
@@ -679,7 +802,7 @@
           ${node.choices
             .map(
               (c) =>
-                `<button class="btn" data-action="academy-choice" data-next="${c.next}" data-text="${esc(
+                `<button class="btn" data-action="academy-choice" data-next="${c.next}" data-cid="${c.id}" data-text="${esc(
                   c.text
                 )}" data-node="${nodeId}">${esc(c.text)}</button>`
             )
@@ -773,11 +896,29 @@
           <a class="btn primary" href="#/measurer/calc/${p.id}/${r.id}">Detailed calc</a>
         </div>
       </div>
-      <div class="panel">
-        <p>Площадь: <strong>${r.areaM2} м²</strong></p>
-        <p>Prelim: ${r.preliminary ? money(r.preliminary.amount) : "—"}</p>
-        <p>Detailed: ${r.detailed ? money(r.detailed.amount) + " · " + r.detailed.revisionId : "нет"}</p>
-        ${r.detailed ? `<div class="banner ok">Detailed сохранён. Вернитесь в ту же комнату — данные на месте (anti re-entry).</div>` : ""}
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Расчёты</h3>
+          <p>Prelim: <strong>${r.preliminary ? money(r.preliminary.amount) : "—"}</strong></p>
+          <p>Detailed: <strong>${r.detailed ? money(r.detailed.amount) + " · " + r.detailed.revisionId : "нет"}</strong></p>
+          ${
+            r.preliminary && r.detailed
+              ? `<div class="banner info">prelim ≠ detailed · в сумме coalesce берёт detailed</div>`
+              : ""
+          }
+        </div>
+        <div class="panel">
+          <h3>Схема / BOM</h3>
+          ${
+            r.scheme
+              ? `<p>Схема: <strong>${esc(r.scheme.label)}</strong> · ${r.scheme.panels} панелей</p>
+                 <div class="scheme-box" style="height:100px"><div class="panel-rect" style="left:12%;top:20%;width:65%;height:55%">saved</div></div>
+                 <ul>${(r.bom || [])
+                   .map((b) => `<li class="muted">${esc(b.name)}: ${b.qty} ${esc(b.unit)}</li>`)
+                   .join("")}</ul>`
+              : `<p class="muted">Схема ещё не сохранена</p>`
+          }
+        </div>
       </div>`
     );
   }
@@ -785,20 +926,71 @@
   function measurerCalc(projectId, roomId) {
     const p = MFStore.project(projectId);
     const r = MFStore.room(projectId, roomId);
-    const amount = Math.round(r.areaM2 * 3550);
+    const L = r.lengthM || 4;
+    const W = r.widthM || 3;
+    const cut = r.geometry?.cutouts || 0;
+    const bom =
+      r.bom ||
+      [
+        { sku: "MF-PROF-3", name: "Профиль MultiFrame 3м", qty: 8, unit: "шт" },
+        { sku: "CANVAS-W", name: "Полотно белое", qty: Math.ceil(L * W), unit: "м²" },
+        { sku: "CLIP-50", name: "Клипсы", qty: 40, unit: "шт" },
+      ];
+    const conflict = S().ui.conflictDemo;
     return shell(
       "measurer/home",
       `
       <div class="page-head">
-        <div><h1>Detailed расчёт</h1><p class="sub">${esc(p.name)} / ${esc(r.name)}</p></div>
+        <div><h1>Detailed расчёт</h1><p class="sub">${esc(p.name)} / ${esc(r.name)} · геометрия + схема + BOM</p></div>
+        <div class="page-actions"><a class="btn ghost" href="#/measurer/room/${p.id}/${r.id}">Назад</a></div>
       </div>
-      <div class="panel">
-        <div class="stat"><div class="n">${money(amount)}</div><div class="l">Detailed · схема + узлы</div></div>
-        <button class="btn primary" style="margin-top:12px" data-action="save-room-calc"
-          data-pid="${p.id}" data-rid="${r.id}" data-kind="detailed" data-amount="${amount}"
-          data-back="#/measurer/room/${p.id}/${r.id}">
-          Сохранить detailed
-        </button>
+      ${
+        conflict
+          ? `<div class="banner warn">${esc(conflict.message)}<br>kept A ${esc(conflict.keptA)} · B ${esc(
+              conflict.keptB
+            )} <button class="btn sm" data-action="clear-conflict">OK</button></div>`
+          : ""
+      }
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Геометрия</h3>
+          <div class="field"><label>Длина, м</label><input id="det-L" type="number" step="0.1" value="${L}"></div>
+          <div class="field"><label>Ширина, м</label><input id="det-W" type="number" step="0.1" value="${W}"></div>
+          <div class="field"><label>Вырезы / препятствия</label><input id="det-cut" type="number" value="${cut}"></div>
+          <div class="field"><label>Подпись схемы</label><input id="det-sch" value="Схема ${esc(r.name)}"></div>
+          <label class="row"><input type="checkbox" id="det-409"> Симулировать 409 (две device revision)</label>
+        </div>
+        <div class="panel">
+          <h3>Макет схемы</h3>
+          <div class="scheme-box" id="scheme-preview" style="height:160px">
+            <div class="panel-rect" style="left:10%;top:15%;width:70%;height:60%">полотно</div>
+            <div class="panel-rect" style="left:72%;top:20%;width:18%;height:25%;border-color:var(--warn)">вырез</div>
+          </div>
+          <p class="muted">Площадь ≈ <span id="det-area">${(L * W).toFixed(1)}</span> м² · prelim ${
+        r.preliminary ? money(r.preliminary.amount) : "—"
+      }</p>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:12px">
+        <h3>BOM (редактируемо)</h3>
+        <table class="bom-table" id="bom-table">
+          <thead><tr><th>SKU</th><th>Название</th><th>Кол-во</th><th>Ед.</th></tr></thead>
+          <tbody>
+            ${bom
+              .map(
+                (b, i) => `<tr>
+              <td class="mono">${esc(b.sku)}</td>
+              <td>${esc(b.name)}</td>
+              <td><input data-bom-qty="${i}" type="number" value="${b.qty}"></td>
+              <td>${esc(b.unit)}</td>
+            </tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+        <script type="application/json" id="bom-json">${JSON.stringify(bom).replace(/</g, "\\u003c")}</script>
+        <button class="btn primary" style="margin-top:12px" data-action="save-detailed"
+          data-pid="${p.id}" data-rid="${r.id}">Сохранить detailed + схему</button>
       </div>`
     );
   }
@@ -806,11 +998,18 @@
   /* ---------- CREW ---------- */
   function crewHome() {
     const items = MFStore.crewInbox();
+    const allTech = [];
+    S().projects.forEach((p) =>
+      p.rooms.forEach((r) => {
+        if (r.roomAssent === "ordered" && r.techReady && r.status !== "closed") allTech.push({ p, r });
+      })
+    );
+    const hidden = allTech.filter((x) => x.r.assigneeCrew !== MFStore.CREW_SELF);
     return shell(
       "crew/home",
       `
       <div class="page-head">
-        <div><h1>Мои задания</h1><p class="sub">Только ordered + tech-ready. Коммерческие суммы скрыты.</p></div>
+        <div><h1>Мои задания</h1><p class="sub">Только ordered + tech-ready + <strong>assignee = Денис</strong>. Суммы КП скрыты.</p></div>
       </div>
       <ul class="list panel">
         ${
@@ -821,24 +1020,43 @@
           <li class="list-item" data-action="goto" data-href="#/crew/install/${p.id}/${r.id}">
             <div>
               <div class="title">${esc(r.name)}</div>
-              <div class="meta">${esc(p.address)} · схема ${r.schemeOk ? "есть" : "нет"}</div>
+              <div class="meta">${esc(p.address)} · checklist ${
+                    r.installChecklist?.length ? r.installChecklist.length + " п." : "ОТСУТСТВУЕТ"
+                  }</div>
             </div>
-            <div class="aside">${r.blocker && r.blocker.open ? "blocker" : "в работе"}</div>
+            <div class="aside">${r.blocker && r.blocker.open ? "blocker" : "открыть"}</div>
           </li>`
                 )
                 .join("")
-            : `<li class="empty"><strong>Нет заданий</strong><p>Deferred / без detailed не попадают сюда.</p></li>`
+            : `<li class="empty"><strong>Нет ваших заданий</strong></li>`
         }
       </ul>
-      <p class="footnote">Кухня Васильева (deferred) намеренно отсутствует в inbox.</p>`
+      ${
+        hidden.length
+          ? `<div class="banner info">Скрыто чужих tech-ready: ${hidden
+              .map((x) => esc(x.r.name) + "→" + esc(staffName(x.r.assigneeCrew)))
+              .join(", ")} (GC-P0-05)</div>`
+          : ""
+      }
+      <p class="footnote">Кухня deferred и чужой санузел (Сергей) не в inbox Дениса.</p>`
     );
   }
 
   function crewInstall(projectId, roomId) {
     const p = MFStore.project(projectId);
     const r = MFStore.room(projectId, roomId);
+    if (r.assigneeCrew && r.assigneeCrew !== MFStore.CREW_SELF) {
+      return shell(
+        "crew/home",
+        `<div class="banner danger">Комната назначена другому монтажнику (${esc(
+          staffName(r.assigneeCrew)
+        )}). Не ваше задание.</div>
+         <a class="btn" href="#/crew/home">К inbox</a>`
+      );
+    }
     const mode = S().ui.installMode || "checklist";
-    const cl = r.installChecklist || [];
+    const cl = r.installChecklist;
+    const missing = !cl || !cl.length;
     return shell(
       "crew/home",
       `
@@ -854,17 +1072,13 @@
       <div class="panel">
         ${
           mode === "scheme"
-            ? `<div class="banner info">Схема раскроя · демо-файл «зал_васильев_v2.pdf»</div>
-               <p class="muted">Просмотр help. Persist сметы для crew нет.</p>`
+            ? `<div class="banner info">${r.scheme ? esc(r.scheme.label) : "Схема не приложена"}</div>
+               <div class="scheme-box" style="height:120px"><div class="panel-rect" style="left:15%;top:20%;width:60%;height:50%">view</div></div>`
             : mode === "blocker"
-            ? `
-              ${
+            ? (
                 r.blocker && r.blocker.open
-                  ? `<div class="banner danger">Открыт blocker: <strong>${esc(r.blocker.type)}</strong> — ${esc(
-                      r.blocker.note
-                    )}
-                    <div style="margin-top:8px"><button class="btn sm" data-action="clear-blocker" data-pid="${p.id}" data-rid="${r.id}">Снять</button></div>
-                   </div>`
+                  ? `<div class="banner danger">Blocker: <strong>${esc(r.blocker.type)}</strong> — ${esc(r.blocker.note)}
+                       <button class="btn sm" data-action="clear-blocker" data-pid="${p.id}" data-rid="${r.id}">Снять</button></div>`
                   : `<div class="field"><label>Тип</label>
                       <select id="blk-type">
                         <option value="no_scheme">Нет схемы</option>
@@ -872,11 +1086,14 @@
                         <option value="install_question">Вопрос по монтажу</option>
                         <option value="contact_responsible">Связаться с ответственным</option>
                       </select></div>
-                     <div class="field"><label>Комментарий</label><textarea id="blk-note" rows="2">Не хватает закладных под люстру</textarea></div>
-                     <button class="btn danger" data-action="set-blocker" data-pid="${p.id}" data-rid="${r.id}">Зафиксировать препятствие</button>`
-              }`
-            : `
-              ${cl
+                     <div class="field"><label>Комментарий</label><textarea id="blk-note" rows="2">Не хватает закладных</textarea></div>
+                     <button class="btn danger" data-action="set-blocker" data-pid="${p.id}" data-rid="${r.id}">Зафиксировать</button>`
+              )
+            : missing
+            ? `<div class="banner danger">Чек-лист отсутствует — закрытие комнаты запрещено (GC-P0-05).
+                 <div style="margin-top:8px"><button class="btn primary" data-action="ensure-checklist" data-pid="${p.id}" data-rid="${r.id}">Инициализировать чек-лист</button></div>
+               </div>`
+            : `${cl
                 .map(
                   (c) => `
                 <div class="check-item">
@@ -900,7 +1117,7 @@
               <div class="row" style="margin-top:14px">
                 <button class="btn primary" data-action="close-install" data-pid="${p.id}" data-rid="${r.id}">Закрыть комнату</button>
               </div>
-              <p class="dim" style="font-size:.8rem;margin-top:8px">Закрытие без полного чек-листа или при open blocker — блок.</p>`
+              <p class="dim" style="font-size:.8rem;margin-top:8px">Блок при open blocker / неполном чек-листе / пустом чек-листе.</p>`
         }
       </div>`
     );
@@ -1029,17 +1246,34 @@
   }
 
   function ownerStaff() {
+    const cred = S().ui.oneTimeCred;
     return shell(
       "owner/staff",
       `
-      <div class="page-head"><div><h1>Сотрудники</h1><p class="sub">Неболайн</p></div></div>
+      <div class="page-head"><div><h1>Сотрудники</h1><p class="sub">Создание / reset · one-time credentials</p></div></div>
+      <div class="panel" style="max-width:480px;margin-bottom:12px">
+        <h3>Добавить</h3>
+        <div class="field"><label>Имя</label><input id="st-name" placeholder="ФИО"></div>
+        <div class="field"><label>Роль</label>
+          <select id="st-role">
+            <option value="sales">sales</option>
+            <option value="measurer">measurer</option>
+            <option value="crew">crew</option>
+          </select>
+        </div>
+        <button class="btn primary" data-action="create-staff">Создать + показать пароль</button>
+      </div>
       <ul class="list panel">
         ${S()
           .staff.map(
-            (u) => `<li class="list-item"><div class="title">${esc(u.name)}</div><div class="aside">${esc(u.role)}</div></li>`
+            (u) => `<li class="list-item">
+            <div><div class="title">${esc(u.name)}</div><div class="meta">${esc(u.role)}</div></div>
+            <div class="aside"><button class="btn sm" data-action="reset-staff" data-uid="${u.id}">Сброс пароля</button></div>
+          </li>`
           )
           .join("")}
-      </ul>`
+      </ul>
+      <p class="footnote">После «Скрыть» plaintext пароль в карточке не показывается повторно.</p>`
     );
   }
 
@@ -1119,15 +1353,22 @@
         body = `<button class="btn primary" data-action="create-intervention" data-partner="${p.id}">Создать intervention</button>`;
       }
     } else {
+      const before = intervention?.baseline || p.adoptionBefore || {};
+      const after = intervention?.after || p.adoptionAfter;
       body = intervention
-        ? `<p>Проверка adoption (отдельно от conversion widget).</p>
-           <div class="row">
-             <button class="btn ok" data-action="verify-int" data-iid="${intervention.id}" data-result="adopted">Adopted</button>
+        ? `<p>Verify adoption — <strong>не</strong> conversion widget.</p>
+           <div class="grid-2">
+             <div class="stat"><div class="n">${Math.round((before.offerRate||0)*100)}%</div><div class="l">Before offer rate</div></div>
+             <div class="stat"><div class="n">${Math.round((before.followupDone||0)*100)}%</div><div class="l">Before follow-up</div></div>
+           </div>
+           <div class="row" style="margin-top:12px">
+             <button class="btn ok" data-action="verify-int" data-iid="${intervention.id}" data-result="adopted">Adopted (симулировать прирост)</button>
              <button class="btn" data-action="verify-int" data-iid="${intervention.id}" data-result="no_change">Без изменений</button>
            </div>
            ${
              intervention.verified
-               ? `<div class="banner ok" style="margin-top:12px">Verified: ${esc(intervention.result)}</div>`
+               ? `<div class="banner ok" style="margin-top:12px">Verified: ${esc(intervention.result)}
+                    · After offer ${Math.round((after?.offerRate||0)*100)}% / follow-up ${Math.round((after?.followupDone||0)*100)}%</div>`
                : ""
            }`
         : `<p class="muted">Сначала intervention.</p>`;
