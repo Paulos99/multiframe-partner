@@ -159,7 +159,7 @@
       }
     } catch (e) {
       console.error(e);
-      html = MFViews.errorView(e.message || "render failed");
+      html = MFViews.errorView(e.message || "ошибка отображения");
       preserveFrame = null;
     }
 
@@ -178,12 +178,12 @@
     host.innerHTML = `
       <div class="modal-back" data-action="close-sheet">
         <div class="modal" style="width:min(560px,100%)" onclick="event.stopPropagation()">
-          <h3>Принято — согласие по комнатам</h3>
-          <p class="muted">GC3-P0-02 / GC2-P0-03: scope = rooms sent Quote. «Не выбрано» по умолчанию. ≥1 ordered.</p>
+          <h3>Клиент согласился — решение по комнатам</h3>
+          <p class="muted">Только комнаты из отправленного КП. «Не выбрано» по умолчанию. Нужна хотя бы одна «заказано».</p>
           ${
             rooms.length
               ? ""
-              : `<div class="banner warn">Нет применимого sent Quote / пустой scope — accept недоступен.</div>`
+              : `<div class="banner warn">Нет подходящего отправленного КП или пустой список комнат — принять нельзя.</div>`
           }
           ${rooms
             .map((r) => {
@@ -191,9 +191,9 @@
               return `<div class="field"><label>${r.name} · ${amt} ₽</label>
                 <select data-assent-room="${r.id}" required>
                   <option value="" selected>Не выбрано</option>
-                  <option value="ordered">ordered</option>
-                  <option value="deferred">deferred</option>
-                  <option value="out_of_scope">out_of_scope</option>
+                  <option value="ordered">Заказано</option>
+                  <option value="deferred">Отложено</option>
+                  <option value="out_of_scope">Вне сделки</option>
                 </select></div>`;
             })
             .join("")}
@@ -201,7 +201,7 @@
             <button class="btn ghost" data-action="close-sheet">Отмена</button>
             <button class="btn ok" data-action="confirm-accept" data-deal="${dealId}" ${
               rooms.length ? "" : "disabled"
-            }>Подтвердить accepted</button>
+            }>Подтвердить согласие</button>
           </div>
         </div>
       </div>`;
@@ -211,15 +211,15 @@
   function openSheet(dealId, mode) {
     const host = document.getElementById("deal-sheet");
     if (!host) return;
-    const title = mode === "pause" ? "Пауза сделки" : "Отказ (early decline)";
+    const title = mode === "pause" ? "Пауза сделки" : "Отказ на раннем этапе";
     host.innerHTML = `
       <div class="modal-back" data-action="close-sheet">
         <div class="modal" onclick="event.stopPropagation()">
           <h3>${title}</h3>
           <p class="muted">${
             mode === "pause"
-              ? "Нетерминально: Deal остаётся active, resume на тот же этап."
-              : "Терминально: Deal закрывается, reopen запрещён."
+              ? "Сделка остаётся активной, можно возобновить с того же этапа."
+              : "Сделка закрывается окончательно, повторно открыть нельзя."
           }</p>
           <div class="field"><label>Причина (обязательно)</label>
             <input id="sheet-reason" placeholder="Почему…" value="${
@@ -339,7 +339,7 @@
     }
     if (action === "toggle-offline") {
       MFStore.setOffline(!MFStore.get().offline);
-      toast(MFStore.get().offline ? "Офлайн" : "Онлайн", MFStore.get().offline ? "Создание/bind блокируются" : "Синхронизация ок", "warn");
+      toast(MFStore.get().offline ? "Офлайн" : "Онлайн", MFStore.get().offline ? "Создание и сохранение в проект недоступны" : "Синхронизация ок", "warn");
       render();
       return;
     }
@@ -355,16 +355,16 @@
         areaM2: document.getElementById("inq-area").value,
       });
       if (!res.ok) {
-        toast("Не создано", res.error === "offline_queued" ? "В outbox (офлайн)" : "Ошибка", "danger");
+        toast("Не создано", res.error === "offline_queued" ? "В очереди офлайн" : "Ошибка", "danger");
         return;
       }
-      toast("Проект создан", `Deal ${res.dealId}`, "ok");
+      toast("Проект создан", `dealId: ${res.dealId}`, "ok");
       location.hash = `#/sales/project/${res.projectId}`;
       return;
     }
     if (action === "start-quick") {
       MFStore.startQuickConsultation(el.getAttribute("data-persona") || "");
-      toast("Консультация", "session + анкета (шум не pre-filled)", "ok");
+      toast("Консультация", "сессия и анкета (шум не подставляется заранее)", "ok");
       location.hash = "#/sales/pm-quick";
       return;
     }
@@ -459,7 +459,7 @@
         ui.pmPhase = "result";
         ui.pmStep = "result";
         MFStore.save();
-        toast("Итог", `persona ${res.result.clientPersona}`, "ok");
+        toast("Итог", `тип клиента: ${res.result.clientPersona}`, "ok");
         render();
         return;
       }
@@ -591,7 +591,7 @@
         toast("Не сохранено", res.error, "danger");
         return;
       }
-      toast("Личный результат", `${res.id} · Project не изменён`, "ok");
+      toast("Личный результат", `${res.id} · проект не изменён`, "ok");
       render();
       return;
     }
@@ -613,7 +613,7 @@
         purpose: document.getElementById("pm-purpose").value,
       });
       const res = MFStore.runPmOnDraft();
-      toast("Result", `persona ${res.result.clientPersona}`, "ok");
+      toast("Результат", `тип клиента: ${res.result.clientPersona}`, "ok");
       render();
       return;
     }
@@ -648,13 +648,13 @@
     }
     if (action === "offer-mf") {
       const res = MFStore.markMultiframeOffered();
-      toast("multiframe_offered", `session ${res.consultationSessionId} · без dealId`, "ok");
+      toast("Предложили MultiFrame", `сессия ${res.consultationSessionId} · без привязки к сделке`, "ok");
       render();
       return;
     }
     if (action === "pm-done") {
       MFStore.finishPmOnDraft();
-      toast("PM", "Оценка зафиксирована", "ok");
+      toast("Проблемомер", "Оценка зафиксирована", "ok");
       location.hash = "#/sales/calc-quick";
       return;
     }
@@ -693,11 +693,11 @@
           return;
         }
         if (res.error === "forbidden_role" || res.error === "forbidden_create") {
-          toast("Нет права записи в Project", `Роль ${res.role} · D5 §1.7`, "danger");
+          toast("Нет права записи в проект", `Роль ${res.role}`, "danger");
           render();
           return;
         }
-        toast("Save не выполнен", res.error === "offline_queued" ? "В outbox (офлайн)" : res.error, "danger");
+        toast("Сохранение не выполнено", res.error === "offline_queued" ? "В очереди офлайн" : res.error, "danger");
         render();
         return;
       }
@@ -720,7 +720,7 @@
         areaResolution: resolution,
       });
       if (!res.ok) {
-        toast("Save не выполнен", res.error, "danger");
+        toast("Сохранение не выполнено", res.error, "danger");
         render();
         return;
       }
@@ -759,7 +759,7 @@
     if (action === "quote-copy" || action === "quote-pdf") {
       const mode = action === "quote-pdf" ? "pdf" : "copy";
       const res = MFStore.shareQuote(el.getAttribute("data-qid"), mode);
-      toast(res.message || "Готово", "lifecycle не изменился (≠ sent)", "ok");
+      toast(res.message || "Готово", "статус КП не изменился (не «отправлено»)", "ok");
       render();
       return;
     }
@@ -772,7 +772,7 @@
     if (action === "clipboard-quote") {
       const t = MFStore.get().ui.quotePreview?.text || "";
       if (navigator.clipboard?.writeText) navigator.clipboard.writeText(t);
-      toast("В буфере", "Всё ещё ≠ sent", "ok");
+      toast("В буфере", "Это всё ещё не подтверждение отправки", "ok");
       return;
     }
     if (action === "download-quote-pdf") {
@@ -838,14 +838,14 @@
       if (!res.ok) {
         const msg =
           res.error === "need_one_ordered"
-            ? "Нужна ≥1 ordered"
+            ? "Нужна хотя бы одна комната «заказано»"
             : res.error === "assent_incomplete"
             ? `Выберите согласие: ${res.roomName || res.roomId}`
             : res.error;
-        toast("Не принято · state не изменён", msg, "danger");
+        toast("Не принято · состояние не изменено", msg, "danger");
         return;
       }
-      toast("Accepted", `ordered ${res.ordered.length} · ${res.acceptedAmount} ₽`, "ok");
+      toast("Клиент согласился", `заказано комнат: ${res.ordered.length} · ${res.acceptedAmount} ₽`, "ok");
       render();
       return;
     }
@@ -857,14 +857,14 @@
         render();
         return;
       }
-      toast("Deal закрыта", "Можно sequential", "ok");
+      toast("Сделка завершена", "Можно создать следующую сделку", "ok");
       render();
       return;
     }
     if (action === "sequential-deal") {
       const res = MFStore.createSequentialDeal(el.getAttribute("data-pid"));
       if (!res.ok) toast("Нет", res.error, "danger");
-      else toast("Новая Deal", res.dealId, "ok");
+      else toast("Новая сделка", `dealId: ${res.dealId}`, "ok");
       render();
       return;
     }
@@ -905,7 +905,7 @@
       return;
     }
     if (action === "mark-na") {
-      const reason = prompt("Причина N/A", "Не применимо на объекте") || "";
+      const reason = prompt("Причина «не применимо»", "Не применимо на объекте") || "";
       MFStore.toggleChecklist(el.getAttribute("data-pid"), el.getAttribute("data-rid"), el.getAttribute("data-cid"), {
         done: false,
         na: true,
@@ -928,7 +928,7 @@
         document.getElementById("blk-type").value,
         document.getElementById("blk-note").value
       );
-      toast("Blocker", "Закрытие комнаты заблокировано", "warn");
+      toast("Препятствие", "Закрытие комнаты заблокировано", "warn");
       MFStore.get().ui.installMode = "checklist";
       MFStore.save();
       render();
@@ -936,7 +936,7 @@
     }
     if (action === "clear-blocker") {
       MFStore.clearBlocker(el.getAttribute("data-pid"), el.getAttribute("data-rid"));
-      toast("Blocker снят", "", "ok");
+      toast("Препятствие снято", "", "ok");
       render();
       return;
     }
@@ -946,7 +946,7 @@
         toast(
           "Нельзя закрыть",
           res.error === "blocker"
-            ? "Открыт blocker"
+            ? "Открыто препятствие"
             : res.error === "checklist_missing"
             ? "Чек-лист отсутствует"
             : "Чек-лист неполный",
@@ -954,7 +954,7 @@
         );
         return;
       }
-      toast("Комната закрыта", "Checklist выполнен", "ok");
+      toast("Комната закрыта", "Чек-лист выполнен", "ok");
       location.hash = "#/crew/home";
       return;
     }
@@ -990,7 +990,7 @@
       }
       const hyp = document.getElementById("hyp")?.value || "Stall follow-up";
       const res = MFStore.createIntervention(partnerId, hyp, "quote_followup");
-      toast("Intervention", res.id, "ok");
+      toast("Вмешательство создано", res.id, "ok");
       MFStore.get().ui.adminStep = "intervene";
       MFStore.save();
       render();
@@ -998,7 +998,7 @@
     }
     if (action === "verify-int") {
       const res = MFStore.verifyIntervention(el.getAttribute("data-iid"), el.getAttribute("data-result"));
-      toast("Verify", `${el.getAttribute("data-result")} · before/after adoption`, "ok");
+      toast("Проверка", "Результат обучения зафиксирован", "ok");
       render();
       return;
     }

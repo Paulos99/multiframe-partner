@@ -676,9 +676,9 @@
       interventions: [],
       ownerInbox: [
         { id: "oi1", kind: "assign", title: "Нет замерщика на гостиную", projectId: "prj_nv_soroka", roomId: "room_sor_living", severity: "warn" },
-        { id: "oi2", kind: "blocker", title: "Монтаж: открытый blocker", projectId: "prj_nv_install", roomId: "room_vas_hall", severity: "danger" },
+        { id: "oi2", kind: "blocker", title: "Монтаж: открытое препятствие", projectId: "prj_nv_install", roomId: "room_vas_hall", severity: "danger" },
         { id: "oi3", kind: "paused", title: "Сделка на паузе — Парк Хаус", projectId: "prj_nv_park", dealId: "deal_nv_038", severity: "info" },
-        { id: "oi4", kind: "assent", title: "Partial assent — Волкова 3 комнаты", projectId: "prj_nv_volkova", dealId: "deal_nv_055", severity: "warn" },
+        { id: "oi4", kind: "assent", title: "Частичное согласие — Волкова, 3 комнаты", projectId: "prj_nv_volkova", dealId: "deal_nv_055", severity: "warn" },
       ],
       events: [],
       trainingAttempts: [],

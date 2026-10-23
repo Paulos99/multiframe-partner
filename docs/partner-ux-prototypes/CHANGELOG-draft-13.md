@@ -13,3 +13,9 @@
 **Tests:** `node smoke.mjs` · `node e2e-gc9.mjs` (math/GC10–GC11 unchanged)
 
 **Media:** `media/gate-c-draft13-cabinet-desktop.png`, `media/gate-c-draft13-empty-room-desktop.png`
+
+### GC13-UX-01 (дополнение к `rev-gate-c-draft-13`)
+
+| ID | Change |
+|----|--------|
+| **GC13-UX-01** | Пользовательские подписи в `assets/views.js` + тосты/листы в `app.js`: Bind/Save/Result/Deal/assent sheet → русский; lifecycle КП, исходы сделки, crew/owner/admin copy; **MultiFrame** / **PDF** / id (`dealId`, `ordered` values) без перевода |

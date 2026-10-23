@@ -1,14 +1,15 @@
-# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-7`
+# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-13`
 
 **Честно:** ячейки «Observed» ниже — **agent walkthrough / store smoke**, **не** human usability lab.  
 GC-P1-05: финальный Gate C OK требует незаполненный человеком прогон без подсказок. Не ставить UX PASS по зелёному smoke.
 
 | Поле | Значение |
 |------|----------|
-| Revision | `rev-gate-c-draft-7` |
+| Revision | `rev-gate-c-draft-13` |
+| Changelog | [`CHANGELOG-draft-13.md`](./CHANGELOG-draft-13.md) (вкл. GC13-UX-01 русские подписи) |
 | Device agent | desktop Chromium + store VM |
 | Human observed | **NOT observed** |
-| Agent smoke | **36/36 PASS** (`node smoke.mjs`) |
+| Agent smoke | **52/52 PASS** (`node smoke.mjs`) |
 
 Протокол §7.1: first-click · confusion · re-entry · clarity 1–5 · recovery · device · comments.
 

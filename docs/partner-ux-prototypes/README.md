@@ -1,7 +1,7 @@
 # Gate C — изолированные HTML-прототипы MultiFrame Партнёр
 
 **Revision:** `rev-gate-c-draft-13`  
-**Статус:** Gate C **in review** (GC9-P0-01 calc→bind) · Gate B **APPROVED / frozen**  
+**Статус:** Gate C **in review** (draft-13: GC11 cabinet + **GC13-UX-01** RU labels) · Gate B **APPROVED / frozen**  
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
