@@ -1,11 +1,11 @@
 # Gate C — изолированные HTML-прототипы MultiFrame Партнёр
 
-**Revision:** `rev-gate-c-draft-5`  
-**Статус:** Gate C **in review** (shared tools + 409 retry after `5188bf1`) · Gate B **APPROVED / frozen**  
+**Revision:** `rev-gate-c-draft-6`  
+**Статус:** Gate C **in review** (voice pass Академия/тренажёры) · Gate B **APPROVED / frozen**  
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Changelog: [`CHANGELOG-draft-5.md`](./CHANGELOG-draft-5.md) · Smoke: `node smoke.mjs` (26/26).
+Changelog: [`CHANGELOG-draft-6.md`](./CHANGELOG-draft-6.md) · Smoke: `node smoke.mjs` (26/26).
 
 **Инструменты (все роли):** `#/tools/pm` · `#/tools/calc` · hub `#/tools/hub` — прямые входы, PM и Calc независимы.
 
