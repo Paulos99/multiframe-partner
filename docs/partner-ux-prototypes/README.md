@@ -1,13 +1,13 @@
 # Gate C — изолированные HTML-прототипы MultiFrame Партнёр
 
-**Revision:** `rev-gate-c-draft-8`  
-**Статус:** Gate C **in review** (GC6-P0-03 original tool shells) · Gate B **APPROVED / frozen**  
-**Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
+**Revision:** `rev-gate-c-draft-9`  
+**Статус:** Gate C **in review** (GC6-P0-03 remainder + GC8-P1-01) · Gate B **APPROVED / frozen**  
+**Периметр:** только этот каталог. **Не** `apps/*` (кроме readonly calc snapshot), **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Changelog: [`CHANGELOG-draft-8.md`](./CHANGELOG-draft-8.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` (38/38) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
+Changelog: [`CHANGELOG-draft-9.md`](./CHANGELOG-draft-9.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
 
-**Инструменты:** `#/tools/pm` (фирменный wizard) · `#/tools/calc` (iframe-снимок согласованного калькулятора) · hub `#/tools/hub`. Owner ref: https://paulos99.github.io/multiframe-partner/ · Bind — RBAC D5 §1.7.
+**Инструменты:** `#/tools/pm` / `#/tools/calc` — full-bleed iframe hosts of agreed shells (outside dark cabinet). Owner ref: https://paulos99.github.io/multiframe-partner/
 
 ---
 

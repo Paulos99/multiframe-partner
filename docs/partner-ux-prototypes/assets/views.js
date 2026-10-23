@@ -302,237 +302,37 @@
       .join("")}</ol>`;
   }
 
+  /**
+   * GC6-P0-03 remainder: host Problemer outside the dark cabinet shell
+   * (compact StP header + wizard live in tools/problemomer/).
+   * Legacy toolsWrapPm kept below for reference / fallback deep-links.
+   */
   function toolsPm() {
-    return toolsWrapPm();
+    const role = S().role || "—";
+    const d = S().sessionDraft;
+    const ready = d && (d.pmDone || d.calcDone) && !d.bound;
+    return `
+      <div class="tool-host" data-tool="pm">
+        <header class="tool-chrome tool-chrome--compact">
+          <a class="tool-chrome__back" href="#/tools/hub">← Инстр.</a>
+          <div class="tool-chrome__title">
+            <strong>Проблемомер</strong>
+            <span class="muted">роль ${esc(role)} · согласованный wizard · один клик «Начать»</span>
+          </div>
+          <div class="tool-chrome__actions">
+            <a class="btn sm ghost" href="#/tools/calc">Калькулятор</a>
+            <a class="btn sm ${ready ? "primary" : ""}" href="#/tools/bind">${
+              ready ? "Сохранить…" : "Bind после итога"
+            }</a>
+          </div>
+        </header>
+        <iframe class="tool-frame" title="Проблемомер MultiFRAME" src="tools/problemomer/index.html" allow="clipboard-write"></iframe>
+      </div>`;
   }
 
   function toolsWrapPm() {
-    const theme = S().ui.toolTheme === "dark" ? "dark" : "light";
-    let d = S().sessionDraft;
-    const phase =
-      d && d.pmDone && (S().ui.pmPhase === "result" || S().ui.pmStep === "result")
-        ? "result"
-        : S().ui.pmPhase || "intro";
-
-    if (!d || d.bound) {
-      return shell(
-        "tools/pm",
-        `
-        <div class="orig-wrap">
-          <div class="page-actions-inline">
-            <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
-            <span class="pill info">роль ${esc(S().role || "—")}</span>
-          </div>
-          <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
-            ${origToolHeader("pm", theme)}
-            <div class="orig-body">
-              ${pmProgress("intro")}
-              <div class="orig-hero">
-                <h1>Проверьте уровень акустического комфорта на своём объекте</h1>
-                <p>Ответьте на несколько вопросов, Проблемомер оценит уровень шума.</p>
-                <p>Дальше вы увидите, насколько тише станет после монтажа MultiFrame.</p>
-                <div style="position:relative;margin-top:6px;display:flex;flex-direction:column;gap:8px">
-                  <button type="button" class="orig-btn orig-btn--primary" data-action="pm-begin" data-persona="">Начать</button>
-                  <div style="display:flex;flex-wrap:wrap;gap:8px">
-                    <button type="button" class="orig-btn orig-btn--secondary" data-action="pm-begin" data-persona="quiet">Пресет: без жалобы</button>
-                    <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-begin" data-persona="noise">Пресет: слышит соседей</button>
-                  </div>
-                </div>
-              </div>
-              <p class="dim" style="text-align:center;margin-top:16px"><a href="#/tools/calc">Калькулятор</a> можно открыть отдельно</p>
-            </div>
-          </div>
-        </div>`
-      );
-    }
-
-    if (phase === "intro" && !d.pmDone) {
-      return shell(
-        "tools/pm",
-        `
-        <div class="orig-wrap">
-          <div class="page-actions-inline">
-            <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
-          </div>
-          <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
-            ${origToolHeader("pm", theme)}
-            <div class="orig-body">
-              ${pmProgress("intro")}
-              <div class="orig-hero">
-                <h1>Проверьте уровень акустического комфорта на своём объекте</h1>
-                <p>Ответьте на несколько вопросов, Проблемомер оценит уровень шума.</p>
-                <p>Дальше вы увидите, насколько тише станет после монтажа MultiFrame.</p>
-                <button type="button" class="orig-btn orig-btn--primary" style="position:relative;margin-top:8px" data-action="pm-intro-next">Начать</button>
-              </div>
-            </div>
-          </div>
-        </div>`
-      );
-    }
-
-    if (phase === "result" && d.pmDone && d.pmResult) {
-      const r = d.pmResult;
-      const ch = r.chain;
-      const roomLabel =
-        { bedroom: "Спальня", living: "Гостиная", kids: "Детская", kitchen: "Кухня", office: "Кабинет", other: "Другое" }[
-          r.roomType
-        ] || r.roomType;
-      return shell(
-        "tools/pm",
-        `
-        <div class="orig-wrap">
-          <div class="page-actions-inline">
-            <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
-          </div>
-          <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
-            ${origToolHeader("pm", theme)}
-            <div class="orig-body">
-              ${pmProgress("result")}
-              <div class="orig-result">
-                <h1>Акустический профиль помещения</h1>
-                <p class="muted">${esc(roomLabel)} · ${r.areaM2} м² · потолок: натяжной (пресет сегмента) · demo</p>
-                <div class="orig-disclaimer">Иллюстрация по ответам анкеты · не акустическое измерение, не лабораторный протокол и не гарантия дБ.</div>
-                <section class="orig-section" aria-label="Параметры объекта">
-                  <h3>Параметры объекта</h3>
-                  <p class="muted" style="margin:0">Тип комнаты: ${esc(roomLabel)} · Площадь: ${r.areaM2} м² · Persona: ${esc(
-          r.clientPersona
-        )}</p>
-                </section>
-                <section class="orig-section" aria-label="Ключевые показатели">
-                  <h3>Ключевые показатели</h3>
-                  <div class="orig-kpis">
-                    <div class="orig-kpi"><span class="l">Сейчас · риск</span><span class="n">${esc(r.currentRisk)}</span></div>
-                    <div class="orig-kpi"><span class="l">С MultiFrame</span><span class="n" style="font-size:1rem">${esc(
-                      r.withMfComfort
-                    )}</span></div>
-                    <div class="orig-kpi"><span class="l">Разница</span><span class="n" style="font-size:.95rem">${esc(
-                      ch.difference
-                    )}</span></div>
-                    <div class="orig-kpi"><span class="l">Ориентир</span><span class="n" style="font-size:.95rem">без −N дБ</span></div>
-                  </div>
-                </section>
-                <section class="orig-section" aria-label="Нормы комфорта для жилья">
-                  <h3>Нормы комфорта для жилья</h3>
-                  <p>${esc(ch.norms)}</p>
-                </section>
-                <section class="orig-section" aria-label="Эффективность и сравнение">
-                  <h3>Эффективность и сравнение</h3>
-                  <ol class="orig-chain">
-                    <li><span class="num">1</span><div><strong>Сейчас</strong><div class="muted">${esc(ch.current)}</div></div></li>
-                    <li><span class="num">2</span><div><strong>С MultiFrame</strong><div class="muted">${esc(ch.withMf)}</div></div></li>
-                    <li><span class="num">3</span><div><strong>Разница</strong><div class="muted">${esc(ch.difference)}</div></div></li>
-                  </ol>
-                  <p>${esc(r.narrative)}</p>
-                </section>
-                <section class="orig-section" aria-label="Уникальность системы MultiFrame">
-                  <h3>Уникальность системы MultiFrame</h3>
-                  <div class="orig-pillars">
-                    <div class="orig-pillar"><strong>Звукоизоляция и акустический комфорт</strong><span class="muted">Снижает шум сверху и поглощает звук в комнате — без обещания лабораторных дБ.</span></div>
-                    <div class="orig-pillar"><strong>Быстрый монтаж</strong><span class="muted">Сначала панели, затем натяжное полотно — под сегмент потолочников.</span></div>
-                    <div class="orig-pillar"><strong>Безопасность</strong><span class="muted">Материалы для жилых помещений: спальня, детская, кухня.</span></div>
-                  </div>
-                </section>
-                <section class="orig-section" aria-label="Следующий шаг">
-                  <h3>Следующий шаг</h3>
-                  <p>${esc(ch.nextStep)}</p>
-                  <div class="orig-actions-row">
-                    <a class="orig-btn orig-btn--primary" href="#/tools/bind">Сохранить профиль</a>
-                    <a class="orig-btn orig-btn--secondary" href="#/tools/calc">Рассчитать количество MultiFrame</a>
-                    <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-demo-pdf">Скачать PDF</button>
-                    <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-resuvey">Пройти ещё раз</button>
-                  </div>
-                </section>
-              </div>
-            </div>
-            <div class="orig-footer">
-              <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-resuvey">Назад</button>
-              <a class="orig-btn orig-btn--primary" href="#/tools/bind">Сохранить</a>
-            </div>
-          </div>
-        </div>`
-      );
-    }
-
-    // survey
-    const a = d.answers || {};
-    let q = Number(S().ui.pmQ) || 0;
-    // skip noiseKind when quiet
-    const quietNeighbors = a.noisyNeighbors === "no" || a.noisyNeighbors === "none";
-    const visible = PM_QS.filter((step) => !(step.skipIfQuiet && quietNeighbors));
-    if (q >= visible.length) q = visible.length - 1;
-    if (q < 0) q = 0;
-    const step = visible[q];
-    const pct = Math.round(((q + 1) / visible.length) * 100);
-    const selected = a[step.id];
-    let body = "";
-    if (step.id === "basics") {
-      body = `
-        <div class="orig-cards">
-          ${step.roomTypes
-            .map(
-              (opt) =>
-                `<button type="button" class="orig-choice ${
-                  a.roomType === opt.id ? "is-selected" : ""
-                }" data-action="pm-pick" data-field="roomType" data-value="${opt.id}"><strong>${esc(
-                  opt.label
-                )}</strong></button>`
-            )
-            .join("")}
-        </div>
-        <div class="orig-field">
-          <label for="pm-area-input">Площадь потолка, м²</label>
-          <input id="pm-area-input" type="number" min="1" step="0.1" placeholder="Например, 18" value="${
-            a.areaM2 ?? ""
-          }" data-action-input="pm-area" />
-        </div>`;
-    } else {
-      body = `<div class="orig-cards">${step.options
-        .map(
-          (opt) =>
-            `<button type="button" class="orig-choice ${
-              selected === opt.id ? "is-selected" : ""
-            }" data-action="pm-pick" data-field="${step.id}" data-value="${opt.id}"><strong>${esc(
-              opt.label
-            )}</strong>${opt.hint ? `<span>${esc(opt.hint)}</span>` : ""}</button>`
-        )
-        .join("")}</div>`;
-    }
-    const canNext =
-      step.id === "basics"
-        ? !!(a.roomType && Number(a.areaM2) > 0)
-        : selected != null && selected !== "";
-
-    return shell(
-      "tools/pm",
-      `
-      <div class="orig-wrap">
-        <div class="page-actions-inline">
-          <a class="btn ghost sm" href="#/tools/hub">← Инструменты</a>
-          <span class="pill">${esc(d.consultationSessionId || "")}</span>
-        </div>
-        <div class="orig-root ${theme === "dark" ? "theme-dark" : ""}">
-          ${origToolHeader("pm", theme)}
-          <div class="orig-body">
-            ${pmProgress("survey")}
-            <div class="orig-survey-head">
-              <p class="eyebrow">${esc((step.lead.split("·")[1] || "Объект").trim())}</p>
-              <h2>${esc(step.title)}</h2>
-              <p class="lead">Вопрос ${q + 1} из ${visible.length}</p>
-            </div>
-            <div class="orig-bar" aria-hidden><i style="width:${pct}%"></i></div>
-            ${body}
-          </div>
-          <div class="orig-footer">
-            <button type="button" class="orig-btn orig-btn--ghost" data-action="pm-back" ${
-              q === 0 ? "" : ""
-            }>Назад</button>
-            <button type="button" class="orig-btn orig-btn--primary" data-action="pm-next" ${
-              canNext ? "" : "disabled"
-            }>Далее</button>
-          </div>
-        </div>
-      </div>`
-    );
+    /* Legacy inline PM removed — primary entry is toolsPm() iframe host. */
+    return toolsPm();
   }
 
   /**

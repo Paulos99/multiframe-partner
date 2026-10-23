@@ -1,6 +1,6 @@
 /**
- * Gate C draft-7 store — demo fixtures only. NOT production proof.
- * KEY bumped to v6: GC6 bind RBAC + bind form persistence.
+ * Gate C draft-9 store — demo fixtures only. NOT production proof.
+ * KEY v7: original tool iframe hosts + richer PM result (GC6-P0-03 remainder).
  */
 (function (global) {
   const KEY = "mf_gate_c_proto_v7";
@@ -276,7 +276,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-8",
+      revision: "rev-gate-c-draft-9",
       role: null,
       offline: false,
       syncState: "online",
@@ -941,6 +941,43 @@
     });
     save();
     return { ok: true, consultationSessionId: d.consultationSessionId };
+  }
+
+  function ingestPmToolResult(result) {
+    ensureCalcDraft(result?.areaM2 || result?.answers?.areaM2 || 14);
+    const d = state.sessionDraft;
+    d.kind = "tool_pm";
+    d.answers = {
+      ...(d.answers || {}),
+      ...(result?.answers || {}),
+      areaM2: Number(result?.areaM2) || Number(result?.answers?.areaM2) || draftAreaM2(d),
+      roomType: result?.roomType || result?.answers?.basics || d.answers.roomType,
+      noiseAwareness:
+        result?.answers?.noisyNeighbors === "often_noisy" ||
+        result?.answers?.noisyNeighbors === "sometimes_noisy"
+          ? "bothered"
+          : result?.answers?.noisyNeighbors === "usually_quiet"
+            ? "none"
+            : d.answers.noiseAwareness || "unknown",
+      neighbors:
+        result?.answers?.noisyNeighbors === "often_noisy" ||
+        result?.answers?.noisyNeighbors === "sometimes_noisy"
+          ? "above"
+          : d.answers.neighbors || "unknown",
+    };
+    d.pmResult = {
+      ...computePmResult(d.answers),
+      ...result,
+      illustrativeOnly: true,
+      guaranteedDb: false,
+      fromOriginalShell: true,
+    };
+    d.pmDone = true;
+    state.ui.pmStep = "result";
+    state.ui.pmPhase = "result";
+    state.consultationSessionId = d.consultationSessionId;
+    save();
+    return { ok: true, draft: d };
   }
 
   function ingestCalcToolResult(payload) {
@@ -1967,6 +2004,7 @@
     resolveConflict,
     startQuickConsultation,
     ensureCalcDraft,
+    ingestPmToolResult,
     ingestCalcToolResult,
     ensureCalcUi,
     defaultCalcUi,

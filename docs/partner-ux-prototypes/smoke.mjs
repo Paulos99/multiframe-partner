@@ -273,6 +273,15 @@ MFStore.setRole("sales");
 const ingC = MFStore.ingestCalcToolResult({ areaM2: 20, amount: 68000 });
 check("GC6-P0-03 ingest calc snapshot", ingC.ok && MFStore.get().sessionDraft.calcDone && MFStore.get().sessionDraft.amount === 68000);
 check("GC6-P0-03 calc draft area 20", MFStore.draftAreaM2(MFStore.get().sessionDraft) === 20);
+MFStore.resetAll();
+MFStore.setRole("sales");
+const ingP = MFStore.ingestPmToolResult({
+  areaM2: 21,
+  roomType: "bedroom",
+  answers: { basics: "bedroom", noisyNeighbors: "sometimes_noisy", noiseKind: "impact", areaM2: 21 },
+});
+check("GC6-P0-03 ingest PM iframe", ingP.ok && MFStore.get().sessionDraft.pmDone);
+check("GC6-P0-03 PM area 21", MFStore.draftAreaM2(MFStore.get().sessionDraft) === 21);
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");

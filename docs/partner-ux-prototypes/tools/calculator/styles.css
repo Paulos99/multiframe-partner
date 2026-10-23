@@ -8225,3 +8225,32 @@ body.theme-dark .sketch-inline-footer {
   border-color: #2a3140;
   color: #c5ccd4;
 }
+
+/* Gate C GC8-P1-01: prevent header logo/title overlap at 360–390px */
+@media (max-width: 420px) {
+  .app-header {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    align-items: center;
+    padding: 8px 10px;
+  }
+  .app-header__logo {
+    width: 28px;
+    height: 28px;
+  }
+  .app-header__text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .app-header__text h1 {
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
+  }
+  .app-header__brand-logo {
+    max-height: 16px;
+    max-width: 96px;
+  }
+  .app-header__help {
+    margin-left: auto;
+  }
+}

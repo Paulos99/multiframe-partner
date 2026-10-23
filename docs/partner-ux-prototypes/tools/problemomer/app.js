@@ -1,9 +1,8 @@
 /**
- * Gate C Problemomer — visual/interaction mirror of the agreed StP tool.
- * Demo acoustic narrative only; not a substitute for production acoustic engine.
+ * Gate C Problemomer snapshot — compact StP shell + stepped survey + rich result.
+ * Demo acoustic narrative only (illustrative). One click «Начать» → first question.
  */
 (function () {
-  const STEPS = ["start", "room", "result"];
   const ROOM_SUB = [
     {
       id: "houseType",
@@ -90,8 +89,26 @@
         { id: "mixed", label: "И то, и другое", hint: "и шаги, и голоса сверху" },
         { id: "unknown", label: "Сложно сказать" },
       ],
+      skipIfQuiet: true,
     },
   ];
+
+  const PILLARS = [
+    ["Звукоизоляция и акустический комфорт", "Снижает шум сверху и поглощает звук в комнате — меньше эха."],
+    ["Безопасность", "Материалы безопасны для жилых помещений: спальня, детская, кухня."],
+    ["Экологичность", "Без минеральной ваты и строительной пыли на объекте."],
+    ["Быстрый монтаж", "Сначала панели, затем натяжное полотно — без долгой стройки."],
+    ["Универсальность", "Подходит к перекрытию на любой стадии ремонта."],
+  ];
+
+  const ROOM_LABELS = {
+    living: "Гостиная",
+    bedroom: "Спальня",
+    kids: "Детская",
+    kitchen: "Кухня",
+    office: "Кабинет",
+    other: "Другое",
+  };
 
   const state = {
     theme: localStorage.getItem("mf_pm_theme") || "light",
@@ -99,9 +116,17 @@
     sub: 0,
     answers: {},
     areaM2: 14,
+    audioSide: "before",
   };
 
   const root = () => document.getElementById("app");
+
+  function visibleSubs() {
+    return ROOM_SUB.filter((q) => {
+      if (!q.skipIfQuiet) return true;
+      return state.answers.noisyNeighbors !== "usually_quiet";
+    });
+  }
 
   function applyTheme() {
     document.documentElement.setAttribute("data-theme", state.theme === "dark" ? "dark" : "light");
@@ -110,31 +135,33 @@
   function header() {
     return `<header class="header"><div class="header-inner">
       <div class="brand">
-        <img class="stp" src="../shared/logo-stp.png" alt="StP" width="28" height="28" />
-        <img class="mf" src="../shared/logo-multiframe.png" alt="MultiFRAME" height="18" />
+        <img class="stp" src="../shared/logo-stp.png" alt="StP" width="26" height="26" />
+        <img class="mf" src="../shared/logo-multiframe.png" alt="MultiFRAME" height="16" />
         <span class="product">Проблемомер</span>
       </div>
       <button type="button" class="theme-btn" data-act="theme">${
-        state.theme === "dark" ? "Светлая тема" : "Тёмная тема"
+        state.theme === "dark" ? "Светлая" : "Тёмная"
       }</button>
     </div></header>`;
   }
 
   function dots() {
     if (state.step === "start") return "";
-    const map = [
-      ["start", "Старт"],
-      ["room", "Объект"],
-      ["result", "Итог"],
-    ];
-    return `<div class="dots">${map
-      .map(([id, label]) => `<span class="${state.step === id || (id === "room" && state.step === "room") ? "on" : ""}">${label}</span>`)
-      .join("<span aria-hidden>·</span>")}</div>`;
+    const cur = state.step === "room" ? 1 : 2;
+    const labels = ["Старт", "Объект", "Итог"];
+    return `<div class="dots" aria-label="Прогресс">${labels
+      .map((label, i) => {
+        const cls = i === cur ? "on" : i < cur ? "done" : "";
+        return `<span class="${cls}">${label}</span>`;
+      })
+      .join("")}</div>`;
   }
 
   function canNext() {
     if (state.step !== "room") return true;
-    const q = ROOM_SUB[state.sub];
+    const vis = visibleSubs();
+    const q = vis[state.sub];
+    if (!q) return false;
     const val = state.answers[q.id];
     if (!val) return false;
     if (q.needsArea) {
@@ -147,24 +174,35 @@
   function computeResult() {
     const noise = state.answers.noisyNeighbors;
     const kind = state.answers.noiseKind;
-    const noisy = noise === "sometimes_noisy" || noise === "often_noisy" || kind === "impact" || kind === "mixed";
+    const noisy =
+      noise === "sometimes_noisy" ||
+      noise === "often_noisy" ||
+      kind === "impact" ||
+      kind === "mixed";
     const quiet = noise === "usually_quiet";
+    const air = quiet ? 18 : noisy ? 32 : 24;
+    const impact = quiet ? 22 : noisy ? 38 : 28;
+    const max = Math.max(air, impact);
     return {
       areaM2: Number(state.areaM2) || 14,
       roomType: state.answers.basics || "bedroom",
       clientPersona: quiet ? "quiet" : noisy ? "noise" : "mixed",
       currentRisk: quiet ? "низкий" : noisy ? "повышенный" : "неясный",
+      quieterAir: air,
+      quieterImpact: impact,
+      quieterMax: max,
+      rwBefore: quiet ? 48 : 44,
+      rwAfter: quiet ? 52 : 51,
+      lnwBefore: quiet ? 68 : 74,
+      lnwAfter: quiet ? 62 : 64,
+      echoBefore: quiet ? 2 : 4,
+      echoAfter: 1,
       narrative: noisy
         ? "Есть сигнал о шуме сверху. MultiFrame под натяжным — аргумент снижения ударного шума. Без обещаний «−N дБ»."
         : "Клиент не жалуется на шум — потребность формируем мягко, с запасом комфорта на будущее.",
-      chain: {
-        norms: "Иллюстрация по ответам · не акустическое измерение",
-        current: quiet ? "Сейчас · комфорт ближе к ожидаемому" : "Сейчас · риск дискомфорта от соседей",
-        withMf: "С MultiFrame под полотном · ориентир заметного запаса комфорта",
-        difference: "Ориентир улучшения без гарантии дБ",
-        nextStep: "Сохранить профиль · при необходимости открыть калькулятор",
-      },
       answers: { ...state.answers, areaM2: Number(state.areaM2) || 14 },
+      houseType: state.answers.houseType,
+      ceiling: state.answers.plannedCeiling || "stretch",
     };
   }
 
@@ -180,38 +218,112 @@
           <p>Дальше вы увидите, насколько тише станет после монтажа MultiFrame.</p>
           <button class="btn full" data-act="start">Начать</button>
         </div>
-        <p class="dim" style="margin-top:12px">Gate C snapshot · согласованный вид StP/MultiFRAME · демо-результат</p>
+        <p class="dim" style="margin-top:12px">Gate C · согласованный wizard · один клик «Начать» · демо-значения помечены</p>
       </main>`;
       bind();
       return;
     }
     if (state.step === "result") {
       const r = computeResult();
+      const room = ROOM_LABELS[r.roomType] || r.roomType;
       el.innerHTML = `${header()}${dots()}<main class="main">
-        <div class="result-card">
-          <p class="eyebrow">Итог</p>
-          <h2>Ориентир комфорта для этой комнаты</h2>
+        <p class="eyebrow">Итог</p>
+        <h2 class="title">Акустический профиль помещения</h2>
+        <p class="disclaimer">Демо-иллюстрация по ответам · не измерение, не лабораторный протокол и не гарантия дБ. Цифры % / Rw / Lnw — ориентиры интерфейса.</p>
+        <section class="params">
+          <h3>Параметры объекта</h3>
+          <dl>
+            <dt>Комната</dt><dd>${room}</dd>
+            <dt>Площадь</dt><dd>${r.areaM2} м²</dd>
+            <dt>Дом</dt><dd>${r.houseType || "—"}</dd>
+            <dt>Потолок</dt><dd>${r.ceiling} (пресет сегмента)</dd>
+            <dt>Риск сейчас</dt><dd>${r.currentRisk}</dd>
+          </dl>
+        </section>
+        <section class="kpi-row" aria-label="Ключевые показатели">
+          <article class="kpi">
+            <span class="l">Воздушный шум</span>
+            <span class="n">−${r.quieterAir}<em>%</em></span>
+            <div class="bars" aria-hidden><i style="height:${Math.round((r.rwBefore / 60) * 100)}%"></i><i class="after" style="height:${Math.round((r.rwAfter / 60) * 100)}%"></i></div>
+            <span class="h">изоляция воздуха · demo Rw ${r.rwBefore}→${r.rwAfter}</span>
+          </article>
+          <article class="kpi">
+            <span class="l">Ударный шум</span>
+            <span class="n">−${r.quieterImpact}<em>%</em></span>
+            <div class="bars" aria-hidden><i style="height:${Math.round((r.lnwBefore / 90) * 100)}%"></i><i class="after" style="height:${Math.round((r.lnwAfter / 90) * 100)}%"></i></div>
+            <span class="h">удар · demo Lnw ${r.lnwBefore}→${r.lnwAfter}</span>
+          </article>
+          <article class="kpi">
+            <span class="l">Акустический комфорт</span>
+            <span class="n">${r.echoBefore}→${r.echoAfter}</span>
+            <span class="h">визуальный ориентир «сейчас / после» · demo</span>
+          </article>
+          <article class="kpi">
+            <span class="l">Снижение шума</span>
+            <span class="n">−${r.quieterMax}<em>%</em></span>
+            <span class="h">воздух ${r.quieterAir}% · удар ${r.quieterImpact}%</span>
+          </article>
+        </section>
+        <section class="section">
+          <h3>Рекомендации и продукт</h3>
           <p class="lead">${r.narrative}</p>
-          <ol class="chain">
-            <li><strong>Ориентир</strong><br>${r.chain.norms}</li>
-            <li><strong>Сейчас</strong><br>${r.chain.current}</li>
-            <li><strong>С MultiFrame</strong><br>${r.chain.withMf}</li>
-            <li><strong>Разница</strong><br>${r.chain.difference}</li>
-            <li><strong>Дальше</strong><br>${r.chain.nextStep}</li>
-          </ol>
-          <p class="dim">${r.areaM2} м² · риск «${r.currentRisk}» · не гарантия дБ</p>
-          <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+          <p class="dim">MultiFrame под натяжным полотном · без обещания «−N дБ».</p>
+        </section>
+        <section class="section">
+          <h3>Нормы комфорта для жилья</h3>
+          <table class="norms">
+            <thead><tr><th>Класс</th><th>Rw</th><th>Lnw</th></tr></thead>
+            <tbody>
+              <tr><td>Высокий комфорт (А)</td><td>≥ 54</td><td>≤ 58</td></tr>
+              <tr><td>Комфорт (Б)</td><td>≥ 52</td><td>≤ 60</td></tr>
+              <tr><td>Допустимый (В)</td><td>≥ 50</td><td>≤ 63</td></tr>
+              <tr><td>Ниже допустимого</td><td>&lt; 50</td><td>&gt; 63</td></tr>
+            </tbody>
+          </table>
+          <p class="dim" style="margin-top:8px">Таблица — справочный UI-ориентир, не заключение по объекту.</p>
+        </section>
+        <section class="section">
+          <h3>Визуальное сравнение</h3>
+          <div class="compare">
+            <div class="col ${state.audioSide === "before" ? "on" : ""}">
+              <strong>Сейчас</strong>
+              <span class="dim">Комфорт ближе к «${r.currentRisk}» · demo</span>
+            </div>
+            <div class="col ${state.audioSide === "after" ? "on" : ""}">
+              <strong>С MultiFrame</strong>
+              <span class="dim">Ориентир запаса комфорта · demo</span>
+            </div>
+          </div>
+        </section>
+        <section class="section">
+          <h3>Сравнить на слух</h3>
+          <div class="audio-demo">
+            <button type="button" class="btn ghost ${state.audioSide === "before" ? "is-on" : ""}" data-act="audio" data-side="before">До</button>
+            <button type="button" class="btn ghost ${state.audioSide === "after" ? "is-on" : ""}" data-act="audio" data-side="after">После</button>
+            <span class="dim">Демо-переключатель UI · без реального аудиофайла в Gate C</span>
+          </div>
+        </section>
+        <section class="section">
+          <h3>Почему MultiFrame</h3>
+          <div class="pillars">
+            ${PILLARS.map(([t, s]) => `<div class="pillar"><strong>${t}</strong><span>${s}</span></div>`).join("")}
+          </div>
+        </section>
+        <section class="section">
+          <h3>Следующий шаг</h3>
+          <div class="actions">
             <button class="btn" data-act="save-parent">Сохранить профиль в кабинет</button>
             <button class="btn ghost" data-act="restart">Пройти снова</button>
           </div>
-        </div>
+        </section>
       </main>`;
       bind();
       return;
     }
-    // room
-    const q = ROOM_SUB[state.sub];
-    const total = ROOM_SUB.length;
+    const vis = visibleSubs();
+    if (state.sub >= vis.length) state.sub = vis.length - 1;
+    const q = vis[state.sub];
+    const total = vis.length;
     const pct = Math.round(((state.sub + 1) / total) * 100);
     const selected = state.answers[q.id];
     el.innerHTML = `${header()}${dots()}<main class="main">
@@ -262,13 +374,14 @@
           return;
         }
         if (act === "start") {
+          // One click → first survey question (no second intro)
           state.step = "room";
           state.sub = 0;
           render();
           return;
         }
         if (act === "pick") {
-          const q = ROOM_SUB[state.sub];
+          const q = visibleSubs()[state.sub];
           state.answers[q.id] = btn.getAttribute("data-id");
           render();
           return;
@@ -281,8 +394,14 @@
         }
         if (act === "next") {
           if (!canNext()) return;
-          if (state.sub < ROOM_SUB.length - 1) state.sub += 1;
+          const vis = visibleSubs();
+          if (state.sub < vis.length - 1) state.sub += 1;
           else state.step = "result";
+          render();
+          return;
+        }
+        if (act === "audio") {
+          state.audioSide = btn.getAttribute("data-side") || "before";
           render();
           return;
         }
@@ -290,19 +409,16 @@
           state.step = "start";
           state.sub = 0;
           state.answers = {};
+          state.audioSide = "before";
           render();
           return;
         }
         if (act === "save-parent") {
           const result = computeResult();
+          const payload = { type: "mf-gate-c-pm", result };
           try {
-            window.parent.postMessage(
-              { type: "mf-gate-c-pm", result },
-              window.location.origin === "null" ? "*" : window.location.origin
-            );
-          } catch (_) {
-            window.parent.postMessage({ type: "mf-gate-c-pm", result }, "*");
-          }
+            window.parent.postMessage(payload, "*");
+          } catch (_) {}
           btn.textContent = "Отправлено в кабинет";
           btn.disabled = true;
         }

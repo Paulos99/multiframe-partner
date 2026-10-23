@@ -1061,6 +1061,14 @@
   window.addEventListener("message", (ev) => {
     const data = ev.data;
     if (!data || typeof data !== "object") return;
+    if (data.type === "mf-gate-c-pm" && data.result) {
+      const res = MFStore.ingestPmToolResult(data.result);
+      if (res.ok) {
+        toast("Профиль из Проблемомера", `${data.result.areaM2 || "—"} м² · в черновике`, "ok");
+        render();
+      }
+      return;
+    }
     if (data.type === "mf-cabinet-calc") {
       const area = Number(data.areaM2) || null;
       const amount = Number(data.panelsCost) || null;

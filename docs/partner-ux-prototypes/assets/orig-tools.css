@@ -767,7 +767,7 @@
   margin-bottom: 4px;
 }
 
-/* Full-bleed host for agreed calculator snapshot */
+/* Full-bleed host for agreed tool snapshots (outside dark cabinet shell) */
 .tool-host {
   position: fixed;
   inset: 0;
@@ -780,18 +780,20 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 8px 12px;
   background: #14211c;
   color: #f3ece2;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+.tool-chrome--compact { padding: 6px 10px; gap: 8px; }
 .tool-chrome__back {
   color: #d4a35c;
   text-decoration: none;
   font-weight: 650;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 .tool-chrome__title {
   flex: 1;
@@ -799,19 +801,35 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
 }
-.tool-chrome__title strong { font-size: 0.95rem; }
+.tool-chrome__title strong {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .tool-chrome__title .muted,
 .tool-chrome__title .muted a {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #a89f92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tool-chrome__title .muted a { color: #d4a35c; }
 .tool-chrome__actions {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  flex: 0 1 auto;
+  max-width: 55%;
+}
+.tool-chrome__actions .btn {
+  white-space: nowrap;
+  font-size: 0.75rem;
+  padding: 6px 10px;
 }
 .tool-frame {
   flex: 1;
@@ -820,7 +838,25 @@
   background: #fff;
   min-height: 0;
 }
+/* GC8-P1-01: mobile chrome — no overlapping labels/actions */
 @media (max-width: 820px) {
-  .tool-chrome { flex-wrap: wrap; }
-  .tool-chrome__actions { width: 100%; }
+  .tool-chrome {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 6px;
+  }
+  .tool-chrome__title { order: 3; flex: 1 1 100%; }
+  .tool-chrome__back { order: 1; }
+  .tool-chrome__actions {
+    order: 2;
+    max-width: none;
+    width: auto;
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .tool-chrome__title .muted { display: none; }
+}
+@media (max-width: 390px) {
+  .tool-chrome__actions .btn.ghost { display: none; }
 }

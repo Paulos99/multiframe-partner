@@ -6,8 +6,7 @@
 
 | Инструмент | Прототип | Источник UI |
 |------------|----------|-------------|
-| Проблемомер | `#/tools/pm` | Фирменный wizard в `views.js` + `orig-tools.css` (StP green, 7 шагов, тема) |
-| Калькулятор | `#/tools/calc` → iframe `tools/calculator/` | Readonly snapshot `apps/web/public/calculator` |
-| Standalone PM snapshot | `tools/problemomer/` | Локальный mirror для парных скринов |
+| Проблемомер | `#/tools/pm` → iframe `tools/problemomer/` | Compact StP wizard + rich result (demo-labeled) |
+| Калькулятор | `#/tools/calc` → iframe `tools/calculator/` | Readonly snapshot `apps/web/public/calculator` (draw editor / panel layout) |
 
-Парные PNG: `media/gate-c-draft8-pm-start.png` ↔ `…-ref-pm-start.png`; `…-calc-entry.png` ↔ `…-ref-calc-entry.png`; survey / host / mobile.
+Парные PNG: `media/gate-c-draft9-*.png` и `media/gate-c-draft8-*-ref-*.png`.
