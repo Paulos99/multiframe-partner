@@ -276,7 +276,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-12",
+      revision: "rev-gate-c-draft-13",
       role: null,
       offline: false,
       syncState: "online",

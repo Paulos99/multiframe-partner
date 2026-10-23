@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Executable Gate C store smoke — rev-gate-c-draft-12
+ * Executable Gate C store smoke — rev-gate-c-draft-13
  *
  * Usage (from this directory or repo root):
  *   node docs/partner-ux-prototypes/smoke.mjs
@@ -315,7 +315,12 @@ check("GC10-P0-01 ceiling bind totals", calcApp.includes("bomTotalsForPartnerBin
 const bomJs = fs.readFileSync(path.join(__dirname, "tools/calculator/src/calculators/materials-bom.js"), "utf8");
 check("GC11-P1-01 finalizePartnerBomTotals", bomJs.includes("finalizePartnerBomTotals"));
 check("GC11 quick area finalize", calcApp.includes("finalizePartnerBomTotals(state.bom)"));
-check("rev-gate-c-draft-12", MFStore.get().revision === "rev-gate-c-draft-12");
+const viewsJs = fs.readFileSync(path.join(__dirname, "assets/views.js"), "utf8");
+check("GC11-UX-02 Russian prelim label", viewsJs.includes("Предварительный расчёт"));
+check("GC11-UX-03 room empty CTA", viewsJs.includes("Комната создана"));
+const protoCss = fs.readFileSync(path.join(__dirname, "assets/proto.css"), "utf8");
+check("GC11-UX-01 light shell accent", protoCss.includes("--accent: #01644f"));
+check("rev-gate-c-draft-13", MFStore.get().revision === "rev-gate-c-draft-13");
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");

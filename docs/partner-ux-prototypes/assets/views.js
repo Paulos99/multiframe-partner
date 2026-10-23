@@ -25,13 +25,32 @@
   function stageLabel(stage) {
     const map = {
       inquiry: "Заявка",
-      assessed: "Оценка PM",
+      assessed: "Оценка в Проблемомере",
       calculated: "Есть расчёт",
       quote_sent_confirmed: "КП подтверждено",
       accepted: "Принято",
       new: "Новая",
     };
     return map[stage] || stage || "—";
+  }
+
+  function calcKindLabel(kind) {
+    return kind === "detailed" ? "Расчёт по замеру" : "Предварительный расчёт";
+  }
+
+  function roomAssentLabel(v) {
+    const map = {
+      ordered: "Клиент заказал",
+      deferred: "Решение отложено",
+      declined: "Клиент отказался",
+      pending: "Ожидает решения",
+    };
+    return map[v] || (v ? esc(v) : "ещё не задано");
+  }
+
+  function segmentLabel(seg) {
+    const map = { comfort: "Комфорт", standard: "Стандарт", premium: "Премиум" };
+    return map[seg] || seg || "—";
   }
 
   /* ---------- LOGIN ---------- */
@@ -422,10 +441,11 @@
       return p && r ? `${p.name} → ${r.name}` : pickPair || "—";
     })();
     const previewFor = (st) => {
-      if (st === "profile") return d.pmDone ? "только профиль PM (без preliminary)" : "—";
+      if (st === "profile") return d.pmDone ? "только профиль Проблемомера (без расчёта)" : "—";
       if (st === "preliminary")
-        return `${d.pmDone ? "профиль PM + " : ""}preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
-      if (st === "both") return `профиль PM + preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
+        return `${d.pmDone ? "профиль + " : ""}предварительный расчёт ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
+      if (st === "both")
+        return `профиль Проблемомера + предварительный расчёт ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
       return "—";
     };
     return shell(
@@ -453,9 +473,9 @@
       <div class="panel">
         <div class="field"><label>Тип сохранения</label>
           <select id="bind-savetype" data-action="bind-savetype-change">
-            <option value="profile" ${selected==="profile"?"selected":""} ${d.pmDone?"":"disabled"}>Только профиль PM</option>
-            <option value="preliminary" ${selected==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>Preliminary${d.pmDone?" (+профиль)":""}</option>
-            <option value="both" ${selected==="both"?"selected":""} ${d.pmDone && d.calcDone?"":"disabled"}>Профиль + preliminary</option>
+            <option value="profile" ${selected==="profile"?"selected":""} ${d.pmDone?"":"disabled"}>Только профиль Проблемомера</option>
+            <option value="preliminary" ${selected==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>Предварительный расчёт${d.pmDone?" (+ профиль)":""}</option>
+            <option value="both" ${selected==="both"?"selected":""} ${d.pmDone && d.calcDone?"":"disabled"}>Профиль + предварительный расчёт</option>
           </select>
         </div>
         ${
@@ -829,8 +849,8 @@
               <div>
                 <div class="title">${esc(r.name)} · ${r.areaM2} м²</div>
                 <div class="meta">
-                  ${r.preliminary ? `Prelim ${money(r.preliminary.amount)}` : "нет prelim"}
-                  ${r.detailed ? ` · Detailed ${money(r.detailed.amount)}` : ""}
+                  ${r.preliminary ? `Предв. ${money(r.preliminary.amount)}` : "нет предв. расчёта"}
+                  ${r.detailed ? ` · по замеру ${money(r.detailed.amount)}` : ""}
                   ${r.techReady ? " · tech-ready" : ""}
                 </div>
               </div>
@@ -884,7 +904,7 @@
       </div>
       ${
         assentQ
-          ? `<div class="banner info">Assent scope = Quote ${esc(assentQ.revisionId)} (${esc(
+          ? `<div class="banner info">Согласие по комнатам: КП ${esc(assentQ.revisionId)} (${esc(
               assentQ.lifecycle
             )}): ${(assentQ.rooms || []).map((id) => esc(id)).join(", ") || "—"}. GC3-P0-02: рассчитанные вне КП не в sheet.</div>`
           : `<div class="banner warn">Нет sent/sent_confirmed Quote — согласие по комнатам недоступно.</div>`
@@ -930,12 +950,12 @@
               )
               .join("")
       }
-      <h3 style="margin-top:18px">Согласие по комнатам (roomAssent)</h3>
+      <h3 style="margin-top:18px">Согласие по комнатам</h3>
       <ul class="list">
         ${p.rooms
           .map(
             (r) => `<li class="list-item"><div class="title">${esc(r.name)}</div>
-            <div class="aside"><span class="pill">${esc(r.roomAssent || "—")}</span>
+            <div class="aside"><span class="pill">${roomAssentLabel(r.roomAssent)}</span>
             ${money(r.detailed?.amount || r.preliminary?.amount)}</div></li>`
           )
           .join("")}
@@ -993,6 +1013,7 @@
     if (!p || !r) return shell("sales/projects", `<div class="empty">Комната не найдена</div>`);
     const ap = r.acousticProfile;
     const prelimArea = r.preliminary?.areaM2 ?? r.areaM2;
+    const emptyCalc = !r.preliminary && !r.detailed;
     return shell(
       "sales/projects",
       `
@@ -1001,38 +1022,59 @@
           <h1>${esc(r.name)}</h1>
           <p class="sub">${esc(p.name)} · ${r.areaM2} м²${
             r.preliminary?.areaM2 != null && Math.abs(r.preliminary.areaM2 - r.areaM2) > 0.05
-              ? ` · prelim ${r.preliminary.areaM2} м²`
+              ? ` · в расчёте ${r.preliminary.areaM2} м²`
               : ""
           }</p>
         </div>
         <div class="page-actions">
           <a class="btn ghost" href="#/sales/project/${p.id}">К проекту</a>
-          <a class="btn" href="#/sales/calc/${p.id}/${r.id}?kind=preliminary">Preliminary</a>
-          <a class="btn primary" href="#/sales/project/${p.id}?tab=deal">К сделке</a>
+          ${
+            emptyCalc
+              ? `<a class="btn primary" href="#/tools/calc">Начать предварительный расчёт</a>`
+              : `<a class="btn" href="#/sales/calc/${p.id}/${r.id}?kind=preliminary">Открыть предв. расчёт</a>`
+          }
+          <a class="btn ghost" href="#/sales/project/${p.id}?tab=deal">К сделке</a>
         </div>
       </div>
+      ${
+        emptyCalc
+          ? `<div class="banner info">
+              <p><strong>Комната создана.</strong> Здесь пока нет суммы и сметы — сначала сделайте расчёт в калькуляторе, затем сохраните его в эту комнату.</p>
+              <ol class="muted" style="margin:10px 0 0 18px;line-height:1.5">
+                <li>Откройте <strong>Калькулятор</strong> (отдельный инструмент слева) и посчитайте площадь потолка.</li>
+                <li>Нажмите «Сохранить и привязать» — выберите этот проект и комнату.</li>
+                <li>При необходимости сначала пройдите <strong>Проблемомер</strong> — профиль тоже можно сохранить в комнату.</li>
+              </ol>
+              <div class="row" style="margin-top:14px">
+                <a class="btn primary" href="#/tools/calc">Калькулятор</a>
+                <a class="btn" href="#/tools/pm">Проблемомер</a>
+                <a class="btn ghost" href="#/tools/bind">Привязать к комнате</a>
+              </div>
+            </div>`
+          : ""
+      }
       <div class="grid-2">
         <div class="panel">
           <h3>Расчёты</h3>
-          <p>Prelim: <strong>${
+          <p>Предварительный: <strong>${
             r.preliminary
               ? money(r.preliminary.amount) +
                 " · " +
                 (r.preliminary.areaM2 ?? prelimArea) +
                 " м² · " +
-                esc(r.preliminary.segment || "—")
-              : "—"
+                segmentLabel(r.preliminary.segment)
+              : "ещё не сохраняли"
           }</strong></p>
-          <p>Detailed: <strong>${r.detailed ? money(r.detailed.amount) : "—"}</strong></p>
+          <p>По замеру: <strong>${r.detailed ? money(r.detailed.amount) : "ещё не сохраняли"}</strong></p>
         </div>
         <div class="panel">
           <h3>Готовность</h3>
-          <p>Assent: ${esc(r.roomAssent || "—")}</p>
-          <p>Tech-ready: ${r.techReady ? "да" : "нет"}</p>
+          <p>Решение клиента: <strong>${roomAssentLabel(r.roomAssent)}</strong></p>
+          <p>Готовность к монтажу: <strong>${r.techReady ? "да" : "нет"}</strong></p>
         </div>
       </div>
       <div class="panel" style="margin-top:12px">
-        <h3>Акустический профиль PM ${ap ? `<span class="pill ok">сохранён</span>` : `<span class="pill">нет</span>`}</h3>
+        <h3>Профиль Проблемомера ${ap ? `<span class="pill ok">сохранён</span>` : `<span class="pill">нет</span>`}</h3>
         ${
           ap
             ? `<p class="muted">persona «${esc(ap.clientPersona || "—")}» · риск «${esc(
@@ -1074,18 +1116,18 @@
       "sales/projects",
       `
       <div class="page-head">
-        <div><h1>Калькулятор · ${k}</h1><p class="sub">${esc(p.name)} / ${esc(r.name)}</p></div>
+        <div><h1>${calcKindLabel(k)}</h1><p class="sub">${esc(p.name)} / ${esc(r.name)}</p></div>
         <div class="page-actions"><a class="btn ghost" href="#/sales/room/${p.id}/${r.id}">Назад</a></div>
       </div>
       ${
         saved
-          ? `<div class="banner ok">Сохранённый ${k}: <strong>${money(saved.amount)}</strong> · ${
+          ? `<div class="banner ok">Сохранённый ${calcKindLabel(k).toLowerCase()}: <strong>${money(saved.amount)}</strong> · ${
               saved.areaM2 ?? area
-            } м² · ${esc(saved.segment || "comfort")} · ${esc(saved.revisionId || "")}. Повторное сохранение не меняет площадь/сумму молча.</div>`
+            } м² · ${segmentLabel(saved.segment || "comfort")}. Повторное сохранение не меняет площадь/сумму молча.</div>`
           : ""
       }
       <div class="panel">
-        <div class="stat"><div class="n">${money(amount)}</div><div class="l">${k} · ${area} м²</div></div>
+        <div class="stat"><div class="n">${money(amount)}</div><div class="l">${calcKindLabel(k)} · ${area} м²</div></div>
         <p class="muted" style="margin-top:8px">Ориентир пересчёта по той же площади: ${money(recomputed)} (не подменяет сохранённое без явного Save).</p>
         <button class="btn primary" style="margin-top:14px" data-action="save-room-calc"
           data-pid="${p.id}" data-rid="${r.id}" data-kind="${k}" data-amount="${amount}" data-area="${area}">
@@ -1306,17 +1348,17 @@
         <div><h1>${esc(r.name)}</h1><p class="sub">${esc(p.name)}</p></div>
         <div class="page-actions">
           <a class="btn ghost" href="#/measurer/home">Назад</a>
-          <a class="btn primary" href="#/measurer/calc/${p.id}/${r.id}">Detailed calc</a>
+          <a class="btn primary" href="#/measurer/calc/${p.id}/${r.id}">Расчёт по замеру</a>
         </div>
       </div>
       <div class="grid-2">
         <div class="panel">
           <h3>Расчёты</h3>
-          <p>Prelim: <strong>${r.preliminary ? money(r.preliminary.amount) : "—"}</strong></p>
-          <p>Detailed: <strong>${r.detailed ? money(r.detailed.amount) + " · " + r.detailed.revisionId : "нет"}</strong></p>
+          <p>Предварительный: <strong>${r.preliminary ? money(r.preliminary.amount) : "—"}</strong></p>
+          <p>По замеру: <strong>${r.detailed ? money(r.detailed.amount) : "нет"}</strong></p>
           ${
             r.preliminary && r.detailed
-              ? `<div class="banner info">prelim ≠ detailed · в сумме coalesce берёт detailed</div>`
+              ? `<div class="banner info">Предварительный и расчёт по замеру различаются — в сделке учитывается расчёт по замеру.</div>`
               : ""
           }
         </div>
@@ -1362,7 +1404,7 @@
       "measurer/home",
       `
       <div class="page-head">
-        <div><h1>Detailed расчёт</h1><p class="sub">${esc(p.name)} / ${esc(r.name)} · геометрия + схема + BOM</p></div>
+        <div><h1>Расчёт по замеру</h1><p class="sub">${esc(p.name)} / ${esc(r.name)} · геометрия + схема + смета</p></div>
         <div class="page-actions"><a class="btn ghost" href="#/measurer/room/${p.id}/${r.id}">Назад</a></div>
       </div>
       ${
