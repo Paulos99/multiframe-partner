@@ -121,7 +121,7 @@
           })
           .join("")}
         <div class="nav-section">Прототип</div>
-        <button class="nav-link" data-action="reset">Сбросить демо-данные (v3)</button>
+        <button class="nav-link" data-action="reset">Сбросить демо-данные (v4)</button>
         <button class="nav-link" data-action="toggle-loading">Demo loading</button>
       </nav>
       <nav class="bottom-nav" aria-label="Мобильная навигация">
@@ -428,18 +428,44 @@
     const projects = S().projects.filter((p) => p.rooms && p.rooms.length);
     // GC2-P0-04: default both when PM+Calc ready
     const saveTypeDefault = d.pmDone && d.calcDone ? "both" : d.calcDone ? "preliminary" : "profile";
-    const willProfile = d.pmDone;
-    const willCalc = d.calcDone;
+    const areaPrompt = S().ui.bindAreaPrompt;
+    const previewFor = (st) => {
+      if (st === "profile") return d.pmDone ? "только профиль PM (без preliminary)" : "—";
+      if (st === "preliminary")
+        return `${d.pmDone ? "профиль PM + " : ""}preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
+      if (st === "both")
+        return `профиль PM + preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
+      return "—";
+    };
     return shell(
       "sales/quick",
       `
       <div class="page-head">
-        <div><h1>Куда сохранить?</h1><p class="sub">GC-P0-02 / GC2-P0-04: PM-only OK · PM+Calc сохраняет профиль и prelim · pick|create.</p></div>
+        <div><h1>Куда сохранить?</h1><p class="sub">GC-P0-02 / GC3-P0-01: PM-only OK · площадь консультации не затирается · pick|create.</p></div>
       </div>
       <div class="tabs">
         <button class="tab ${mode==="pick"?"active":""}" data-action="bind-mode" data-mode="pick">Выбрать существующие</button>
         <button class="tab ${mode==="create"?"active":""}" data-action="bind-mode" data-mode="create">Создать новые</button>
       </div>
+      ${
+        areaPrompt
+          ? `<div class="banner warn">
+              <strong>Площадь не совпадает</strong> (GC3-P0-01): комната «${esc(areaPrompt.roomName)}» = ${
+                areaPrompt.roomArea
+              } м², консультация = ${areaPrompt.draftArea} м² / ${money(areaPrompt.draftAmount)}.
+              Выберите явно — без молчаливой подмены.
+              <div class="row" style="margin-top:10px">
+                <button class="btn primary" data-action="bind-resolve-area" data-resolution="adopt_consultation">Взять площадь консультации (${
+                  areaPrompt.draftArea
+                } м² / ${money(areaPrompt.draftAmount)})</button>
+                <button class="btn" data-action="bind-resolve-area" data-resolution="keep_room_recalc">Оставить площадь комнаты (${
+                  areaPrompt.roomArea
+                } м²) и пересчитать сумму</button>
+                <button class="btn ghost" data-action="bind-cancel-area">Отмена</button>
+              </div>
+            </div>`
+          : ""
+      }
       <div class="panel">
         <div class="field"><label>Тип сохранения</label>
           <select id="bind-savetype">
@@ -455,7 +481,7 @@
                   .flatMap((p) =>
                     p.rooms.map(
                       (r) =>
-                        `<option value="${p.id}::${r.id}">${esc(p.name)} → ${esc(r.name)}</option>`
+                        `<option value="${p.id}::${r.id}">${esc(p.name)} → ${esc(r.name)} (${r.areaM2} м²)</option>`
                     )
                   )
                   .join("")}</select></div>`
@@ -463,10 +489,10 @@
                <div class="field"><label>Комната</label><input id="bind-room" value="Спальня"></div>
                <div class="field"><label>Клиент</label><input id="bind-client" value=""></div>`
         }
-        <div class="banner info" style="margin:10px 0">Будет сохранено: ${
-          willProfile ? "профиль PM" : "—"
-        }${willCalc ? " · preliminary " + money(d.amount) + " · " + MFStore.draftAreaM2(d) + " м²" : ""}. При выборе preliminary/both профиль не теряется.</div>
-        <button class="btn primary" data-action="do-bind">Сохранить в комнату</button>
+        <div class="banner info" style="margin:10px 0">Будет сохранено при текущем типе «${esc(saveTypeDefault)}»: ${esc(
+          previewFor(saveTypeDefault)
+        )}. «Только профиль» не обещает preliminary.</div>
+        <button class="btn primary" data-action="do-bind" ${areaPrompt ? "disabled" : ""}>Сохранить в комнату</button>
       </div>`
     );
   }
@@ -555,6 +581,8 @@
     const quotes = MFStore.quotesForDeal(deal.dealId);
     const sheet = S().ui.dealSheet;
     const closedDeals = S().deals.filter((d) => d.projectId === p.id && !d.active);
+    const assentQ = MFStore.quoteForAssent(deal.dealId);
+    const outOfQuote = MFStore.outOfQuoteCalculatedRooms(deal.dealId);
     return `
       <div class="row" style="margin-bottom:12px">
         <span class="pill info">dealId ${esc(deal.dealId)}</span>
@@ -563,6 +591,20 @@
         ${deal.outcome && !deal.paused ? `<span class="pill">${esc(deal.outcome)}</span>` : ""}
         ${deal.acceptedAmount != null ? `<span class="pill ok">accepted ${money(deal.acceptedAmount)}</span>` : ""}
       </div>
+      ${
+        assentQ
+          ? `<div class="banner info">Assent scope = Quote ${esc(assentQ.revisionId)} (${esc(
+              assentQ.lifecycle
+            )}): ${(assentQ.rooms || []).map((id) => esc(id)).join(", ") || "—"}. GC3-P0-02: рассчитанные вне КП не в sheet.</div>`
+          : `<div class="banner warn">Нет sent/sent_confirmed Quote — согласие по комнатам недоступно.</div>`
+      }
+      ${
+        outOfQuote.length
+          ? `<div class="banner warn">Вне scope КП (не в assent): ${outOfQuote
+              .map((r) => esc(r.name))
+              .join(", ")}</div>`
+          : ""
+      }
       ${
         deal.paused
           ? `<div class="banner warn">Сделка на паузе. <button class="btn primary sm" data-action="resume-deal" data-deal="${deal.dealId}">Возобновить на «${esc(
@@ -658,13 +700,19 @@
     const p = MFStore.project(projectId);
     const r = MFStore.room(projectId, roomId);
     if (!p || !r) return shell("sales/projects", `<div class="empty">Комната не найдена</div>`);
+    const ap = r.acousticProfile;
+    const prelimArea = r.preliminary?.areaM2 ?? r.areaM2;
     return shell(
       "sales/projects",
       `
       <div class="page-head">
         <div>
           <h1>${esc(r.name)}</h1>
-          <p class="sub">${esc(p.name)} · ${r.areaM2} м²</p>
+          <p class="sub">${esc(p.name)} · ${r.areaM2} м²${
+            r.preliminary?.areaM2 != null && Math.abs(r.preliminary.areaM2 - r.areaM2) > 0.05
+              ? ` · prelim ${r.preliminary.areaM2} м²`
+              : ""
+          }</p>
         </div>
         <div class="page-actions">
           <a class="btn ghost" href="#/sales/project/${p.id}">К проекту</a>
@@ -675,7 +723,15 @@
       <div class="grid-2">
         <div class="panel">
           <h3>Расчёты</h3>
-          <p>Prelim: <strong>${r.preliminary ? money(r.preliminary.amount) : "—"}</strong></p>
+          <p>Prelim: <strong>${
+            r.preliminary
+              ? money(r.preliminary.amount) +
+                " · " +
+                (r.preliminary.areaM2 ?? prelimArea) +
+                " м² · " +
+                esc(r.preliminary.segment || "—")
+              : "—"
+          }</strong></p>
           <p>Detailed: <strong>${r.detailed ? money(r.detailed.amount) : "—"}</strong></p>
         </div>
         <div class="panel">
@@ -683,6 +739,27 @@
           <p>Assent: ${esc(r.roomAssent || "—")}</p>
           <p>Tech-ready: ${r.techReady ? "да" : "нет"}</p>
         </div>
+      </div>
+      <div class="panel" style="margin-top:12px">
+        <h3>Акустический профиль PM ${ap ? `<span class="pill ok">сохранён</span>` : `<span class="pill">нет</span>`}</h3>
+        ${
+          ap
+            ? `<p class="muted">persona «${esc(ap.clientPersona || "—")}» · риск «${esc(
+                ap.currentRisk || "—"
+              )}» · ${ap.areaM2 ?? "—"} м² · ${esc(ap.savedAt || "")}</p>
+               <p>${esc(ap.narrative || "")}</p>
+               <details open>
+                 <summary>Открыть Result (без нового опроса)</summary>
+                 <ol class="list" style="margin-top:8px">
+                   <li class="list-item"><div class="meta">${esc(ap.chain?.norms || "")}</div></li>
+                   <li class="list-item"><div class="meta">${esc(ap.chain?.current || "")}</div></li>
+                   <li class="list-item"><div class="meta">${esc(ap.chain?.withMf || "")}</div></li>
+                   <li class="list-item"><div class="meta">${esc(ap.chain?.difference || "")}</div></li>
+                   <li class="list-item"><div class="meta">${esc(ap.chain?.nextStep || "")}</div></li>
+                 </ol>
+               </details>`
+            : `<p class="muted">Профиль ещё не сохраняли в эту комнату.</p>`
+        }
       </div>`
     );
   }
@@ -691,7 +768,17 @@
     const p = MFStore.project(projectId);
     const r = MFStore.room(projectId, roomId);
     const k = kind || "preliminary";
-    const amount = Math.round(r.areaM2 * (k === "detailed" ? 3600 : 3400));
+    // GC3-P0-01: reopen uses saved prelim identity, not a silent recompute from stale room.areaM2
+    const saved = k === "preliminary" ? r.preliminary : r.detailed;
+    const area =
+      saved?.areaM2 != null
+        ? Number(saved.areaM2)
+        : Number(r.areaM2) || 0;
+    const amount =
+      saved?.amount != null
+        ? Number(saved.amount)
+        : Math.round(area * (k === "detailed" ? 3600 : 3400));
+    const recomputed = Math.round(area * (k === "detailed" ? 3600 : 3400));
     return shell(
       "sales/projects",
       `
@@ -699,11 +786,19 @@
         <div><h1>Калькулятор · ${k}</h1><p class="sub">${esc(p.name)} / ${esc(r.name)}</p></div>
         <div class="page-actions"><a class="btn ghost" href="#/sales/room/${p.id}/${r.id}">Назад</a></div>
       </div>
+      ${
+        saved
+          ? `<div class="banner ok">Сохранённый ${k}: <strong>${money(saved.amount)}</strong> · ${
+              saved.areaM2 ?? area
+            } м² · ${esc(saved.segment || "comfort")} · ${esc(saved.revisionId || "")}. Повторное сохранение не меняет площадь/сумму молча.</div>`
+          : ""
+      }
       <div class="panel">
-        <div class="stat"><div class="n">${money(amount)}</div><div class="l">${k} · ${r.areaM2} м²</div></div>
+        <div class="stat"><div class="n">${money(amount)}</div><div class="l">${k} · ${area} м²</div></div>
+        <p class="muted" style="margin-top:8px">Ориентир пересчёта по той же площади: ${money(recomputed)} (не подменяет сохранённое без явного Save).</p>
         <button class="btn primary" style="margin-top:14px" data-action="save-room-calc"
-          data-pid="${p.id}" data-rid="${r.id}" data-kind="${k}" data-amount="${amount}">
-          Сохранить в комнату
+          data-pid="${p.id}" data-rid="${r.id}" data-kind="${k}" data-amount="${amount}" data-area="${area}">
+          Сохранить в комнату (сохранить ${area} м² / ${money(amount)})
         </button>
       </div>`
     );
@@ -963,7 +1058,15 @@
         { sku: "CANVAS-W", name: "Полотно белое", qty: Math.ceil(L * W), unit: "м²" },
         { sku: "CLIP-50", name: "Клипсы", qty: 40, unit: "шт" },
       ];
-    const conflict = S().ui.conflictDemo;
+    const conflict =
+      S().pendingConflicts?.[roomId] ||
+      (S().ui.conflictDemo?.roomId === roomId ? S().ui.conflictDemo : null);
+    const prefill = conflict?.retryPrefill;
+    const showL = prefill?.lengthM ?? L;
+    const showW = prefill?.widthM ?? W;
+    const showCut = prefill?.cutouts ?? cut;
+    const showSch = prefill?.schemeLabel || `Схема ${r.name}`;
+    const showBom = prefill?.bom || bom;
     return shell(
       "measurer/home",
       `
@@ -973,20 +1076,47 @@
       </div>
       ${
         conflict
-          ? `<div class="banner warn">${esc(conflict.message)}<br>current ${esc(
-              conflict.current || conflict.keptA || "—"
-            )} · incoming ${esc(conflict.incoming || "—")} · alternate ${esc(
-              conflict.alternate || conflict.keptB || "—"
-            )} <button class="btn sm" data-action="clear-conflict">OK</button></div>`
+          ? `<div class="banner warn">
+              <p>${esc(conflict.message)}</p>
+              <div class="grid-2" style="margin-top:10px">
+                <div class="panel" style="background:var(--bg1)">
+                  <h3>Current (на комнате)</h3>
+                  <p>rev ${esc(conflict.current || "—")}</p>
+                  <p>L×W ${conflict.currentSnapshot?.lengthM ?? r.lengthM} × ${
+                    conflict.currentSnapshot?.widthM ?? r.widthM
+                  }</p>
+                  <p>Сумма ${money(conflict.currentSnapshot?.amount ?? r.detailed?.amount)}</p>
+                  <p>BOM: ${(conflict.currentSnapshot?.bom || r.bom || [])
+                    .map((b) => `${esc(b.name)}:${b.qty}`)
+                    .join(", ") || "—"}</p>
+                </div>
+                <div class="panel" style="background:var(--bg1)">
+                  <h3>Incoming (ваш вариант)</h3>
+                  <p>rev ${esc(conflict.incoming || "—")}</p>
+                  <p>L×W ${conflict.incomingPreview?.lengthM} × ${conflict.incomingPreview?.widthM}</p>
+                  <p>Сумма ${money(conflict.incomingPreview?.amount)}</p>
+                  <p>BOM: ${(conflict.incomingPreview?.bom || [])
+                    .map((b) => `${esc(b.name)}:${b.qty}`)
+                    .join(", ") || "—"}</p>
+                </div>
+              </div>
+              <div class="row" style="margin-top:10px">
+                <button class="btn primary" data-action="conflict-keep" data-pid="${p.id}" data-rid="${r.id}">Оставить current</button>
+                <button class="btn ok" data-action="conflict-apply" data-pid="${p.id}" data-rid="${r.id}">Восстановить мой вариант</button>
+                <button class="btn" data-action="conflict-retry" data-pid="${p.id}" data-rid="${r.id}">Повторить с актуальной revision</button>
+                <button class="btn ghost sm" data-action="clear-conflict" data-rid="${r.id}">Скрыть баннер</button>
+              </div>
+              <p class="dim" style="margin-top:6px">«Скрыть баннер» не удаляет incoming — он в pendingConflicts.</p>
+            </div>`
           : ""
       }
       <div class="grid-2">
         <div class="panel">
           <h3>Геометрия</h3>
-          <div class="field"><label>Длина, м</label><input id="det-L" type="number" step="0.1" value="${L}"></div>
-          <div class="field"><label>Ширина, м</label><input id="det-W" type="number" step="0.1" value="${W}"></div>
-          <div class="field"><label>Вырезы / препятствия</label><input id="det-cut" type="number" value="${cut}"></div>
-          <div class="field"><label>Подпись схемы</label><input id="det-sch" value="Схема ${esc(r.name)}"></div>
+          <div class="field"><label>Длина, м</label><input id="det-L" type="number" step="0.1" value="${showL}"></div>
+          <div class="field"><label>Ширина, м</label><input id="det-W" type="number" step="0.1" value="${showW}"></div>
+          <div class="field"><label>Вырезы / препятствия</label><input id="det-cut" type="number" value="${showCut}"></div>
+          <div class="field"><label>Подпись схемы</label><input id="det-sch" value="${esc(showSch)}"></div>
           <label class="row"><input type="checkbox" id="det-409"> Симулировать 409 (две device revision)</label>
         </div>
         <div class="panel">
@@ -995,7 +1125,7 @@
             <div class="panel-rect" style="left:10%;top:15%;width:70%;height:60%">полотно</div>
             <div class="panel-rect" style="left:72%;top:20%;width:18%;height:25%;border-color:var(--warn)">вырез</div>
           </div>
-          <p class="muted">Площадь ≈ <span id="det-area">${(L * W).toFixed(1)}</span> м² · prelim ${
+          <p class="muted">Площадь ≈ <span id="det-area">${(showL * showW).toFixed(1)}</span> м² · prelim ${
         r.preliminary ? money(r.preliminary.amount) : "—"
       }</p>
         </div>
@@ -1005,7 +1135,7 @@
         <table class="bom-table" id="bom-table">
           <thead><tr><th>SKU</th><th>Название</th><th>Кол-во</th><th>Ед.</th></tr></thead>
           <tbody>
-            ${bom
+            ${showBom
               .map(
                 (b, i) => `<tr>
               <td class="mono">${esc(b.sku)}</td>
@@ -1017,7 +1147,7 @@
               .join("")}
           </tbody>
         </table>
-        <script type="application/json" id="bom-json">${JSON.stringify(bom).replace(/</g, "\\u003c")}</script>
+        <script type="application/json" id="bom-json">${JSON.stringify(showBom).replace(/</g, "\\u003c")}</script>
         <button class="btn primary" style="margin-top:12px" data-action="save-detailed"
           data-pid="${p.id}" data-rid="${r.id}">Сохранить detailed + схему</button>
       </div>`

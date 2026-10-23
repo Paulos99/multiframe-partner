@@ -115,7 +115,12 @@
       <div class="modal-back" data-action="close-sheet">
         <div class="modal" style="width:min(560px,100%)" onclick="event.stopPropagation()">
           <h3>Принято — согласие по комнатам</h3>
-          <p class="muted">GC2-P0-03: по умолчанию «Не выбрано». Нужен явный выбор по каждой комнате в scope. ≥1 ordered. Без опасных дефолтов ordered.</p>
+          <p class="muted">GC3-P0-02 / GC2-P0-03: scope = rooms sent Quote. «Не выбрано» по умолчанию. ≥1 ordered.</p>
+          ${
+            rooms.length
+              ? ""
+              : `<div class="banner warn">Нет применимого sent Quote / пустой scope — accept недоступен.</div>`
+          }
           ${rooms
             .map((r) => {
               const amt = r.detailed?.amount || r.preliminary?.amount || 0;
@@ -130,7 +135,9 @@
             .join("")}
           <div class="row">
             <button class="btn ghost" data-action="close-sheet">Отмена</button>
-            <button class="btn ok" data-action="confirm-accept" data-deal="${dealId}">Подтвердить accepted</button>
+            <button class="btn ok" data-action="confirm-accept" data-deal="${dealId}" ${
+              rooms.length ? "" : "disabled"
+            }>Подтвердить accepted</button>
           </div>
         </div>
       </div>`;
@@ -288,7 +295,10 @@
       return;
     }
     if (action === "calc-done") {
-      MFStore.finishCalcOnDraft(Number(el.getAttribute("data-amount")));
+      MFStore.finishCalcOnDraft(
+        Number(el.getAttribute("data-amount")),
+        Number(el.getAttribute("data-area"))
+      );
       toast("Ориентир в черновике", "Теперь привяжите к проекту", "ok");
       location.hash = "#/sales/bind";
       return;
@@ -308,12 +318,43 @@
       }
       const res = MFStore.bindDraft(opts);
       if (!res.ok) {
+        if (res.error === "area_mismatch") {
+          toast("Площади отличаются", `${res.draftArea} vs ${res.roomArea} м² — выберите явно`, "warn");
+          render();
+          return;
+        }
         toast("Save не выполнен", res.error === "offline_queued" ? "В outbox (офлайн)" : res.error, "danger");
         render();
         return;
       }
-      toast("Сохранено", `${res.saveType} → ${res.roomId}`, "ok");
+      toast("Сохранено", `${res.saveType} → ${res.roomId}${res.amount != null ? " · " + res.amount + " ₽" : ""}`, "ok");
       location.hash = `#/sales/room/${res.projectId}/${res.roomId}`;
+      return;
+    }
+    if (action === "bind-resolve-area") {
+      const prompt = MFStore.get().ui.bindAreaPrompt;
+      if (!prompt) return;
+      const resolution = el.getAttribute("data-resolution");
+      const res = MFStore.bindDraft({
+        mode: "pick",
+        saveType: prompt.saveType,
+        projectId: prompt.projectId,
+        roomId: prompt.roomId,
+        areaResolution: resolution,
+      });
+      if (!res.ok) {
+        toast("Save не выполнен", res.error, "danger");
+        render();
+        return;
+      }
+      toast("Сохранено", `${res.areaM2} м² · ${res.amount} ₽`, "ok");
+      location.hash = `#/sales/room/${res.projectId}/${res.roomId}`;
+      return;
+    }
+    if (action === "bind-cancel-area") {
+      MFStore.get().ui.bindAreaPrompt = null;
+      MFStore.save();
+      render();
       return;
     }
     if (action === "save-room-calc") {
@@ -321,8 +362,9 @@
       const rid = el.getAttribute("data-rid");
       const kind = el.getAttribute("data-kind");
       const amount = Number(el.getAttribute("data-amount"));
-      const res = MFStore.saveCalcToRoom(pid, rid, kind, amount);
-      toast("Сохранено", `${kind} · ${res.revisionId}`, "ok");
+      const area = Number(el.getAttribute("data-area"));
+      const res = MFStore.saveCalcToRoom(pid, rid, kind, amount, { areaM2: area });
+      toast("Сохранено", `${kind} · ${res.areaM2} м² · ${res.revisionId}`, "ok");
       const back = el.getAttribute("data-back");
       location.hash = back || `#/sales/room/${pid}/${rid}`;
       return;
@@ -611,8 +653,36 @@
       return;
     }
     if (action === "clear-conflict") {
-      MFStore.get().ui.conflictDemo = null;
-      MFStore.save();
+      const rid = el.getAttribute("data-rid") || MFStore.get().ui.conflictDemo?.roomId;
+      if (rid) MFStore.dismissConflictBanner(rid);
+      else {
+        MFStore.get().ui.conflictDemo = null;
+        MFStore.save();
+      }
+      toast("Баннер скрыт", "incoming сохранён в pendingConflicts", "ok");
+      render();
+      return;
+    }
+    if (action === "conflict-keep" || action === "conflict-apply" || action === "conflict-retry") {
+      const pid = el.getAttribute("data-pid");
+      const rid = el.getAttribute("data-rid");
+      const choice =
+        action === "conflict-keep" ? "keep_current" : action === "conflict-apply" ? "apply_incoming" : "retry";
+      const res = MFStore.resolveConflict(pid, rid, choice);
+      if (!res.ok) {
+        toast("Conflict", res.error, "danger");
+        render();
+        return;
+      }
+      toast(
+        choice === "keep_current"
+          ? "Оставлен current"
+          : choice === "apply_incoming"
+          ? "Восстановлен ваш вариант"
+          : "Retry prefills",
+        res.revisionId || "",
+        "ok"
+      );
       render();
       return;
     }

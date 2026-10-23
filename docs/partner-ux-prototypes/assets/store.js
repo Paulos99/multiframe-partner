@@ -1,9 +1,9 @@
 /**
- * Gate C draft-3 store — demo fixtures only. NOT production proof.
- * KEY bumped to v3 after GC2-P0 fixes (ChatGPT re-review on eefc726).
+ * Gate C draft-4 store — demo fixtures only. NOT production proof.
+ * KEY bumped to v4 after GC3-P0/P1 fixes (ChatGPT re-review on 16a90c0).
  */
 (function (global) {
-  const KEY = "mf_gate_c_proto_v3";
+  const KEY = "mf_gate_c_proto_v4";
   const CREW_SELF = "u_denis";
   const MEASURER_SELF = "u_pavel";
 
@@ -267,13 +267,14 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-3",
+      revision: "rev-gate-c-draft-4",
       role: null,
       offline: false,
       syncState: "online",
       outbox: [],
       consultationSessionId: null,
       sessionDraft: null,
+      pendingConflicts: {},
       ui: {
         projectTab: "rooms",
         dealSheet: null,
@@ -291,6 +292,7 @@
         conflictDemo: null,
         quotePreview: null,
         oneTimeCred: null,
+        bindAreaPrompt: null,
       },
       org: {
         id: "org_neboline",
@@ -800,11 +802,15 @@
     return { ok: true, consultationSessionId: d.consultationSessionId };
   }
 
-  function finishCalcOnDraft(amount) {
+  function finishCalcOnDraft(amount, areaM2) {
     if (!state.sessionDraft) return;
     state.sessionDraft.calcDone = true;
     state.sessionDraft.amount = amount;
     state.sessionDraft.saveType = "preliminary";
+    if (areaM2 != null) {
+      state.sessionDraft.answers = state.sessionDraft.answers || {};
+      state.sessionDraft.answers.areaM2 = Number(areaM2) || draftAreaM2(state.sessionDraft);
+    }
     save();
   }
 
@@ -824,6 +830,8 @@
     let roomId;
     let dealId;
     let created = false;
+    const draftArea = draftAreaM2(d);
+    const willSaveCalc = (saveType === "preliminary" || saveType === "both") && d.calcDone;
 
     if (opts.mode === "pick") {
       projectId = opts.projectId;
@@ -831,13 +839,52 @@
       if (!projectId || !roomId) return { ok: false, error: "pick_required" };
       const r = room(projectId, roomId);
       if (!r) return { ok: false, error: "room_missing" };
+
+      // GC3-P0-01: if consultation area ≠ room area, require conscious resolution
+      if (willSaveCalc) {
+        const roomArea = Number(r.areaM2) || 0;
+        const mismatch = Math.abs(roomArea - draftArea) > 0.05;
+        if (mismatch && !opts.areaResolution) {
+          state.ui.bindAreaPrompt = {
+            projectId,
+            roomId,
+            roomName: r.name,
+            roomArea,
+            draftArea,
+            draftAmount: d.amount,
+            saveType,
+            mode: "pick",
+          };
+          save();
+          return {
+            ok: false,
+            error: "area_mismatch",
+            roomArea,
+            draftArea,
+            draftAmount: d.amount,
+          };
+        }
+        if (mismatch && opts.areaResolution === "keep_room_recalc") {
+          const rate = d.segment === "premium" ? 4200 : d.segment === "comfort" ? 3400 : 2800;
+          d.amount = Math.round(roomArea * rate);
+          d.answers = d.answers || {};
+          d.answers.areaM2 = roomArea;
+          if (d.pmResult) d.pmResult.areaM2 = roomArea;
+        } else if (mismatch && opts.areaResolution === "adopt_consultation") {
+          r.areaM2 = draftArea;
+          r.lengthM = +(Math.sqrt(draftArea * 1.2).toFixed(2));
+          r.widthM = +(Math.sqrt(draftArea / 1.2).toFixed(2));
+        }
+      }
+
       const deal = activeDeal(projectId);
       dealId = deal ? deal.dealId : null;
       applySaveToRoom(r, d, saveType);
+      state.ui.bindAreaPrompt = null;
       if (deal && d.pmDone && ["inquiry", "contact", "new", "offered"].includes(deal.stage)) deal.stage = "assessed";
       if (deal && d.calcDone && !deal.paused) deal.stage = "calculated";
     } else {
-      // create
+      // create — room area = consultation area
       if (!opts.projectName || !opts.roomName) return { ok: false, error: "names_required" };
       projectId = uid("prj");
       roomId = uid("room");
@@ -846,10 +893,9 @@
       const r = emptyRoom({
         id: roomId,
         name: opts.roomName,
-        areaM2: d.answers?.areaM2 || d.pmResult?.areaM2 || 12,
-        lengthM: Math.sqrt(draftAreaM2(d) * 1.2),
-        widthM: Math.sqrt(draftAreaM2(d) / 1.2),
-        areaM2: draftAreaM2(d),
+        areaM2: draftArea,
+        lengthM: +(Math.sqrt(draftArea * 1.2).toFixed(2)),
+        widthM: +(Math.sqrt(draftArea / 1.2).toFixed(2)),
       });
       applySaveToRoom(r, d, saveType);
       state.projects.unshift({
@@ -884,10 +930,21 @@
       created,
       consultationSessionId: d.consultationSessionId,
       multiframeOffered: d.multiframeOffered,
+      areaM2: willSaveCalc ? draftAreaM2(d) : null,
+      amount: willSaveCalc ? d.amount : null,
     });
     state.sessionDraft = { ...d, bound: true, projectId, roomId, dealId, saveType };
     save();
-    return { ok: true, projectId, roomId, dealId, saveType, created };
+    return {
+      ok: true,
+      projectId,
+      roomId,
+      dealId,
+      saveType,
+      created,
+      amount: d.amount,
+      areaM2: draftAreaM2(d),
+    };
   }
 
   function applySaveToRoom(r, d, saveType) {
@@ -905,17 +962,22 @@
     }
     if ((saveType === "preliminary" || saveType === "both") && d.calcDone) {
       const revisionId = uid("crev");
+      const areaM2 = draftAreaM2(d);
+      // GC3-P0-01: room header area stays aligned with saved prelim identity
+      r.areaM2 = areaM2;
       r.preliminary = {
         revisionId,
         amount: d.amount,
         segment: d.segment || "comfort",
-        areaM2: draftAreaM2(d),
+        areaM2,
       };
       state.calcHistory.push({
         revisionId,
         roomId: r.id,
         kind: "preliminary",
         amount: d.amount,
+        areaM2,
+        segment: d.segment || "comfort",
         at: new Date().toISOString(),
         consultationSessionId: d.consultationSessionId,
       });
@@ -937,24 +999,41 @@
     return { ok: true, result };
   }
 
-  function saveCalcToRoom(projectId, roomId, kind, amount) {
+  function saveCalcToRoom(projectId, roomId, kind, amount, meta) {
     const r = room(projectId, roomId);
     if (!r) return { ok: false };
     const revisionId = uid("crev");
-    const entry = { revisionId, amount, segment: r.preliminary?.segment || "comfort" };
+    const areaM2 =
+      meta?.areaM2 != null
+        ? Number(meta.areaM2)
+        : kind === "preliminary" && r.preliminary?.areaM2 != null
+        ? Number(r.preliminary.areaM2)
+        : Number(r.areaM2) || 0;
+    const segment = meta?.segment || r.preliminary?.segment || "comfort";
+    const entry = { revisionId, amount, segment, areaM2 };
     if (kind === "detailed") {
       r.detailed = entry;
     } else {
+      // GC3-P0-01: preserve area identity; keep room header in sync
+      r.areaM2 = areaM2;
       r.preliminary = entry;
     }
-    state.calcHistory.push({ revisionId, roomId, kind, amount, at: new Date().toISOString() });
+    state.calcHistory.push({
+      revisionId,
+      roomId,
+      kind,
+      amount,
+      areaM2,
+      segment,
+      at: new Date().toISOString(),
+    });
     const deal = activeDeal(projectId);
     if (deal && !deal.paused && ["assessed", "inquiry", "new", "offered"].includes(deal.stage)) {
       deal.stage = "calculated";
     }
     // GC-P0-03: never auto-set roomAssent from calc
     save();
-    return { ok: true, revisionId };
+    return { ok: true, revisionId, areaM2, amount };
   }
 
   /** GC-P0-04 detailed with geometry + scheme + BOM · GC2-P1-02: no overwrite before 409 */
@@ -989,9 +1068,27 @@
       payload.forceConflict ||
       (expected != null && currentRev != null && expected !== currentRev);
 
-    // GC2-P1-02: conflict path — append history only; do NOT mutate confirmed current
+    // GC2-P1-02 / GC3-P1-02: conflict — keep current; persist full incoming for compare/restore
     if (stale) {
       const other = uid("crev");
+      const incomingFull = {
+        revisionId,
+        amount,
+        scheme: JSON.parse(JSON.stringify(scheme)),
+        bom: JSON.parse(JSON.stringify(bom)),
+        geometry: { lengthM, widthM, cutouts, areaM2: area },
+        lengthM,
+        widthM,
+      };
+      const currentSnap = {
+        revisionId: currentRev,
+        amount: r.detailed?.amount,
+        scheme: r.scheme ? JSON.parse(JSON.stringify(r.scheme)) : null,
+        bom: r.bom ? JSON.parse(JSON.stringify(r.bom)) : null,
+        geometry: r.geometry ? JSON.parse(JSON.stringify(r.geometry)) : null,
+        lengthM: r.lengthM,
+        widthM: r.widthM,
+      };
       state.calcHistory.push({
         revisionId: other,
         roomId,
@@ -1006,10 +1103,12 @@
         kind: "detailed",
         amount,
         at: new Date().toISOString(),
-        note: "incoming_rejected_overwrite",
+        note: "incoming_pending_resolution",
         schemeId: scheme.id,
+        snapshot: incomingFull,
       });
-      state.ui.conflictDemo = {
+      const conflict = {
+        projectId,
         roomId,
         current: currentRev,
         incoming: revisionId,
@@ -1017,9 +1116,13 @@
         keptA: currentRev,
         keptB: other,
         message:
-          "409 Conflict — подтверждённый current не перезаписан; обе revision в истории (append-only). Compare / retry.",
-        incomingPreview: { amount, scheme, bom, geometry: { lengthM, widthM, cutouts, areaM2: area } },
+          "409 Conflict — current не перезаписан. Сравните варианты и выберите: оставить current / восстановить мой / повторить.",
+        incomingPreview: incomingFull,
+        currentSnapshot: currentSnap,
+        dismissed: false,
       };
+      state.pendingConflicts[roomId] = conflict;
+      state.ui.conflictDemo = conflict;
       save();
       return { ok: false, error: "conflict_409", revisionId, other, amount, current: currentRev };
     }
@@ -1153,16 +1256,106 @@
    * assentMap: { roomId: 'ordered'|'deferred'|'out_of_scope' }
    * Validate all scoped rooms first; mutate atomically only on success.
    */
+  /** GC3-P0-02: assent scope = rooms of applicable sent Quote only (not «any calculated») */
+  function quoteForAssent(dealId) {
+    const list = quotesForDeal(dealId);
+    return list.find((x) => x.lifecycle === "sent_confirmed") || list.find((x) => x.lifecycle === "sent") || null;
+  }
+
   function scopedRoomsForDeal(dealId) {
     const deal = state.deals.find((d) => d.dealId === dealId);
     if (!deal) return [];
     const p = project(deal.projectId);
     if (!p) return [];
-    const q =
-      quotesForDeal(dealId).find((x) => x.lifecycle === "sent_confirmed") || quotesForDeal(dealId)[0];
-    return p.rooms.filter(
-      (r) => !q || (q.rooms || []).includes(r.id) || r.preliminary || r.detailed
-    );
+    const q = quoteForAssent(dealId);
+    if (!q) return [];
+    const ids = new Set(q.rooms || []);
+    return p.rooms.filter((r) => ids.has(r.id));
+  }
+
+  function outOfQuoteCalculatedRooms(dealId) {
+    const deal = state.deals.find((d) => d.dealId === dealId);
+    if (!deal) return [];
+    const p = project(deal.projectId);
+    if (!p) return [];
+    const q = quoteForAssent(dealId);
+    if (!q) return p.rooms.filter((r) => r.preliminary || r.detailed);
+    const ids = new Set(q.rooms || []);
+    return p.rooms.filter((r) => (r.preliminary || r.detailed) && !ids.has(r.id));
+  }
+
+  function dismissConflictBanner(roomId) {
+    // GC3-P1-02: dismissing UI must NOT destroy the only full incoming copy
+    if (state.pendingConflicts[roomId]) {
+      state.pendingConflicts[roomId].dismissed = true;
+    }
+    if (state.ui.conflictDemo?.roomId === roomId) {
+      state.ui.conflictDemo = state.pendingConflicts[roomId]
+        ? { ...state.pendingConflicts[roomId], dismissed: true }
+        : null;
+    }
+    save();
+  }
+
+  function resolveConflict(projectId, roomId, choice) {
+    const conflict = state.pendingConflicts[roomId] || state.ui.conflictDemo;
+    if (!conflict || conflict.roomId !== roomId) return { ok: false, error: "no_conflict" };
+    const r = room(projectId, roomId);
+    if (!r) return { ok: false, error: "room_missing" };
+
+    if (choice === "keep_current") {
+      delete state.pendingConflicts[roomId];
+      state.ui.conflictDemo = null;
+      pushEvent("conflict_resolved", { roomId, choice: "keep_current", kept: conflict.current });
+      save();
+      return { ok: true, choice, revisionId: conflict.current };
+    }
+
+    if (choice === "apply_incoming") {
+      const inc = conflict.incomingPreview;
+      if (!inc) return { ok: false, error: "no_incoming" };
+      r.lengthM = inc.lengthM;
+      r.widthM = inc.widthM;
+      r.areaM2 = inc.geometry?.areaM2 ?? inc.lengthM * inc.widthM;
+      r.geometry = inc.geometry;
+      r.scheme = inc.scheme;
+      r.bom = inc.bom;
+      r.schemeOk = true;
+      r.detailed = {
+        revisionId: inc.revisionId || conflict.incoming,
+        amount: inc.amount,
+        segment: "comfort",
+        schemeId: inc.scheme?.id,
+      };
+      delete state.pendingConflicts[roomId];
+      state.ui.conflictDemo = null;
+      pushEvent("conflict_resolved", { roomId, choice: "apply_incoming", kept: r.detailed.revisionId });
+      save();
+      return { ok: true, choice, revisionId: r.detailed.revisionId, amount: inc.amount };
+    }
+
+    if (choice === "retry") {
+      // Restore form fields from incoming for re-edit; keep current on room; clear force path
+      const inc = conflict.incomingPreview;
+      state.ui.conflictDemo = {
+        ...conflict,
+        dismissed: false,
+        retryPrefill: inc
+          ? {
+              lengthM: inc.lengthM,
+              widthM: inc.widthM,
+              cutouts: inc.geometry?.cutouts || 0,
+              schemeLabel: inc.scheme?.label,
+              bom: inc.bom,
+            }
+          : null,
+        message: "Retry: поля заполнены вашим вариантом. Сохраните без 409 — expectedRevision = current.",
+      };
+      save();
+      return { ok: true, choice: "retry", prefill: state.ui.conflictDemo.retryPrefill, current: conflict.current };
+    }
+
+    return { ok: false, error: "bad_choice" };
   }
 
   function acceptDeal(dealId, assentMap) {
@@ -1561,7 +1754,11 @@
     computePmResult,
     draftAreaM2,
     scoreAnnaPath,
+    quoteForAssent,
     scopedRoomsForDeal,
+    outOfQuoteCalculatedRooms,
+    dismissConflictBanner,
+    resolveConflict,
     startQuickConsultation,
     updatePmAnswers,
     runPmOnDraft,

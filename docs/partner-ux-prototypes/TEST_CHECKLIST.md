@@ -1,14 +1,14 @@
-# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-3`
+# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-4`
 
 **Честно:** ячейки «Observed» ниже — **agent walkthrough / store smoke**, **не** human usability lab.  
 GC-P1-05: финальный Gate C OK требует незаполненный человеком прогон без подсказок. Не ставить UX PASS по зелёному smoke.
 
 | Поле | Значение |
 |------|----------|
-| Revision | `rev-gate-c-draft-3` |
+| Revision | `rev-gate-c-draft-4` |
 | Device agent | desktop Chromium + store VM |
 | Human observed | **NOT observed** |
-| Agent smoke GC2 | **19/19 PASS** (см. SMOKE_TEST) · prior draft-2 25/25 retained conceptually |
+| Agent smoke GC3 | **18/18 PASS** (`node smoke.mjs`) |
 
 Протокол §7.1: first-click · confusion · re-entry · clarity 1–5 · recovery · device · comments.
 
@@ -53,6 +53,22 @@ GC-P1-05: финальный Gate C OK требует незаполненный
 ### GC2-P0-04 — PM+Calc bind keeps profile
 - Steps: PM → Calc → Bind preliminary/both → room has acousticProfile + preliminary  
 - Agent: PASS (store) · Human: NOT observed  
+
+### GC3-P0-01 — Area/amount identity after bind+reopen
+- Steps: PM 21 → calc 71400 → bind existing with adopt → room 21/71400 → reopen Preliminary stays  
+- Agent: PASS (`node smoke.mjs`) · Human: NOT observed  
+
+### GC3-P0-02 — Assent = Quote.rooms only
+- Steps: restrict sent Quote to bedroom; scopedRoomsForDeal excludes other calculated rooms  
+- Agent: PASS · Human: NOT observed  
+
+### GC3-P1-01 — Profile visible on room
+- Steps: PM-only bind → room card shows profile + Result details  
+- Agent: PASS (store+view) · Human: NOT observed  
+
+### GC3-P1-02 — 409 compare / restore
+- Steps: detailed 409 → compare → apply incoming or keep; dismiss keeps pending  
+- Agent: PASS · Human: NOT observed  
 
 ---
 

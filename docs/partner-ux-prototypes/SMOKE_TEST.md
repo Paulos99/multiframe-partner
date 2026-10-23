@@ -1,33 +1,26 @@
-# Gate C smoke — `rev-gate-c-draft-3`
+# Gate C smoke — `rev-gate-c-draft-4`
 
-**Не user testing.** Store VM checks below + prior draft-2 screenshots in [`media/`](./media/).
+**Не user testing.**
 
 | | |
 |--|--|
-| Against review | PR comment GC2-P0-01…04 on `eefc726` |
-| Store smoke (GC2) | **19/19 PASS** |
-| Verdict | GC2-P0 clickable behaviors implemented; Gate C still needs human UX evidence |
+| Against review | PR comment GC3 on `16a90c0` |
+| Store smoke | **18/18 PASS** via executable script |
+| Verdict | GC3-P0/P1 clickable; Gate C still needs human UX evidence |
 
-## GC2-P0 / P1 checks (store)
-
-| ID | Result |
-|----|--------|
-| P0-01 area 21 → estimate 71400 (not 12×) | PASS |
-| P0-04 prelim bind keeps acousticProfile | PASS |
-| P0-03 empty assent → `assent_incomplete`, no mutate | PASS |
-| P0-03 no ordered → `need_one_ordered`, no mutate | PASS |
-| P0-03 bedroom-only ordered | PASS |
-| P0-02 close blocked until ordered closed | PASS |
-| P0-02 close OK after install close | PASS |
-| P1-01 no normative class А/Б/В | PASS |
-| P1-02 409 leaves current detailed unchanged | PASS |
-
-Repro (Node, from this directory):
+## Command
 
 ```bash
-# see agent transcript / run store.js under stub localStorage
+cd docs/partner-ux-prototypes
+node smoke.mjs
 ```
+
+Script: [`smoke.mjs`](./smoke.mjs)
+
+## Checks covered
+
+GC3-P0-01 area mismatch + adopt + create + reopen identity · GC3-P0-02 quote-only scope · GC3-P1-01 profile-only · GC3-P1-02 409 pending/dismiss/apply.
 
 ## Residual
 
-Full unassisted human D11 §7 panel (desktop+mobile) still open. Do not invent observed results.
+Full unassisted human D11 §7 panel still open. Do not invent observed results.
