@@ -945,19 +945,15 @@
 
   function buildCalcIframeQuery(draft) {
     const d = draft || state.sessionDraft;
-    const q = new URLSearchParams();
-    q.set("partner", "1");
-    q.set("gateC", "1");
-    q.set("walls", "0");
-    q.set("surfaces", "ceiling");
+    const parts = ["partner=1", "gateC=1", "walls=0", "surfaces=ceiling"];
     if (d?.pmDone && !d?.calcDone) {
       const area = draftAreaM2(d);
       if (area > 0) {
-        q.set("area", String(area));
-        q.set("source", "problemomer");
+        parts.push(`area=${encodeURIComponent(String(area))}`);
+        parts.push("source=problemomer");
       }
     }
-    return q.toString();
+    return parts.join("&");
   }
 
   function calcToolIframePath(draft) {
