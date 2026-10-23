@@ -121,7 +121,7 @@
           })
           .join("")}
         <div class="nav-section">Прототип</div>
-        <button class="nav-link" data-action="reset">Сбросить демо-данные (v2)</button>
+        <button class="nav-link" data-action="reset">Сбросить демо-данные (v3)</button>
         <button class="nav-link" data-action="toggle-loading">Demo loading</button>
       </nav>
       <nav class="bottom-nav" aria-label="Мобильная навигация">
@@ -327,7 +327,9 @@
           <li class="list-item"><div><div class="title">5. Следующий шаг</div><div class="meta">${esc(ch.nextStep)}</div></div></li>
         </ol>
         <p>${esc(r.narrative)}</p>
-        <p class="dim">Qualified claims only · guaranteedDb=${r.guaranteedDb}</p>
+        <p class="dim">Иллюстрация по анкете · не измерение · guaranteedDb=${r.guaranteedDb} · риск «${esc(
+          r.currentRisk || "—"
+        )}»</p>
         <div class="row">
           <a class="btn primary" href="#/sales/bind">Сохранить профиль (PM-only OK)</a>
           <a class="btn" href="#/sales/calc-quick">К калькулятору</a>
@@ -380,19 +382,25 @@
   function salesCalcQuick() {
     const d = S().sessionDraft;
     if (!d) return salesQuick();
-    const estimate = Math.round((d.areaM2 || 12) * (d.segment === "premium" ? 4200 : d.segment === "comfort" ? 3400 : 2800));
+    // GC2-P0-01: area from answers/pmResult (not stale d.areaM2)
+    const area = MFStore.draftAreaM2(d);
+    const estimate = Math.round(
+      area * (d.segment === "premium" ? 4200 : d.segment === "comfort" ? 3400 : 2800)
+    );
     return shell(
       "sales/quick",
       `
       <div class="page-head">
-        <div><h1>Калькулятор · предварительный</h1><p class="sub">Ориентир, не смета монтажа. Save без bind запрещён.</p></div>
+        <div><h1>Калькулятор · предварительный</h1><p class="sub">Ориентир, не смета монтажа. Save без bind запрещён. Площадь из анкеты PM.</p></div>
         <div class="page-actions"><a class="btn ghost" href="#/sales/quick">К консультации</a></div>
       </div>
       <div class="panel">
-        <div class="stat"><div class="n">${money(estimate)}</div><div class="l">Ориентир по ${d.areaM2} м² · ${esc(d.segment)}</div></div>
-        <p class="muted" style="margin-top:12px">Включает полотно, профиль, каркас MultiFrame (пресет).</p>
+        <div class="stat"><div class="n">${money(estimate)}</div><div class="l">Ориентир по ${area} м² · ${esc(d.segment)}</div></div>
+        <p class="muted" style="margin-top:12px">Включает полотно, профиль, каркас MultiFrame (пресет). Источник площади: answers.areaM2=${esc(
+          String(d.answers?.areaM2 ?? "—")
+        )}.</p>
         <div class="row" style="margin-top:14px">
-          <button class="btn primary" data-action="calc-done" data-amount="${estimate}">Сохранить ориентир в черновик</button>
+          <button class="btn primary" data-action="calc-done" data-amount="${estimate}" data-area="${area}">Сохранить ориентир в черновик</button>
           <a class="btn" href="#/sales/bind">К привязке →</a>
         </div>
       </div>`
@@ -418,12 +426,15 @@
     }
     const mode = S().ui.bindMode || "pick";
     const projects = S().projects.filter((p) => p.rooms && p.rooms.length);
-    const saveTypeDefault = d.calcDone ? "preliminary" : "profile";
+    // GC2-P0-04: default both when PM+Calc ready
+    const saveTypeDefault = d.pmDone && d.calcDone ? "both" : d.calcDone ? "preliminary" : "profile";
+    const willProfile = d.pmDone;
+    const willCalc = d.calcDone;
     return shell(
       "sales/quick",
       `
       <div class="page-head">
-        <div><h1>Куда сохранить?</h1><p class="sub">GC-P0-02: PM-only OK · pick existing OR create · без orphan.</p></div>
+        <div><h1>Куда сохранить?</h1><p class="sub">GC-P0-02 / GC2-P0-04: PM-only OK · PM+Calc сохраняет профиль и prelim · pick|create.</p></div>
       </div>
       <div class="tabs">
         <button class="tab ${mode==="pick"?"active":""}" data-action="bind-mode" data-mode="pick">Выбрать существующие</button>
@@ -432,8 +443,9 @@
       <div class="panel">
         <div class="field"><label>Тип сохранения</label>
           <select id="bind-savetype">
-            <option value="profile" ${saveTypeDefault==="profile"?"selected":""}>Акустический профиль PM${d.pmDone?"":" (нужен PM)"}</option>
-            <option value="preliminary" ${saveTypeDefault==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>Preliminary calc${d.calcDone?"":" — сначала calc"}</option>
+            <option value="profile" ${saveTypeDefault==="profile"?"selected":""} ${d.pmDone?"":"disabled"}>Только акустический профиль PM${d.pmDone?"":" (нужен PM)"}</option>
+            <option value="preliminary" ${saveTypeDefault==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>Preliminary calc${d.pmDone?" (+профиль, если есть PM)":""}${d.calcDone?"":" — сначала calc"}</option>
+            <option value="both" ${saveTypeDefault==="both"?"selected":""} ${d.pmDone && d.calcDone?"":"disabled"}>Профиль PM + preliminary calc</option>
           </select>
         </div>
         ${
@@ -451,8 +463,10 @@
                <div class="field"><label>Комната</label><input id="bind-room" value="Спальня"></div>
                <div class="field"><label>Клиент</label><input id="bind-client" value=""></div>`
         }
+        <div class="banner info" style="margin:10px 0">Будет сохранено: ${
+          willProfile ? "профиль PM" : "—"
+        }${willCalc ? " · preliminary " + money(d.amount) + " · " + MFStore.draftAreaM2(d) + " м²" : ""}. При выборе preliminary/both профиль не теряется.</div>
         <button class="btn primary" data-action="do-bind">Сохранить в комнату</button>
-        <p class="muted" style="margin-top:8px">Preview: ${d.pmDone ? "профиль PM" : "—"} ${d.calcDone ? "· " + money(d.amount) : ""}</p>
       </div>`
     );
   }
@@ -605,12 +619,25 @@
           : ""
       }
       ${
-        deal.outcome === "accepted" && deal.active
-          ? `<div class="banner ok">Accepted · сумма по ordered: ${money(deal.acceptedAmount)}
-             <div class="row" style="margin-top:8px">
-               <button class="btn" data-action="close-accepted" data-deal="${deal.dealId}">Закрыть Deal (sales/owner)</button>
-             </div></div>`
-          : ""
+        (() => {
+          if (!(deal.outcome === "accepted" && deal.active)) return "";
+          const unfinished = p.rooms.filter(
+            (r) => r.roomAssent === "ordered" && r.status !== "closed"
+          );
+          // GC2-P0-02 / A-06
+          return `<div class="banner ok">Accepted · сумма по ordered: ${money(deal.acceptedAmount)}
+             ${
+               unfinished.length
+                 ? `<p style="margin:8px 0 0">Закрытие Deal запрещено (A-06), пока не закрыт монтаж ordered:
+                    ${unfinished.map((r) => `<span class="pill warn">${esc(r.name)} · ${esc(r.status || "open")}</span>`).join(" ")}</p>
+                    <div class="row" style="margin-top:8px">
+                      <button class="btn" disabled title="Сначала закройте монтаж ordered комнат">Закрыть Deal (blocked)</button>
+                    </div>`
+                 : `<div class="row" style="margin-top:8px">
+                      <button class="btn" data-action="close-accepted" data-deal="${deal.dealId}">Закрыть Deal (все ordered closed)</button>
+                    </div>`
+             }</div>`;
+        })()
       }
       ${
         !deal.active
@@ -946,8 +973,10 @@
       </div>
       ${
         conflict
-          ? `<div class="banner warn">${esc(conflict.message)}<br>kept A ${esc(conflict.keptA)} · B ${esc(
-              conflict.keptB
+          ? `<div class="banner warn">${esc(conflict.message)}<br>current ${esc(
+              conflict.current || conflict.keptA || "—"
+            )} · incoming ${esc(conflict.incoming || "—")} · alternate ${esc(
+              conflict.alternate || conflict.keptB || "—"
             )} <button class="btn sm" data-action="clear-conflict">OK</button></div>`
           : ""
       }

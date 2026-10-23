@@ -1,11 +1,11 @@
 # Gate C — изолированные HTML-прототипы MultiFrame Партнёр
 
-**Revision:** `rev-gate-c-draft-2`  
-**Статус:** Gate C **in review** (после NOT APPROVED на `3ad2502`) · Gate B **APPROVED / frozen**  
+**Revision:** `rev-gate-c-draft-3`  
+**Статус:** Gate C **in review** (GC2 fixes after `eefc726`) · Gate B **APPROVED / frozen**  
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Ревью: [`CHATGPT_GATE_C_REVIEW_2026-10-23.md`](./CHATGPT_GATE_C_REVIEW_2026-10-23.md) · Changelog: [`CHANGELOG-draft-2.md`](./CHANGELOG-draft-2.md)
+Ревью: [`CHATGPT_GATE_C_REVIEW_2026-10-23.md`](./CHATGPT_GATE_C_REVIEW_2026-10-23.md) (draft-1) · Changelog: [`CHANGELOG-draft-3.md`](./CHANGELOG-draft-3.md) · prior [`CHANGELOG-draft-2.md`](./CHANGELOG-draft-2.md)
 
 ---
 
@@ -16,7 +16,7 @@ python3 -m http.server 8765 --directory docs/partner-ux-prototypes
 # http://localhost:8765/
 ```
 
-Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v2`** (сброс в nav).
+Или откройте [`index.html`](./index.html). Состояние: `localStorage` key **`mf_gate_c_proto_v3`** (сброс в nav).
 
 ---
 

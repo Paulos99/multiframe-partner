@@ -1,9 +1,9 @@
 /**
- * Gate C draft-2 store — demo fixtures only. NOT production proof.
- * KEY bumped to v2 after GC-P0 fixes (ChatGPT review 2026-10-23).
+ * Gate C draft-3 store — demo fixtures only. NOT production proof.
+ * KEY bumped to v3 after GC2-P0 fixes (ChatGPT re-review on eefc726).
  */
 (function (global) {
-  const KEY = "mf_gate_c_proto_v2";
+  const KEY = "mf_gate_c_proto_v3";
   const CREW_SELF = "u_denis";
   const MEASURER_SELF = "u_pavel";
 
@@ -65,26 +65,27 @@
     const quietClient = noise === "none" && (neighbors === "none" || neighbors === "unknown");
     const noiseClient = noise === "bothered" || neighbors === "above";
 
-    let currentClass = "Б";
-    let withMfClass = "А";
+    // GC2-P1-01: verbal risk/comfort levels — not normative А/Б/В classes
+    let currentRisk = "средний";
+    let withMfComfort = "осторожный ориентир комфорта";
     let narrative;
     let deltaLabel;
     if (quietClient) {
-      currentClass = "А/Б";
-      withMfClass = "А";
-      deltaLabel = "умеренный запас комфорта";
+      currentRisk = "низкий";
+      withMfComfort = "мягкий запас комфорта (иллюстрация)";
+      deltaLabel = "умеренный запас комфорта — без обещания дБ";
       narrative =
         "Клиент не жалуется на шум — потребность в ЗИ формируем мягко: под полотном можно заложить каркас на будущее и для ударного шума соседей.";
     } else if (noiseClient) {
-      currentClass = "В";
-      withMfClass = "Б";
-      deltaLabel = "заметное улучшение комфорта (ориентир, не гарантия дБ)";
+      currentRisk = "повышенный";
+      withMfComfort = "заметный ориентир комфорта (иллюстрация)";
+      deltaLabel = "ориентир улучшения комфорта — не гарантия дБ и не измерение";
       narrative =
         "Есть сигнал о шуме/соседях. MultiFrame под натяжным — аргумент снижения ударного шума. Без обещаний «−N дБ» и lab-гарантий.";
     } else {
-      currentClass = "Б";
-      withMfClass = "А/Б";
-      deltaLabel = "осторожный ориентир";
+      currentRisk = "неясный";
+      withMfComfort = "осторожный ориентир";
+      deltaLabel = "данных мало — уточнить на объекте";
       narrative =
         "Недостаточно данных о шуме — показываем сравнение «сейчас / с MultiFrame» и предлагаем уточнить на объекте или в calc.";
     }
@@ -97,9 +98,10 @@
       neighbors,
       purpose: answers.purpose || "living",
       chain: {
-        norms: "Ориентир комфорта жилья (не сертификация)",
-        current: `Сейчас · класс ${currentClass}`,
-        withMf: `С MultiFrame под полотном · класс ${withMfClass}`,
+        norms:
+          "Иллюстрация по ответам анкеты · не акустическое измерение и не нормативный класс жилья",
+        current: `Сейчас · словесный риск «${currentRisk}»`,
+        withMf: `С MultiFrame под полотном · ${withMfComfort}`,
         difference: deltaLabel,
         nextStep: quietClient
           ? "Сохранить профиль · мягко предложить ориентир calc"
@@ -108,8 +110,21 @@
       narrative,
       claimsQualified: true,
       guaranteedDb: false,
+      illustrativeOnly: true,
+      currentRisk,
+      withMfComfort,
       clientPersona: quietClient ? "quiet" : noiseClient ? "noise" : "mixed",
     };
+  }
+
+  /** GC2-P0-01: area lives on answers / pmResult, never a stale top-level default */
+  function draftAreaM2(d) {
+    if (!d) return 14;
+    const fromAnswers = Number(d.answers?.areaM2);
+    if (Number.isFinite(fromAnswers) && fromAnswers > 0) return fromAnswers;
+    const fromPm = Number(d.pmResult?.areaM2);
+    if (Number.isFinite(fromPm) && fromPm > 0) return fromPm;
+    return 14;
   }
 
   /**
@@ -252,7 +267,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-2",
+      revision: "rev-gate-c-draft-3",
       role: null,
       offline: false,
       syncState: "online",
@@ -832,8 +847,9 @@
         id: roomId,
         name: opts.roomName,
         areaM2: d.answers?.areaM2 || d.pmResult?.areaM2 || 12,
-        lengthM: Math.sqrt((d.answers?.areaM2 || 12) * 1.2),
-        widthM: Math.sqrt((d.answers?.areaM2 || 12) / 1.2),
+        lengthM: Math.sqrt(draftAreaM2(d) * 1.2),
+        widthM: Math.sqrt(draftAreaM2(d) / 1.2),
+        areaM2: draftAreaM2(d),
       });
       applySaveToRoom(r, d, saveType);
       state.projects.unshift({
@@ -875,16 +891,26 @@
   }
 
   function applySaveToRoom(r, d, saveType) {
-    if (saveType === "profile" || (d.pmDone && saveType !== "preliminary" && saveType !== "detailed")) {
+    // GC2-P0-04: PM+Calc bind keeps profile when saving preliminary (not calc-only wipe)
+    const persistProfile =
+      d.pmDone &&
+      d.pmResult &&
+      (saveType === "profile" || saveType === "preliminary" || saveType === "both");
+    if (persistProfile) {
       r.acousticProfile = {
         ...d.pmResult,
         consultationSessionId: d.consultationSessionId,
         savedAt: new Date().toISOString(),
       };
     }
-    if (saveType === "preliminary" && d.calcDone) {
+    if ((saveType === "preliminary" || saveType === "both") && d.calcDone) {
       const revisionId = uid("crev");
-      r.preliminary = { revisionId, amount: d.amount, segment: d.segment || "comfort" };
+      r.preliminary = {
+        revisionId,
+        amount: d.amount,
+        segment: d.segment || "comfort",
+        areaM2: draftAreaM2(d),
+      };
       state.calcHistory.push({
         revisionId,
         roomId: r.id,
@@ -931,7 +957,7 @@
     return { ok: true, revisionId };
   }
 
-  /** GC-P0-04 detailed with geometry + scheme + BOM */
+  /** GC-P0-04 detailed with geometry + scheme + BOM · GC2-P1-02: no overwrite before 409 */
   function saveDetailedCalc(projectId, roomId, payload) {
     const r = room(projectId, roomId);
     if (!r) return { ok: false };
@@ -957,6 +983,47 @@
       cutouts,
       savedAt: new Date().toISOString(),
     };
+    const currentRev = r.detailed?.revisionId || null;
+    const expected = payload.expectedRevision;
+    const stale =
+      payload.forceConflict ||
+      (expected != null && currentRev != null && expected !== currentRev);
+
+    // GC2-P1-02: conflict path — append history only; do NOT mutate confirmed current
+    if (stale) {
+      const other = uid("crev");
+      state.calcHistory.push({
+        revisionId: other,
+        roomId,
+        kind: "detailed",
+        amount: amount - 500,
+        at: new Date().toISOString(),
+        note: "device_B_parallel",
+      });
+      state.calcHistory.push({
+        revisionId,
+        roomId,
+        kind: "detailed",
+        amount,
+        at: new Date().toISOString(),
+        note: "incoming_rejected_overwrite",
+        schemeId: scheme.id,
+      });
+      state.ui.conflictDemo = {
+        roomId,
+        current: currentRev,
+        incoming: revisionId,
+        alternate: other,
+        keptA: currentRev,
+        keptB: other,
+        message:
+          "409 Conflict — подтверждённый current не перезаписан; обе revision в истории (append-only). Compare / retry.",
+        incomingPreview: { amount, scheme, bom, geometry: { lengthM, widthM, cutouts, areaM2: area } },
+      };
+      save();
+      return { ok: false, error: "conflict_409", revisionId, other, amount, current: currentRev };
+    }
+
     r.lengthM = lengthM;
     r.widthM = widthM;
     r.areaM2 = area;
@@ -973,26 +1040,6 @@
       at: new Date().toISOString(),
       schemeId: scheme.id,
     });
-    // demo 409 conflict: if expectedRevision stale
-    if (payload.expectedRevision && payload.expectedRevision !== "crev_vb_d" && payload.forceConflict) {
-      const other = uid("crev");
-      state.calcHistory.push({
-        revisionId: other,
-        roomId,
-        kind: "detailed",
-        amount: amount - 500,
-        at: new Date().toISOString(),
-        note: "device_B_parallel",
-      });
-      state.ui.conflictDemo = {
-        roomId,
-        keptA: revisionId,
-        keptB: other,
-        message: "409 Conflict — обе revision сохранены (append-only), silent LWW запрещён",
-      };
-      save();
-      return { ok: false, error: "conflict_409", revisionId, other, amount };
-    }
     const deal = activeDeal(projectId);
     if (deal && !deal.paused) deal.stage = "calculated";
     pushEvent("detailed_saved", { projectId, roomId, revisionId, schemeId: scheme.id });
@@ -1102,28 +1149,57 @@
   }
 
   /**
-   * GC-P0-03: accept with explicit per-room assent map.
+   * GC-P0-03 / GC2-P0-03: accept with explicit per-room assent map.
    * assentMap: { roomId: 'ordered'|'deferred'|'out_of_scope' }
+   * Validate all scoped rooms first; mutate atomically only on success.
    */
+  function scopedRoomsForDeal(dealId) {
+    const deal = state.deals.find((d) => d.dealId === dealId);
+    if (!deal) return [];
+    const p = project(deal.projectId);
+    if (!p) return [];
+    const q =
+      quotesForDeal(dealId).find((x) => x.lifecycle === "sent_confirmed") || quotesForDeal(dealId)[0];
+    return p.rooms.filter(
+      (r) => !q || (q.rooms || []).includes(r.id) || r.preliminary || r.detailed
+    );
+  }
+
   function acceptDeal(dealId, assentMap) {
     const deal = state.deals.find((d) => d.dealId === dealId);
     if (!deal || deal.paused) return { ok: false, error: "deal" };
     const p = project(deal.projectId);
     if (!assentMap || typeof assentMap !== "object") return { ok: false, error: "assent_required" };
-    const ordered = [];
-    let acceptedAmount = 0;
-    for (const r of p.rooms) {
+
+    const scoped = scopedRoomsForDeal(dealId);
+    if (!scoped.length) return { ok: false, error: "no_scoped_rooms" };
+
+    // Phase 1 — validate only (no room mutations)
+    const planned = [];
+    for (const r of scoped) {
       const a = assentMap[r.id];
-      if (!a) continue;
-      if (!["ordered", "deferred", "out_of_scope"].includes(a)) return { ok: false, error: "bad_assent" };
-      r.roomAssent = a;
-      if (a === "ordered") {
-        ordered.push(r.id);
+      if (a == null || a === "") {
+        return { ok: false, error: "assent_incomplete", roomId: r.id, roomName: r.name };
+      }
+      if (!["ordered", "deferred", "out_of_scope"].includes(a)) {
+        return { ok: false, error: "bad_assent", roomId: r.id };
+      }
+      planned.push({ room: r, assent: a });
+    }
+    const ordered = planned.filter((x) => x.assent === "ordered").map((x) => x.room.id);
+    if (!ordered.length) return { ok: false, error: "need_one_ordered" };
+
+    let acceptedAmount = 0;
+    for (const { room: r, assent } of planned) {
+      if (assent === "ordered") {
         acceptedAmount += r.detailed?.amount || r.preliminary?.amount || 0;
       }
     }
-    if (!ordered.length) return { ok: false, error: "need_one_ordered" };
 
+    // Phase 2 — atomic mutate
+    for (const { room: r, assent } of planned) {
+      r.roomAssent = assent;
+    }
     deal.outcome = "accepted";
     deal.stage = "accepted";
     deal.acceptedAmount = acceptedAmount;
@@ -1141,14 +1217,26 @@
         if (!r.installChecklist) r.installChecklist = defaultChecklist();
       }
     });
-    pushEvent("deal_accepted", { dealId, ordered, acceptedAmount, assentMap });
+    pushEvent("deal_accepted", { dealId, ordered, acceptedAmount, assentMap: { ...assentMap } });
     save();
     return { ok: true, ordered, acceptedAmount };
   }
 
+  /** GC2-P0-02 / A-06: close only when every ordered room is status=closed */
   function closeAcceptedDeal(dealId) {
     const deal = state.deals.find((d) => d.dealId === dealId);
-    if (!deal || deal.outcome !== "accepted") return { ok: false };
+    if (!deal || deal.outcome !== "accepted") return { ok: false, error: "not_accepted" };
+    const p = project(deal.projectId);
+    const unfinished = (p?.rooms || []).filter(
+      (r) => r.roomAssent === "ordered" && r.status !== "closed"
+    );
+    if (unfinished.length) {
+      return {
+        ok: false,
+        error: "install_incomplete",
+        unfinished: unfinished.map((r) => ({ id: r.id, name: r.name, status: r.status || "open" })),
+      };
+    }
     deal.active = false;
     deal.closedAt = new Date().toISOString();
     pushEvent("deal_closed", { dealId });
@@ -1471,7 +1559,9 @@
     quotesForDeal,
     pushEvent,
     computePmResult,
+    draftAreaM2,
     scoreAnnaPath,
+    scopedRoomsForDeal,
     startQuickConsultation,
     updatePmAnswers,
     runPmOnDraft,

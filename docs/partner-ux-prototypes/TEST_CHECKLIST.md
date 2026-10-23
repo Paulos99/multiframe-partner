@@ -1,14 +1,14 @@
-# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-2`
+# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-3`
 
 **Честно:** ячейки «Observed» ниже — **agent walkthrough / store smoke**, **не** human usability lab.  
 GC-P1-05: финальный Gate C OK требует незаполненный человеком прогон без подсказок. Не ставить UX PASS по зелёному smoke.
 
 | Поле | Значение |
 |------|----------|
-| Revision | `rev-gate-c-draft-2` |
+| Revision | `rev-gate-c-draft-3` |
 | Device agent | desktop Chromium + store VM |
 | Human observed | **NOT observed** |
-| Agent smoke P0 | **25/25 PASS** (см. SMOKE_TEST) |
+| Agent smoke GC2 | **19/19 PASS** (см. SMOKE_TEST) · prior draft-2 25/25 retained conceptually |
 
 Протокол §7.1: first-click · confusion · re-entry · clarity 1–5 · recovery · device · comments.
 
@@ -37,6 +37,22 @@ GC-P1-05: финальный Gate C OK требует незаполненный
 ### GC-P0-03 partial assent (extra)
 - Steps: `#/sales/project/prj_nv_volkova?tab=deal` → Принято → sheet ordered/deferred/out_of_scope → close → sequential Deal  
 - Agent: PASS · Human: NOT observed  
+
+### GC2-P0-01 — Calc area from PM answers
+- Steps: PM area **21** → calc-quick → estimate uses 21 м²  
+- Agent: PASS (store) · Human: NOT observed  
+
+### GC2-P0-02 — A-06 close blocked
+- Steps: Accept bedroom only → «Закрыть Deal» blocked until room status=closed  
+- Agent: PASS (store) · Human: NOT observed  
+
+### GC2-P0-03 — Assent no dangerous defaults
+- Steps: sheet defaults «Не выбрано»; confirm with blanks → no state change; then bedroom ordered only  
+- Agent: PASS (store) · Human: NOT observed  
+
+### GC2-P0-04 — PM+Calc bind keeps profile
+- Steps: PM → Calc → Bind preliminary/both → room has acousticProfile + preliminary  
+- Agent: PASS (store) · Human: NOT observed  
 
 ---
 

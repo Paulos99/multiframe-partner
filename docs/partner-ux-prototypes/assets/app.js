@@ -110,20 +110,18 @@
   function openAcceptSheet(dealId) {
     const host = document.getElementById("deal-sheet");
     if (!host) return;
-    const deal = MFStore.get().deals.find((d) => d.dealId === dealId);
-    const p = MFStore.project(deal.projectId);
-    const q = MFStore.quotesForDeal(dealId).find((x) => x.lifecycle === "sent_confirmed") || MFStore.quotesForDeal(dealId)[0];
-    const rooms = p.rooms.filter((r) => !q || (q.rooms || []).includes(r.id) || r.preliminary || r.detailed);
+    const rooms = MFStore.scopedRoomsForDeal(dealId);
     host.innerHTML = `
       <div class="modal-back" data-action="close-sheet">
         <div class="modal" style="width:min(560px,100%)" onclick="event.stopPropagation()">
           <h3>Принято — согласие по комнатам</h3>
-          <p class="muted">GC-P0-03: явно ordered / deferred / out_of_scope. ≥1 ordered. Сумма = только ordered.</p>
+          <p class="muted">GC2-P0-03: по умолчанию «Не выбрано». Нужен явный выбор по каждой комнате в scope. ≥1 ordered. Без опасных дефолтов ordered.</p>
           ${rooms
             .map((r) => {
               const amt = r.detailed?.amount || r.preliminary?.amount || 0;
               return `<div class="field"><label>${r.name} · ${amt} ₽</label>
-                <select data-assent-room="${r.id}">
+                <select data-assent-room="${r.id}" required>
+                  <option value="" selected>Не выбрано</option>
                   <option value="ordered">ordered</option>
                   <option value="deferred">deferred</option>
                   <option value="out_of_scope">out_of_scope</option>
@@ -416,7 +414,13 @@
       });
       const res = MFStore.acceptDeal(dealId, map);
       if (!res.ok) {
-        toast("Не принято", res.error === "need_one_ordered" ? "Нужна ≥1 ordered" : res.error, "danger");
+        const msg =
+          res.error === "need_one_ordered"
+            ? "Нужна ≥1 ordered"
+            : res.error === "assent_incomplete"
+            ? `Выберите согласие: ${res.roomName || res.roomId}`
+            : res.error;
+        toast("Не принято · state не изменён", msg, "danger");
         return;
       }
       toast("Accepted", `ordered ${res.ordered.length} · ${res.acceptedAmount} ₽`, "ok");
@@ -424,7 +428,13 @@
       return;
     }
     if (action === "close-accepted") {
-      MFStore.closeAcceptedDeal(el.getAttribute("data-deal"));
+      const res = MFStore.closeAcceptedDeal(el.getAttribute("data-deal"));
+      if (!res.ok) {
+        const names = (res.unfinished || []).map((u) => u.name).join(", ");
+        toast("A-06: закрытие запрещено", names ? `Не закрыт монтаж: ${names}` : res.error, "danger");
+        render();
+        return;
+      }
       toast("Deal закрыта", "Можно sequential", "ok");
       render();
       return;
@@ -579,17 +589,20 @@
         const inp = document.querySelector(`[data-bom-qty="${i}"]`);
         if (inp) b.qty = Number(inp.value);
       });
+      const forceConflict = !!document.getElementById("det-409")?.checked;
+      const currentRev = MFStore.room(pid, rid)?.detailed?.revisionId || null;
       const res = MFStore.saveDetailedCalc(pid, rid, {
         lengthM: document.getElementById("det-L").value,
         widthM: document.getElementById("det-W").value,
         cutouts: document.getElementById("det-cut").value,
         schemeLabel: document.getElementById("det-sch").value,
         bom: bomMeta,
-        forceConflict: document.getElementById("det-409")?.checked,
-        expectedRevision: "stale_other_device",
+        forceConflict,
+        // GC2-P1-02: optimistic expected = current; stale only when demo checkbox on
+        expectedRevision: forceConflict ? "stale_other_device" : currentRev,
       });
       if (!res.ok && res.error === "conflict_409") {
-        toast("409 Conflict", "Обе revision в истории", "warn");
+        toast("409 Conflict", "current не перезаписан · обе revision в истории", "warn");
         render();
         return;
       }
