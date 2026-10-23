@@ -619,58 +619,102 @@
       <div class="toast-host" id="toasts"></div>`;
   }
 
-  /* ---------- SALES ---------- */
+  const BRAND = "./assets/brand";
+
+  function salesBaselineChrome(navId, title, lead, body, actionsHtml) {
+    const openDeals = S().deals.filter((d) => d.active && !d.paused).length;
+    const projectCount = S().projects.filter((p) => !p.emptyDemo).length;
+    const items = [
+      { id: "deals", label: `Сделки · ${openDeals || projectCount}`, href: "#/sales/home", short: "Сделки" },
+      { id: "tools", label: "Инструменты", href: "#/tools/hub", short: "Инстр." },
+      { id: "projects", label: "Проекты", href: "#/sales/projects", short: "Проекты" },
+      { id: "help", label: "Обучение", href: "#/sales/academy-hub", short: "Обучение" },
+    ];
+    const navLinks = items
+      .map((n) => `<a href="${n.href}" class="${navId === n.id ? "is-active" : ""}">${esc(n.label)}</a>`)
+      .join("");
+    const bottomLinks = items
+      .map(
+        (n) =>
+          `<a href="${n.href}" class="${navId === n.id ? "is-active" : ""}">${esc(n.short)}</a>`
+      )
+      .join("");
+    return `
+      <div class="mf-cab-frame">
+        <aside class="mf-cab-side" aria-label="Меню">
+          <div class="mf-cab-brand">
+            <img class="stp" src="${BRAND}/logo-stp.png" alt="StP" width="32" height="32" />
+            <img class="mf" src="${BRAND}/logo-multiframe.png" alt="MultiFRAME" height="20" />
+          </div>
+          <nav class="mf-cab-nav">${navLinks}</nav>
+        </aside>
+        <div class="mf-cab-main">
+          <header class="mf-cab-topbar">
+            <div class="mf-mobile-brand mf-cab-brand">
+              <img class="stp" src="${BRAND}/logo-stp.png" alt="StP" width="28" height="28" />
+              <img class="mf" src="${BRAND}/logo-multiframe.png" alt="MultiFRAME" height="16" />
+            </div>
+            <div style="min-width:0;flex:1 1 220px">
+              <h1>${esc(title)}</h1>
+              ${lead ? `<p class="mf-cab-lead">${lead}</p>` : ""}
+            </div>
+            <div class="mf-cab-actions">${actionsHtml || ""}</div>
+          </header>
+          <div class="mf-cab-work">${body}</div>
+        </div>
+        <nav class="mf-cab-bottom" aria-label="Навигация">${bottomLinks}</nav>
+      </div>
+      <div class="toast-host" id="toasts"></div>`;
+  }
+
+  /* ---------- SALES (visual baseline — production cabinet patterns) ---------- */
   function salesHome() {
     const st = S();
     const paused = st.deals.filter((d) => d.outcome === "early_paused");
     const active = st.deals.filter((d) => d.active && !d.paused);
-    return shell(
-      "sales/home",
-      `
-      <div class="page-head">
-        <div>
-          <h1>Сегодня</h1>
-          <p class="sub">Что сделать по сделкам сегодня. Один фокус — без кучи панелей.</p>
-        </div>
-        <div class="page-actions">
-          <a class="btn" href="#/sales/inquiry">Новый проект</a>
-          <a class="btn primary" href="#/sales/quick">Быстрый расчёт</a>
-        </div>
-      </div>
-      <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="inbox">Входящие</button>
-        <button class="tab" data-action="goto" data-href="#/sales/projects">Все проекты</button>
-      </div>
-      <div class="panel cab-queue">
-        <h2>Требуют действия</h2>
-        <ul class="list">
+    const role = MFStore.ROLES[st.role];
+    const title = role.org ? `${role.label} · ${role.org}` : role.label;
+    const actions = `
+      <a class="mf-btn mf-btn--ghost" href="#/sales/inquiry">Новый проект</a>
+      <a class="mf-btn mf-btn--primary" href="#/sales/quick">Быстрый расчёт</a>`;
+    const workList =
+      active.length || paused.length
+        ? `<ul class="mf-action-list">
           ${active
             .map((d) => {
               const p = MFStore.project(d.projectId);
-              return `<li class="list-item" data-action="goto" data-href="#/sales/project/${d.projectId}?tab=deal">
-                <div>
-                  <div class="title">${esc(p.name)}</div>
-                  <div class="meta">Сделка ${esc(d.dealId)} · этап «${esc(stageLabel(d.stage))}»</div>
-                </div>
-                <div class="aside">Открыть сделку</div>
-              </li>`;
+              return `<li><a href="#/sales/project/${d.projectId}?tab=deal">
+                <strong>${esc(p.name)}</strong>
+                <span class="mf-meta">Сделка ${esc(d.dealId)} · этап «${esc(stageLabel(d.stage))}»</span>
+              </a></li>`;
             })
             .join("")}
           ${paused
             .map((d) => {
               const p = MFStore.project(d.projectId);
-              return `<li class="list-item" data-action="goto" data-href="#/sales/project/${d.projectId}?tab=deal">
-                <div>
-                  <div class="title">⏸ Пауза · ${esc(p.name)}</div>
-                  <div class="meta">${esc(d.lossReason)} · возобновить на этапе «${esc(stageLabel(d.stageAtOutcome))}»</div>
-                </div>
-                <div class="aside"><span class="pill warn">На паузе</span></div>
-              </li>`;
+              return `<li><a href="#/sales/project/${d.projectId}?tab=deal">
+                <strong>Пауза · ${esc(p.name)}</strong>
+                <span class="mf-meta">${esc(d.lossReason)} · возобновить на «${esc(stageLabel(d.stageAtOutcome))}»</span>
+              </a></li>`;
             })
             .join("")}
-        </ul>
-      </div>`
-    );
+        </ul>`
+        : `<p class="mf-lead">Нет срочных действий — можно начать новый расчёт или консультацию.</p>`;
+    const body = `
+      <section class="mf-hint-card" aria-label="Сегодня в работе">
+        <h2>Сегодня в работе</h2>
+        ${workList}
+      </section>
+      <section class="mf-hint-card" aria-label="С чего начать">
+        <h2>С чего начать</h2>
+        <p class="mf-lead">Три равноправных входа — не обязательно с жалобы на шум.</p>
+        <div class="mf-entry-grid">
+          <a class="mf-entry-btn" href="#/sales/quick"><strong>Новый клиент / консультация</strong><span>Короткая карточка и вопросы о помещении.</span></a>
+          <a class="mf-entry-btn" href="#/sales/tool/calc/prj_nv_soroka/room_sor_living"><strong>Быстрый расчёт</strong><span>Калькулятор, затем привязка к проекту.</span></a>
+          <a class="mf-entry-btn" href="#/sales/tool/pm/prj_nv_soroka/room_sor_living"><strong>Оценить акустический комфорт</strong><span>Проблемомер для диагностики.</span></a>
+        </div>
+      </section>`;
+    return salesBaselineChrome("deals", title, "Сегодня в работе · сделки и КП", body, actions);
   }
 
   function salesInquiry() {
@@ -1082,17 +1126,17 @@
     const empty = !roomHasStartedWork(r);
     const calcBlock = empty
       ? `
-      <div class="panel empty-room-start">
+      <section class="mf-hint-card">
         <h2>В комнате пока нет расчёта</h2>
-        <p class="sub">Сохранены только название и площадь (${r.areaM2} м²) из карточки объекта. Здесь появятся ${LABEL.preliminary.toLowerCase()}, ${LABEL.detailed.toLowerCase()} и ${LABEL.assent.toLowerCase()} после инструментов и сохранения в проект.</p>
-        <div class="row" style="margin-top:16px">
-          <a class="btn primary" href="#/tools/calc">Начать ${LABEL.preliminary.toLowerCase()}</a>
-          <a class="btn ghost" href="#/tools/pm">${LABEL.pmProfile}</a>
+        <p class="mf-lead">Сохранены название и площадь (${r.areaM2} м²). После инструментов и сохранения в проект появятся ${LABEL.preliminary.toLowerCase()}, ${LABEL.detailed.toLowerCase()} и ${LABEL.assent.toLowerCase()}.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+          <a class="mf-btn mf-btn--primary" href="#/sales/tool/calc/${p.id}/${r.id}">Начать ${LABEL.preliminary.toLowerCase()}</a>
+          <a class="mf-btn" href="#/sales/tool/pm/${p.id}/${r.id}">${LABEL.pmProfile}</a>
         </div>
-      </div>`
+      </section>`
       : `
-      <div class="grid-2">
-        <div class="panel">
+      <div class="mf-grid-2">
+        <div class="mf-card">
           <h3>Расчёты</h3>
           <p>${LABEL.preliminary}: <strong>${
             r.preliminary
@@ -1105,57 +1149,64 @@
           }</strong></p>
           <p>${LABEL.detailed}: <strong>${r.detailed ? money(r.detailed.amount) : "—"}</strong></p>
         </div>
-        <div class="panel">
+        <div class="mf-card">
           <h3>Готовность</h3>
           <p>${LABEL.assent}: <strong>${esc(roomAssentLabel(r.roomAssent))}</strong></p>
           <p>${LABEL.techReady}: <strong>${r.techReady ? "да" : "нет"}</strong></p>
         </div>
       </div>`;
-    return shell(
-      "sales/projects",
-      `
-      <div class="page-head">
-        <div>
-          <h1>${esc(r.name)}</h1>
-          <p class="sub">${esc(p.name)} · ${r.areaM2} м²${
-            r.preliminary?.areaM2 != null && Math.abs(r.preliminary.areaM2 - r.areaM2) > 0.05
-              ? ` · предварительно ${r.preliminary.areaM2} м²`
-              : ""
-          }</p>
-        </div>
-        <div class="page-actions">
-          <a class="btn ghost" href="#/sales/project/${p.id}">К проекту</a>
-          ${
-            empty
-              ? ""
-              : `<a class="btn" href="#/tools/calc">${LABEL.preliminary}</a>`
-          }
-          <a class="btn primary" href="#/sales/project/${p.id}?tab=deal">К сделке</a>
-        </div>
-      </div>
-      ${calcBlock}
-      <div class="panel" style="margin-top:12px">
-        <h3>${LABEL.pmProfile} ${ap ? `<span class="pill ok">сохранён</span>` : `<span class="pill">нет</span>`}</h3>
+    const actions = `
+      <a class="mf-btn mf-btn--ghost" href="#/sales/project/${p.id}">К проекту</a>
+      ${empty ? "" : `<a class="mf-btn" href="#/sales/tool/calc/${p.id}/${r.id}">${LABEL.preliminary}</a>`}
+      <a class="mf-btn mf-btn--primary" href="#/sales/project/${p.id}?tab=deal">К сделке</a>`;
+    const lead = `${esc(p.name)} · ${r.areaM2} м²${
+      r.preliminary?.areaM2 != null && Math.abs(r.preliminary.areaM2 - r.areaM2) > 0.05
+        ? ` · предварительно ${r.preliminary.areaM2} м²`
+        : ""
+    }`;
+    const body = `${calcBlock}
+      <div class="mf-card">
+        <h3>${LABEL.pmProfile} ${ap ? "· сохранён" : "· нет"}</h3>
         ${
           ap
-            ? `<p class="muted">persona «${esc(ap.clientPersona || "—")}» · риск «${esc(
+            ? `<p class="mf-lead">Тип клиента «${esc(ap.clientPersona || "—")}» · риск «${esc(
                 ap.currentRisk || "—"
-              )}» · ${ap.areaM2 ?? "—"} м² · ${esc(ap.savedAt || "")}</p>
+              )}» · ${ap.areaM2 ?? "—"} м²</p>
                <p>${esc(ap.narrative || "")}</p>
                <details open>
                  <summary>Открыть результат (без нового опроса)</summary>
-                 <ol class="list" style="margin-top:8px">
-                   <li class="list-item"><div class="meta">${esc(ap.chain?.norms || "")}</div></li>
-                   <li class="list-item"><div class="meta">${esc(ap.chain?.current || "")}</div></li>
-                   <li class="list-item"><div class="meta">${esc(ap.chain?.withMf || "")}</div></li>
-                   <li class="list-item"><div class="meta">${esc(ap.chain?.difference || "")}</div></li>
-                   <li class="list-item"><div class="meta">${esc(ap.chain?.nextStep || "")}</div></li>
+                 <ol class="mf-action-list" style="margin-top:8px">
+                   <li><span class="mf-meta">${esc(ap.chain?.norms || "")}</span></li>
+                   <li><span class="mf-meta">${esc(ap.chain?.current || "")}</span></li>
+                   <li><span class="mf-meta">${esc(ap.chain?.withMf || "")}</span></li>
+                   <li><span class="mf-meta">${esc(ap.chain?.difference || "")}</span></li>
+                   <li><span class="mf-meta">${esc(ap.chain?.nextStep || "")}</span></li>
                  </ol>
                </details>`
-            : `<p class="muted">Профиль ещё не сохраняли в эту комнату.</p>`
+            : `<p class="mf-lead">Профиль ещё не сохраняли в эту комнату.</p>`
         }
-      </div>`
-    );
+      </div>`;
+    return salesBaselineChrome("projects", r.name, lead, body, actions);
+  }
+
+  function salesRoomTool(projectId, roomId, tool) {
+    const p = MFStore.project(projectId);
+    const r = MFStore.room(projectId, roomId);
+    if (!p || !r) return salesBaselineChrome("projects", "Комната", "", `<p>Не найдена</p>`, "");
+    const isPm = tool === "pm";
+    const src = isPm ? pmToolIframeSrc() : calcToolIframeSrc();
+    const label = isPm ? "Проблемомер" : "Калькулятор";
+    MFStore.get().ui.salesToolContext = { projectId, roomId };
+    return `
+      <div class="mf-cab mf-cab--tool">
+        <header class="mf-cab-toolbar">
+          <a class="mf-back" href="#/sales/room/${p.id}/${r.id}">← ${esc(r.name)}</a>
+          <span>${label}</span>
+          <a class="mf-back" style="margin-left:auto;font-weight:600" href="#/sales/project/${p.id}">Проект</a>
+        </header>
+        <iframe class="mf-tool-frame" title="${esc(label)}" src="${esc(src)}" allow="clipboard-write"></iframe>
+      </div>
+      <div class="toast-host" id="toasts"></div>`;
   }
 
   function salesCalc(projectId, roomId, kind) {
@@ -2016,6 +2067,7 @@
     salesProjects,
     salesProject,
     salesRoom,
+    salesRoomTool,
     salesCalc,
     salesAnalytics,
     salesAcademy,

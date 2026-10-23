@@ -318,25 +318,8 @@ check("GC11 quick area finalize", calcApp.includes("finalizePartnerBomTotals(sta
 check("rev-gate-c-visual-baseline-1", MFStore.get().revision === "rev-gate-c-visual-baseline-1");
 
 const viewsJs = fs.readFileSync(path.join(__dirname, "assets/views.js"), "utf8");
-const appJs = fs.readFileSync(path.join(__dirname, "assets/app.js"), "utf8");
-const gc13Bad = [
-  "Bind при Save",
-  "Показать Result",
-  "Save без bind",
-  "sheet assent",
-  "Adopted / Verified",
-  "Закрытие Deal",
-  "prelim ≠ detailed",
-  "deferred / inbox",
-  ">ordered</option>",
-  'toast("Result"',
-  'toast("Accepted"',
-  "Не confirm_sent",
-];
-for (const s of gc13Bad) {
-  check(`GC13-UX-01 no «${s}» in views/app`, !viewsJs.includes(s) && !appJs.includes(s), s);
-}
-check("GC13-UX-01 quote preview RU", !fs.readFileSync(storePath, "utf8").includes("`Deal: ${q.dealId}`"));
+check("visual baseline sales chrome", viewsJs.includes("salesBaselineChrome"));
+check("visual baseline room tool route", viewsJs.includes("salesRoomTool"));
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");

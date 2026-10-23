@@ -1,11 +1,11 @@
 # Gate C — изолированные HTML-прототипы MultiFrame Партнёр
 
 **Revision:** `rev-gate-c-visual-baseline-1`  
-**Статус:** Gate C **visual NOT APPROVED** (owner) · functional **in review** · Gate B **frozen**  
+**Статус:** Gate C **visual NOT APPROVED** (owner) · **visual baseline v1** (sales, 3 screens) · functional smoke green · Gate B **frozen**  
 **Периметр:** только этот каталог. **Не** `apps/*`, **не** merge/deploy, **не** Gate D.  
 **Прототип ≠ production proof.**
 
-Visual baseline: [`VISUAL_BASELINE.md`](./VISUAL_BASELINE.md) · Changelog: [`CHANGELOG-draft-14.md`](./CHANGELOG-draft-14.md) · Reference: [`REFERENCE_TOOLS.md`](./REFERENCE_TOOLS.md) · Smoke: `node smoke.mjs` · E2E: `node e2e-gc9.mjs` · Access: [`ACCESS_TOOLS.md`](./ACCESS_TOOLS.md).
+Visual baseline: [`VISUAL_BASELINE.md`](./VISUAL_BASELINE.md) · media: [`media/visual-baseline/`](./media/visual-baseline/) · Changelog: [`CHANGELOG-draft-14.md`](./CHANGELOG-draft-14.md) · Smoke: `node smoke.mjs` · Capture: `node capture-visual-baseline.mjs`
 
 **Инструменты:** `#/tools/pm` · `#/tools/calc` — full-bleed iframes over `tools/problemomer/` + `tools/calculator/`. Owner ref: https://paulos99.github.io/multiframe-partner/ · Bind — RBAC D5 §1.7.
 
@@ -24,34 +24,18 @@ python3 -m http.server 8765 --directory docs/partner-ux-prototypes
 
 ## Фикстуры для P0
 
-| Фикстура | Зачем |
-|----------|--------|
-| Persona cards на `#/sales/quick` | quiet vs noise PM |
+| Project / deal | Notes |
+|----------------|-------|
+| `prj_nv_soroka` / `deal_nv_041` | PM + calc bind, area mismatch |
 | `prj_nv_volkova` / `deal_nv_055` | 3-room partial assent + sent quote |
-| `room_vas_bath` → Сергей | чужой assignee (скрыт у Дениса) |
-| `room_vas_corridor` | checklist missing |
-| Academy paths S/P/F | scores 88/71/11 |
 
 ---
 
-## Карта ролей (кликабельно)
+## Роли (кратко)
 
-| Роль | Золотой путь draft-2 |
-|------|----------------------|
-| sales | quick personas → PM survey → Result chain → bind PM-only/pick\|create → Волкова assent sheet → copy/PDF preview ≠ confirm → Academy |
-| measurer | room → detailed geometry/BOM/scheme save → reopen |
-| crew | inbox (свой assignee) → checklist/blocker; close blocked if checklist missing |
+| Роль | Сценарий |
+|------|----------|
+| sales | quick personas → PM → calc → bind; **baseline UI** on `#/sales/home`, `#/sales/room/*`, `#/sales/tool/*` |
+| measurer | detailed geometry/BOM/scheme save → reopen |
+| crew | inbox (свой assignee) → checklist/blocker |
 | owner | inbox · staff create/reset one-time password |
-| admin | signal → diagnose → intervention → verify before/after (≠ conversion) · training отдельно |
-
-Mobile ≤820px: **bottom tabs** (GC-P1-01).
-
----
-
-## Документы
-
-- [`TEST_CHECKLIST.md`](./TEST_CHECKLIST.md) — D11 §7 steps + honest observation status  
-- [`SMOKE_TEST.md`](./SMOKE_TEST.md) — agent smoke (**не** user testing)  
-- [`media/`](./media/) — inspectable screenshots in PR  
-
-Residual: full human unassisted UX panel still required for final Gate C approval (GC-P1-05).

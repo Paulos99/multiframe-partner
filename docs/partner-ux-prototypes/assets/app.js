@@ -102,7 +102,7 @@
         location.hash = "#/login";
         return;
       } else {
-        const [zone, screen, a, b] = parts;
+        const [zone, screen, a, b, c] = parts;
         if (zone === "tools") {
           if (!requireStaff()) return;
           if (screen === "hub") html = MFViews.toolsHub();
@@ -121,6 +121,7 @@
           else if (screen === "projects") html = MFViews.salesProjects();
           else if (screen === "project") html = MFViews.salesProject(a, params.tab);
           else if (screen === "room") html = MFViews.salesRoom(a, b);
+          else if (screen === "tool") html = MFViews.salesRoomTool(b, c, a);
           else if (screen === "calc") html = MFViews.salesCalc(a, b, params.kind);
           else if (screen === "analytics") html = MFViews.salesAnalytics();
           else if (screen === "academy-hub") html = MFViews.salesAcademyHub();
@@ -162,6 +163,12 @@
       html = MFViews.errorView(e.message || "ошибка отображения");
       preserveFrame = null;
     }
+
+    const baseline =
+      st.role === "sales" &&
+      parts[0] === "sales" &&
+      (parts[1] === "home" || parts[1] === "room" || parts[1] === "tool");
+    document.body.classList.toggle("mf-baseline", !!baseline);
 
     root().innerHTML = html;
     if (preserveFrame && preserveTool) {

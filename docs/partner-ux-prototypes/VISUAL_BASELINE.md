@@ -1,54 +1,38 @@
 # Gate C — Visual baseline (owner feedback 2026-10-23)
 
-**Status:** **VISUAL NOT APPROVED** · functional prototype (draft-13/14) remains valid for logic/smoke only.  
-**Revision:** `rev-gate-c-visual-baseline-1` · **no** Gate C UX acceptance · **no** Gate D.
+**Status:** **VISUAL NOT APPROVED** · functional invariants (GC9–GC11, bind) unchanged · **no** Gate D.  
+**Revision:** `rev-gate-c-visual-baseline-1`  
+Owner rejected the parallel HTML UI ([PR #78 comment](https://github.com/Paulos99/multiframe-partner/pull/78#issuecomment-6368191763)). This slice matches **live** cabinet patterns before wider rollout.
 
-Owner rejected the parallel HTML UI system (primitive cards, ①②③ nav, separate chrome). This document starts **VISUAL BASELINE FIRST** per PR #78.
+## Kept
 
-## Step 0 — Inventory (production → prototype)
+- Store/smoke/e2e behavior; tool iframes unchanged.
+- Other roles: legacy `proto.css` shell (not reskinned).
 
-| Production source (`apps/web`) | What it defines | Gate C before | Baseline v1 (`visual-baseline-1`) |
-|--------------------------------|-----------------|---------------|-----------------------------------|
-| `src/styles/tokens.css` `--cab-*` | Palette, radii, shadows, title/kpi scale | Ad-hoc `--bg0`, `--radius: 12px` | `assets/cabinet-tokens.css` mirror + alias in `proto.css` |
-| `app-shell/CabinetChrome.module.css` | 260px grid, radial page bg, sticky topbar | Stacked header + 220px nav | `.cab-frame`, `.cab-topbar`, `.cab-work` |
-| `app-shell/Sidebar.module.css` | Logo row, 44px nav, **filled green active** | Inset accent bar, text-only brand | StP + MultiFrame PNGs, `.nav.desktop-nav a.active` |
-| `partner/Projects.module.css` | XL card radius, 44px buttons, caption uppercase | 12px panels, 8px buttons | `--cab-radius-xl` panels, `min-height: 44px` buttons |
-| `partner/CabinetBrand.module.css` | Logo filters on light sidebar | «MultiFrame» text only | `logo-stp.png` + `logo-multiframe.png` |
-| Mobile ≤640px | Bottom tab bar, no ①②③ | Unstyled `.bottom-nav` | Fixed bottom bar, short labels |
+## Changed (sales only)
 
-**Preserve without redesign:** brand green `#01644f`, logo assets, sidebar width 260px, card elevation, touch 44px, queue-not-dashboard for «Сегодня».
+| Screen | Route |
+|--------|--------|
+| Сегодня | `#/sales/home` |
+| Комната пустая / заполненная | `#/sales/room/prj_nv_soroka/room_sor_living` · `room_sor_bedroom` |
+| Проблемомер / калькулятор + назад | `#/sales/tool/{pm\|calc}/{projectId}/{roomId}` |
 
-**Explicitly not claimed:** pixel-perfect match to production React components; full 5-role reskin; D11 §7 human pass.
+Tokens copied from `apps/web/src/styles/tokens.css` → `assets/partner-tokens.css`; layout → `assets/partner-baseline.css` (260px sidebar, logos, hint cards, 44px targets). **apps not edited.**
 
-## Step 1 — Scope (2–3 screens only)
+## Evidence
 
-| # | Route | Fixture | Purpose |
-|---|--------|---------|---------|
-| 1 | `#/sales/home` | login `sales` | Personal queue «Сегодня» |
-| 2 | `#/sales/room/prj_nv_soroka/room_sor_living` | empty room | CTA + tools path |
-| 3 | `#/sales/room/prj_nv_soroka/room_sor_bedroom` | prelim saved | Filled room card |
-| 4 | `#/tools/hub` | any role | PM/Calc entry (organic back via chrome) |
+Production reference: https://paulos99.github.io/multiframe-partner/?demo=1 (sales demo login).
 
-## Step 2 — Evidence in PR
+| File | Description |
+|------|-------------|
+| `original-sales-home-{1440,390}.png` | Live cabinet |
+| `prototype-sales-home-{1440,390}.png` | Gate C baseline |
+| `prototype-room-{empty,filled}-{1440,390}.png` | Room states |
+| `prototype-tool-calc-{1440,390}.png` | Calc entry + back bar |
+| `compare-*` | Side-by-side original (left) → prototype (right) |
 
-Screenshots in `media/visual-baseline-1-*` (desktop **1440×900**, mobile **390×844**):
+Regenerate: `node capture-visual-baseline.mjs` (also copies to agent store `media/visual-baseline/`).
 
-- `visual-baseline-1-sales-home-{desktop,mobile}.png`
-- `visual-baseline-1-room-empty-{desktop,mobile}.png`
-- `visual-baseline-1-room-filled-{desktop,mobile}.png`
+## Approval gate
 
-**Production reference** (for owner side-by-side): live partner UI at https://paulos99.github.io/multiframe-partner/ (same tokens as `apps/web`). Capture login/projects from that deployment when comparing; prototype does not modify `apps/*`.
-
-Regenerate:
-
-```bash
-cd docs/partner-ux-prototypes && node capture-visual-baseline.mjs
-```
-
-## Step 3 — Approval gate
-
-Owner approves **this baseline** before reskinning admin/crew/measurer clusters. Smoke/e2e green ≠ visual OK.
-
-## Step 4 — After visual OK
-
-Roll cabinet styles across roles; keep Gate A/B store invariants unchanged.
+Owner signs off this baseline before reskinning other roles. Smoke green ≠ visual OK.
