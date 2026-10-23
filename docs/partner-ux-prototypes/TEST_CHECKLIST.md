@@ -1,14 +1,14 @@
-# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-5`
+# Gate C — TEST_CHECKLIST (D11 §7) · `rev-gate-c-draft-7`
 
 **Честно:** ячейки «Observed» ниже — **agent walkthrough / store smoke**, **не** human usability lab.  
 GC-P1-05: финальный Gate C OK требует незаполненный человеком прогон без подсказок. Не ставить UX PASS по зелёному smoke.
 
 | Поле | Значение |
 |------|----------|
-| Revision | `rev-gate-c-draft-5` |
+| Revision | `rev-gate-c-draft-7` |
 | Device agent | desktop Chromium + store VM |
 | Human observed | **NOT observed** |
-| Agent smoke | **26/26 PASS** (`node smoke.mjs`) |
+| Agent smoke | **36/36 PASS** (`node smoke.mjs`) |
 
 Протокол §7.1: first-click · confusion · re-entry · clarity 1–5 · recovery · device · comments.
 
@@ -81,6 +81,14 @@ GC-P1-05: финальный Gate C OK требует незаполненный
 ### Bind preview follows select
 - Steps: PM+Calc bind → change saveType to profile-only → banner text updates  
 - Agent: wired (`bind-savetype-change`) · Human: NOT observed  
+
+### GC6-P0-01 — crew/admin cannot write projects
+- Steps: crew calc → bind → personal only; Сорокина area/prelim unchanged; admin create forbidden  
+- Agent: PASS (`smoke.mjs`) · Human: NOT observed  
+
+### GC6-P0-02 — saveType keeps room selection
+- Steps: pick Гостиная → switch both↔profile → Save → living profile; bedroom untouched  
+- Agent: PASS · Human: NOT observed  
 
 ---
 

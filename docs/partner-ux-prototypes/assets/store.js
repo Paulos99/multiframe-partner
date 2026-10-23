@@ -1,9 +1,9 @@
 /**
- * Gate C draft-5 store — demo fixtures only. NOT production proof.
- * KEY bumped to v5: shared tools access + 409 retry fix (owner clarification).
+ * Gate C draft-7 store — demo fixtures only. NOT production proof.
+ * KEY bumped to v6: GC6 bind RBAC + bind form persistence.
  */
 (function (global) {
-  const KEY = "mf_gate_c_proto_v5";
+  const KEY = "mf_gate_c_proto_v6";
   const CREW_SELF = "u_denis";
   const MEASURER_SELF = "u_pavel";
 
@@ -276,7 +276,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-5",
+      revision: "rev-gate-c-draft-7",
       role: null,
       offline: false,
       syncState: "online",
@@ -284,6 +284,7 @@
       consultationSessionId: null,
       sessionDraft: null,
       pendingConflicts: {},
+      personalResults: [],
       ui: {
         projectTab: "rooms",
         dealSheet: null,
@@ -303,6 +304,8 @@
         oneTimeCred: null,
         bindAreaPrompt: null,
         bindSaveType: null,
+        bindPickPair: null,
+        bindCreateFields: null,
       },
       org: {
         id: "org_neboline",
@@ -873,11 +876,53 @@
     save();
   }
 
-  /** GC-P0-02: PM-only OR calc may bind; pick existing OR create */
+  /** D5 §1.7: crew/admin cannot CRUD org projects; tools still open */
+  function canWriteProjects(role) {
+    return role === "sales" || role === "owner" || role === "measurer";
+  }
+
+  function canCreateProjects(role) {
+    return role === "sales" || role === "owner" || role === "measurer";
+  }
+
+  /** Personal tool result — no Project/Room/Deal mutation (crew/admin) */
+  function savePersonalResult() {
+    const d = state.sessionDraft;
+    if (!d) return { ok: false, error: "no_draft" };
+    if (!d.pmDone && !d.calcDone) return { ok: false, error: "need_result" };
+    const entry = {
+      id: uid("pres"),
+      role: state.role,
+      at: new Date().toISOString(),
+      consultationSessionId: d.consultationSessionId,
+      pmDone: !!d.pmDone,
+      pmResult: d.pmDone ? d.pmResult : null,
+      calcDone: !!d.calcDone,
+      amount: d.amount,
+      areaM2: draftAreaM2(d),
+      segment: d.segment,
+    };
+    state.personalResults = state.personalResults || [];
+    state.personalResults.unshift(entry);
+    d.personalSaved = true;
+    d.personalResultId = entry.id;
+    pushEvent("personal_tool_saved", {
+      role: state.role,
+      consultationSessionId: d.consultationSessionId,
+      personalResultId: entry.id,
+    });
+    save();
+    return { ok: true, personal: true, id: entry.id };
+  }
+
+  /** GC-P0-02 / GC6-P0-01: PM-only OR calc may bind; RBAC on write */
   function bindDraft(opts) {
     const d = state.sessionDraft;
     if (!d) return { ok: false, error: "no_draft" };
     if (!d.pmDone && !d.calcDone) return { ok: false, error: "need_result" };
+    if (!canWriteProjects(state.role)) {
+      return { ok: false, error: "forbidden_role", role: state.role };
+    }
     if (state.offline) {
       state.outbox.push({ id: uid("ob"), type: "bind", draftId: d.consultationSessionId, status: "pending" });
       save();
@@ -944,6 +989,9 @@
       if (deal && d.calcDone && !deal.paused) deal.stage = "calculated";
     } else {
       // create — room area = consultation area
+      if (!canCreateProjects(state.role)) {
+        return { ok: false, error: "forbidden_create", role: state.role };
+      }
       if (!opts.projectName || !opts.roomName) return { ok: false, error: "names_required" };
       projectId = uid("prj");
       roomId = uid("room");
@@ -1828,6 +1876,9 @@
     startQuickConsultation,
     ensureCalcDraft,
     ensurePmDraft,
+    canWriteProjects,
+    canCreateProjects,
+    savePersonalResult,
     updatePmAnswers,
     runPmOnDraft,
     markMultiframeOffered,

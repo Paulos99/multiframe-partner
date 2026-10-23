@@ -204,6 +204,25 @@
     document.querySelectorAll("select[data-action]").forEach((el) => {
       el.addEventListener("change", onAction);
     });
+    document.querySelectorAll("input[data-action='bind-create-change']").forEach((el) => {
+      el.addEventListener("change", onAction);
+      el.addEventListener("blur", onAction);
+    });
+  }
+
+  function persistBindFormFromDom() {
+    const ui = MFStore.get().ui;
+    const pair = document.getElementById("bind-pair")?.value;
+    if (pair) ui.bindPickPair = pair;
+    const proj = document.getElementById("bind-proj");
+    if (proj) {
+      ui.bindCreateFields = {
+        projectName: proj.value,
+        roomName: document.getElementById("bind-room")?.value || "",
+        client: document.getElementById("bind-client")?.value || "",
+      };
+    }
+    MFStore.save();
   }
 
   function onAction(ev) {
@@ -289,8 +308,30 @@
       return;
     }
     if (action === "bind-savetype-change") {
+      persistBindFormFromDom();
       MFStore.get().ui.bindSaveType = el.value;
       MFStore.save();
+      render();
+      return;
+    }
+    if (action === "bind-pair-change") {
+      MFStore.get().ui.bindPickPair = el.value;
+      MFStore.save();
+      render();
+      return;
+    }
+    if (action === "bind-create-change") {
+      persistBindFormFromDom();
+      render();
+      return;
+    }
+    if (action === "save-personal") {
+      const res = MFStore.savePersonalResult();
+      if (!res.ok) {
+        toast("Не сохранено", res.error, "danger");
+        return;
+      }
+      toast("Личный результат", `${res.id} · Project не изменён`, "ok");
       render();
       return;
     }
@@ -324,6 +365,7 @@
       return;
     }
     if (action === "bind-mode") {
+      persistBindFormFromDom();
       MFStore.get().ui.bindMode = el.getAttribute("data-mode");
       MFStore.save();
       render();
@@ -361,15 +403,20 @@
       return;
     }
     if (action === "do-bind") {
+      persistBindFormFromDom();
       const mode = MFStore.get().ui.bindMode || "pick";
-      const saveType = document.getElementById("bind-savetype")?.value || "profile";
+      const saveType =
+        document.getElementById("bind-savetype")?.value || MFStore.get().ui.bindSaveType || "profile";
       let opts = { mode, saveType };
       if (mode === "create") {
-        opts.projectName = document.getElementById("bind-proj").value;
-        opts.roomName = document.getElementById("bind-room").value;
-        opts.client = document.getElementById("bind-client").value;
+        const cf = MFStore.get().ui.bindCreateFields || {};
+        opts.projectName = document.getElementById("bind-proj")?.value || cf.projectName;
+        opts.roomName = document.getElementById("bind-room")?.value || cf.roomName;
+        opts.client = document.getElementById("bind-client")?.value || cf.client;
       } else {
-        const pair = (document.getElementById("bind-pair")?.value || "").split("::");
+        const pairStr =
+          document.getElementById("bind-pair")?.value || MFStore.get().ui.bindPickPair || "";
+        const pair = pairStr.split("::");
         opts.projectId = pair[0];
         opts.roomId = pair[1];
       }
@@ -377,6 +424,11 @@
       if (!res.ok) {
         if (res.error === "area_mismatch") {
           toast("Площади отличаются", `${res.draftArea} vs ${res.roomArea} м² — выберите явно`, "warn");
+          render();
+          return;
+        }
+        if (res.error === "forbidden_role" || res.error === "forbidden_create") {
+          toast("Нет права записи в Project", `Роль ${res.role} · D5 §1.7`, "danger");
           render();
           return;
         }

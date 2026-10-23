@@ -1,13 +1,13 @@
-# Gate C smoke — `rev-gate-c-draft-5`
+# Gate C smoke — `rev-gate-c-draft-7`
 
 **Не user testing.**
 
 | | |
 |--|--|
-| Against | GC3 remainder + owner shared-tools clarification on `5188bf1` |
-| Store smoke | **26/26 PASS** |
+| Against | GC6-P0-01/02 on `5457e87` |
+| Store smoke | **36/36 PASS** |
 | Command | `node docs/partner-ux-prototypes/smoke.mjs` |
 
-Covers GC3-P0-01/02, profile bind, 409 keep/dismiss/apply/**retry→save**, calc-only draft without PM.
+Includes prior GC3 checks + crew/admin forbidden bind + personal save + bindPickPair retention.
 
 Human D11 §7 still **NOT observed**.

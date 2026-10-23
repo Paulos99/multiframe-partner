@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Executable Gate C store smoke — rev-gate-c-draft-5
+ * Executable Gate C store smoke — rev-gate-c-draft-7
  *
  * Usage (from this directory or repo root):
  *   node docs/partner-ux-prototypes/smoke.mjs
@@ -43,6 +43,7 @@ function check(name, cond, detail = "") {
 }
 
 MFStore.resetAll();
+MFStore.setRole("sales");
 
 // --- GC3-P0-01: bind adopt keeps 21 / 71400 on reopen path ---
 MFStore.startQuickConsultation("noise");
@@ -80,6 +81,7 @@ check(
 
 // create path
 MFStore.resetAll();
+MFStore.setRole("sales");
 MFStore.startQuickConsultation("quiet");
 MFStore.updatePmAnswers({ areaM2: 21 });
 MFStore.runPmOnDraft();
@@ -106,6 +108,7 @@ check("P0-02 out-of-quote liv+kit", ooo.includes("room_vol_liv") && ooo.includes
 
 // --- GC3-P1-01: profile present after bind ---
 MFStore.resetAll();
+MFStore.setRole("sales");
 MFStore.startQuickConsultation("noise");
 MFStore.updatePmAnswers({ areaM2: 18 });
 MFStore.runPmOnDraft();
@@ -176,6 +179,7 @@ check("P1-02 room length=7 after retry save", MFStore.room("prj_nv_volkova", "ro
 
 // Shared tools: calc-only draft without PM
 MFStore.resetAll();
+MFStore.setRole("sales");
 MFStore.ensureCalcDraft(19);
 MFStore.get().sessionDraft.segment = "comfort";
 MFStore.finishCalcOnDraft(19 * 3400, 19);
@@ -188,6 +192,81 @@ const calcBind = MFStore.bindDraft({
   client: "X",
 });
 check("tools calc-only bind", calcBind.ok && MFStore.room(calcBind.projectId, calcBind.roomId).preliminary?.areaM2 === 19);
+
+// GC6-P0-01: crew cannot mutate projects
+MFStore.resetAll();
+MFStore.setRole("crew");
+MFStore.ensureCalcDraft(21);
+MFStore.finishCalcOnDraft(71400, 21);
+const beforeBed = JSON.parse(JSON.stringify(MFStore.room("prj_nv_soroka", "room_sor_bedroom")));
+const crewBind = MFStore.bindDraft({
+  mode: "pick",
+  saveType: "preliminary",
+  projectId: "prj_nv_soroka",
+  roomId: "room_sor_bedroom",
+  areaResolution: "adopt_consultation",
+});
+check("GC6-P0-01 crew forbidden", !crewBind.ok && crewBind.error === "forbidden_role", JSON.stringify(crewBind));
+const afterBed = MFStore.room("prj_nv_soroka", "room_sor_bedroom");
+check(
+  "GC6-P0-01 crew no mutate",
+  afterBed.areaM2 === beforeBed.areaM2 &&
+    JSON.stringify(afterBed.preliminary) === JSON.stringify(beforeBed.preliminary) &&
+    afterBed.acousticProfile === beforeBed.acousticProfile
+);
+const personal = MFStore.savePersonalResult();
+check("GC6-P0-01 crew personal ok", personal.ok && personal.personal, personal.id);
+check(
+  "GC6-P0-01 personal leaves room",
+  MFStore.room("prj_nv_soroka", "room_sor_bedroom").areaM2 === beforeBed.areaM2
+);
+
+// admin also forbidden
+MFStore.resetAll();
+MFStore.setRole("admin");
+MFStore.ensureCalcDraft(16);
+MFStore.finishCalcOnDraft(54400, 16);
+const adminBind = MFStore.bindDraft({
+  mode: "create",
+  saveType: "preliminary",
+  projectName: "Hack",
+  roomName: "X",
+  client: "Y",
+});
+check("GC6-P0-01 admin forbidden", !adminBind.ok && adminBind.error === "forbidden_role", JSON.stringify(adminBind));
+check("GC6-P0-01 admin no new project", !MFStore.get().projects.some((p) => p.name === "Hack"));
+
+// GC6-P0-02: bindPickPair persists across saveType (store-level contract)
+MFStore.resetAll();
+MFStore.setRole("sales");
+MFStore.startQuickConsultation("noise");
+MFStore.updatePmAnswers({ areaM2: 18 });
+MFStore.runPmOnDraft();
+MFStore.finishCalcOnDraft(61200, 18);
+MFStore.get().ui.bindPickPair = "prj_nv_soroka::room_sor_living";
+MFStore.get().ui.bindSaveType = "both";
+MFStore.save();
+MFStore.get().ui.bindSaveType = "profile";
+MFStore.save();
+check(
+  "GC6-P0-02 pair retained after saveType flip",
+  MFStore.get().ui.bindPickPair === "prj_nv_soroka::room_sor_living"
+);
+const livingBind = MFStore.bindDraft({
+  mode: "pick",
+  saveType: "profile",
+  projectId: "prj_nv_soroka",
+  roomId: "room_sor_living",
+});
+check("GC6-P0-02 binds living", livingBind.ok && livingBind.roomId === "room_sor_living", JSON.stringify(livingBind));
+check(
+  "GC6-P0-02 bedroom untouched",
+  !MFStore.room("prj_nv_soroka", "room_sor_bedroom").acousticProfile
+);
+check(
+  "GC6-P0-02 living has profile",
+  !!MFStore.room("prj_nv_soroka", "room_sor_living").acousticProfile
+);
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n===" , `${results.filter((r) => r.ok).length}/${results.length}`, failed.length ? "FAILED" : "PASS", "===");
