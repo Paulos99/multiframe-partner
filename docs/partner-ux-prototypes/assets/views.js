@@ -25,13 +25,34 @@
   function stageLabel(stage) {
     const map = {
       inquiry: "Заявка",
-      assessed: "Оценка PM",
+      assessed: "Профиль Проблемомера",
       calculated: "Есть расчёт",
       quote_sent_confirmed: "КП подтверждено",
       accepted: "Принято",
       new: "Новая",
     };
     return map[stage] || stage || "—";
+  }
+
+  const LABEL = {
+    preliminary: "Предварительный расчёт",
+    detailed: "Расчёт по замеру",
+    assent: "Решение клиента",
+    techReady: "Готовность к монтажу",
+    pmProfile: "Профиль Проблемомера",
+  };
+
+  function roomAssentLabel(v) {
+    const map = {
+      ordered: "Заказано",
+      deferred: "Отложено",
+      out_of_scope: "Вне сделки",
+    };
+    return map[v] || v || "—";
+  }
+
+  function roomHasStartedWork(r) {
+    return !!(r?.preliminary || r?.detailed || r?.acousticProfile);
   }
 
   /* ---------- LOGIN ---------- */
@@ -65,6 +86,7 @@
     return `
       <header class="chrome">
         <div class="brand">Multi<span>Frame</span></div>
+        <span class="brand-sub">StP</span>
         <span class="pill">${esc(role.org)}</span>
         <div class="chrome-meta">
           <span class="pill ${st.offline ? "warn" : "ok"}">${st.offline ? "Офлайн" : "Синхр. ок"}</span>
@@ -398,7 +420,7 @@
         Выберите личное сохранение — данные организации останутся неизменными.
       </div>
       <div class="panel">
-        <p>В черновике: ${d.pmDone ? "профиль PM" : "—"} ${d.calcDone ? "· " + money(d.amount) + " · " + MFStore.draftAreaM2(d) + " м²" : ""}</p>
+        <p>В черновике: ${d.pmDone ? LABEL.pmProfile : "—"} ${d.calcDone ? "· " + money(d.amount) + " · " + MFStore.draftAreaM2(d) + " м²" : ""}</p>
         <button class="btn primary" data-action="save-personal">Сохранить личный результат (не в проект)</button>
       </div>`
       );
@@ -422,10 +444,11 @@
       return p && r ? `${p.name} → ${r.name}` : pickPair || "—";
     })();
     const previewFor = (st) => {
-      if (st === "profile") return d.pmDone ? "только профиль PM (без preliminary)" : "—";
+      if (st === "profile") return d.pmDone ? `только ${LABEL.pmProfile}` : "—";
       if (st === "preliminary")
-        return `${d.pmDone ? "профиль PM + " : ""}preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
-      if (st === "both") return `профиль PM + preliminary ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
+        return `${d.pmDone ? LABEL.pmProfile + " + " : ""}${LABEL.preliminary} ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
+      if (st === "both")
+        return `${LABEL.pmProfile} + ${LABEL.preliminary} ${money(d.amount)} · ${MFStore.draftAreaM2(d)} м²`;
       return "—";
     };
     return shell(
@@ -453,9 +476,9 @@
       <div class="panel">
         <div class="field"><label>Тип сохранения</label>
           <select id="bind-savetype" data-action="bind-savetype-change">
-            <option value="profile" ${selected==="profile"?"selected":""} ${d.pmDone?"":"disabled"}>Только профиль PM</option>
-            <option value="preliminary" ${selected==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>Preliminary${d.pmDone?" (+профиль)":""}</option>
-            <option value="both" ${selected==="both"?"selected":""} ${d.pmDone && d.calcDone?"":"disabled"}>Профиль + preliminary</option>
+            <option value="profile" ${selected==="profile"?"selected":""} ${d.pmDone?"":"disabled"}>Только ${LABEL.pmProfile}</option>
+            <option value="preliminary" ${selected==="preliminary"?"selected":""} ${d.calcDone?"":"disabled"}>${LABEL.preliminary}${d.pmDone ? " (+ профиль)" : ""}</option>
+            <option value="both" ${selected==="both"?"selected":""} ${d.pmDone && d.calcDone?"":"disabled"}>${LABEL.pmProfile} + ${LABEL.preliminary}</option>
           </select>
         </div>
         ${
@@ -495,7 +518,7 @@
     if (!d.pmDone && !d.calcDone) {
       return shell(
         "tools/bind",
-        `<div class="banner warn">Нужен Result PM <em>или</em> calc.</div>
+        `<div class="banner warn">Нужен результат Проблемомера <em>или</em> расчёт калькулятора.</div>
          <a class="btn" href="#/tools/pm">Проблемомер</a> <a class="btn" href="#/tools/calc">Калькулятор</a>`
       );
     }
@@ -578,7 +601,7 @@
                   <div class="title">⏸ Пауза · ${esc(p.name)}</div>
                   <div class="meta">${esc(d.lossReason)} · возобновить на этапе «${esc(stageLabel(d.stageAtOutcome))}»</div>
                 </div>
-                <div class="aside"><span class="pill warn">early_paused</span></div>
+                <div class="aside"><span class="pill warn">На паузе</span></div>
               </li>`;
             })
             .join("")}
@@ -655,11 +678,11 @@
       </div>
       <div class="panel">
         <div class="row">
-          <span class="pill ${d.pmDone ? "ok" : ""}">PM ${d.pmDone ? "готов · " + esc(d.pmResult?.clientPersona || "") : "не пройден"}</span>
+          <span class="pill ${d.pmDone ? "ok" : ""}">${LABEL.pmProfile} ${d.pmDone ? "готов · " + esc(d.pmResult?.clientPersona || "") : "не пройден"}</span>
           <span class="pill ${d.calcDone ? "ok" : ""}">Calc ${d.calcDone ? money(d.amount) : "опционально"}</span>
           <span class="pill ${d.bound ? "ok" : "warn"}">${d.bound ? "Привязан" : "Не сохранён"}</span>
         </div>
-        <p class="muted" style="margin-top:10px">Можно сохранить <strong>только профиль PM</strong> без calc (GC-P0-02).</p>
+        <p class="muted" style="margin-top:10px">Можно сохранить <strong>только ${LABEL.pmProfile}</strong> без калькулятора.</p>
         ${
           d.multiframeOffered
             ? `<div class="banner ok">multiframe_offered → <span class="mono">${esc(
@@ -699,7 +722,7 @@
           r.currentRisk || "—"
         )}»</p>
         <div class="row">
-          <a class="btn primary" href="#/sales/bind">Сохранить профиль (PM-only OK)</a>
+          <a class="btn primary" href="#/sales/bind">Сохранить профиль Проблемомера</a>
           <a class="btn" href="#/sales/calc-quick">К калькулятору</a>
         </div>
       </div>`
@@ -781,7 +804,7 @@
     if (!d.pmDone && !d.calcDone) {
       return shell(
         "sales/quick",
-        `<div class="banner warn">Нужен хотя бы Result PM <em>или</em> calc — сохранять нечего.</div>
+        `<div class="banner warn">Нужен результат Проблемомера <em>или</em> расчёт калькулятора — сохранять нечего.</div>
          <a class="btn primary" href="#/sales/pm-quick">К проблемомеру</a>`
       );
     }
@@ -829,9 +852,9 @@
               <div>
                 <div class="title">${esc(r.name)} · ${r.areaM2} м²</div>
                 <div class="meta">
-                  ${r.preliminary ? `Prelim ${money(r.preliminary.amount)}` : "нет prelim"}
-                  ${r.detailed ? ` · Detailed ${money(r.detailed.amount)}` : ""}
-                  ${r.techReady ? " · tech-ready" : ""}
+                  ${r.preliminary ? `${LABEL.preliminary} ${money(r.preliminary.amount)}` : "нет предварительного"}
+                  ${r.detailed ? ` · ${LABEL.detailed} ${money(r.detailed.amount)}` : ""}
+                  ${r.techReady ? ` · ${LABEL.techReady}` : ""}
                 </div>
               </div>
               <div class="aside">${esc(r.status)}</div>
@@ -880,14 +903,14 @@
         <span class="pill">этап «${esc(stageLabel(deal.stage))}»</span>
         ${deal.paused ? `<span class="pill warn">Пауза · resume → ${esc(stageLabel(deal.stageAtOutcome))}</span>` : ""}
         ${deal.outcome && !deal.paused ? `<span class="pill">${esc(deal.outcome)}</span>` : ""}
-        ${deal.acceptedAmount != null ? `<span class="pill ok">accepted ${money(deal.acceptedAmount)}</span>` : ""}
+        ${deal.acceptedAmount != null ? `<span class="pill ok">Принято ${money(deal.acceptedAmount)}</span>` : ""}
       </div>
       ${
         assentQ
-          ? `<div class="banner info">Assent scope = Quote ${esc(assentQ.revisionId)} (${esc(
+          ? `<div class="banner info">${LABEL.assent}: комнаты из КП ${esc(assentQ.revisionId)} (${esc(
               assentQ.lifecycle
-            )}): ${(assentQ.rooms || []).map((id) => esc(id)).join(", ") || "—"}. GC3-P0-02: рассчитанные вне КП не в sheet.</div>`
-          : `<div class="banner warn">Нет sent/sent_confirmed Quote — согласие по комнатам недоступно.</div>`
+            )}): ${(assentQ.rooms || []).map((id) => esc(id)).join(", ") || "—"}.</div>`
+          : `<div class="banner warn">Нет отправленного КП — ${LABEL.assent.toLowerCase()} по комнатам недоступно.</div>`
       }
       ${
         outOfQuote.length
@@ -930,12 +953,12 @@
               )
               .join("")
       }
-      <h3 style="margin-top:18px">Согласие по комнатам (roomAssent)</h3>
+      <h3 style="margin-top:18px">${LABEL.assent} по комнатам</h3>
       <ul class="list">
         ${p.rooms
           .map(
             (r) => `<li class="list-item"><div class="title">${esc(r.name)}</div>
-            <div class="aside"><span class="pill">${esc(r.roomAssent || "—")}</span>
+            <div class="aside"><span class="pill">${esc(roomAssentLabel(r.roomAssent))}</span>
             ${money(r.detailed?.amount || r.preliminary?.amount)}</div></li>`
           )
           .join("")}
@@ -993,28 +1016,22 @@
     if (!p || !r) return shell("sales/projects", `<div class="empty">Комната не найдена</div>`);
     const ap = r.acousticProfile;
     const prelimArea = r.preliminary?.areaM2 ?? r.areaM2;
-    return shell(
-      "sales/projects",
-      `
-      <div class="page-head">
-        <div>
-          <h1>${esc(r.name)}</h1>
-          <p class="sub">${esc(p.name)} · ${r.areaM2} м²${
-            r.preliminary?.areaM2 != null && Math.abs(r.preliminary.areaM2 - r.areaM2) > 0.05
-              ? ` · prelim ${r.preliminary.areaM2} м²`
-              : ""
-          }</p>
+    const empty = !roomHasStartedWork(r);
+    const calcBlock = empty
+      ? `
+      <div class="panel empty-room-start">
+        <h2>В комнате пока нет расчёта</h2>
+        <p class="sub">Сохранены только название и площадь (${r.areaM2} м²) из карточки объекта. Здесь появятся ${LABEL.preliminary.toLowerCase()}, ${LABEL.detailed.toLowerCase()} и ${LABEL.assent.toLowerCase()} после инструментов и сохранения в проект.</p>
+        <div class="row" style="margin-top:16px">
+          <a class="btn primary" href="#/tools/calc">Начать ${LABEL.preliminary.toLowerCase()}</a>
+          <a class="btn ghost" href="#/tools/pm">${LABEL.pmProfile}</a>
         </div>
-        <div class="page-actions">
-          <a class="btn ghost" href="#/sales/project/${p.id}">К проекту</a>
-          <a class="btn" href="#/sales/calc/${p.id}/${r.id}?kind=preliminary">Preliminary</a>
-          <a class="btn primary" href="#/sales/project/${p.id}?tab=deal">К сделке</a>
-        </div>
-      </div>
+      </div>`
+      : `
       <div class="grid-2">
         <div class="panel">
           <h3>Расчёты</h3>
-          <p>Prelim: <strong>${
+          <p>${LABEL.preliminary}: <strong>${
             r.preliminary
               ? money(r.preliminary.amount) +
                 " · " +
@@ -1023,16 +1040,39 @@
                 esc(r.preliminary.segment || "—")
               : "—"
           }</strong></p>
-          <p>Detailed: <strong>${r.detailed ? money(r.detailed.amount) : "—"}</strong></p>
+          <p>${LABEL.detailed}: <strong>${r.detailed ? money(r.detailed.amount) : "—"}</strong></p>
         </div>
         <div class="panel">
           <h3>Готовность</h3>
-          <p>Assent: ${esc(r.roomAssent || "—")}</p>
-          <p>Tech-ready: ${r.techReady ? "да" : "нет"}</p>
+          <p>${LABEL.assent}: <strong>${esc(roomAssentLabel(r.roomAssent))}</strong></p>
+          <p>${LABEL.techReady}: <strong>${r.techReady ? "да" : "нет"}</strong></p>
+        </div>
+      </div>`;
+    return shell(
+      "sales/projects",
+      `
+      <div class="page-head">
+        <div>
+          <h1>${esc(r.name)}</h1>
+          <p class="sub">${esc(p.name)} · ${r.areaM2} м²${
+            r.preliminary?.areaM2 != null && Math.abs(r.preliminary.areaM2 - r.areaM2) > 0.05
+              ? ` · предварительно ${r.preliminary.areaM2} м²`
+              : ""
+          }</p>
+        </div>
+        <div class="page-actions">
+          <a class="btn ghost" href="#/sales/project/${p.id}">К проекту</a>
+          ${
+            empty
+              ? ""
+              : `<a class="btn" href="#/tools/calc">${LABEL.preliminary}</a>`
+          }
+          <a class="btn primary" href="#/sales/project/${p.id}?tab=deal">К сделке</a>
         </div>
       </div>
+      ${calcBlock}
       <div class="panel" style="margin-top:12px">
-        <h3>Акустический профиль PM ${ap ? `<span class="pill ok">сохранён</span>` : `<span class="pill">нет</span>`}</h3>
+        <h3>${LABEL.pmProfile} ${ap ? `<span class="pill ok">сохранён</span>` : `<span class="pill">нет</span>`}</h3>
         ${
           ap
             ? `<p class="muted">persona «${esc(ap.clientPersona || "—")}» · риск «${esc(
@@ -1101,9 +1141,9 @@
       `
       <div class="page-head"><div><h1>Аналитика продаж</h1><p class="sub">Только воронка сделок (Deal). Тренировки — в Академии, сюда не попадают.</p></div></div>
       <div class="grid-3">
-        <div class="stat"><div class="n">7</div><div class="l">accepted (месяц)</div></div>
+        <div class="stat"><div class="n">7</div><div class="l">принято (месяц)</div></div>
         <div class="stat"><div class="n">5</div><div class="l">early_declined</div></div>
-        <div class="stat"><div class="n">3</div><div class="l">early_paused (не lost)</div></div>
+        <div class="stat"><div class="n">3</div><div class="l">на паузе (не потеряно)</div></div>
       </div>
       <div class="banner info" style="margin-top:14px">Попытки из Академии здесь не считаются — они отдельно от воронки.</div>`
     );
@@ -1306,14 +1346,14 @@
         <div><h1>${esc(r.name)}</h1><p class="sub">${esc(p.name)}</p></div>
         <div class="page-actions">
           <a class="btn ghost" href="#/measurer/home">Назад</a>
-          <a class="btn primary" href="#/measurer/calc/${p.id}/${r.id}">Detailed calc</a>
+          <a class="btn primary" href="#/measurer/calc/${p.id}/${r.id}">${LABEL.detailed}</a>
         </div>
       </div>
       <div class="grid-2">
         <div class="panel">
           <h3>Расчёты</h3>
-          <p>Prelim: <strong>${r.preliminary ? money(r.preliminary.amount) : "—"}</strong></p>
-          <p>Detailed: <strong>${r.detailed ? money(r.detailed.amount) + " · " + r.detailed.revisionId : "нет"}</strong></p>
+          <p>${LABEL.preliminary}: <strong>${r.preliminary ? money(r.preliminary.amount) : "—"}</strong></p>
+          <p>${LABEL.detailed}: <strong>${r.detailed ? money(r.detailed.amount) + " · " + r.detailed.revisionId : "нет"}</strong></p>
           ${
             r.preliminary && r.detailed
               ? `<div class="banner info">prelim ≠ detailed · в сумме coalesce берёт detailed</div>`
@@ -1362,7 +1402,7 @@
       "measurer/home",
       `
       <div class="page-head">
-        <div><h1>Detailed расчёт</h1><p class="sub">${esc(p.name)} / ${esc(r.name)} · геометрия + схема + BOM</p></div>
+        <div><h1>${LABEL.detailed}</h1><p class="sub">${esc(p.name)} / ${esc(r.name)} · геометрия + схема + спецификация</p></div>
         <div class="page-actions"><a class="btn ghost" href="#/measurer/room/${p.id}/${r.id}">Назад</a></div>
       </div>
       ${
@@ -1459,7 +1499,7 @@
       "crew/home",
       `
       <div class="page-head">
-        <div><h1>Мои задания</h1><p class="sub">Только ordered + tech-ready + <strong>assignee = Денис</strong>. Суммы КП скрыты.</p></div>
+        <div><h1>Мои задания</h1><p class="sub">Только «заказано» + ${LABEL.techReady.toLowerCase()} + <strong>бригада Денис</strong>. Суммы КП скрыты.</p></div>
       </div>
       <ul class="list panel">
         ${
@@ -1483,7 +1523,7 @@
       </ul>
       ${
         hidden.length
-          ? `<div class="banner info">Скрыто чужих tech-ready: ${hidden
+          ? `<div class="banner info">Скрыто чужих «${LABEL.techReady.toLowerCase()}»: ${hidden
               .map((x) => esc(x.r.name) + "→" + esc(staffName(x.r.assigneeCrew)))
               .join(", ")} (GC-P0-05)</div>`
           : ""

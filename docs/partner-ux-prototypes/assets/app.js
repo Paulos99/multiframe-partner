@@ -1028,7 +1028,7 @@
         render();
         return;
       }
-      toast("Detailed сохранён", `${res.revisionId} · схема ${res.scheme.id}`, "ok");
+      toast("Расчёт по замеру сохранён", `${res.revisionId} · схема ${res.scheme.id}`, "ok");
       location.hash = `#/measurer/room/${pid}/${rid}`;
       return;
     }
