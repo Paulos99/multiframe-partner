@@ -1,6 +1,7 @@
 # Gate B — решения, требующие утверждения владельца
 
-**Revision:** `rev-gate-b-draft-2` · **NOT approved**  
+**Revision:** `rev-gate-b-final-candidate` · **NOT approved** владельцем  
+**ChatGPT (2026-10-23):** рекомендует принять A-06 / A-09 / A-11 / A-12 / Pause / M-assent как базу — см. [acceptance](./gate-b-chatgpt-acceptance-2026-10-23.md). Это **рекомендация экспертизы**, не owner OK.  
 **Правило:** всё ниже — **proposal**, не `approved`. Не путать с утверждённым Gate A / ADR-008.
 
 | ID | Тема | Proposal (канон в спеках) | Альтернатива | Влияние | Нужен OK? |

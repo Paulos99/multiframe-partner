@@ -1,18 +1,19 @@
 # MultiFrame Партнёр — пакет спецификаций
 
-**Пакет Gate B:** `rev-gate-b-final-candidate` · **status: NOT approved**  
+**Пакет Gate B:** `rev-gate-b-final-candidate` · **status: NOT approved** (ждёт **формальный OK владельца**)  
+**ChatGPT expert:** **PASS** на SHA `d57ac530` — [gate-b-chatgpt-acceptance-2026-10-23.md](./gate-b-chatgpt-acceptance-2026-10-23.md) (не заменяет owner OK)  
 **Gate A:** согласован **условно** · снимок [`revisions/rev-gate-a-approved-20261022/`](./revisions/rev-gate-a-approved-20261022/) · SHA `953be7ed7ddc1bddd1a2c0834ccee6cdeec47fbf`  
 **Сегмент:** потолочные компании  
-**Код:** gap-анализ readonly; продуктовый код **не менялся** · Gate C **не начат**
+**Код:** gap-анализ readonly; продуктовый код **не менялся** · Gate C **не начат** (запрещён до owner OK)
 
 ## Независимое ревью (ChatGPT / внешний эксперт)
 
 1. Открой **[CHATGPT_REVIEW_BRIEF.md](./CHATGPT_REVIEW_BRIEF.md)** — роль, порядок чтения, вопросы.  
-2. Ревью draft-1: **[CHATGPT_GATE_B_REVIEW_2026-10-22.md](./CHATGPT_GATE_B_REVIEW_2026-10-22.md)** (Gate B **NOT APPROVED**).  
+2. Ревью draft-1: **[CHATGPT_GATE_B_REVIEW_2026-10-22.md](./CHATGPT_GATE_B_REVIEW_2026-10-22.md)**.  
 3. Changelog draft-1→2: [gate-b-changelog-draft-1-to-2.md](./gate-b-changelog-draft-1-to-2.md).  
-4. Changelog draft-2→final-candidate (C1–C4): [gate-b-changelog-draft-2-to-final-candidate.md](./gate-b-changelog-draft-2-to-final-candidate.md) · [decisions](./gate-b-decisions-for-owner.md) · [coverage](./gate-b-screen-coverage-matrix.md).  
-5. Канон публикации: GitHub `docs/partner-ux-spec/` (не ZIP как SoT).  
-6. Репозиторий: https://github.com/Paulos99/multiframe-partner · PR #78.
+4. Changelog draft-2→final-candidate (C1–C4): [gate-b-changelog-draft-2-to-final-candidate.md](./gate-b-changelog-draft-2-to-final-candidate.md).  
+5. Expert PASS (docs): [gate-b-chatgpt-acceptance-2026-10-23.md](./gate-b-chatgpt-acceptance-2026-10-23.md) · decisions: [gate-b-decisions-for-owner.md](./gate-b-decisions-for-owner.md).  
+6. Канон: GitHub `docs/partner-ux-spec/` · PR #78.
 
 Манифест: [MANIFEST.md](./MANIFEST.md).
 
