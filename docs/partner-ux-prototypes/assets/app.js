@@ -48,10 +48,52 @@
     return true;
   }
 
+  function absoluteIframeSrc(relative) {
+    try {
+      return new URL(relative, window.location.href).href;
+    } catch {
+      return relative;
+    }
+  }
+
+  function preserveToolFrame(toolId, nextSrc) {
+    const host = root().querySelector(`.tool-host[data-tool="${toolId}"]`);
+    const frame = host?.querySelector("iframe.tool-frame");
+    if (!frame) return null;
+    const nextAbs = absoluteIframeSrc(nextSrc);
+    if (frame.src && frame.src.split("#")[0] === nextAbs.split("#")[0]) return frame;
+    return null;
+  }
+
+  function refreshToolChrome(toolId) {
+    const host = root().querySelector(`.tool-host[data-tool="${toolId}"]`);
+    if (!host) return false;
+    const html = toolId === "calc" ? MFViews.toolsCalc() : MFViews.toolsPm();
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html;
+    const newChrome = wrap.querySelector(".tool-chrome");
+    const oldChrome = host.querySelector(".tool-chrome");
+    if (newChrome && oldChrome) {
+      oldChrome.replaceWith(newChrome);
+      bindGlobal();
+      return true;
+    }
+    return false;
+  }
+
   function render() {
     const { parts, params } = parseHash();
     const st = MFStore.get();
     let html = "";
+    let preserveFrame = null;
+    let preserveTool = null;
+
+    if (parts[0] === "tools" && (parts[1] === "calc" || parts[1] === "pm")) {
+      preserveTool = parts[1] === "pm" ? "pm" : "calc";
+      const nextSrc =
+        preserveTool === "calc" ? MFViews.calcToolIframeSrc() : MFViews.pmToolIframeSrc();
+      preserveFrame = preserveToolFrame(preserveTool, nextSrc);
+    }
 
     try {
       if (!parts.length || parts[0] === "login") {
@@ -118,9 +160,14 @@
     } catch (e) {
       console.error(e);
       html = MFViews.errorView(e.message || "render failed");
+      preserveFrame = null;
     }
 
     root().innerHTML = html;
+    if (preserveFrame && preserveTool) {
+      const slot = root().querySelector(`.tool-host[data-tool="${preserveTool}"] .tool-frame`);
+      if (slot) slot.replaceWith(preserveFrame);
+    }
     bindGlobal();
   }
 
@@ -1049,25 +1096,21 @@
       render();
       return;
     }
-    if (action === "calc-capture-demo") {
-      MFStore.ingestCalcToolResult({ areaM2: 14, amount: 47600, segment: "comfort" });
-      toast("Калькулятор → черновик", "14 м² · демо (снимок UI)", "ok");
-      render();
-      return;
-    }
-
   }
 
   window.addEventListener("message", (ev) => {
     const data = ev.data;
     if (!data || typeof data !== "object") return;
     if (data.type === "mf-cabinet-calc") {
-      const area = Number(data.areaM2) || null;
-      const amount = Number(data.panelsCost) || null;
-      if (area || amount) {
-        MFStore.ingestCalcToolResult({ areaM2: area || 14, amount: amount || undefined });
-        toast("Смета из Калькулятора", `${area || "—"} м² · в черновике`, "ok");
-        render();
+      const res = MFStore.ingestCalcToolResult(data);
+      if (res.ok) {
+        toast("Смета из Калькулятора", `${res.areaM2} м² · ${res.amount} ₽ в черновике`, "ok");
+        const { parts } = parseHash();
+        if (parts[0] === "tools" && parts[1] === "calc") {
+          refreshToolChrome("calc");
+        } else {
+          render();
+        }
       }
       return;
     }

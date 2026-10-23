@@ -1590,6 +1590,13 @@ async function runCalculation(options = {}) {
   if (!silent) showValidationErrors([]);
 
   const f = els.form;
+  if (partnerCeilingOnlyHost()) {
+    setAllWallSurfaces(false);
+    if (f.calcCeiling) f.calcCeiling.checked = true;
+    state.options.calcCeiling = true;
+    state.options.calcWalls = false;
+    state.options.selectedWallIds = [];
+  }
   if (state.inputMode === 'area') {
     const ceilingArea = parseFloat(f.areaOnlyInput?.value) || 0;
     const wallIds = state.areaWalls.filter((w) => w.enabled && w.area > 0).map((w) => w.id);
@@ -1612,7 +1619,10 @@ async function runCalculation(options = {}) {
   }
 
   let calcRoom = state.room;
-  const useAreaPath = state.inputMode === 'area' || (state.inputMode === 'dims' && state.forceAreaBySize);
+  const useAreaPath =
+    state.inputMode === 'area' ||
+    (state.inputMode === 'dims' && state.forceAreaBySize) ||
+    shouldUseQuickDimsAreaPath();
 
   if (useAreaPath) {
     const ceilingArea = state.inputMode === 'area'
@@ -1939,7 +1949,27 @@ async function handleShare() {
 }
 
 function isAreaEstimateMode() {
-  return state.inputMode === 'area' || (state.inputMode === 'dims' && state.forceAreaBySize);
+  return (
+    state.inputMode === 'area' ||
+    (state.inputMode === 'dims' && state.forceAreaBySize) ||
+    shouldUseQuickDimsAreaPath()
+  );
+}
+
+function partnerCeilingOnlyHost() {
+  const params = new URLSearchParams(window.location.search);
+  return (
+    params.get('partner') === '1' &&
+    (params.get('walls') === '0' || params.get('surfaces') === 'ceiling')
+  );
+}
+
+/** Gate C host: L×W with walls off → ceiling area only (not full room shell). */
+function shouldUseQuickDimsAreaPath() {
+  if (!partnerCeilingOnlyHost()) return false;
+  if (state.inputMode !== 'dims') return false;
+  const f = els.form;
+  return !!(f.calcCeiling?.checked) && readSelectedWallIds().length === 0;
 }
 
 function rememberCalcOffline(event) {
@@ -2101,12 +2131,61 @@ function triggerPdfDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+function cabinetBindAreaM2() {
+  if (partnerCeilingOnlyHost() && state.bom?.ceiling?.area > 0) {
+    return state.bom.ceiling.area;
+  }
+  const fromBom = (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0);
+  if (fromBom > 0) return fromBom;
+  if (state.areaValue > 0) return state.areaValue;
+  return null;
+}
+
+/** Amount shown as partner «Итого» — same field Gate C bind uses as preliminary. */
+function cabinetBindAmount() {
+  const bom = state.bom;
+  if (!bom) return null;
+  const area = cabinetBindAreaM2();
+  const panelsOnly = bom.total?.totalCost ?? null;
+  if (PARTNER_PRICING.enabled) {
+    const grand = partnerGrandTotal(bom, area, panelsOnly);
+    if (grand != null) return grand;
+  }
+  return panelsOnly;
+}
+
+function postCabinetCalcPayload(extra = {}) {
+  const params = new URLSearchParams(window.location.search);
+  const panels = state.bom?.total?.panelsWithReserve ?? state.bom?.total?.panels ?? null;
+  const dowels = state.bom?.total?.dowelsWithReserve ?? null;
+  const areaM2 = cabinetBindAreaM2();
+  const panelsCost = cabinetBindAmount();
+  const targetOrigin =
+    window.location.origin && window.location.origin !== 'null'
+      ? window.location.origin
+      : '*';
+  window.parent.postMessage(
+    {
+      type: 'mf-cabinet-calc',
+      objectId: params.get('objectId') || null,
+      inputMode: state.inputMode,
+      areaEstimate: isAreaEstimateMode(),
+      hasScheme: extra.hasScheme ?? false,
+      panels,
+      dowels,
+      areaM2,
+      panelsCost,
+      ...extra,
+    },
+    targetOrigin,
+  );
+}
+
 /** Смета (цены, количество и схема раскладки) уходит в кабинет (родительское окно). */
 async function publishCalcToCabinet() {
   if (window.parent === window) return;
   if (!state.bom) return;
   if (onboardingDemoActive) return;
-  if (isAreaEstimateMode()) return;
   const params = new URLSearchParams(window.location.search);
   if (params.get('partner') !== '1') return;
   const sig = calcSignature();
@@ -2118,9 +2197,20 @@ async function publishCalcToCabinet() {
     statusEl.textContent = 'Сохраняем смету в объект…';
   }
   try {
+    if (calcSignature() !== sig) return;
+
+    const areaEstimate = isAreaEstimateMode();
+    if (areaEstimate) {
+      postCabinetCalcPayload({ hasScheme: false, pdfBase64: null, filename: null });
+      lastPublishedSig = sig;
+      if (statusEl) statusEl.textContent = 'Смета отправлена в кабинет';
+      return;
+    }
+
     const input = await collectPdfInput();
     if (calcSignature() !== sig) return;
-    if (input.areaEstimate || !input.hasScheme) return;
+    if (!input.hasScheme) return;
+
     const { exportCalculationPDF } = await import('../export/pdf-export.js');
     const fileLabel = params.get('client') || '';
     const priced = await exportCalculationPDF({
@@ -2130,27 +2220,12 @@ async function publishCalcToCabinet() {
       fileLabel,
     });
     const pdfBase64 = await blobToBase64(priced.blob);
-    const panels = state.bom?.total?.panelsWithReserve ?? null;
-    const dowels = state.bom?.total?.dowelsWithReserve ?? null;
-    const areaM2 =
-      (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0) || state.areaValue || null;
-    const panelsCost = state.bom?.total?.totalCost ?? null;
-    window.parent.postMessage(
-      {
-        type: 'mf-cabinet-calc',
-        objectId: params.get('objectId') || null,
-        inputMode: state.inputMode,
-        areaEstimate: input.areaEstimate,
-        hasScheme: input.hasScheme,
-        panels,
-        dowels,
-        areaM2,
-        panelsCost,
-        filename: priced.filename,
-        pdfBase64,
-      },
-      window.location.origin,
-    );
+    postCabinetCalcPayload({
+      areaEstimate: false,
+      hasScheme: true,
+      filename: priced.filename,
+      pdfBase64,
+    });
     lastPublishedSig = sig;
     if (statusEl) statusEl.textContent = 'Смета отправлена в кабинет';
   } catch (err) {
@@ -2170,8 +2245,6 @@ async function publishCalcToCabinet() {
 function scheduleCabinetPublish(options = {}) {
   if (options.skipCabinet || onboardingDemoActive) return;
   if (window.parent === window) return;
-  // «По площади» не строит раскладку — объект и PDF не создаём.
-  if (isAreaEstimateMode()) return;
   clearTimeout(publishTimer);
   if (options.silent) {
     publishTimer = setTimeout(() => {
@@ -2298,6 +2371,23 @@ function loadFromUrl() {
  * Deep-link from Проблемомер / marketing:
  * ?area=18&mode=area&walls=0&source=problemomer → ceiling-only area calc.
  */
+/** Gate C / partner host: ceiling-only by default (walls off), no UI redesign. */
+function applyGateCCeilingPreset() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('partner') !== '1') return;
+  const ceilingOnly =
+    params.get('walls') === '0' ||
+    params.get('surfaces') === 'ceiling' ||
+    params.get('source') === 'problemomer' ||
+    params.get('source') === 'cabinet';
+  if (!ceilingOnly) return;
+  setAllWallSurfaces(false);
+  if (els.form?.calcCeiling) els.form.calcCeiling.checked = true;
+  state.options.calcCeiling = true;
+  state.options.calcWalls = false;
+  state.options.selectedWallIds = [];
+}
+
 function applyQueryHandoff() {
   const params = new URLSearchParams(window.location.search);
   const area = parseFloat(params.get('area') || '');
@@ -2433,6 +2523,7 @@ function init() {
   updateResultsPreview();
   loadFromUrl();
   if (!state.inputMode) updateSchemeModeUi();
+  applyGateCCeilingPreset();
 
   const appOnboarding = setupAppOnboarding({
     getInputMode: () => state.inputMode,

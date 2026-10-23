@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Executable Gate C store smoke — rev-gate-c-draft-9
+ * Executable Gate C store smoke — rev-gate-c-draft-10
  *
  * Usage (from this directory or repo root):
  *   node docs/partner-ux-prototypes/smoke.mjs
@@ -270,9 +270,15 @@ check(
 
 MFStore.resetAll();
 MFStore.setRole("sales");
-const ingC = MFStore.ingestCalcToolResult({ areaM2: 20, amount: 68000 });
+const ingC = MFStore.ingestCalcToolResult({ areaM2: 20, panelsCost: 68000, inputMode: "area" });
 check("GC6-P0-03 ingest calc snapshot", ingC.ok && MFStore.get().sessionDraft.calcDone && MFStore.get().sessionDraft.amount === 68000);
 check("GC6-P0-03 calc draft area 20", MFStore.draftAreaM2(MFStore.get().sessionDraft) === 20);
+MFStore.resetAll();
+MFStore.setRole("sales");
+const badCalc = MFStore.ingestCalcToolResult({});
+check("GC9-P0-01 reject fake calc payload", !badCalc.ok && badCalc.error === "invalid_calc_payload");
+const bad14 = MFStore.ingestCalcToolResult({ areaM2: 14 });
+check("GC9-P0-01 reject amount-only 14m²", !bad14.ok);
 MFStore.resetAll();
 MFStore.setRole("sales");
 const ingP = MFStore.ingestPmToolResult({

@@ -1,9 +1,9 @@
 /**
  * Gate C draft-9 store — demo fixtures only. NOT production proof.
- * KEY v7: original tool iframe hosts + richer PM result (GC6-P0-03 remainder).
+ * KEY v9: GC9 calc→host bind via mf-cabinet-calc (partner=1).
  */
 (function (global) {
-  const KEY = "mf_gate_c_proto_v8";
+  const KEY = "mf_gate_c_proto_v9";
   const CREW_SELF = "u_denis";
   const MEASURER_SELF = "u_pavel";
 
@@ -276,7 +276,7 @@
 
     return {
       version: 2,
-      revision: "rev-gate-c-draft-9",
+      revision: "rev-gate-c-draft-10",
       role: null,
       offline: false,
       syncState: "online",
@@ -944,16 +944,22 @@
   }
 
   function ingestCalcToolResult(payload) {
-    const area = Number(payload?.areaM2) || 14;
-    const amount = Number(payload?.amount) || Math.round(area * 3400);
+    const area = Number(payload?.areaM2);
+    const amount = Number(payload?.panelsCost ?? payload?.amount);
+    if (!(area > 0) || !(amount > 0)) {
+      return { ok: false, error: "invalid_calc_payload" };
+    }
     ensureCalcDraft(area);
     const d = state.sessionDraft;
     d.kind = d.pmDone ? "tool_pm_calc" : "tool_calc";
     d.segment = payload?.segment || d.segment || "comfort";
+    d.calcPanels = payload?.panels ?? d.calcPanels ?? null;
+    d.calcInputMode = payload?.inputMode || d.calcInputMode || null;
     finishCalcOnDraft(amount, area);
     d.fromOriginalShell = true;
+    d.fromLiveCalc = true;
     save();
-    return { ok: true, amount, areaM2: area };
+    return { ok: true, amount, areaM2: area, panelsCost: amount };
   }
 
   /** Result from tools/problemomer iframe → sessionDraft for bind */

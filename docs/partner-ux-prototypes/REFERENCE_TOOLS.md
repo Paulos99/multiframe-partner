@@ -1,4 +1,4 @@
-# Gate C — референс согласованных инструментов (GC6-P0-03 / draft-9)
+# Gate C — референс согласованных инструментов (draft-10 / GC9 bind)
 
 **Референс владельца:** https://paulos99.github.io/multiframe-partner/  
 **Калькулятор:** https://paulos99.github.io/multiframe-partner/calculator/
@@ -6,7 +6,7 @@
 | Инструмент | Прототип | Источник UI |
 |------------|----------|-------------|
 | Проблемомер | `#/tools/pm` → iframe `tools/problemomer/` | Compact logo row, segment progress, 7-step survey (ceiling stretch preset), full result composition + DEMO listen |
-| Калькулятор | `#/tools/calc` → iframe `tools/calculator/` | Readonly snapshot of `apps/web/public/calculator` (dims / draw / area + montage scheme + BOM) |
+| Калькулятор | `#/tools/calc` → iframe `tools/calculator/?partner=1&walls=0…` | Snapshot UI; **`mf-cabinet-calc`** → host draft for bind (area/dims/draw) |
 
 Thin host chrome: hub / bind / role — tools are full-bleed.
 

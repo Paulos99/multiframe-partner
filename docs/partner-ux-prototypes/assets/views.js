@@ -325,8 +325,29 @@
             }</a>
           </div>
         </header>
-        <iframe class="tool-frame" title="Проблемомер MultiFRAME" src="tools/problemomer/index.html" allow="autoplay"></iframe>
+        <iframe class="tool-frame" title="Проблемомер MultiFRAME" src="${pmToolIframeSrc()}" allow="autoplay"></iframe>
       </div>`;
+  }
+
+  /** GC9-P0-01: partner=1 enables mf-cabinet-calc; optional PM area handoff once. */
+  function calcToolIframeSrc() {
+    const d = S().sessionDraft;
+    const q = new URLSearchParams();
+    q.set("partner", "1");
+    q.set("walls", "0");
+    q.set("surfaces", "ceiling");
+    if (d?.pmDone && !d?.calcDone) {
+      const area = MFStore.draftAreaM2(d);
+      if (area > 0) {
+        q.set("area", String(area));
+        q.set("source", "problemomer");
+      }
+    }
+    return `tools/calculator/index.html?${q}`;
+  }
+
+  function pmToolIframeSrc() {
+    return "tools/problemomer/index.html";
   }
 
   /**
@@ -337,23 +358,23 @@
     const role = S().role || "—";
     const d = S().sessionDraft;
     const ready = d && (d.pmDone || d.calcDone) && !d.bound;
+    const src = calcToolIframeSrc();
     return `
-      <div class="tool-host" data-tool="calc">
+      <div class="tool-host" data-tool="calc" data-iframe-src="${esc(src)}">
         <header class="tool-chrome">
           <a class="tool-chrome__back" href="#/tools/hub">← Инстр.</a>
           <div class="tool-chrome__title">
             <strong>Калькулятор</strong>
-            <span class="muted hide-narrow">роль ${esc(role)} · снимок UI</span>
+            <span class="muted hide-narrow">роль ${esc(role)} · partner=1 · потолок</span>
           </div>
           <div class="tool-chrome__actions">
             <a class="btn sm ghost" href="#/tools/pm">PM</a>
-            <a class="btn sm ${ready ? "primary" : "ghost"}" href="#/tools/bind">${
-              ready ? "Сохранить…" : "Bind"
-            }</a>
-            <button type="button" class="btn sm primary hide-narrow" data-action="calc-capture-demo" title="Если PDF/postMessage ещё не сработали">Демо→черновик</button>
+            <a class="btn sm ${ready ? "primary" : "ghost"}" href="#/tools/bind" ${
+              ready ? "" : 'aria-disabled="true"'
+            }>${ready ? "Сохранить…" : "Bind после расчёта"}</a>
           </div>
         </header>
-        <iframe class="tool-frame" title="Калькулятор MultiFRAME" src="tools/calculator/index.html" allow="clipboard-write"></iframe>
+        <iframe class="tool-frame" title="Калькулятор MultiFRAME" src="${esc(src)}" allow="clipboard-write"></iframe>
       </div>`;
   }
 
@@ -1892,6 +1913,8 @@
     toolsHub,
     toolsPm,
     toolsCalc,
+    calcToolIframeSrc,
+    pmToolIframeSrc,
     toolsBind,
     salesHome,
     salesInquiry,
