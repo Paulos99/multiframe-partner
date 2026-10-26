@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Deal } from '../../../../../packages/shared/deal';
 import type { JobObject, Project, SessionUser } from '../../../../../packages/shared/partner';
 import { apiListDeals, hasRemoteApi, type ApiDeal } from '../apiClient';
-import { ensureDealsForProjects, listLocalDeals } from './localDeals';
+import { isDemoModeEnabled } from '../DemoSwitcher';
+import { sessionBook } from './demoBook';
 
 function asDeal(row: ApiDeal): Deal {
   return {
@@ -16,12 +17,17 @@ function asDeal(row: ApiDeal): Deal {
     outcome: (row.outcome as Deal['outcome']) ?? null,
     lossReason: (row.lossReason as Deal['lossReason']) ?? null,
     lossComment: row.lossComment ?? null,
+    stageAtOutcome: row.stageAtOutcome ?? null,
+    roomAssent: row.roomAssent as Deal['roomAssent'],
+    acceptedAmount: row.acceptedAmount ?? null,
+    closedAt: row.closedAt ?? null,
+    recordVersion: row.recordVersion ?? 1,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
-/** Сделки: remote API или localStorage-демо. */
+/** Сделки: сервер, а в демонстрации — память сессии, не localStorage. */
 export function useCommercialDeals(input: {
   user: SessionUser | null;
   objects: JobObject[];
@@ -41,6 +47,13 @@ export function useCommercialDeals(input: {
       return;
     }
 
+    if (isDemoModeEnabled()) {
+      setDeals(sessionBook().listDeals().filter((deal) => !orgId || deal.orgId === orgId));
+      return () => {
+        live = false;
+      };
+    }
+
     if (hasRemoteApi()) {
       void apiListDeals()
         .then((rows) => {
@@ -54,8 +67,7 @@ export function useCommercialDeals(input: {
       };
     }
 
-    const next = ensureDealsForProjects(orgId, user.id, projects, objects);
-    setDeals(next);
+    setDeals([]);
     return () => {
       live = false;
     };
@@ -77,12 +89,8 @@ export function useCommercialDeals(input: {
   }, [deals, projectId]);
 
   const reloadLocal = useCallback(() => {
-    if (!user?.orgId || hasRemoteApi()) {
-      refresh();
-      return;
-    }
-    setDeals(listLocalDeals(user.orgId));
-  }, [user?.orgId, refresh]);
+    refresh();
+  }, [refresh]);
 
   return { deals, projectId, activeDealId, refresh: reloadLocal };
 }
