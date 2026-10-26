@@ -32,6 +32,7 @@ import {
 } from './objectStore.js';
 import { migratePlatform } from './platformMigrate.js';
 import { handleCommercial } from './routes/commercial.js';
+import { noteInvocationIamToken } from './commercial/ydbAuth.js';
 import { resetCommercialRepositoryForTests } from './commercial/repository.js';
 import { handleAcademy } from './routes/academy.js';
 import { handleSupport } from './routes/support.js';
@@ -857,7 +858,8 @@ function normalizeIncomingEvent(raw) {
   return candidate;
 }
 
-export async function handler(event = {}) {
+export async function handler(event = {}, context) {
+  noteInvocationIamToken(context);
   if (getMethod(event) === 'OPTIONS') {
     return { statusCode: 204, headers: CORS, body: '' };
   }
