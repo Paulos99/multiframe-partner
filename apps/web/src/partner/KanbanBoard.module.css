@@ -253,12 +253,6 @@
     background: var(--cab-accent);
     color: var(--cab-card);
   }
-  .steps {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 6px;
-  }
   .help {
     font-size: 0.7rem;
   }
@@ -334,6 +328,14 @@
 }
 .steps {
   display: none;
+}
+@media (max-width: 767px) {
+  .steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
 }
 .step,
 .stepNext,
