@@ -142,10 +142,7 @@ function buildSchemeSummaryBody({ bom, room, dateStr, planImage, hidePrices = fa
   const paramsBlock = statsBlock(
     [
       { label: 'Форма помещения', value: `Полигон, ${sizeLabel}` },
-      { label: 'Высота стен', value: `${room.wallHeight.toFixed(2)} м` },
       { label: 'Площадь потолка', value: `${room.getTotalArea().toFixed(2)} м²` },
-      { label: 'Площадь стен (чистая)', value: `${room.getTotalWallArea().toFixed(2)} м²` },
-      { label: 'Проёмов', value: `${room.openings.length} шт.` },
       { label: 'Размер панели', value: '0,75×0,55 м' },
     ],
     { compact: true }
@@ -216,7 +213,7 @@ function totalsRowsList(bom, hidePrices = false) {
   return [
     bom.ceiling
       ? {
-          label: `Потолок (${bom.ceiling.mountingLabel})`,
+          label: 'Потолок',
           value: hidePrices
             ? `${bom.ceiling.stats.withReserve} пан.`
             : `${bom.ceiling.stats.withReserve} пан. · ${formatRub(bom.ceiling.stats.totalCost)}`,

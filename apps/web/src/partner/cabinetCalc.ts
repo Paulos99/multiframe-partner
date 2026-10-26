@@ -10,6 +10,9 @@ export type CabinetCalcMessage = {
   dowels?: number | null;
   areaM2?: number | null;
   panelsCost?: number | null;
+  installCost?: number | null;
+  dowelsCost?: number | null;
+  grandTotal?: number | null;
   filename?: string;
   pdfBase64?: string;
   /** Старый калькулятор слал ещё PDF без цен. Больше не используется. */
@@ -57,12 +60,21 @@ export function estimateFromCalc(
   const dowels = Math.max(0, Math.round(num(msg.dowels) || 0));
   const area = num(msg.areaM2);
   const panelsCost = num(msg.panelsCost) != null ? Math.round(num(msg.panelsCost) || 0) : null;
+  const installFromMsg = num(msg.installCost);
+  const dowelsFromMsg = num(msg.dowelsCost);
+  const grand = num(msg.grandTotal);
   const installCost =
-    org?.installPricePerM2 != null && area != null && area > 0
-      ? Math.round(area * org.installPricePerM2)
-      : null;
+    installFromMsg != null
+      ? Math.round(installFromMsg)
+      : org?.installPricePerM2 != null && area != null && area > 0
+        ? Math.round(area * org.installPricePerM2)
+        : null;
   const dowelsCost =
-    org?.dowelPriceRub != null && dowels > 0 ? Math.round(dowels * org.dowelPriceRub) : null;
+    dowelsFromMsg != null
+      ? Math.round(dowelsFromMsg)
+      : org?.dowelPriceRub != null && dowels > 0
+        ? Math.round(dowels * org.dowelPriceRub)
+        : null;
   const parts = [panelsCost, installCost, dowelsCost].filter((v): v is number => v != null);
   return {
     panels,
@@ -70,7 +82,7 @@ export function estimateFromCalc(
     panelsCost,
     installCost,
     dowelsCost,
-    totalCost: parts.length ? parts.reduce((s, n) => s + n, 0) : null,
+    totalCost: grand != null ? Math.round(grand) : parts.length ? parts.reduce((s, n) => s + n, 0) : null,
   };
 }
 
@@ -85,10 +97,16 @@ export function objectPatchFromCalc(
   const area = areaRaw != null && areaRaw > 0 ? Math.round(areaRaw * 10) / 10 : null;
   const estimate = estimateFromCalc(msg, org);
   const summary = `Калькулятор · ${area ?? '—'} м² · ${estimate.panels} пан. · ${estimate.dowels} дюб.`;
+  const prevArea = existing?.room?.areaM2;
+  const prevSummary = existing?.clientSummary?.trim() || '';
+  const areaMoved =
+    area != null && prevArea != null && Math.abs(prevArea - area) > 0.049 && prevSummary.length > 0;
   const patch: Partial<JobObject> & { id?: string } = {
     room: { ...(existing?.room || {}), areaM2: area },
     estimate,
-    clientSummary: existing?.clientSummary || summary,
+    clientSummary: areaMoved
+      ? `Площадь теперь ${area} м². Сводка устарела, пересоберите.`
+      : prevSummary || summary,
   };
   if (existing && Object.prototype.hasOwnProperty.call(existing, 'projectId')) {
     patch.projectId = existing.projectId ?? null;

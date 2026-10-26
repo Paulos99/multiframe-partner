@@ -8237,6 +8237,8 @@ body.ceiling-only [data-tab='walls'],
 body.ceiling-only [data-tab-content='walls'],
 body.ceiling-only #sharedCalcOptions,
 body.ceiling-only #resultsTabs,
-body.ceiling-only #sketchWallHeightModal {
+body.ceiling-only #sketchWallHeightModal,
+body.ceiling-only .form-group:has(#quickHeight),
+body.ceiling-only .form-group:has(#drawHeight) {
   display: none !important;
 }

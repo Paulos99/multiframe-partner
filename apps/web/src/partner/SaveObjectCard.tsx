@@ -5,7 +5,7 @@ import { useSession } from '../state/SessionContext';
 import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
-import { answersFromStoredRoom, roomRecordFromAnswers } from './roomLink';
+import { roomRecordFromAnswers } from './roomLink';
 import { usePartner } from './PartnerContext';
 import listStyles from './ProjectList.module.css';
 import styles from './partner.module.css';
@@ -21,7 +21,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 export function SaveObjectCard() {
   const { user, saveObject, createProject, partner, diagnosisRequest, objects, projects, attachProfile } = usePartner();
-  const { session, patchRoom, setCeilingArea } = useSession();
+  const { session } = useSession();
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -53,11 +53,7 @@ export function SaveObjectCard() {
     setCity(obj.city || user?.org?.city || '');
     setProjectChoice(obj.projectId || 'new');
     setRoomName(obj.roomName || '');
-    const stored = answersFromStoredRoom(obj.room);
-    if (stored) patchRoom(stored);
-    if (typeof stored?.ceilingAreaM2 === 'number') setCeilingArea(stored.ceilingAreaM2);
-    else if (typeof obj.room?.areaM2 === 'number') setCeilingArea(obj.room.areaM2);
-  }, [diagnosisRequest, objects, patchRoom, setCeilingArea, user?.org?.city]);
+  }, [diagnosisRequest, objects, user?.org?.city]);
 
   useEffect(() => {
     if (!savedFlash && !sentFlash) return;
@@ -71,7 +67,9 @@ export function SaveObjectCard() {
   if (!user) return null;
   const canCreate = canCreateObjects(user.role);
   const canMove = canMoveObjects(user.role);
-  if (!canCreate && !objectId) return null;
+  if (!canCreate && !objectId && !diagnosisRequest?.objectId) return null;
+  const linkedId = diagnosisRequest?.objectId || objectId;
+  const linked = Boolean(diagnosisRequest?.objectId);
 
   const room = session.answers.room;
   const area = room.ceilingAreaM2 ?? null;
@@ -103,12 +101,12 @@ export function SaveObjectCard() {
   }
 
   function objectFields(next: 'keep' | 'quote_sent', projectId?: string) {
-    const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
+    const existing = linkedId ? objects.find((item) => item.id === linkedId) : undefined;
     const status = next === 'quote_sent' ? 'quote_sent' : existing?.status || 'draft';
     const chosen = projectId || (projectChoice !== 'new' ? projectChoice : existing?.projectId || undefined);
     const roomLabel = roomName.trim() || existing?.roomName || room.roomTypeCustom || '';
     return {
-      ...(objectId ? { id: objectId } : {}),
+      ...(linkedId ? { id: linkedId } : {}),
       ...(chosen ? { projectId: chosen } : {}),
       ...(roomLabel ? { roomName: roomLabel } : {}),
       status,
@@ -123,8 +121,9 @@ export function SaveObjectCard() {
   }
 
   async function projectForSave(): Promise<string | undefined> {
+    const existing = linkedId ? objects.find((item) => item.id === linkedId) : undefined;
+    if (diagnosisRequest?.objectId) return existing?.projectId || undefined;
     if (projectChoice !== 'new') return projectChoice;
-    const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
     if (!existing?.projectId) return undefined;
     if (user?.role !== 'owner' && user?.role !== 'sales') return existing.projectId;
     const project = await createProject({
@@ -154,13 +153,12 @@ export function SaveObjectCard() {
     }
   }
 
-  async function onSave(e: FormEvent) {
-    e.preventDefault();
+  async function saveRoom() {
     setBusy(true);
     setMsg(null);
     setErr(null);
     try {
-      const updating = Boolean(objectId);
+      const updating = Boolean(linkedId);
       const linked = await projectForSave();
       const obj = await saveObject(objectFields('keep', linked));
       if (obj.projectId) setProjectChoice(obj.projectId);
@@ -219,6 +217,36 @@ export function SaveObjectCard() {
     }
   }
 
+  async function onSave(e: FormEvent) {
+    e.preventDefault();
+    await saveRoom();
+  }
+
+  if (linked) {
+    return (
+      <div className={styles.actionRow} aria-label="Комната">
+        <Button type="button" fullWidth loading={busy} success={savedFlash} disabled={busy || sending} onClick={() => void saveRoom()}>
+          {busy ? 'Сохраняем…' : 'Сохранить в комнату'}
+        </Button>
+        {msg ? (
+          <p className={styles.flash} role="status">
+            {msg}
+          </p>
+        ) : null}
+        {profileNote ? (
+          <p className={styles.hint} role="status" data-testid="profile-attach-note">
+            {profileNote}
+          </p>
+        ) : null}
+        {err ? (
+          <p className={styles.error} role="alert">
+            {err}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <section className={styles.card} style={{ width: '100%', marginTop: 8 }} aria-label="Комната">
       <h2>Сохранить комнату</h2>
@@ -246,7 +274,7 @@ export function SaveObjectCard() {
             <input
               aria-label="Комната"
               value={roomName}
-              placeholder="Кухня"
+              placeholder="Название"
               onChange={(event) => setRoomName(event.target.value)}
             />
           </label>
@@ -304,8 +332,7 @@ export function SaveObjectCard() {
           {canMove ? (
           <Button
             type="button"
-            fullWidth
-            variant="secondary"
+            variant="ghost"
             loading={sending}
             success={sentFlash}
             disabled={busy || sending}

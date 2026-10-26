@@ -350,7 +350,7 @@ function objectVisibleTo(user, obj) {
     return true;
   }
   if (user.role === 'measurer') {
-    return obj.createdBy === user.id || obj.assignedTo === user.id;
+    return obj.assignedTo === user.id;
   }
   if (user.role === 'crew') {
     // Задание видно только тому монтажнику, на кого его назначили.

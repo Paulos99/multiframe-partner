@@ -2721,12 +2721,12 @@ export class SketchEditor {
           : 'Задайте размеры — кликните по стороне, затем «Изменить размер»';
       } else if (this.geometryLocked) {
         hintText = touchUi
-          ? 'Тап по стороне — проёмы · размеры слева'
-          : 'Размеры задаются слева · клик по стороне — проёмы · вкладка «Стены»';
+          ? 'Тап по стороне — размер'
+          : 'Размеры задаются слева · клик по стороне меняет длину';
       } else {
         hintText = touchUi
           ? 'Тяните углы · pinch — масштаб'
-          : 'Контур готов · тяните углы или «Настроить стены»';
+          : 'Контур готов · тяните углы, чтобы поправить форму';
       }
     } else if (!this.closed && this.vertices.length >= 3) {
       hintText = touchUi
@@ -3218,7 +3218,7 @@ export class SketchEditor {
       }
     }
 
-    if (this.closed && this._wallHeightConfirmed && this.vertices.length >= 3) {
+    if (this.closed && this._wallHeightConfirmed && this.vertices.length >= 3 && !document.body.classList.contains('ceiling-only')) {
       this._drawWallHeightCenter();
     }
 

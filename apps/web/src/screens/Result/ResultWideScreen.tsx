@@ -13,6 +13,7 @@ import {
 } from './resultShared';
 import { PartnerEstimateCard } from '../../partner/PartnerEstimateCard';
 import { SaveObjectCard } from '../../partner/SaveObjectCard';
+import { usePartner } from '../../partner/PartnerContext';
 import styles from './ResultWideScreen.module.css';
 
 /** Flip to true to restore frequency charts if clients ask. */
@@ -147,6 +148,8 @@ function useScrollDrift() {
 }
 
 export function ResultWideScreen() {
+  const { diagnosisRequest } = usePartner();
+  const linkedRoom = Boolean(diagnosisRequest?.objectId);
   const { goBack } = useSession();
   const p = useResultProfile();
   const rootRef = useScrollDrift();
@@ -410,7 +413,6 @@ export function ResultWideScreen() {
       ) : null}
 
       <PartnerEstimateCard areaM2={p.room.ceilingAreaM2} />
-      <SaveObjectCard />
 
       <div className={styles.closeRow}>
         <section className={styles.panel} data-reveal aria-label="Уникальность системы MultiFrame">
@@ -435,13 +437,16 @@ export function ResultWideScreen() {
         >
           <h2>Следующий шаг</h2>
           <p className={styles.panelLead}>
-            Подберите комплектацию MultiFrame или запросите консультацию.
+            {linkedRoom
+              ? 'Результат запишется в эту комнату.'
+              : 'Сохраните комнату. Остальные шаги — по желанию.'}
           </p>
+          <SaveObjectCard />
           <div className={styles.nextActions}>
-            <Button fullWidth onClick={p.openCalc}>
+            <Button variant="ghost" fullWidth onClick={p.openCalc}>
               Рассчитать количество MultiFrame
             </Button>
-            <Button variant="secondary" fullWidth onClick={p.openConsultation}>
+            <Button variant="ghost" fullWidth onClick={p.openConsultation}>
               Запросить консультацию или подбор
             </Button>
             <div className={styles.splitActions}>

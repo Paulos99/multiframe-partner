@@ -52,7 +52,13 @@ export function PdfView({ name, url, onFail }: PdfViewProps) {
     (async () => {
       const pdfjs = await loadPdfJs();
       if (cancelled) return;
-      const task = pdfjs.getDocument({ url, ...pdfDocumentOptions() });
+      // Воркер pdf.js не открывает blob:-ссылку (ERR_FILE_NOT_FOUND). Байты читаем на странице.
+      const data =
+        url.startsWith('blob:') || url.startsWith('data:')
+          ? new Uint8Array(await (await fetch(url)).arrayBuffer())
+          : null;
+      if (cancelled) return;
+      const task = pdfjs.getDocument(data ? { data, ...pdfDocumentOptions() } : { url, ...pdfDocumentOptions() });
       destroyTask = () => void task.destroy();
       task.onProgress = ({ loaded: done, total }: { loaded: number; total: number }) => {
         if (!cancelled && total > 0) setProgress(Math.min(99, Math.floor((done / total) * 100)));

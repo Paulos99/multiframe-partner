@@ -40,6 +40,7 @@ import {
 import {
   canMoveRoom,
   roomCountLabel,
+  roomCardTitle,
   roomDisplayName,
   KANBAN_STAGES,
   sortRooms,
@@ -374,8 +375,7 @@ export function KanbanBoard({
     return (
       <>
         <strong>
-          {project?.clientName || room.clientName || 'Клиент'} ·{' '}
-          {roomDisplayName(room)}
+          {roomCardTitle(room, project?.clientName || room.clientName)}
         </strong>
         <small>
           {(project?.address || room.address || '').trim() || 'Добавить адрес'}

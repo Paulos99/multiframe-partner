@@ -38,14 +38,14 @@ function SyncBadge() {
 
 function InstallHint() {
   return (
-    <div className={styles.hintCard}>
-      <h2>Офлайн на планшете / телефоне</h2>
+    <details className={styles.docBlock}>
+      <summary>Офлайн на планшете и телефоне</summary>
       <p className={styles.lead}>
         Установите кабинет на устройство: в Chrome — «Установить приложение», на iPhone —
         «Поделиться → На экран Домой». После первого открытия прайс и комнаты доступны без сети;
         отправка на сервер встаёт в очередь.
       </p>
-    </div>
+    </details>
   );
 }
 

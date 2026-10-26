@@ -8,6 +8,7 @@ import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
 import { type SessionUser } from '../../../packages/shared/partner';
 import { isCabinetCalcMessage } from './partner/cabinetCalc';
+import { sessionFromRoom } from './partner/roomLink';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
@@ -220,6 +221,12 @@ function PartnerShell() {
     ? objects.find((obj) => obj.id === calcObjectId)?.clientName || ''
     : '';
 
+  const diagnosisSeed = useMemo(() => {
+    if (!diagnosisRequest) return null;
+    const room = objects.find((obj) => obj.id === diagnosisRequest.objectId);
+    return room ? sessionFromRoom(room) : null;
+  }, [diagnosisRequest, objects]);
+
   const calcSrc = useMemo(() => {
     if (!user) return '';
     return calcUrlFromOrg(user.org, user.org?.companyName, {
@@ -307,7 +314,7 @@ function PartnerShell() {
           <div className={styles.toolBody}>
             <div className={styles.toolFill}>
               <SmoothScroll>
-                <SessionProvider>
+                <SessionProvider key={diagnosisRequest?.nonce ?? 'plain'} seed={diagnosisSeed}>
                   <AppShell />
                   <CookieNotice />
                 </SessionProvider>

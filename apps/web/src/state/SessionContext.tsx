@@ -2,7 +2,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -63,8 +65,21 @@ function initialSession(): SessionState {
   return tryRestoreSharedSession() ?? createInitialSession();
 }
 
-export function SessionProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<SessionState>(initialSession);
+export function SessionProvider({
+  children,
+  seed = null,
+}: {
+  children: ReactNode;
+  /** Комната, из которой открыли проблемомер: тип и площадь уже на первом вопросе. */
+  seed?: SessionState | null;
+}) {
+  const [session, setSession] = useState<SessionState>(() => seed ?? initialSession());
+  const seeded = useRef(Boolean(seed));
+  useEffect(() => {
+    if (!seed || seeded.current) return;
+    seeded.current = true;
+    setSession(seed);
+  }, [seed]);
   useFunnelAnalytics(session);
 
   const patch = useCallback((fn: (s: SessionState) => SessionState) => {

@@ -31,11 +31,13 @@ function partnerExtras(areaM2, dowels) {
 
 function resolveCoveredAreaM2(bom) {
   const area = Number(bom.ceiling?.area ?? 0);
-  if (area > 0) return area;
-  const fromStats = Number(bom.ceiling?.stats?.netArea ?? bom.ceiling?.stats?.coverageArea ?? 0);
-  if (fromStats > 0) return fromStats;
-  const panels = bom.ceiling?.stats?.withReserve ?? 0;
-  return panels > 0 ? panels * PANEL_COVERAGE_AREA : 0;
+  const raw =
+    area > 0
+      ? area
+      : Number(bom.ceiling?.stats?.netArea ?? bom.ceiling?.stats?.coverageArea ?? 0) ||
+        (bom.ceiling?.stats?.withReserve > 0 ? bom.ceiling.stats.withReserve * PANEL_COVERAGE_AREA : 0);
+  if (!(raw > 0)) return 0;
+  return Math.round(raw * 100) / 100;
 }
 
 export function buildBOM({ room, ceilingResult, options }) {
@@ -210,7 +212,7 @@ export function renderResultsHtml(bom, { mode = null } = {}) {
     const area = s.netArea ?? s.coverageArea ?? bom.ceiling.area;
     const meta = areaMode
       ? `Оценка по площади · ${fmtArea(area)}`
-      : `${esc(bom.ceiling.schemeName || 'Схема')} · ${esc(bom.ceiling.mountingLabel || '')} · ${fmtArea(area)}`;
+      : `${esc(bom.ceiling.schemeName || 'Схема')} · ${fmtArea(area)}`;
 
     parts.push(`
       <section class="rb-block">
