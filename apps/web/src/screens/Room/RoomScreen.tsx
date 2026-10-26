@@ -7,7 +7,6 @@ import {
   NOISE_KIND_OPTIONS,
   NOISY_NEIGHBORS_OPTIONS,
   OBJECT_STAGE_OPTIONS,
-  PLANNED_CEILING_OPTIONS,
   ROOM_FACTOR_GROUP,
   ROOM_FACTOR_GROUP_LABEL,
   ROOM_TYPE_LABELS,
@@ -27,7 +26,6 @@ const SUBSTEP_TITLE: Record<RoomSubstep, string> = {
   slabType: 'Выберите тип перекрытия',
   slabThickness: 'Выберите толщину перекрытия',
   basics: 'Укажите тип комнаты и площадь',
-  plannedCeiling: 'Какой у вас потолок?',
   objectStage: 'На какой стадии комната?',
   noisyNeighbors: 'Насколько шумно сверху?',
   noiseKind: 'Что именно слышно сверху?',
@@ -48,7 +46,6 @@ export function RoomScreen() {
     setSlabThickness,
     setHouseType,
     setObjectStage,
-    setPlannedCeiling,
     setNoisyNeighbors,
     setNoiseKind,
     canGoNext,
@@ -187,20 +184,6 @@ export function RoomScreen() {
             </p>
           ) : null}
         </>
-      ) : null}
-
-      {sub === 'plannedCeiling' ? (
-        <div className={styles.grid}>
-          {PLANNED_CEILING_OPTIONS.map((opt) => (
-            <CardSelect
-              key={opt.id}
-              dense
-              title={opt.label}
-              selected={room.plannedCeiling === opt.id}
-              onClick={() => setPlannedCeiling(opt.id)}
-            />
-          ))}
-        </div>
       ) : null}
 
       {sub === 'objectStage' ? (

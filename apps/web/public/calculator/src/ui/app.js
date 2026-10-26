@@ -504,12 +504,8 @@ function updateStatCards() {
     return;
   }
 
-  const panels = partnerCeilingOnly()
-    ? (bom.ceiling?.stats?.withReserve ?? bom.ceiling?.stats?.panelsToPurchase ?? 0)
-    : (bom.total.panelsWithReserve ?? 0);
-  const area = partnerCeilingOnly()
-    ? (bom.ceiling?.area ?? 0)
-    : (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
+  const panels = bom.ceiling?.stats?.withReserve ?? bom.ceiling?.stats?.panelsToPurchase ?? 0;
+  const area = bom.ceiling?.area ?? 0;
   const cost = bom.total.totalCost ?? 0;
   animateStatValue($('totalPanels'), panels, formatStatPanels);
   animateStatValue($('coverageArea'), area, formatStatArea);
@@ -782,13 +778,7 @@ function partnerCeilingOnly() {
 }
 
 function readSelectedWallIds() {
-  if (partnerCeilingOnly()) return [];
-  if (state.inputMode === 'area') {
-    return state.areaWalls.filter((w) => w.enabled && w.area > 0).map((w) => w.id);
-  }
-  const list = $('wallSurfacesList');
-  if (!list) return state.options.selectedWallIds ?? [];
-  return [...list.querySelectorAll('input[type="checkbox"]:checked')].map((el) => el.value);
+  return [];
 }
 
 function renderAreaWallsList() {
@@ -1479,9 +1469,8 @@ function validateBeforeCalc() {
 
   if (state.inputMode === 'area') {
     const ceilingArea = parseFloat(f.areaOnlyInput?.value) || 0;
-    const walls = state.areaWalls.filter((w) => w.enabled && w.area > 0);
-    if (ceilingArea <= 0 && walls.length === 0) {
-      return ['Укажите площадь потолка или хотя бы одну стену'];
+    if (ceilingArea <= 0) {
+      return ['Укажите площадь потолка'];
     }
     return [];
   }
@@ -1609,22 +1598,22 @@ async function runCalculation(options = {}) {
   }
   if (state.inputMode === 'area') {
     const ceilingArea = parseFloat(f.areaOnlyInput?.value) || 0;
-    const wallIds = state.areaWalls.filter((w) => w.enabled && w.area > 0).map((w) => w.id);
+    state.areaWalls = [];
     state.options = {
       calcCeiling: ceilingArea > 0,
-      selectedWallIds: wallIds,
-      calcWalls: wallIds.length > 0,
+      selectedWallIds: [],
+      calcWalls: false,
       // По площади нет геометрии для каркаса — только бескаркасный
       ceilingMounting: 'ceiling_frameless',
       wallMounting: 'wall_frameless',
     };
   } else {
     state.options = {
-      calcCeiling: partnerCeilingOnly() ? true : f.calcCeiling.checked,
-      selectedWallIds: readSelectedWallIds(),
-      calcWalls: readSelectedWallIds().length > 0,
-      ceilingMounting: partnerCeilingOnly() ? 'ceiling_frameless' : f.ceilingMounting.value,
-      wallMounting: f.wallMounting.value,
+      calcCeiling: true,
+      selectedWallIds: [],
+      calcWalls: false,
+      ceilingMounting: 'ceiling_frameless',
+      wallMounting: 'wall_frameless',
     };
   }
   if (partnerCeilingOnly()) {
@@ -2127,24 +2116,74 @@ function triggerPdfDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-/** Комната создаётся только кнопкой «Сохранить» в проблемомере, не расчётом калькулятора. */
-async function publishCalcToCabinet() {
-  return;
+function cabinetCeilingArea() {
+  if (state.inputMode === 'area') {
+    const typed = parseFloat(els.form.areaOnlyInput?.value);
+    if (typed > 0) return typed;
+  }
+  const fromBom = Number(state.bom?.ceiling?.area);
+  if (fromBom > 0) return fromBom;
+  const geometric = state.room?.getTotalArea?.() || 0;
+  return geometric > 0 ? geometric : 0;
+}
+
+/** Площадь уходит в уже открытую комнату. PDF — только по кнопке скачивания. Новую комнату расчёт не создаёт. */
+async function publishCalcToCabinet(options = {}) {
+  if (window.parent === window) return;
+  const params = new URLSearchParams(window.location.search);
+  const objectId = params.get('objectId');
+  if (!objectId) return;
+  const area = cabinetCeilingArea();
+  if (!(area > 0)) return;
+  const panels = state.bom?.ceiling?.stats?.withReserve ?? state.bom?.ceiling?.stats?.panelsToPurchase ?? 0;
+  const dowels = state.bom?.ceiling?.stats?.dowels?.withReserve ?? 0;
+  const withPdf = options.withPdf === true;
+  const sig = `${objectId}|${Math.round(area * 10) / 10}|${panels}|${withPdf ? 'pdf' : 'area'}`;
+  if (!withPdf && sig === lastPublishedSig) return;
+  const payload = {
+    type: 'mf-cabinet-calc',
+    objectId,
+    inputMode: state.inputMode,
+    areaEstimate: isAreaEstimateMode(),
+    hasScheme: !isAreaEstimateMode(),
+    panels,
+    dowels,
+    areaM2: Math.round(area * 10) / 10,
+    panelsCost: state.bom?.ceiling?.stats?.totalCost ?? null,
+  };
+  if (withPdf && state.bom) {
+    try {
+      const { exportCalculationPDF } = await import('../export/pdf-export.js');
+      const input = await collectPdfInput();
+      const file = await exportCalculationPDF({
+        ...input,
+        hidePrices: false,
+        download: false,
+        fileLabel: params.get('client') || '',
+      });
+      payload.pdfBase64 = await blobToBase64(file.blob);
+      payload.hasScheme = input.hasScheme !== false;
+    } catch {
+      /* площадь всё равно сохраняем */
+    }
+  }
+  lastPublishedSig = sig;
+  window.parent.postMessage(payload, window.location.origin);
 }
 
 function scheduleCabinetPublish(options = {}) {
   if (options.skipCabinet || onboardingDemoActive) return;
   if (window.parent === window) return;
-  // «По площади» не строит раскладку — объект и PDF не создаём.
-  if (isAreaEstimateMode()) return;
+  if (!new URLSearchParams(window.location.search).get('objectId')) return;
   clearTimeout(publishTimer);
-  if (options.silent) {
+  const withPdf = options.withPdf === true;
+  if (options.silent && !withPdf) {
     publishTimer = setTimeout(() => {
-      void publishCalcToCabinet();
-    }, 2200);
+      void publishCalcToCabinet({ withPdf: false });
+    }, 800);
     return;
   }
-  void publishCalcToCabinet();
+  void publishCalcToCabinet({ withPdf });
 }
 
 async function handlePDF() {
@@ -2162,7 +2201,7 @@ async function handlePDF() {
     fileLabel: new URLSearchParams(window.location.search).get('client') || '',
   });
   triggerPdfDownload(file.blob, file.filename);
-  scheduleCabinetPublish({ silent: false });
+  scheduleCabinetPublish({ silent: false, withPdf: true });
 }
 
 function setupMobileActions() {
@@ -2303,9 +2342,8 @@ function applyQueryHandoff() {
   }, 0);
 }
 
-/** Кабинет считает только бескаркасный потолок MultiFrame: стены и каркас скрыты. */
+/** Калькулятор считает только бескаркасный потолок: стены и каркас скрыты. */
 function lockPartnerCeiling() {
-  if (!partnerCeilingOnly()) return;
   document.body.classList.add('ceiling-only');
   state.areaWalls = [];
   state.wallResult = null;
@@ -2489,7 +2527,7 @@ function resetUiAfterOnboarding() {
     if (els.form.wallHeight) els.form.wallHeight.value = '2.7';
     if ($('drawHeight')) $('drawHeight').value = '2.7';
     if (els.form.ceilingMounting) els.form.ceilingMounting.value = 'ceiling_frameless';
-    if (els.form.wallMounting) els.form.wallMounting.value = 'wall_framed';
+    if (els.form.wallMounting) els.form.wallMounting.value = 'wall_frameless';
     document.querySelectorAll('[data-segment-for="ceilingMounting"] .segmented__btn').forEach((btn) => {
       btn.classList.toggle('is-active', btn.dataset.value === 'ceiling_frameless');
     });

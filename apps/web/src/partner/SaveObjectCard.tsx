@@ -2,10 +2,10 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { canCreateObjects, canMoveObjects, type JobObject } from '../../../../packages/shared/partner';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { useSession } from '../state/SessionContext';
-import type { RoomAnswers } from '../state/types';
 import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
+import { answersFromStoredRoom, roomRecordFromAnswers } from './roomLink';
 import { usePartner } from './PartnerContext';
 import listStyles from './ProjectList.module.css';
 import styles from './partner.module.css';
@@ -53,9 +53,10 @@ export function SaveObjectCard() {
     setCity(obj.city || user?.org?.city || '');
     setProjectChoice(obj.projectId || 'new');
     setRoomName(obj.roomName || '');
-    const answers = obj.room?.answers;
-    if (answers && typeof answers === 'object') patchRoom(answers as Partial<RoomAnswers>);
-    if (typeof obj.room?.areaM2 === 'number') setCeilingArea(obj.room.areaM2);
+    const stored = answersFromStoredRoom(obj.room);
+    if (stored) patchRoom(stored);
+    if (typeof stored?.ceilingAreaM2 === 'number') setCeilingArea(stored.ceilingAreaM2);
+    else if (typeof obj.room?.areaM2 === 'number') setCeilingArea(obj.room.areaM2);
   }, [diagnosisRequest, objects, patchRoom, setCeilingArea, user?.org?.city]);
 
   useEffect(() => {
@@ -81,16 +82,12 @@ export function SaveObjectCard() {
   const sim = session.derived?.simulation;
 
   function roomPayload() {
-    return {
-      roomType: room.roomType,
-      roomTypeCustom: room.roomTypeCustom || null,
-      areaM2: area,
-      houseType: room.houseType,
-      objectStage: room.objectStage,
-      classBefore: sim ? `Rw ${sim.before.Rw} / Lnw ${sim.before.Lnw}` : null,
-      classAfter: sim ? `Rw ${sim.after.Rw} / Lnw ${sim.after.Lnw}` : null,
-      answers: room as unknown as Record<string, unknown>,
-    };
+    return roomRecordFromAnswers(
+      room,
+      sim
+        ? { before: { Rw: sim.before.Rw, Lnw: sim.before.Lnw }, after: { Rw: sim.after.Rw, Lnw: sim.after.Lnw } }
+        : null,
+    );
   }
 
   function estimatePayload() {

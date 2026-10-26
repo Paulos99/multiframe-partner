@@ -23,6 +23,8 @@ export function StaffPanel() {
   const [issued, setIssued] = useState<{ login: string; password: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [savingStaff, setSavingStaff] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
   const staff = api.partnerListStaff();
 
   if (!user || !canManageStaff(user.role)) return null;
@@ -51,88 +53,101 @@ export function StaffPanel() {
   }
 
   return (
-    <form className={`${styles.card} ${styles.panelCard}`} onSubmit={(e) => void onCreateStaff(e)}>
+    <section className={`${styles.card} ${styles.panelCard}`}>
       <h2>Сотрудники</h2>
       <p className={styles.lead}>
-        Менеджер ведёт проекты и КП. Замерщик сохраняет профиль комнаты. У каждого монтажника свой
-        вход и назначенные комнаты. Смету со схемой раскладки видят все.
+        {staff.length ? `${staff.length} в команде` : 'Пока никого нет'}. Карточка открывается по нажатию.
       </p>
-      <div className={styles.grid2}>
-        <label className={styles.field}>
-          Имя / подпись
-          <input
-            value={execName}
-            onChange={(e) => setExecName(e.target.value)}
-            placeholder="Например, Иван · замер"
-          />
-        </label>
-        <label className={styles.field}>
-          Роль
-          <select value={execRole} onChange={(e) => setExecRole(e.target.value as UserRole)}>
-            {STAFF_ROLES.map((r) => (
-              <option key={r} value={r}>
-                {ROLE_LABELS[r]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={styles.field}>
-          Логин
-          <input
-            value={execLogin}
-            onChange={(e) => setExecLogin(e.target.value)}
-            required
-            autoComplete="off"
-          />
-        </label>
-      </div>
-      <p className={styles.hint}>Пароль создаётся при сохранении и показывается один раз.</p>
-      {issued ? (
-        <p className={styles.flash} role="status">
-          Сотрудник {issued.login}. Пароль: {issued.password}{' '}
-          <button type="button" className={styles.ghost} onClick={() => setIssued(null)}>
-            Скрыть пароль
-          </button>
-        </p>
+      <button type="button" className={styles.primary} onClick={() => setAdding((open) => !open)}>
+        {adding ? 'Закрыть' : 'Добавить'}
+      </button>
+      {adding ? (
+        <form onSubmit={(e) => void onCreateStaff(e)}>
+          <div className={styles.grid2}>
+            <label className={styles.field}>
+              Имя / подпись
+              <input
+                value={execName}
+                onChange={(e) => setExecName(e.target.value)}
+                placeholder="Например, Иван · замер"
+              />
+            </label>
+            <label className={styles.field}>
+              Роль
+              <select value={execRole} onChange={(e) => setExecRole(e.target.value as UserRole)}>
+                {STAFF_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.field}>
+              Логин
+              <input
+                value={execLogin}
+                onChange={(e) => setExecLogin(e.target.value)}
+                required
+                autoComplete="off"
+              />
+            </label>
+          </div>
+          <p className={styles.hint}>Пароль создаётся при сохранении и показывается один раз.</p>
+          {issued ? (
+            <p className={styles.flash} role="status">
+              Сотрудник {issued.login}. Пароль: {issued.password}{' '}
+              <button type="button" className={styles.ghost} onClick={() => setIssued(null)}>
+                Скрыть пароль
+              </button>
+            </p>
+          ) : null}
+          {err ? (
+            <p className={styles.error} role="alert">
+              {err}
+            </p>
+          ) : null}
+          <Button type="submit" loading={savingStaff} disabled={savingStaff}>
+            {savingStaff ? 'Создаём…' : 'Создать сотрудника'}
+          </Button>
+        </form>
       ) : null}
-      {err ? (
-        <p className={styles.error} role="alert">
-          {err}
-        </p>
-      ) : null}
-      <Button type="submit" loading={savingStaff} disabled={savingStaff}>
-        {savingStaff ? 'Создаём…' : 'Создать сотрудника'}
-      </Button>
       {api.staffLoading && !staff.length ? <Skeleton count={3} label="Загрузка сотрудников"/> : null}
       <div className={styles.table}><AnimatePresence initial={false}>
         {staff.map((ex) => (
           <m.div layout={!reduce} initial={reduce?false:motionPresets.page.initial} animate={motionPresets.page.animate} exit={reduce?undefined:motionPresets.page.exit} key={ex.id} className={styles.tableRow}>
-            <div>
+            <button
+              type="button"
+              className={styles.ghost}
+              aria-expanded={openId === ex.id}
+              onClick={() => setOpenId(openId === ex.id ? null : ex.id)}
+            >
               <strong>{ex.displayName}</strong>
               <div className={styles.hint}>
                 {ex.login} · {ROLE_LABELS[ex.role] || ex.role}
               </div>
-            </div>
-            <div className={styles.rowActions}>
-              <NewPasswordButton staffId={ex.id} staffName={ex.displayName} />
-              {ex.id === user.id ? null : (
-                <button
-                  type="button"
-                  className={styles.danger}
-                  onClick={() => {
-                    if (confirm(`Удалить сотрудника «${ex.displayName}» (${ex.login})?`)) {
-                      void api.partnerDeleteStaff(ex.id);
-                    }
-                  }}
-                >
-                  Удалить
-                </button>
-              )}
-            </div>
+            </button>
+            {openId === ex.id ? (
+              <div className={styles.rowActions}>
+                <NewPasswordButton staffId={ex.id} staffName={ex.displayName} />
+                {ex.id === user.id ? null : (
+                  <button
+                    type="button"
+                    className={styles.danger}
+                    onClick={() => {
+                      if (confirm(`Удалить сотрудника «${ex.displayName}» (${ex.login})?`)) {
+                        void api.partnerDeleteStaff(ex.id);
+                      }
+                    }}
+                  >
+                    Удалить
+                  </button>
+                )}
+              </div>
+            ) : null}
           </m.div>
         ))}</AnimatePresence>
         {!api.staffLoading && !staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
       </div>
-    </form>
+    </section>
   );
 }

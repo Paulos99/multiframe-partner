@@ -414,6 +414,7 @@ function OwnerCabinet({
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [savingOrg, setSavingOrg] = useState(false);
+  const [companyEdit, setCompanyEdit] = useState(false);
   async function onSave(e: FormEvent) {
     e.preventDefault();
     setMsg(null);
@@ -430,6 +431,7 @@ function OwnerCabinet({
         dowelPriceRub: dowelPriceRub === '' ? null : Number(dowelPriceRub),
       });
       setMsg(api.remote ? 'Сохранено в облаке' : 'Сохранено в этом браузере');
+      setCompanyEdit(false);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
     } finally {
@@ -485,6 +487,21 @@ function OwnerCabinet({
 
       {tab === 'company' ? (
         <TabPanel>
+          {!companyEdit ? (
+            <section className={`${styles.card} ${styles.panelCard}`}>
+              <h2>Компания</h2>
+              <p className={styles.lead}>{companyName.trim() || 'Без названия'}</p>
+              <p className={styles.hint}>{city.trim() || 'Город не указан'} · РРЦ панели {panelPriceRub || '—'} ₽</p>
+              {msg ? (
+                <p className={styles.flash} role="status">
+                  {msg}
+                </p>
+              ) : null}
+              <button type="button" className={styles.primary} onClick={() => setCompanyEdit(true)}>
+                Изменить
+              </button>
+            </section>
+          ) : (
           <form className={`${styles.card} ${styles.panelCard}`} onSubmit={(e) => void onSave(e)}>
             <h2>Параметры компании</h2>
             <label className={styles.field}>
@@ -562,10 +579,16 @@ function OwnerCabinet({
                 {err}
               </p>
             ) : null}
-            <Button type="submit" loading={savingOrg} disabled={savingOrg}>
-              {savingOrg ? 'Сохраняем…' : 'Сохранить'}
-            </Button>
+            <div className={styles.navRow}>
+              <Button type="submit" loading={savingOrg} disabled={savingOrg}>
+                {savingOrg ? 'Сохраняем…' : 'Сохранить'}
+              </Button>
+              <button type="button" className={styles.ghost} onClick={() => setCompanyEdit(false)}>
+                Закрыть
+              </button>
+            </div>
           </form>
+          )}
           <InstallHint />
         </TabPanel>
       ) : null}

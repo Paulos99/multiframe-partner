@@ -82,18 +82,7 @@ function slabNoun(room: RoomAnswers): string {
 /** Why sound passes — named once per text. */
 function isolationCause(room: RoomAnswers): string {
   const slab = slabNoun(room);
-  switch (room.plannedCeiling) {
-    case 'stretch':
-      return `${slab} с натяжным потолком гудит, как барабан`;
-    case 'gypsum':
-      return `${slab} и обычный гипсокартон почти не держат звук`;
-    case 'plaster':
-      return `${slab} без звукоизоляции почти не держит звук`;
-    case 'other_exists':
-      return `${slab} и нынешний потолок почти не держат звук`;
-    default:
-      return `${slab} почти не держит звук`;
-  }
+  return `${slab} с натяжным потолком гудит, как барабан`;
 }
 
 /** The customer hears neighbours (not «usually quiet») and cares about it. */

@@ -247,6 +247,8 @@ for (const role of ['admin', 'owner'] as const) {
   test(`${role}: сводка аналитики без «Объёма», «Отправок», «Входов» и «По дням месяца»`, async ({ page }) => {
     await enter(page, role);
     await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: /Площадь, м²/ }).click();
     await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toBeVisible();
     for (const label of ['Средняя м²', 'Готовых расчётов', 'Площадь, м²', 'Панели']) {
       await expect(page.getByText(label, { exact: true })).toHaveCount(1);

@@ -1,12 +1,13 @@
 import { PageTransition } from './partner/motionBits';
 import { Skeleton } from './partner/Skeleton';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { SessionProvider } from './state/SessionContext';
 import { AppShell } from './app-shell/AppShell';
 import { InstallPromptHost } from './app-shell/InstallAppButton';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
 import { type SessionUser } from '../../../packages/shared/partner';
+import { isCabinetCalcMessage } from './partner/cabinetCalc';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
@@ -42,6 +43,37 @@ function concealCalcBanner(frame: HTMLIFrameElement) {
     doc.head.appendChild(style);
   } catch {
     /* калькулятор ещё не готов */
+  }
+}
+
+class ToolErrorBoundary extends Component<{ onBack: () => void; children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[tool]', error, info);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className={styles.shell}>
+        <p className={styles.lead}>Не удалось открыть инструмент. Вернитесь в кабинет и откройте его ещё раз.</p>
+        <button
+          type="button"
+          className={styles.primary}
+          onClick={() => {
+            this.setState({ error: null });
+            this.props.onBack();
+          }}
+        >
+          Вернуться
+        </button>
+      </div>
+    );
   }
 }
 
@@ -119,7 +151,8 @@ function ToolChrome({
 }
 
 function PartnerShell() {
-  const { user, ready, noteTool, logout, objects, calcRequest, requestCalculator, diagnosisRequest, clearDiagnosis } = usePartner();
+  const { user, ready, noteTool, logout, objects, calcRequest, requestCalculator, diagnosisRequest, clearDiagnosis, applyCalculation } =
+    usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
@@ -148,6 +181,26 @@ function PartnerShell() {
   useEffect(() => {
     applyStoredTheme();
   }, []);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      if (!isCabinetCalcMessage(event.data)) return;
+      const objectId = event.data.objectId || calcObjectId;
+      if (!objectId) return;
+      void applyCalculation(event.data, objectId).then((saved) => {
+        if (!saved) return;
+        const attached = Boolean(event.data.pdfBase64 && event.data.pdfBase64.length >= 32);
+        setCalcNotice(
+          attached
+            ? 'Смета приложена к комнате. Клиенту она уйдёт только из карточки.'
+            : 'Площадь сохранена в комнате',
+        );
+      });
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [applyCalculation, calcObjectId]);
 
   useEffect(() => {
     if (route === 'cabinet' || !user) return;
@@ -226,8 +279,9 @@ function PartnerShell() {
         onLogout={logout}
       />
     );
-    body =
-      route === 'calculator' ? (
+    body = (
+      <ToolErrorBoundary onBack={() => setRoute('cabinet')}>
+      {route === 'calculator' ? (
         <div className={styles.toolHost}>
           {chrome}
           <div className={styles.toolBody}>
@@ -261,7 +315,9 @@ function PartnerShell() {
             </div>
           </div>
         </div>
-      );
+      )}
+      </ToolErrorBoundary>
+    );
   }
 
   return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${user?.id||'login'}-${route}`} shift={false}>{body}</PageTransition></ShellFrame>;

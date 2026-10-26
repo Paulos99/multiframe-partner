@@ -7,7 +7,6 @@ import {
   HOUSE_TYPE_OPTIONS,
   NOISE_KIND_OPTIONS,
   NOISY_NEIGHBORS_OPTIONS,
-  PLANNED_CEILING_OPTIONS,
   roomTypeLabel,
   SLAB_THICKNESS_OPTIONS,
   SLAB_TYPE_OPTIONS,
@@ -227,7 +226,11 @@ function pageChrome(
   </div>`;
 }
 
-function buildReportDocument(session: SessionState, assets: ReportAssets): string {
+function buildReportDocument(
+  session: SessionState,
+  assets: ReportAssets,
+  opts: { hidePrices?: boolean } = {},
+): string {
   const { qr, logos, panel } = assets;
   const handoff = buildLeadHandoff(session);
   const room = handoff.room;
@@ -363,7 +366,7 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
       : '';
   const estimate =
     room.ceilingAreaM2 != null ? buildEstimateFromOrg(room.ceilingAreaM2, partnerOrg) : null;
-  const estimateHtml = estimate
+  const estimateHtml = estimate && !opts.hidePrices
     ? `<div class="card estimate-card">
       <h2><span class="sec-idx">КП</span>Смета для КП</h2>
       ${
@@ -790,7 +793,7 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
         <div><dt>Перекрытие</dt><dd>${escapeHtml(slabLabel)}</dd></div>
         <div><dt>Тип дома</dt><dd>${escapeHtml(optLabel(HOUSE_TYPE_OPTIONS, room.houseType))}</dd></div>
         <div><dt>Комната</dt><dd>${escapeHtml(roomName)} · ${escapeHtml(area)}</dd></div>
-        <div><dt>Потолок</dt><dd>${escapeHtml(optLabel(PLANNED_CEILING_OPTIONS, room.plannedCeiling))}</dd></div>
+        <div><dt>Потолок</dt><dd>Натяжной</dd></div>
         ${neighborsCell}
         ${noiseKindCell}
       </dl>
@@ -1036,7 +1039,7 @@ function triggerDownload(blob: Blob, filename: string): void {
 /** Render report as one A4 page image each → PDF blob («Профиль» объекта). */
 export async function renderAcousticProfilePdf(
   session: SessionState,
-  opts: { compact?: boolean } = {},
+  opts: { compact?: boolean; hidePrices?: boolean } = {},
 ): Promise<{ blob: Blob; filename: string }> {
   const full = session.derived ? session : withDerived(session);
   if (!full.derived) {
@@ -1048,7 +1051,7 @@ export async function renderAcousticProfilePdf(
     buildLogoBundle(),
     fetchPanelDataUrl(),
   ]);
-  const html = buildReportDocument(full, { qr, logos, panel });
+  const html = buildReportDocument(full, { qr, logos, panel }, { hidePrices: opts.hidePrices === true });
   const iframe = document.createElement('iframe');
   iframe.setAttribute('aria-hidden', 'true');
   iframe.setAttribute('title', 'PDF');

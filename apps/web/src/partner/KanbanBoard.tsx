@@ -317,18 +317,37 @@ export function KanbanBoard({
       setLocal(null);
       return;
     }
-    let next = draft.current;
-    const room = next.find((r) => r.id === drag.id);
-    const target = next.find((r) => r.id === over.id);
-    const destination = target?.status ?? (over.id as JobObjectStatus);
-    if (!canMoveRoom(role, destination)) {
+    let next = draft.current.length ? draft.current : snapshot.current;
+    let room = next.find((r) => r.id === drag.id);
+    if (!room) {
       setLocal(null);
       return;
     }
-    if (KANBAN_STAGES.includes(over.id as JobObjectStatus) && room) {
-      next = [room, ...next.filter((r) => r.id !== room.id)];
+    const stageHit = KANBAN_STAGES.includes(over.id as JobObjectStatus)
+      ? (over.id as JobObjectStatus)
+      : null;
+    const target = next.find((r) => r.id === over.id);
+    const destination = stageHit ?? target?.status;
+    if (!destination || !canMoveRoom(role, destination)) {
+      setLocal(null);
+      return;
     }
-    if (!room || !canMoveRoom(role, room.status)) {
+    if (room.status !== destination) {
+      const moved = { ...room, status: destination };
+      const rest = next.filter((r) => r.id !== moved.id);
+      if (target && target.id !== moved.id) {
+        const index = rest.findIndex((r) => r.id === target.id);
+        rest.splice(index < 0 ? rest.length : index, 0, moved);
+      } else {
+        rest.unshift(moved);
+      }
+      room = moved;
+      next = rest;
+    } else if (stageHit) {
+      const staying = room;
+      next = [staying, ...next.filter((r) => r.id !== staying.id)];
+    }
+    if (!canMoveRoom(role, room.status)) {
       setLocal(null);
       return;
     }
@@ -471,17 +490,14 @@ export function KanbanBoard({
         sensors={sensors}
         collisionDetection={(args) => {
           const hits = pointerWithin(args);
-          return hits.length
-            ? hits.some((h) => !KANBAN_STAGES.includes(h.id as JobObjectStatus))
-              ? hits.filter(
-                  (h) => !KANBAN_STAGES.includes(h.id as JobObjectStatus),
-                )
-              : hits
-            : args.pointerCoordinates
-              ? []
-              : closestCorners(args);
+          if (hits.length) {
+            const cards = hits.filter((h) => !KANBAN_STAGES.includes(h.id as JobObjectStatus));
+            return cards.length ? cards : hits;
+          }
+          return closestCorners(args).filter((hit) => hit.id !== args.active.id);
         }}
         onDragStart={({ active: drag, activatorEvent }) => {
+          activatorEvent?.preventDefault();
           if (busy.current) return;
           setMenu(null);
           const room = visible.find((r) => r.id === drag.id);
@@ -711,7 +727,7 @@ export function KanbanBoard({
             >
               <div
                 role="menu"
-                aria-label="Действия с комнатой"
+                aria-label={`Действия с комнатой «${roomDisplayName(menu.room)}»`}
                 className={styles.menu}
                 style={{
                   left: Math.max(8, Math.min(menu.x, window.innerWidth - 188)),

@@ -21,10 +21,6 @@ import type {
 import { loadCities, resolveCity } from './cityCatalog';
 import {
   canCreateObjects,
-  DEFAULT_DOWEL_PRICE_RUB,
-  DEFAULT_INSTALL_PRICE_PER_M2,
-  OFFICIAL_PANEL_PRICE_RUB,
-  OFFICIAL_PRICE_PER_M2,
   toPartnerProfile,
   type JobObjectDocument,
 } from '../../../../packages/shared/partner';
@@ -55,6 +51,13 @@ import {
   readablePdfName,
   type CabinetCalcMessage,
 } from './cabinetCalc';
+import { linkCalcToRoom } from './roomLink';
+import {
+  PARTNER_CALC_STORE,
+  partnerCalcParamsFromOrg,
+  persistPartnerCalcParams,
+} from './calcUrl';
+export { calcUrlFromOrg } from './calcUrl';
 import { withDemoDocuments } from './demoDocuments';
 import { isDemoModeEnabled } from './demoMode';
 import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
@@ -201,7 +204,7 @@ type PartnerApi = {
   deleteObject: (id: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   flushObjectQueue: () => Promise<void>;
-  /** Открыть калькулятор. objectId — обновить эту карточку, null — новый объект на первом расчёте. */
+  /** Открыть калькулятор на комнате. Без objectId площадь никуда не пишется. */
   requestCalculator: (objectId: string | null) => void;
   calcRequest: { objectId: string | null; nonce: number; areaM2?: number | null } | null;
   requestDiagnosis: (objectId: string) => void;
@@ -210,6 +213,8 @@ type PartnerApi = {
   openObject: (id: string) => void;
   openedObjectId: string | null;
   attachCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
+  /** Площадь и, если PDF уже собран, смета — в существующую комнату. Новую комнату не создаёт и никому не шлёт. */
+  applyCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
   /** «Профиль» — PDF проблемомера в карточку объекта. */
   attachProfile: (saved: JobObject, pdfBase64: string) => Promise<JobObject | null>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
@@ -899,6 +904,30 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, objects, saveObject, attachDocuments],
   );
 
+  const applyCalculation = useCallback(
+    async (message: CabinetCalcMessage, objectId: string | null) => {
+      if (!user || !objectId) return null;
+      const existing = objects.find((item) => item.id === objectId);
+      if (!existing) return null;
+      if (!canCreateObjects(user.role) && user.role !== 'measurer') return null;
+      const patch = linkCalcToRoom(message, existing, user.org);
+      if (!patch) return null;
+      const saved = await saveObject(patch);
+      if (!message.pdfBase64 || message.pdfBase64.length < 32) return saved;
+      return attachDocuments(saved, [
+        {
+          kind: 'estimate',
+          filename: readablePdfName(saved.clientName, 'estimate'),
+          pdfBase64: message.pdfBase64,
+          hasScheme: message.hasScheme !== false && !message.areaEstimate,
+          panels: saved.estimate?.panels ?? message.panels ?? null,
+          areaM2: saved.room?.areaM2 ?? null,
+        },
+      ]);
+    },
+    [user, objects, saveObject, attachDocuments],
+  );
+
   const attachProfile = useCallback(
     async (saved: JobObject, pdfBase64: string) => {
       if (!user || (!canCreateObjects(user.role) && user.role !== 'measurer')) return null;
@@ -1000,6 +1029,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       openObject,
       openedObjectId,
       attachCalculation,
+      applyCalculation,
       attachProfile,
       noteTool,
       refresh,
@@ -1051,6 +1081,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       openObject,
       openedObjectId,
       attachCalculation,
+      applyCalculation,
       attachProfile,
       noteTool,
       refresh,
@@ -1067,79 +1098,6 @@ export function usePartner(): PartnerApi {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error('usePartner outside Provider');
   return ctx;
-}
-
-const PARTNER_CALC_STORE = 'mf_partner_calc_params_v1';
-
-export type PartnerCalcParams = {
-  panelPrice: number;
-  pricePerM2: number;
-  installPerM2: number | null;
-  dowelsPerPanel: number;
-  dowelPrice: number | null;
-  company: string;
-};
-
-export function partnerCalcParamsFromOrg(
-  org: OrgSettings | null | undefined,
-  companyName?: string,
-): PartnerCalcParams {
-  return {
-    panelPrice:
-      org?.panelPriceRub != null && org.panelPriceRub > 0
-        ? org.panelPriceRub
-        : OFFICIAL_PANEL_PRICE_RUB,
-    pricePerM2:
-      org?.pricePerM2 != null && org.pricePerM2 > 0 ? org.pricePerM2 : OFFICIAL_PRICE_PER_M2,
-    installPerM2:
-      org?.installPricePerM2 != null && org.installPricePerM2 >= 0
-        ? org.installPricePerM2
-        : DEFAULT_INSTALL_PRICE_PER_M2,
-    dowelsPerPanel: org?.dowelsPerPanel || 2,
-    dowelPrice:
-      org?.dowelPriceRub != null && org.dowelPriceRub >= 0
-        ? org.dowelPriceRub
-        : DEFAULT_DOWEL_PRICE_RUB,
-    company: companyName || org?.companyName || '',
-  };
-}
-
-/** Persist pricing so calculator works offline / without query string. */
-export function persistPartnerCalcParams(params: PartnerCalcParams): void {
-  try {
-    localStorage.setItem(PARTNER_CALC_STORE, JSON.stringify(params));
-  } catch {
-    /* ignore quota */
-  }
-}
-
-export function calcUrlFromOrg(
-  org: OrgSettings | null | undefined,
-  companyName?: string,
-  opts?: { objectId?: string | null; clientName?: string | null; areaM2?: number | null },
-): string {
-  const params = partnerCalcParamsFromOrg(org, companyName);
-  persistPartnerCalcParams(params);
-  const q = new URLSearchParams();
-  q.set('panelPrice', String(params.panelPrice));
-  q.set('pricePerM2', String(params.pricePerM2));
-  q.set('installPerM2', String(params.installPerM2 ?? DEFAULT_INSTALL_PRICE_PER_M2));
-  q.set('dowelPrice', String(params.dowelPrice ?? DEFAULT_DOWEL_PRICE_RUB));
-  q.set('dowelsPerPanel', String(params.dowelsPerPanel));
-  if (params.company) q.set('company', params.company);
-  if (opts?.objectId) q.set('objectId', opts.objectId);
-  if (opts?.clientName) q.set('client', opts.clientName);
-  if (opts?.objectId && typeof opts.areaM2 === 'number' && Number.isFinite(opts.areaM2) && opts.areaM2 > 0) {
-    q.set('area', String(opts.areaM2));
-    q.set('mode', 'area');
-    q.set('source', 'cabinet');
-  }
-  q.set('walls', '0');
-  q.set('surfaces', 'ceiling');
-  q.set('partner', '1');
-  const path = `${import.meta.env.BASE_URL || '/'}calculator/index.html`.replace(/\/{2,}/g, '/');
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${origin}${path}?${q.toString()}`;
 }
 
 export { generatePassword };

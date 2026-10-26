@@ -120,7 +120,8 @@ export async function buildDemoPdfBlob(
   doc: JobObjectDocument,
   opts?: { hidePrices?: boolean },
 ): Promise<Blob> {
-  const cached = demoPdfCache.get(doc.id);
+  const cacheKey = `${doc.id}:${opts?.hidePrices ? 'plain' : 'priced'}`;
+  const cached = demoPdfCache.get(cacheKey);
   if (cached) return cached;
   const calc = await loadCalculator();
   const older = /_v1$/.test(doc.versionId) && (obj.id === 'obj_a03' || obj.id === 'obj_b03');
@@ -164,7 +165,7 @@ export async function buildDemoPdfBlob(
     fileLabel: obj.clientName || 'Комната',
     fileDate: doc.createdAt,
   });
-  demoPdfCache.set(doc.id, file.blob);
+  demoPdfCache.set(cacheKey, file.blob);
   return file.blob;
 }
 

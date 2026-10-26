@@ -108,11 +108,6 @@
                           <label for="areaOnlyInput">Площадь потолка, м²</label>
                           <input type="number" id="areaOnlyInput" placeholder="35" step="0.1" min="0.1" />
                         </div>
-                        <div id="areaWallsBlock">
-                          <p class="hint-text">Стены (площадь каждой, м²)</p>
-                          <div id="areaWallsList" class="area-walls-list"></div>
-                          <button type="button" class="btn btn-secondary btn-sm area-add-wall-btn" id="addAreaWallBtn">+ Добавить стену</button>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -123,40 +118,18 @@
                   <div class="shared-reveal__collapse">
                     <div class="shared-reveal__inner">
                       <div id="sharedCalcOptions" class="card input-panel expanded active shared-calc-options">
-                        <h3 class="calc-panel-title">Что считать</h3>
-                        <div class="surface-chips" id="surfaceChips">
-                          <label class="surface-chip surface-chip--toggle">
-                            <input type="checkbox" id="calcCeiling" checked />
-                            <span class="surface-chip__label">Потолок</span>
-                          </label>
-                          <div id="wallSurfacesList" class="surface-chips surface-chips--walls"></div>
-                        </div>
-                        <div class="surface-group-actions surface-group-actions--compact">
-                          <button type="button" class="btn-link" id="selectAllWallsBtn">Все стены</button>
-                          <button type="button" class="btn-link" id="deselectAllWallsBtn">Снять</button>
-                        </div>
-
-                        <h3 class="calc-panel-title">Тип монтажа</h3>
-                        <div class="form-group" id="ceilingMountingGroup">
-                          <label>Потолок</label>
-                          <div class="segmented" data-segment-for="ceilingMounting" role="group" aria-label="Монтаж потолка">
-                            <button type="button" class="segmented__btn is-active" data-value="ceiling_frameless">Бескаркасный</button>
-                            <button type="button" class="segmented__btn" data-value="ceiling_framed">Каркасный</button>
-                          </div>
-                          <select id="ceilingMounting" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                        <input type="checkbox" id="calcCeiling" checked hidden />
+                        <div id="wallSurfacesList" hidden></div>
+                        <button type="button" id="selectAllWallsBtn" hidden></button>
+                        <button type="button" id="deselectAllWallsBtn" hidden></button>
+                        <div id="ceilingMountingGroup" hidden>
+                          <select id="ceilingMounting" tabindex="-1" aria-hidden="true">
                             <option value="ceiling_frameless" selected>Бескаркасный</option>
-                            <option value="ceiling_framed">Каркасный</option>
                           </select>
                         </div>
-                        <div class="form-group" id="wallMountingGroup">
-                          <label>Стены</label>
-                          <div class="segmented" data-segment-for="wallMounting" role="group" aria-label="Монтаж стен">
-                            <button type="button" class="segmented__btn is-active" data-value="wall_frameless">Бескаркасный</button>
-                            <button type="button" class="segmented__btn" data-value="wall_framed">Каркасный</button>
-                          </div>
-                          <select id="wallMounting" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                        <div id="wallMountingGroup" hidden>
+                          <select id="wallMounting" tabindex="-1" aria-hidden="true">
                             <option value="wall_frameless" selected>Бескаркасный</option>
-                            <option value="wall_framed">Каркасный</option>
                           </select>
                         </div>
 

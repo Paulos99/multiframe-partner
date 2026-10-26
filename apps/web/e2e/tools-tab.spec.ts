@@ -25,6 +25,26 @@ for (const role of roles) {
   });
 }
 
+test('менеджер: «Сегодня» открывает Проблемомер и Калькулятор без ошибки страницы', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await enter(page, 'sales');
+
+  await page.getByRole('button', { name: 'Проблемомер', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Начать', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Кабинет', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Сегодня', exact: true })).toHaveAttribute('aria-selected', 'true');
+
+  await page.getByRole('button', { name: 'Калькулятор', exact: true }).click();
+  await expect(
+    page
+      .frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]')
+      .getByRole('heading', { name: 'Что вы знаете о помещении?' }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('карточки открывают нужный инструмент, «Назад» возвращает во вкладку', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));

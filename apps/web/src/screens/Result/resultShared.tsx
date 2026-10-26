@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { usePartner } from '../../partner/PartnerContext';
 import { SoundPressureHelpButton } from '../../ui/SoundPressureHelp';
 import { useSession } from '../../state/SessionContext';
 import {
@@ -6,7 +7,6 @@ import {
   HOUSE_TYPE_OPTIONS,
   NOISE_KIND_OPTIONS,
   NOISY_NEIGHBORS_OPTIONS,
-  PLANNED_CEILING_OPTIONS,
   roomTypeLabel,
   SLAB_THICKNESS_OPTIONS,
   SLAB_TYPE_OPTIONS,
@@ -25,8 +25,8 @@ import {
 } from '../../state/simulation';
 import { buildCalculatorUrl } from '../../state/session';
 import {
-  downloadAcousticProfilePdf,
   prefetchAcousticProfilePdf,
+  renderAcousticProfilePdf,
   shareAcousticProfile,
 } from '../../state/reportPdf';
 import {
@@ -202,8 +202,31 @@ export function FeltScale({
 }
 
 /** Shared derived data + actions for the Result dashboard. */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').replace(/^data:[^,]*,/, ''));
+    reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать PDF'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export function useResultProfile() {
   const { session, restart } = useSession();
+  const { diagnosisRequest, objects, attachProfile } = usePartner();
   const room = session.answers.room;
   const sim = session.derived?.simulation ?? deriveSimulation(session.answers);
   const hybridBefore = comfortClassFor(sim.before.Rw, sim.before.Lnw);
@@ -224,7 +247,6 @@ export function useResultProfile() {
       : optionLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness);
   const houseLabel = optionLabel(HOUSE_TYPE_OPTIONS, room.houseType);
   const wishLabel = 'Все эффекты материала';
-  const ceilingLabel = optionLabel(PLANNED_CEILING_OPTIONS, room.plannedCeiling);
   const neighborsLabel = optionLabel(NOISY_NEIGHBORS_OPTIONS, room.noisyNeighbors);
   const noiseKindLabel =
     shouldAskNoiseKind(room.noisyNeighbors) && room.noiseKind !== 'unknown'
@@ -293,7 +315,11 @@ export function useResultProfile() {
     setPdfBusy(true);
     setPdfError(false);
     try {
-      await downloadAcousticProfilePdf(session);
+      const { blob, filename } = await renderAcousticProfilePdf(session, { compact: true });
+      saveBlob(blob, filename);
+      const objectId = diagnosisRequest?.objectId;
+      const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
+      if (existing) await attachProfile(existing, await blobToBase64(blob));
     } catch (err) {
       console.error('[pdf]', err);
       setPdfError(true);
@@ -335,7 +361,6 @@ export function useResultProfile() {
     roomLabel,
     houseLabel,
     wishLabel,
-    ceilingLabel,
     neighborsLabel,
     noiseKindLabel,
     wish,

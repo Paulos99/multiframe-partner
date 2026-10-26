@@ -20,6 +20,10 @@ import {
 } from '../../../../packages/shared/partner';
 import { apiFetchObjectDocument } from './apiClient';
 import { buildDemoPdfBlob, openPdfBlob } from './demoDocuments';
+import { documentOpenPolicy } from './roomDocuments';
+import { answersFromStoredRoom } from './roomLink';
+import { createInitialSession, withDerived } from '../state/session';
+import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
 import { StatusSwap } from './motionBits';
@@ -40,26 +44,54 @@ function formatDocWhen(iso: string): string {
   return formatDocStamp(iso);
 }
 
+/** Профиль проблемомера без блока сметы. Если ответов комнаты нет — схема и количества. */
+async function plainProfileBlob(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+  const answers = answersFromStoredRoom(obj.room);
+  if (answers?.roomType && answers.ceilingAreaM2) {
+    try {
+      const base = createInitialSession();
+      const session = withDerived({
+        ...base,
+        answers: {
+          ...base.answers,
+          room: { ...base.answers.room, ...answers, plannedCeiling: 'stretch' },
+        },
+      });
+      if (session.derived) {
+        const { blob } = await renderAcousticProfilePdf(session, { compact: true, hidePrices: true });
+        return blob;
+      }
+    } catch {
+      /* ниже — схема без цен */
+    }
+  }
+  return buildDemoPdfBlob(obj, doc, { hidePrices: true });
+}
+
 function ObjectDocuments({
   obj,
   busyId,
+  hidePrices,
   onOpen,
+  onShare,
 }: {
   obj: JobObject;
   busyId: string | null;
+  hidePrices: boolean;
   onOpen: (doc: JobObjectDocument, download: boolean) => void;
+  onShare: (doc: JobObjectDocument) => void;
 }) {
   const docs = visibleDocuments(obj.documents);
   return (
-    <div className={styles.docBlock}>
-      <div className={styles.field}>
-        Документы
-        <span className={styles.hint}>
-          {docs.length
-            ? '«Смета» — из калькулятора: цены, количество и схема раскладки. «Профиль» — из проблемомера: акустика комнаты. Старые версии сохраняются.'
-            : '«Смета» появится после расчёта в калькуляторе, «Профиль» — после сохранения проблемомера.'}
-        </span>
-      </div>
+    <details className={styles.docBlock}>
+      <summary>Документы</summary>
+      <span className={styles.hint}>
+        {docs.length
+          ? hidePrices
+            ? 'Схема, материалы и количества. Цен в этих файлах нет. Клиенту файл уходит только по кнопке «Клиенту».'
+            : '«Смета» — цены, количество и схема. «Профиль» — акустика комнаты. Само никому не отправляется: «Клиенту» — только по нажатию.'
+          : '«Смета» появится после PDF в калькуляторе, «Профиль» — после PDF в проблемомере. В комнате файл лежит до нажатия.'}
+      </span>
       {docs.length ? (
         <ul className={styles.docList}>
           {docs.map((doc, index) => {
@@ -95,13 +127,21 @@ function ObjectDocuments({
                   >
                     Скачать
                   </button>
+                  <button
+                    type="button"
+                    className={styles.ghost}
+                    disabled={busyId === doc.id}
+                    onClick={() => onShare(doc)}
+                  >
+                    Клиенту
+                  </button>
                 </div>
               </li>
             );
           })}
         </ul>
       ) : null}
-    </div>
+    </details>
   );
 }
 
@@ -268,28 +308,51 @@ export function ObjectsPanel({
     }
   }
 
+  async function blobForDocument(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+    if (documentOpenPolicy(user.role) === 'without-prices') {
+      if (documentDisplayKind(doc.kind) === 'profile') return plainProfileBlob(obj, doc);
+      return buildDemoPdfBlob(obj, doc, { hidePrices: true });
+    }
+    if (doc.demo) return buildDemoPdfBlob(obj, doc, { hidePrices: false });
+    const local = doc.dataBase64 || loadLocalDocBytes(doc.id);
+    const pdfBase64 = local || (await apiFetchObjectDocument(obj.id, doc.id)).pdfBase64;
+    const bin = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
+    return new Blob([bin], { type: 'application/pdf' });
+  }
+
   async function openDocument(obj: JobObject, doc: JobObjectDocument, download: boolean) {
     setDocBusy(doc.id);
     setErr(null);
     try {
-      let blob: Blob;
-      const crewEstimate = user.role === 'crew' && documentDisplayKind(doc.kind) === 'estimate';
-      if (doc.demo || crewEstimate) {
-        blob = await buildDemoPdfBlob(obj, doc, { hidePrices: crewEstimate });
-      } else {
-        const local = doc.dataBase64 || loadLocalDocBytes(doc.id);
-        if (local) {
-          const bin = Uint8Array.from(atob(local), (c) => c.charCodeAt(0));
-          blob = new Blob([bin], { type: 'application/pdf' });
-        } else {
-          const file = await apiFetchObjectDocument(obj.id, doc.id);
-          const bin = Uint8Array.from(atob(file.pdfBase64), (c) => c.charCodeAt(0));
-          blob = new Blob([bin], { type: 'application/pdf' });
-        }
-      }
-      openPdfBlob(blob, doc.filename, download);
+      openPdfBlob(await blobForDocument(obj, doc), doc.filename, download);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось открыть PDF');
+    } finally {
+      setDocBusy(null);
+    }
+  }
+
+  async function shareDocument(obj: JobObject, doc: JobObjectDocument) {
+    setDocBusy(doc.id);
+    setErr(null);
+    try {
+      const blob = await blobForDocument(obj, doc);
+      const file = new File([blob], doc.filename || 'документ.pdf', { type: 'application/pdf' });
+      if (typeof navigator.share === 'function') {
+        const withFile = typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+        await navigator.share(
+          withFile
+            ? { files: [file], title: doc.filename }
+            : { title: documentLabel(doc.kind), text: doc.filename },
+        );
+        setMsg('Окно «Поделиться» открыто. Само по себе ничего не отправлено.');
+      } else {
+        await navigator.clipboard.writeText(doc.filename);
+        setMsg('Имя файла скопировано. Отправка клиенту — только из этого окна.');
+      }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      setErr(e instanceof Error ? e.message : 'Не удалось поделиться');
     } finally {
       setDocBusy(null);
     }
@@ -633,7 +696,9 @@ export function ObjectsPanel({
             <ObjectDocuments
               obj={selected}
               busyId={docBusy}
+              hidePrices={hideMoney}
               onOpen={(doc, download) => void openDocument(selected, doc, download)}
+              onShare={(doc) => void shareDocument(selected, doc)}
             />
 
             <div className={styles.navRow}>
@@ -716,7 +781,12 @@ export function ObjectsPanel({
               </div>
             ) : null}
 
-            <ObjectHistory key={selected.id} entries={selected.history || []} people={[user, ...staff]} />
+            {(selected.history || []).length ? (
+              <details className={styles.docBlock}>
+                <summary>История</summary>
+                <ObjectHistory key={selected.id} entries={selected.history || []} people={[user, ...staff]} />
+              </details>
+            ) : null}
 
             {canDelete ? (
               <div className={styles.navRow}>
