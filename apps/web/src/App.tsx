@@ -94,7 +94,7 @@ function ToolChrome({
     <div className={styles.toolBar}>
       <button type="button" className={`${styles.toolIconBtn} ${styles.toolBack}`} onClick={onCabinet} aria-label={backLabel}>
         <ChevronLeftIcon />
-        <span>Назад</span>
+        <span>{backLabel}</span>
       </button>
       {/* Переключатель инструментов убран: оба открываются из вкладки «Инструменты». */}
       <span className={styles.toolTitle}>{route === 'calculator' ? 'Калькулятор' : 'Проблемомер'}</span>
@@ -164,13 +164,26 @@ function PartnerShell() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [consultOpen, setConsultOpen] = useState(false);
-  const linkedObjectId = useRef<string | null>(null);
+  const [linkedRoomId, setLinkedRoomId] = useState<string | null>(null);
+  const [returnRoomId, setReturnRoomId] = useState<string | null>(null);
+  const linkedRoomRef = useRef<string | null>(null);
   const returnRoomRef = useRef<string | null>(null);
   const saveLock = useRef(false);
 
+  function rememberLinkedRoom(id: string | null) {
+    linkedRoomRef.current = id;
+    setLinkedRoomId(id);
+  }
+
+  function rememberReturnRoom(id: string | null) {
+    returnRoomRef.current = id;
+    setReturnRoomId(id);
+  }
+
   useEffect(() => {
     if (user) return;
-    linkedObjectId.current = null;
+    rememberLinkedRoom(null);
+    rememberReturnRoom(null);
     setCalcObjectId(null);
     setCalcNotice(null);
     setRoute('cabinet');
@@ -178,8 +191,8 @@ function PartnerShell() {
 
   useEffect(() => {
     if (!calcRequest || !user) return;
-    linkedObjectId.current = calcRequest.objectId;
-    returnRoomRef.current = calcRequest.objectId;
+    rememberLinkedRoom(calcRequest.objectId);
+    rememberReturnRoom(calcRequest.objectId);
     setCalcObjectId(calcRequest.objectId);
     setCalcNotice(null);
     if (user) noteTool('calculator');
@@ -188,7 +201,7 @@ function PartnerShell() {
 
   useEffect(() => {
     if (!diagnosisRequest || !user) return;
-    returnRoomRef.current = diagnosisRequest.objectId;
+    rememberReturnRoom(diagnosisRequest.objectId);
     noteTool('problemomer');
     setRoute('problemomer');
   }, [diagnosisRequest, noteTool, user]);
@@ -205,7 +218,7 @@ function PartnerShell() {
         setCalcNotice('Площадь должна быть больше нуля');
         return;
       }
-      const linked = Boolean(linkedObjectId.current);
+      const linked = Boolean(linkedRoomRef.current);
       setCalcNotice(
         linked
           ? 'Расчёт готов. В комнату он попадёт после «Сохранить в комнату».'
@@ -284,16 +297,16 @@ function PartnerShell() {
   }
 
   async function saveIntoLinkedRoom() {
-    if (!user || !calcDraft || !linkedObjectId.current) return;
+    if (!user || !calcDraft || !linkedRoomRef.current) return;
     if (!claimSave(saveLock)) return;
-    const roomId = linkedObjectId.current;
+    const roomId = linkedRoomRef.current;
     setSaveBusy(true);
     try {
       const saved = await attachCalculation(calcDraft, roomId);
       if (!saved) throw new Error('Не удалось записать расчёт в комнату');
       setCalcDraft(null);
       setCalcNotice('Расчёт записан в комнату');
-      returnRoomRef.current = saved.id;
+      rememberReturnRoom(saved.id);
     } catch (error) {
       setCalcNotice(error instanceof Error ? error.message : 'Не удалось сохранить');
     } finally {
@@ -346,7 +359,8 @@ function PartnerShell() {
       setCalcDraft(null);
       setSaveOpen(false);
       setCalcNotice(null);
-      returnRoomRef.current = saved.id;
+      rememberReturnRoom(saved.id);
+      rememberLinkedRoom(saved.id);
       openObject(saved.id);
       setRoute('cabinet');
     } catch (error) {
@@ -463,29 +477,60 @@ function PartnerShell() {
         {calcDraft ? (
           <div className={styles.unsavedBar}>
             <p>{saveSummary(calcDraftView(calcDraft)).join(' · ') || 'Расчёт ещё не записан в комнату.'}</p>
-            <button type="button" className={styles.primary} onClick={() => setSaveOpen(true)}>
-              Куда сохранить?
+            <button
+              type="button"
+              className={styles.primary}
+              disabled={saveBusy}
+              onClick={() => {
+                if (linkedRoomId) void saveIntoLinkedRoom();
+                else setSaveOpen(true);
+              }}
+            >
+              {linkedRoomId ? 'Сохранить в комнату' : 'Куда сохранить?'}
             </button>
           </div>
         ) : null}
         {consultView ? (
           <div className={styles.unsavedBar}>
             <p>Результат консультации ещё не записан в комнату.</p>
-            <button type="button" className={styles.primary} onClick={() => setConsultOpen(true)}>
-              Куда сохранить?
+            <button
+              type="button"
+              className={styles.primary}
+              disabled={saveBusy}
+              onClick={() => {
+                if (!returnRoomId) {
+                  setConsultOpen(true);
+                  return;
+                }
+                const room = objects.find((item) => item.id === returnRoomId);
+                void confirmConsultSave({
+                  mode: 'existing',
+                  projectId: room?.projectId || null,
+                  roomId: returnRoomId,
+                  projectName: '',
+                  roomName: room?.roomName || '',
+                  phone: '',
+                  address: '',
+                  areaChoice: null,
+                  roomAreaM2: room?.room.areaM2 ?? null,
+                });
+              }}
+            >
+              {returnRoomId ? 'Сохранить в комнату' : 'Куда сохранить?'}
             </button>
           </div>
         ) : null}
         <CabinetScreen
           onNavigate={(r) => {
             if (r === 'calculator') {
-              returnRoomRef.current = null;
+              rememberReturnRoom(null);
+              rememberLinkedRoom(null);
               enterToday();
               requestCalculator(null);
               return;
             }
             if (r === 'problemomer') {
-              returnRoomRef.current = null;
+              rememberReturnRoom(null);
               enterToday();
               clearDiagnosis();
               noteTool('problemomer');
@@ -503,13 +548,13 @@ function PartnerShell() {
         company={user.org?.companyName || user.displayName}
         caption={toolCaption(user)}
         notice={route === 'calculator' ? calcNotice : null}
-        backLabel={returnRoomRef.current ? 'Назад в комнату' : 'Назад'}
-        saveLabel={linkedObjectId.current ? 'Сохранить в комнату' : 'Куда сохранить?'}
+        backLabel={returnRoomId ? 'Назад в комнату' : 'Назад'}
+        saveLabel={linkedRoomId ? 'Сохранить в комнату' : 'Куда сохранить?'}
         onSave={
           route === 'calculator' && calcDraft
             ? () => {
                 if (saveLock.current) return;
-                if (linkedObjectId.current) void saveIntoLinkedRoom();
+                if (linkedRoomId) void saveIntoLinkedRoom();
                 else setSaveOpen(true);
               }
             : null

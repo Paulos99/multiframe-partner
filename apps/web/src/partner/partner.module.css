@@ -1246,7 +1246,7 @@
 
 .toolTitle {
   flex: 1 1 auto;
-  min-width: 8.5rem;
+  min-width: 6.8rem;
   margin: 0 6px;
   font-size: 0.95rem;
   font-weight: 750;
@@ -3168,11 +3168,23 @@
 .toolBack {
   width: auto;
   min-width: 44px;
-  height: 44px;
-  min-height: 44px;
-  padding: 0 12px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
   gap: 4px;
-  font-size: 14px;
+  font-size: 13px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.toolBar .syncDotBtn {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+
+.unsavedBar button {
+  white-space: nowrap;
 }
 
 .unsavedBar {
