@@ -244,6 +244,14 @@
   line-height: 1;
 }
 
+@media (max-width: 1024px), (pointer: coarse) {
+  .inlineBtn {
+    height: var(--touch-min);
+    min-height: var(--touch-min);
+    padding: 0 12px;
+  }
+}
+
 .panel {
   width: min(320px, calc(100vw - 24px));
   max-height: min(70dvh, 520px);

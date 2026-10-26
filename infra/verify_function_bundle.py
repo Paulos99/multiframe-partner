@@ -4,8 +4,9 @@
 verify_function_zip читает переданный zip (тот, который скрипт деплоя
 отправит в Yandex Cloud), распаковывает его во временную папку, ставит
 зависимости командой npm ci --omit=dev по lock из этого архива и импортирует точку
-входа. Облачные ключи не читаются. Сетевые вызовы на время импорта
-заблокированы.
+входа. Если в архиве есть commercial/ydbAuth.js, отдельно проверяет, что
+IAM-билет собирается без модуля @yandex-cloud/nodejs-sdk. Облачные ключи не
+читаются. Сетевые вызовы на время импорта заблокированы.
 
 node_modules внутри архива не используются: иначе проверка смотрела бы
 не на lock, а на уже установленное дерево. Исходники и lock берутся
@@ -70,6 +71,53 @@ console.log('IMPORT_OK');
 console.log('exports:', Object.keys(mod).sort().join(','));
 """
 
+# Токен только для сравнения внутри процесса. В stdout его быть не должно.
+_AUTH_PROBE = "predeploy-iam-token"
+AUTH_CHECK = r"""
+import { createRequire } from 'node:module';
+
+const base = new URL(process.env.MF_PACKAGE_DIR);
+const mod = await import(new URL('commercial/ydbAuth.js', base));
+const sdkModule = await import('ydb-sdk');
+const sdk = sdkModule.default ?? sdkModule;
+const missing = '@yandex-cloud/nodejs-sdk/dist/token-service/metadata-token-service';
+const require = createRequire(new URL('package.json', base));
+try {
+  require.resolve(missing);
+  console.error('peer metadata module is installed; the function bundle must keep working without it');
+  process.exit(1);
+} catch (error) {
+  if (!error || error.code !== 'MODULE_NOT_FOUND') {
+    console.error(error && error.stack ? error.stack : String(error));
+    process.exit(1);
+  }
+}
+const probe = process.env.MF_AUTH_PROBE;
+const auth = mod.createYdbAuthService(sdk, {}, {
+  readContextToken: () => null,
+  fetchImpl: async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ access_token: probe, expires_in: 3600, token_type: 'Bearer' }),
+  }),
+});
+let metadata;
+try {
+  metadata = await auth.getAuthMetadata();
+} catch (error) {
+  const text = error && error.stack ? error.stack : String(error);
+  console.error(text.includes(probe) ? 'YDB auth failed and the error included the probe token' : text);
+  process.exit(1);
+}
+const value = metadata.get('x-ydb-auth-ticket')[0];
+const ticket = Buffer.isBuffer(value) ? value.toString('utf8') : String(value);
+if (ticket !== probe) {
+  console.error('YDB auth ticket mismatch');
+  process.exit(1);
+}
+console.log('YDB_AUTH_OK');
+"""
+
 LOCK_NAMES = ("package-lock.json", "npm-shrinkwrap.json")
 
 
@@ -87,11 +135,15 @@ def verify_function_zip(zip_path: Path, *, entry_file: str) -> str:
         package_dir = _package_dir(extract, entry_file)
         _npm_ci(package_dir)
         import_result = _import_entry(extract / entry_file)
+        checked_auth = (package_dir / "commercial" / "ydbAuth.js").is_file()
+        _check_ydb_auth(package_dir)
     print("function bundle ok")
     print(f"zip: {zip_path.resolve()}")
     print(f"entry file: {entry_file}")
     print("dependencies: npm ci --omit=dev --ignore-scripts (lock from this zip)")
     print(import_result)
+    if checked_auth:
+        print("ydb auth: metadata peer absent, TokenAuthService ticket from stub")
     return import_result
 
 
@@ -186,6 +238,48 @@ def _npm_ci(package_dir: Path) -> None:
     )
     if proc.returncode != 0:
         raise SystemExit(f"npm ci в архиве завершился с кодом {proc.returncode}")
+
+
+def _check_ydb_auth(package_dir: Path) -> None:
+    """Поймать MetadataAuthService без peer-модуля до загрузки архива в облако.
+
+    Минимальные zip из тестов деплоя этого файла не содержат — проверку пропускаем.
+    """
+    if not (package_dir / "commercial" / "ydbAuth.js").is_file():
+        return
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": os.environ.get("HOME", ""),
+        "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "NODE_NO_WARNINGS": "1",
+        "MF_PACKAGE_DIR": package_dir.resolve().as_uri() + "/",
+        "MF_AUTH_PROBE": _AUTH_PROBE,
+    }
+    try:
+        proc = subprocess.run(
+            ["node", "--input-type=module", "-e", AUTH_CHECK],
+            cwd=package_dir,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        raise SystemExit("проверка авторизации YDB не завершилась за 60с") from None
+    combined = f"{proc.stdout}\n{proc.stderr}"
+    if _AUTH_PROBE in combined:
+        raise SystemExit("проверка авторизации YDB напечатала токен")
+    sys.stdout.write(proc.stdout)
+    sys.stderr.write(proc.stderr)
+    if "metadata-token-service" in combined or "ERR_MODULE_NOT_FOUND" in combined:
+        raise SystemExit(
+            "авторизация YDB в архиве требует отсутствующий модуль метаданных\n"
+            + combined.strip()
+        )
+    if proc.returncode != 0 or "YDB_AUTH_OK" not in proc.stdout:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise SystemExit(f"проверка авторизации YDB не прошла (код {proc.returncode})\n{detail}")
 
 
 def _import_entry(entry: Path) -> str:

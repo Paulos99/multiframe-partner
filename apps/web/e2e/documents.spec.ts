@@ -45,10 +45,14 @@ test('API: монтажник видит цены и все документы, 
   expect(owner.documents.map((d) => d.kind)).toEqual(['profile', 'estimate', 'spec']);
   const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.crew', password } });
   const { token, user } = await login.json();
-  expect(user.org.panelPriceRub).toBe(2396);
+  expect(user.org.panelPriceRub).toBeUndefined();
+  expect(user.org.pricePerM2).toBeUndefined();
+  expect(user.org.installPricePerM2).toBeUndefined();
   const list = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${token}` } });
   const room = (await list.json()).objects.find((o: { id: string }) => o.id === 'ui_crew_room');
-  expect(room.estimate.totalCost).toBe(75261);
+  expect(room.estimate.panels).toBe(16);
+  expect(room.estimate.totalCost).toBeUndefined();
+  expect(room.estimate.panelsCost).toBeUndefined();
   expect(room.documents.map((d: { id: string }) => d.id)).toEqual([
     owner.documents[0].id,
     'legacy_est',
@@ -61,29 +65,17 @@ test('API: монтажник видит цены и все документы, 
   expect((await file.json()).kind).toBe('profile');
 });
 
-test('монтажник: «Смета» и «Профиль» в карточке, цены видны, предпросмотр открывается', async ({ page, request }) => {
+test('монтажник: задания открываются без цен и без кнопки снятия препятствия', async ({ page, request }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await uploadAsOwner(request);
   await enter(page, 'crew');
 
-  const card = page.locator('[data-room-id="ui_crew_room"]');
-  await expect(card).toContainText('Смета · Профиль');
-  await card.click();
-
-  const rows = page.locator('[data-doc-kind]');
-  await expect(rows).toHaveCount(3);
-  await expect(page.locator('[data-doc-kind="profile"]')).toHaveCount(1);
-  await expect(page.locator('[data-doc-kind="estimate"]')).toHaveCount(2);
-  await expect(page.getByText('Спецификация', { exact: false })).toHaveCount(0);
-  await expect(page.getByText('Итого комнаты')).toBeVisible();
-
-  await page.locator('[data-doc-kind="profile"]').getByRole('button', { name: 'Открыть', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: /Просмотр: .*профиль/ });
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toHaveAttribute('data-file-kind', 'pdf');
-  await page.keyboard.press('Escape');
-  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Мои задания' })).toBeVisible();
+  await expect(page.getByText('Итого комнаты')).toHaveCount(0);
+  await expect(page.getByText('75 261')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Снять препятствие' })).toHaveCount(0);
+  await expect(page.locator('[data-room-id]')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

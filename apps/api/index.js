@@ -32,6 +32,7 @@ import {
 } from './objectStore.js';
 import { migratePlatform } from './platformMigrate.js';
 import { handleCommercial } from './routes/commercial.js';
+import { noteInvocationIamToken } from './commercial/ydbAuth.js';
 import { resetCommercialRepositoryForTests } from './commercial/repository.js';
 import { handleAcademy } from './routes/academy.js';
 import { handleSupport } from './routes/support.js';
@@ -145,16 +146,23 @@ function normalizeOrgSettings(partial = {}) {
   };
 }
 
+function publicOrgSettings(org, role) {
+  if (!org) return null;
+  const settings = normalizeOrgSettings(org.settings);
+  if (normalizeRole(role) !== 'crew') return settings;
+  const { panelPriceRub, pricePerM2, installPricePerM2, dowelPriceRub, ...rest } = settings;
+  return rest;
+}
+
 function publicUser(user, org) {
   const role = normalizeRole(user.role);
-  let settings = org ? normalizeOrgSettings(org.settings) : null;
   return {
     id: user.id,
     login: user.login,
     role,
     displayName: user.displayName,
     orgId: user.orgId || null,
-    org: settings,
+    org: publicOrgSettings(org, role),
     avatarUrl: null,
   };
 }
@@ -380,9 +388,19 @@ function objectVisibleTo(user, obj) {
   return objectVisibleWithAssignments(user, obj);
 }
 
-/** Цены видят все роли: смета объекта отдаётся целиком. */
-function publicObject(obj) {
-  return { ...obj, history: obj.history || [], documents: visibleDocuments(obj.documents) };
+const CREW_PRICE_KEYS = ['panelsCost', 'installCost', 'dowelsCost', 'totalCost', 'pricePerM2', 'panelPriceRub', 'installPricePerM2', 'dowelPriceRub'];
+
+/** Бригада видит количество и документы. Суммы и прайс организации ей не отдаются. */
+function publicObject(obj, role) {
+  const next = { ...obj, history: obj.history || [], documents: visibleDocuments(obj.documents) };
+  if (role !== 'crew') return next;
+  if (next.estimate) {
+    const estimate = { ...next.estimate };
+    for (const key of CREW_PRICE_KEYS) delete estimate[key];
+    next.estimate = estimate;
+  }
+  for (const key of CREW_PRICE_KEYS) delete next[key];
+  return next;
 }
 
 /** Client clock, clamped so a far-future stamp cannot lock the row. */
@@ -857,7 +875,8 @@ function normalizeIncomingEvent(raw) {
   return candidate;
 }
 
-export async function handler(event = {}) {
+export async function handler(event = {}, context) {
+  noteInvocationIamToken(context);
   if (getMethod(event) === 'OPTIONS') {
     return { statusCode: 204, headers: CORS, body: '' };
   }

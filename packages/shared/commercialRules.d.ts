@@ -37,3 +37,11 @@ export function snapshotFromCalcs(
 export function sumOrdered(quote: QuoteRevision, assent: Record<string, string>): number;
 export function isQuoteFrozen(quote: QuoteRevision | null | undefined): boolean;
 export function httpError(status: number, message: string, fields?: Record<string, unknown>): Error & { status: number };
+export function roomContribution(calcs: Array<{
+  id?: string;
+  calcType?: string;
+  amount?: number;
+  revisionSeq?: number;
+  divergent?: boolean;
+}>): { calcType: 'preliminary' | 'detailed'; amount: number; calculationId: string } | null;
+export function checklistComplete(items: Array<{ state?: string; reason?: string | null }>): boolean;

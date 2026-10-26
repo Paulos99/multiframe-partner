@@ -1300,6 +1300,16 @@
   color: var(--cab-muted);
 }
 
+.toolNotice {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--cab-warn-soft);
+  color: var(--cab-warn);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  flex: 0 0 auto;
+}
+
 .toolMenu .logoutBtn {
   width: 100%;
   min-height: 40px;
@@ -2986,6 +2996,23 @@
   .dashSelect,
   .playerPlay {
     min-height: var(--touch-min);
+  }
+
+  .toolBar {
+    height: auto;
+    min-height: calc(52px + env(safe-area-inset-top));
+    padding-bottom: 4px;
+  }
+
+  .toolIconBtn,
+  .toolDemoBtn {
+    height: var(--touch-min);
+    min-height: var(--touch-min);
+    min-width: var(--touch-min);
+  }
+
+  .toolIconBtn {
+    width: var(--touch-min);
   }
 
   .syncDotBtn {

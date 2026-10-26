@@ -8,6 +8,7 @@ import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
 import { canCreateObjects, type SessionUser } from '../../../packages/shared/partner';
 import { isCabinetCalcMessage } from './partner/cabinetCalc';
+import { offerFieldCalc } from './partner/field/fieldCalcGate';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
@@ -151,6 +152,10 @@ function PartnerShell() {
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       if (!isCabinetCalcMessage(event.data)) return;
+      if (offerFieldCalc(event.data, user?.role, user?.org, (message) => setCalcNotice(message))) {
+        setCalcNotice('Расчёт по замеру отправляется в комнату');
+        return;
+      }
       if (!user || !canCreateObjects(user.role)) return;
       if (event.data.areaEstimate || event.data.inputMode === 'area' || event.data.hasScheme === false) return;
       const target = linkedObjectId.current || event.data.objectId || null;
@@ -251,6 +256,7 @@ function PartnerShell() {
       route === 'calculator' ? (
         <div className={styles.toolHost}>
           {chrome}
+          {calcNotice ? <p className={styles.toolNotice} role="status">{calcNotice}</p> : null}
           <div className={styles.toolBody}>
             {calcSrc ? (
               <iframe
