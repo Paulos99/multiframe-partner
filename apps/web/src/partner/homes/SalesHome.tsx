@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { isDemoModeEnabled } from '../DemoSwitcher';
 import { HelpTrainingPanel } from '../HelpTrainingPanel';
 import { RoleWorkspace } from '../RoleOverview';
 import { StaffPanel } from '../StaffPanel';
@@ -11,7 +12,10 @@ import { consumeReturnToTools } from '../toolsReturn';
 import { EntryPoints } from '../commercial/EntryPoints';
 import { WorkToday } from '../commercial/WorkToday';
 import { nextActionsForRole } from '../commercial/nextActions';
-import { CommercialPanel } from '../commercial/CommercialPanel';
+import { DealIndex } from '../commercial/DealIndex';
+import { DealScreen } from '../commercial/DealScreen';
+import { projectsOf, roomsOf } from '../commercial/commercialPort';
+import { sessionBook } from '../commercial/demoBook';
 import { SupportRequestButton } from '../SupportRequestButton';
 import { useCommercialDeals } from '../commercial/useCommercialDeals';
 
@@ -39,11 +43,20 @@ export function SalesHome({
   const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help' | 'tools'>(() =>
     consumeReturnToTools() ? 'tools' : 'deals',
   );
-  const { deals, projectId, activeDealId, refresh } = useCommercialDeals({
+  const { deals, refresh } = useCommercialDeals({
     user,
     objects: api.objects,
     projects: api.projects,
   });
+  const [openedProject, setOpenedProject] = useState<string | null>(null);
+  const demo = isDemoModeEnabled();
+  const catalog = useMemo(
+    () =>
+      demo
+        ? { projects: sessionBook().listProjects(), rooms: [] }
+        : { projects: projectsOf(api.projects), rooms: roomsOf(api.objects) },
+    [demo, api.projects, api.objects],
+  );
 
   const actions = useMemo(
     () => nextActionsForRole('sales', api.objects, deals),
@@ -78,9 +91,26 @@ export function SalesHome({
       profile={profileOf(user, api.logout)}
     >
       <FrameBody>
-      {tab === 'deals' ? (
+      {tab === 'deals' && openedProject ? (
+        <DealScreen
+          projectId={openedProject}
+          catalog={catalog}
+          demo={demo}
+          role={user.role}
+          onBack={() => setOpenedProject(null)}
+          onChanged={refresh}
+        />
+      ) : null}
+      {tab === 'deals' && !openedProject ? (
         <TabPanel>
-          <WorkToday actions={actions} />
+          <WorkToday
+            actions={actions}
+            onOpen={(action) => {
+              const projectId = action.projectId || deals.find((deal) => deal.id === action.dealId)?.projectId;
+              if (projectId) setOpenedProject(projectId);
+            }}
+          />
+          <DealIndex projects={catalog.projects} deals={deals} onOpen={setOpenedProject} />
           <SupportRequestButton module="sales_home" />
           <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
           <EntryPoints
@@ -88,16 +118,6 @@ export function SalesHome({
               if (route === 'calculator') onOpenCalc();
               else onNavigate('problemomer');
             }}
-          />
-          <CommercialPanel
-            projectId={projectId}
-            dealId={activeDealId}
-            staff={staff.map((s) => ({
-              id: s.id,
-              label: s.displayName || s.login,
-              role: s.role,
-            }))}
-            onDealChanged={refresh}
           />
         </TabPanel>
       ) : null}

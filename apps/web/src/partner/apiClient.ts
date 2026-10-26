@@ -2,6 +2,7 @@
  * Remote API client for partner platform (Yandex Cloud Function).
  */
 import { isSupportPayloadSafe } from '../../../../packages/shared/support';
+import { buildCommercialHeaders, type DataContext } from './commercial/commercialHeaders';
 import type {
   Intervention,
   JobObject,
@@ -532,6 +533,11 @@ export type ApiDeal = {
   outcome: string | null;
   lossReason: string | null;
   lossComment?: string | null;
+  stageAtOutcome?: string | null;
+  roomAssent?: Record<string, string>;
+  acceptedAmount?: number | null;
+  closedAt?: string | null;
+  recordVersion?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -545,10 +551,41 @@ export type ApiQuote = {
   sentConfirmed: boolean;
   amount: number | null;
   roomObjectIds: string[];
+  snapshot?: {
+    lines: Array<{
+      roomId: string;
+      calcType: 'preliminary' | 'detailed' | 'unspecified';
+      calculationId: string | null;
+      revisionSeq: number | null;
+      amount: number | null;
+    }>;
+    legacyTotal?: boolean;
+  } | null;
   sharedAt: string | null;
   sentConfirmedAt: string | null;
   sentComment: string | null;
+  recordVersion?: number;
+  createdAt?: string;
 };
+
+export async function apiCommercial<T>(
+  path: string,
+  init: {
+    method: 'GET' | 'POST' | 'PATCH';
+    body?: unknown;
+    mutation: boolean;
+    ifMatch?: number | null;
+    idempotencyKey?: string | null;
+    context: DataContext;
+  },
+): Promise<T> {
+  const headers = buildCommercialHeaders(init);
+  return request<T>(path, {
+    method: init.method,
+    headers,
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+  });
+}
 
 export async function apiListDeals(): Promise<ApiDeal[]> {
   const data = await request<{ deals: ApiDeal[] }>('/deals');

@@ -1,10 +1,10 @@
 /**
- * Demo-only smoke: менеджер видит сделки/КП без remote API.
+ * Demo-only smoke: менеджер открывает сделку и видит, что копирование не отправка.
  * Запуск: npx playwright test e2e/prd-commercial-demo.spec.ts --config=playwright.demo.config.ts
  */
 import { expect, test } from '@playwright/test';
 
-test('sales: сегодня в работе, КП copy≠sent, исход сделки', async ({ page }) => {
+test('sales: демо-сделка, копирование не подтверждает отправку', async ({ page }) => {
   await page.goto('/?demo=1');
   await page.evaluate(() => localStorage.clear());
   await page.goto('/?demo=1');
@@ -20,18 +20,14 @@ test('sales: сегодня в работе, КП copy≠sent, исход сде
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible({ timeout: 30_000 });
 
-  await expect(page.getByRole('heading', { name: 'Сегодня в работе' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'С чего начать' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'КП по проекту' })).toBeVisible();
-
-  // Без проекта панель сообщает об этом; с демо-объектами — формируем КП
-  const formBtn = page.getByRole('button', { name: 'Сформировать КП' });
-  if (await formBtn.isEnabled().catch(() => false)) {
-    await formBtn.click();
-    await expect(page.getByText(/quote_created|Статус:/)).toBeVisible();
-    await page.getByRole('button', { name: 'Скопировать текст' }).click();
-    await expect(page.getByText(/Статус КП не изменён|quote_created/)).toBeVisible();
-    await page.getByRole('button', { name: 'Подтвердить отправку' }).click();
-    await expect(page.getByText(/отправка подтверждена|quote_sent_confirmed/i)).toBeVisible();
-  }
+  await page.getByRole('button', { name: /Сорокина · до предложения/ }).click();
+  await page.getByRole('button', { name: 'Собрать предложение' }).click();
+  await page.getByRole('checkbox', { name: /Кухня/ }).check();
+  await page.getByRole('button', { name: 'Дальше' }).click();
+  await page.getByRole('button', { name: 'Собрать снимок' }).click();
+  await expect(page.getByText('Это ещё не отправка.')).toBeVisible();
+  await page.getByRole('button', { name: 'Дальше' }).click();
+  await page.getByRole('button', { name: 'Скопировать текст' }).click();
+  await expect(page.getByText('Текст скопирован. Это не отправка.')).toBeVisible();
+  await expect(page.getByText('Отправка подтверждена. Версия заморожена.')).toHaveCount(0);
 });
