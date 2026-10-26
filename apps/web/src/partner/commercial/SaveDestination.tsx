@@ -1,8 +1,9 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { JobObject, Project } from '../../../../../packages/shared/partner';
 import { Button } from '../../ui/Button';
 import { ModalSurface } from '../motionBits';
 import styles from '../partner.module.css';
+import { claimSave, releaseSave } from '../idempotency';
 import {
   areasDiffer,
   saveSummary,
@@ -45,6 +46,7 @@ export function SaveDestination({
   const [address, setAddress] = useState('');
   const [areaChoice, setAreaChoice] = useState<AreaChoice | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const saveLock = useRef(false);
 
   useEffect(() => {
     if (presentation !== 'dialog') return;
@@ -75,24 +77,29 @@ export function SaveDestination({
   const lines = saveSummary(draft);
 
   async function confirm() {
-    const intent: SaveIntent = {
-      mode: boundRoom ? 'existing' : mode,
-      projectId: boundRoom?.projectId || projectId || null,
-      roomId: boundRoom?.id || roomId || null,
-      projectName,
-      roomName,
-      phone,
-      address,
-      areaChoice: mismatch ? areaChoice : null,
-      roomAreaM2: roomArea ?? null,
-    };
-    const problem = validateSave(draft, intent);
-    if (problem) {
-      setError(problem);
-      return;
+    if (!claimSave(saveLock)) return;
+    try {
+      const intent: SaveIntent = {
+        mode: boundRoom ? 'existing' : mode,
+        projectId: boundRoom?.projectId || projectId || null,
+        roomId: boundRoom?.id || roomId || null,
+        projectName,
+        roomName,
+        phone,
+        address,
+        areaChoice: mismatch ? areaChoice : null,
+        roomAreaM2: roomArea ?? null,
+      };
+      const problem = validateSave(draft, intent);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+      setError(null);
+      await onConfirm(intent);
+    } finally {
+      releaseSave(saveLock);
     }
-    setError(null);
-    await onConfirm(intent);
   }
 
   const body = (

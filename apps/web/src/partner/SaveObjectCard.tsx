@@ -9,6 +9,7 @@ import { buildEstimateFromOrg } from './estimate';
 import { usePartner } from './PartnerContext';
 import { SaveDestination } from './commercial/SaveDestination';
 import { chosenArea, type SaveDraftView, type SaveIntent } from './commercial/saveDestination';
+import { claimSave, creationIdempotencyKey, releaseSave } from './idempotency';
 import styles from './partner.module.css';
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -40,7 +41,7 @@ export function SaveObjectCard() {
   const [objectId, setObjectId] = useState<string | null>(null);
   const appliedDiagnosis = useRef<number | null>(null);
   const attachedProfile = useRef<string | null>(null);
-  const savedSig = useRef<string | null>(null);
+  const saveLock = useRef(false);
   const [profileNote, setProfileNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -127,19 +128,19 @@ export function SaveObjectCard() {
   }
 
   async function onConfirm(intent: SaveIntent) {
-    const signature = JSON.stringify({
-      area,
-      summary,
-      mode: intent.mode,
-      roomId: intent.roomId,
-      projectName: intent.projectName.trim(),
-      roomName: intent.roomName.trim(),
-      areaChoice: intent.areaChoice,
-    });
-    if (savedSig.current === signature) {
-      setMsg('Этот результат уже записан в комнату');
-      return;
-    }
+    if (!claimSave(saveLock)) return;
+    const key = creationIdempotencyKey(
+      JSON.stringify({
+        area,
+        summary,
+        mode: intent.mode,
+        roomId: intent.roomId,
+        projectName: intent.projectName.trim(),
+        roomName: intent.roomName.trim(),
+        phone: intent.phone.trim(),
+        address: intent.address.trim(),
+      }),
+    );
     setBusy(true);
     setMsg(null);
     setErr(null);
@@ -147,13 +148,16 @@ export function SaveObjectCard() {
       const areaM2 = chosenArea(intent, area);
       let saved: JobObject;
       if (intent.mode === 'new' && !bound) {
-        const project = await createProject({
-          name: intent.projectName.trim(),
-          clientName: intent.projectName.trim(),
-          clientPhone: intent.phone.trim(),
-          address: intent.address.trim(),
-          city: sessionUser.org?.city || '',
-        });
+        const project = await createProject(
+          {
+            name: intent.projectName.trim(),
+            clientName: intent.projectName.trim(),
+            clientPhone: intent.phone.trim(),
+            address: intent.address.trim(),
+            city: sessionUser.org?.city || '',
+          },
+          key,
+        );
         saved = await saveObject({
           projectId: project.id,
           roomName: intent.roomName.trim(),
@@ -165,7 +169,7 @@ export function SaveObjectCard() {
           clientSummary: summary,
           room: roomPayload(areaM2),
           estimate: estimateFor(areaM2),
-        });
+        }, `${key}:room`);
       } else {
         const targetId = bound?.id || intent.roomId;
         if (!targetId) throw new Error('Выберите комнату');
@@ -180,13 +184,13 @@ export function SaveObjectCard() {
         });
       }
       setObjectId(saved.id);
-      savedSig.current = signature;
       rememberConsult(null);
       void attachProfileTo(saved);
       setMsg(saved.pendingSync ? 'Комната сохранена на устройстве и уйдёт на сервер при сети' : `Сохранено в комнату «${saved.roomName || saved.clientName || 'Комната'}»`);
     } catch (error) {
       setErr(error instanceof Error ? error.message : 'Не удалось сохранить');
     } finally {
+      releaseSave(saveLock);
       setBusy(false);
     }
   }

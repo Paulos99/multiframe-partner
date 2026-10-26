@@ -57,6 +57,8 @@ import {
 } from './cabinetCalc';
 import type { ConsultSnapshot } from './commercial/saveDestination';
 import { withDemoDocuments } from './demoDocuments';
+import { isDemoModeEnabled } from './demoMode';
+import { overlayDemoSalesRooms } from './commercial/demoQueue';
 import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
 import {
   bootstrapHistoryReset,
@@ -191,10 +193,10 @@ type PartnerApi = {
   projectsError: string | null;
   projectsUnavailable: boolean;
   refreshProjects: () => Promise<void>;
-  createProject: (input: ProjectInput) => Promise<Project>;
+  createProject: (input: ProjectInput, idempotencyKey?: string) => Promise<Project>;
   updateProject: (id: string, input: ProjectInput) => Promise<Project>;
   attachRoomToProject: (roomId: string, projectId: string) => Promise<void>;
-  saveObject: (input: Partial<JobObject> & { id?: string }) => Promise<JobObject>;
+  saveObject: (input: Partial<JobObject> & { id?: string }, idempotencyKey?: string) => Promise<JobObject>;
   deleteObject: (id: string) => Promise<void>;
   flushObjectQueue: () => Promise<void>;
   /** Открыть калькулятор. objectId — обновить эту карточку, null — новый объект на первом расчёте. */
@@ -205,6 +207,9 @@ type PartnerApi = {
   diagnosisRequest: { objectId: string; nonce: number } | null;
   openObject: (id: string) => void;
   openedObjectId: string | null;
+  /** Куда вернуться на главную продаж: в комнату или к задачам дня. */
+  cabinetEntry: 'today' | 'room';
+  enterToday: () => void;
   attachCalculation: (
     message: CabinetCalcMessage,
     objectId: string | null,
@@ -245,6 +250,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [projectsUnavailable, setProjectsUnavailable] = useState(false);
   const [diagnosisRequest, setDiagnosisRequest] = useState<{ objectId: string; nonce: number } | null>(null);
   const [openedObjectId, setOpenedObjectId] = useState<string | null>(null);
+  const [cabinetEntry, setCabinetEntry] = useState<'today' | 'room'>('today');
   const [unsavedConsult, setUnsavedConsult] = useState<ConsultSnapshot | null>(null);
   const rememberConsult = useCallback((snapshot: ConsultSnapshot | null) => {
     setUnsavedConsult(snapshot);
@@ -283,10 +289,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     const stamp = objectsEpoch.current;
     if (!silent) setObjectsLoading(true);
     try {
-      const list = withDemoDocuments(await loadVisibleObjects(session, remote));
+      const live = withDemoDocuments(await loadVisibleObjects(session, remote));
       if (stamp !== objectsEpoch.current) return;
+      cacheObjects(live);
+      const list = overlayDemoSalesRooms(live, session, isDemoModeEnabled());
       setObjects(list);
-      cacheObjects(list);
       const queuedDocs = peekObjectDocumentQueue().length;
       setPendingSyncCount(
         (await countMyOutbox(session.id).catch(() => peekObjectQueue().length)) + queuedDocs,
@@ -735,9 +742,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   },[user,remote,tick]);
 
   const saveObject = useCallback(
-    async (input: Partial<JobObject> & { id?: string }) => {
+    async (input: Partial<JobObject> & { id?: string }, idempotencyKey?: string) => {
       if (!user) throw new Error('Нет сессии');
-      const obj = await saveObjectSynced(user, remote, stripObjectDocuments(input));
+      const obj = await saveObjectSynced(user, remote, stripObjectDocuments(input), idempotencyKey);
       await refreshObjects();
       await refreshProjects();
       return obj;
@@ -746,9 +753,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   );
 
   const createProject = useCallback(
-    async (input: ProjectInput) => {
+    async (input: ProjectInput, idempotencyKey?: string) => {
       if (!user) throw new Error('Нет сессии');
-      const project = await saveProjectSynced(user, remote, input);
+      const project = await saveProjectSynced(user, remote, input, undefined, idempotencyKey);
       await refreshProjects();
       return project;
     },
@@ -789,7 +796,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   const clearDiagnosis = useCallback(() => setDiagnosisRequest(null), []);
 
-  const openObject = useCallback((id: string) => setOpenedObjectId(id), []);
+  const openObject = useCallback((id: string) => {
+    setOpenedObjectId(id);
+    setCabinetEntry('room');
+  }, []);
+  const enterToday = useCallback(() => setCabinetEntry('today'), []);
 
   const requestCalculator = useCallback((objectId: string | null) => {
     const areaM2 = objectId ? objects.find(obj => obj.id === objectId)?.room.areaM2 : null;
@@ -977,6 +988,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       diagnosisRequest,
       openObject,
       openedObjectId,
+      cabinetEntry,
+      enterToday,
       attachCalculation,
       unsavedConsult,
       rememberConsult,
@@ -1029,6 +1042,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       diagnosisRequest,
       openObject,
       openedObjectId,
+      cabinetEntry,
+      enterToday,
       attachCalculation,
       unsavedConsult,
       rememberConsult,

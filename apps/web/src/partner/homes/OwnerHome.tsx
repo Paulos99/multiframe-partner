@@ -46,7 +46,7 @@ export function OwnerHome({
   const user = api.user!;
   const [tab, setTab] = useState<OwnerTab>(() => (consumeReturnToTools() ? 'tools' : 'objects'));
   const [openedProjectId, setOpenedProjectId] = useState<string | null>(null);
-  const { deals, refresh } = useCommercialDeals({
+  const { deals, loading: dealsLoading, refresh } = useCommercialDeals({
     user,
     objects: api.objects,
     projects: api.projects,
@@ -159,6 +159,7 @@ export function OwnerHome({
               role: s.role,
             }))}
             onDealChanged={refresh}
+            dealsLoading={dealsLoading}
           />
         </TabPanel>
       ) : null}

@@ -10,6 +10,7 @@ import { canCreateObjects, type SessionUser } from '../../../packages/shared/par
 import { isCabinetCalcMessage, withAreaChoice, type CabinetCalcMessage } from './partner/cabinetCalc';
 import { SaveDestination } from './partner/commercial/SaveDestination';
 import { chosenArea, saveSummary, type SaveDraftView, type SaveIntent } from './partner/commercial/saveDestination';
+import { claimSave, creationIdempotencyKey, releaseSave } from './partner/idempotency';
 import { buildEstimateFromOrg } from './partner/estimate';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
@@ -57,6 +58,7 @@ function ToolChrome({
   onLogout,
   backLabel,
   onSave,
+  saveLabel = 'Куда сохранить?',
 }: {
   route: 'problemomer' | 'calculator';
   company: string;
@@ -66,6 +68,7 @@ function ToolChrome({
   onLogout: () => void;
   backLabel: string;
   onSave?: (() => void) | null;
+  saveLabel?: string;
 }) {
   const [menu, setMenu] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -87,16 +90,12 @@ function ToolChrome({
   }, [menu]);
 
   return (
+    <>
     <div className={styles.toolBar}>
       <button type="button" className={`${styles.toolIconBtn} ${styles.toolBack}`} onClick={onCabinet} aria-label={backLabel}>
         <ChevronLeftIcon />
         <span>Назад</span>
       </button>
-      {onSave ? (
-        <button type="button" className={styles.toolBack} onClick={onSave}>
-          Куда сохранить?
-        </button>
-      ) : null}
       {/* Переключатель инструментов убран: оба открываются из вкладки «Инструменты». */}
       <span className={styles.toolTitle}>{route === 'calculator' ? 'Калькулятор' : 'Проблемомер'}</span>
       <SyncStatus compact />
@@ -127,6 +126,14 @@ function ToolChrome({
         {notice || ''}
       </p>
     </div>
+    {onSave ? (
+      <div className={styles.toolSaveRow}>
+        <button type="button" className={`${styles.primary} ${styles.toolSaveBtn}`} onClick={onSave}>
+          {saveLabel}
+        </button>
+      </div>
+    ) : null}
+    </>
   );
 }
 
@@ -144,6 +151,7 @@ function PartnerShell() {
     diagnosisRequest,
     clearDiagnosis,
     openObject,
+    enterToday,
     createProject,
     saveObject,
     unsavedConsult,
@@ -158,7 +166,7 @@ function PartnerShell() {
   const [consultOpen, setConsultOpen] = useState(false);
   const linkedObjectId = useRef<string | null>(null);
   const returnRoomRef = useRef<string | null>(null);
-  const savedCalcSig = useRef<string | null>(null);
+  const saveLock = useRef(false);
 
   useEffect(() => {
     if (user) return;
@@ -190,40 +198,25 @@ function PartnerShell() {
       if (event.origin !== window.location.origin) return;
       if (!isCabinetCalcMessage(event.data)) return;
       if (!user || !canCreateObjects(user.role)) return;
-      const target = linkedObjectId.current || event.data.objectId || null;
       const areaOnly = Boolean(event.data.areaEstimate || event.data.inputMode === 'area' || event.data.hasScheme === false);
-      if (!target) {
-        setCalcDraft(event.data);
-        setCalcNotice(
-          areaOnly
-            ? 'Предварительный расчёт готов. Комната не создана — выберите, куда сохранить.'
-            : 'Смета готова. Комната не создана — выберите, куда сохранить.',
-        );
-        return;
-      }
       const area = Number(event.data.areaM2);
-      if (areaOnly && !(area > 0)) {
+      setCalcDraft(event.data);
+      if (!(area > 0)) {
         setCalcNotice('Площадь должна быть больше нуля');
         return;
       }
-      setCalcNotice(areaOnly ? 'Сохраняем предварительный расчёт в комнату…' : 'Сохраняем смету в комнату…');
-      void attachCalculation(event.data, target)
-        .then((obj) => {
-          if (obj) linkedObjectId.current = obj.id;
-          setCalcDraft(null);
-          setCalcNotice(
-            obj
-              ? areaOnly
-                ? 'Предварительный расчёт записан в комнату, без схемы'
-                : 'Смета записана в комнату'
-              : 'Не удалось сохранить',
-          );
-        })
-        .catch(() => setCalcNotice('Не удалось сохранить'));
+      const linked = Boolean(linkedObjectId.current);
+      setCalcNotice(
+        linked
+          ? 'Расчёт готов. В комнату он попадёт после «Сохранить в комнату».'
+          : areaOnly
+            ? 'Предварительный расчёт готов. Комната не создана — выберите, куда сохранить.'
+            : 'Смета готова. Комната не создана — выберите, куда сохранить.',
+      );
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [user, attachCalculation]);
+  }, [user]);
 
   useEffect(() => {
     applyStoredTheme();
@@ -269,27 +262,50 @@ function PartnerShell() {
 
   function leaveTool() {
     const room = returnRoomRef.current;
-    setRoute('cabinet');
     if (room) openObject(room);
+    else enterToday();
+    setRoute('cabinet');
+  }
+
+  function saveKey(intent: SaveIntent, draft: CabinetCalcMessage): string {
+    return creationIdempotencyKey(
+      JSON.stringify({
+        area: draft.areaM2,
+        panels: draft.panels,
+        mode: intent.mode,
+        roomId: intent.roomId,
+        projectName: intent.projectName.trim(),
+        roomName: intent.roomName.trim(),
+        phone: intent.phone.trim(),
+        address: intent.address.trim(),
+        areaChoice: intent.areaChoice,
+      }),
+    );
+  }
+
+  async function saveIntoLinkedRoom() {
+    if (!user || !calcDraft || !linkedObjectId.current) return;
+    if (!claimSave(saveLock)) return;
+    const roomId = linkedObjectId.current;
+    setSaveBusy(true);
+    try {
+      const saved = await attachCalculation(calcDraft, roomId);
+      if (!saved) throw new Error('Не удалось записать расчёт в комнату');
+      setCalcDraft(null);
+      setCalcNotice('Расчёт записан в комнату');
+      returnRoomRef.current = saved.id;
+    } catch (error) {
+      setCalcNotice(error instanceof Error ? error.message : 'Не удалось сохранить');
+    } finally {
+      releaseSave(saveLock);
+      setSaveBusy(false);
+    }
   }
 
   async function confirmCalcSave(intent: SaveIntent) {
     if (!user || !calcDraft) return;
-    const signature = JSON.stringify({
-      area: calcDraft.areaM2,
-      panels: calcDraft.panels,
-      mode: intent.mode,
-      roomId: intent.roomId,
-      projectName: intent.projectName.trim(),
-      roomName: intent.roomName.trim(),
-      areaChoice: intent.areaChoice,
-    });
-    if (savedCalcSig.current === signature) {
-      setSaveOpen(false);
-      setCalcNotice('Этот расчёт уже записан в комнату');
-      leaveTool();
-      return;
-    }
+    if (!claimSave(saveLock)) return;
+    const key = saveKey(intent, calcDraft);
     const area = chosenArea(intent, calcDraft.areaM2 ?? null);
     const message =
       intent.areaChoice === 'room' && area != null ? withAreaChoice(calcDraft, area, user.org) : { ...calcDraft, areaM2: area };
@@ -298,13 +314,16 @@ function PartnerShell() {
       let roomId = intent.roomId;
       let known = roomId ? objects.find((obj) => obj.id === roomId) || null : null;
       if (intent.mode === 'new') {
-        const project = await createProject({
-          name: intent.projectName.trim(),
-          clientName: intent.projectName.trim(),
-          clientPhone: intent.phone.trim(),
-          address: intent.address.trim(),
-          city: user.org?.city || '',
-        });
+        const project = await createProject(
+          {
+            name: intent.projectName.trim(),
+            clientName: intent.projectName.trim(),
+            clientPhone: intent.phone.trim(),
+            address: intent.address.trim(),
+            city: user.org?.city || '',
+          },
+          key,
+        );
         known = await saveObject({
           projectId: project.id,
           roomName: intent.roomName.trim(),
@@ -318,13 +337,12 @@ function PartnerShell() {
             message.areaEstimate || message.inputMode === 'area' || message.hasScheme === false
               ? `Предварительный расчёт · ${message.areaM2 ?? '—'} м² · без схемы`
               : `Расчёт со схемой · ${message.areaM2 ?? '—'} м²`,
-        });
+        }, `${key}:room`);
         roomId = known.id;
       }
       if (!roomId) return;
       const saved = await attachCalculation(message, roomId, known);
       if (!saved) throw new Error('Не удалось записать расчёт в комнату');
-      savedCalcSig.current = signature;
       setCalcDraft(null);
       setSaveOpen(false);
       setCalcNotice(null);
@@ -334,12 +352,24 @@ function PartnerShell() {
     } catch (error) {
       setCalcNotice(error instanceof Error ? error.message : 'Не удалось сохранить');
     } finally {
+      releaseSave(saveLock);
       setSaveBusy(false);
     }
   }
 
   async function confirmConsultSave(intent: SaveIntent) {
     if (!user || !unsavedConsult) return;
+    if (!claimSave(saveLock)) return;
+    const key = creationIdempotencyKey(
+      JSON.stringify({
+        area: unsavedConsult.areaM2,
+        summary: unsavedConsult.summary,
+        mode: intent.mode,
+        roomId: intent.roomId,
+        projectName: intent.projectName.trim(),
+        roomName: intent.roomName.trim(),
+      }),
+    );
     setSaveBusy(true);
     try {
       const area = chosenArea(intent, unsavedConsult.areaM2);
@@ -363,13 +393,16 @@ function PartnerShell() {
           : null;
       let roomId = intent.roomId;
       if (intent.mode === 'new') {
-        const project = await createProject({
-          name: intent.projectName.trim(),
-          clientName: intent.projectName.trim(),
-          clientPhone: intent.phone.trim(),
-          address: intent.address.trim(),
-          city: user.org?.city || '',
-        });
+        const project = await createProject(
+          {
+            name: intent.projectName.trim(),
+            clientName: intent.projectName.trim(),
+            clientPhone: intent.phone.trim(),
+            address: intent.address.trim(),
+            city: user.org?.city || '',
+          },
+          key,
+        );
         const created = await saveObject({
           projectId: project.id,
           roomName: intent.roomName.trim(),
@@ -381,7 +414,7 @@ function PartnerShell() {
           clientSummary: unsavedConsult.summary,
           room: { areaM2: area, roomTypeCustom: intent.roomName.trim() },
           estimate,
-        });
+        }, `${key}:room`);
         roomId = created.id;
       } else if (roomId) {
         const existing = objects.find((obj) => obj.id === roomId);
@@ -399,6 +432,7 @@ function PartnerShell() {
     } catch (error) {
       setCalcNotice(error instanceof Error ? error.message : 'Не удалось сохранить');
     } finally {
+      releaseSave(saveLock);
       setSaveBusy(false);
     }
   }
@@ -446,11 +480,13 @@ function PartnerShell() {
           onNavigate={(r) => {
             if (r === 'calculator') {
               returnRoomRef.current = null;
+              enterToday();
               requestCalculator(null);
               return;
             }
             if (r === 'problemomer') {
               returnRoomRef.current = null;
+              enterToday();
               clearDiagnosis();
               noteTool('problemomer');
             }
@@ -468,7 +504,16 @@ function PartnerShell() {
         caption={toolCaption(user)}
         notice={route === 'calculator' ? calcNotice : null}
         backLabel={returnRoomRef.current ? 'Назад в комнату' : 'Назад'}
-        onSave={route === 'calculator' && calcDraft && !linkedObjectId.current ? () => setSaveOpen(true) : null}
+        saveLabel={linkedObjectId.current ? 'Сохранить в комнату' : 'Куда сохранить?'}
+        onSave={
+          route === 'calculator' && calcDraft
+            ? () => {
+                if (saveLock.current) return;
+                if (linkedObjectId.current) void saveIntoLinkedRoom();
+                else setSaveOpen(true);
+              }
+            : null
+        }
         onCabinet={leaveTool}
         onLogout={logout}
       />

@@ -1246,7 +1246,7 @@
 
 .toolTitle {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 8.5rem;
   margin: 0 6px;
   font-size: 0.95rem;
   font-weight: 750;
@@ -1254,7 +1254,24 @@
   color: var(--cab-ink);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
+}
+
+.toolSaveRow {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  background: var(--cab-card);
+  border-bottom: 1px solid var(--cab-border);
+}
+
+.toolSaveBtn {
+  flex: 1 1 auto;
+  width: 100%;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .toolMenuWrap,

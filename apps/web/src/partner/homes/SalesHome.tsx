@@ -41,9 +41,11 @@ export function SalesHome({
   const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help' | 'tools'>(() =>
     consumeReturnToTools() ? 'tools' : 'deals',
   );
-  const [catalog, setCatalog] = useState(false);
+  const [catalog, setCatalog] = useState(() => api.cabinetEntry === 'room' && Boolean(api.openedObjectId));
   const [focusProjectId, setFocusProjectId] = useState<string | null>(null);
-  const [focusRoomId, setFocusRoomId] = useState<string | null>(null);
+  const [focusRoomId, setFocusRoomId] = useState<string | null>(() =>
+    api.cabinetEntry === 'room' ? api.openedObjectId : null,
+  );
   const [openedProjectId, setOpenedProjectId] = useState<string | null>(null);
   const { deals, loading: dealsLoading, refresh } = useCommercialDeals({
     user,
@@ -103,7 +105,14 @@ export function SalesHome({
           <FadeRise key={catalog ? 'catalog' : 'today'}>
             {catalog ? (
               <div className={styles.salesHome}>
-                <button type="button" className={styles.salesLink} onClick={() => setCatalog(false)}>
+                <button
+                  type="button"
+                  className={styles.salesLink}
+                  onClick={() => {
+                    api.enterToday();
+                    setCatalog(false);
+                  }}
+                >
                   К сегодняшним задачам
                 </button>
                 <RoleWorkspace
@@ -122,6 +131,7 @@ export function SalesHome({
                       role: person.role,
                     }))}
                     onDealChanged={refresh}
+                    dealsLoading={dealsLoading}
                   />
                 ) : (
                   <p className={styles.lead}>Откройте проект — коммерческие действия относятся к нему.</p>
@@ -145,10 +155,24 @@ export function SalesHome({
                   </p>
                 ) : null}
                 <div className={styles.salesDock}>
-                  <button type="button" className={styles.primary} onClick={() => onNavigate('problemomer')}>
+                  <button
+                    type="button"
+                    className={styles.primary}
+                    onClick={() => {
+                      api.enterToday();
+                      onNavigate('problemomer');
+                    }}
+                  >
                     Проблемомер
                   </button>
-                  <button type="button" className={styles.primary} onClick={onOpenCalc}>
+                  <button
+                    type="button"
+                    className={styles.primary}
+                    onClick={() => {
+                      api.enterToday();
+                      onOpenCalc();
+                    }}
+                  >
                     Калькулятор
                   </button>
                 </div>
@@ -174,8 +198,14 @@ export function SalesHome({
       {tab === 'tools' ? (
         <TabPanel>
           <ToolsPanel
-            onProblemomer={() => onNavigate('problemomer')}
-            onCalculator={onOpenCalc}
+            onProblemomer={() => {
+              api.enterToday();
+              onNavigate('problemomer');
+            }}
+            onCalculator={() => {
+              api.enterToday();
+              onOpenCalc();
+            }}
           />
         </TabPanel>
       ) : null}

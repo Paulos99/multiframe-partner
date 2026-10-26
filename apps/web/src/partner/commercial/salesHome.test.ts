@@ -13,6 +13,9 @@ import {
   type SaveDraftView,
   type SaveIntent,
 } from './saveDestination.ts';
+import { claimSave, creationIdempotencyKey, dedupeByKey, releaseSave } from '../idempotency.ts';
+import { overlayDemoSalesRooms } from './demoQueue.ts';
+import { dealGapCopy } from './dealHint.ts';
 
 function room(partial: Partial<JobObject> & Pick<JobObject, 'id' | 'status'>): JobObject {
   return {
@@ -170,4 +173,61 @@ test('сохранение требует явного места и не соз
   assert.equal(lines[0], 'Предварительный расчёт по площади, без схемы');
   assert.match(lines[1] || '', /16/);
   assert.match(lines[2] || '', /90/);
+});
+
+test('три синхронных нажатия «Сохранить» создают проект один раз и с одним ключом', async () => {
+  const lock = { current: false };
+  const key = creationIdempotencyKey('проект|Кухня|16');
+  let creates = 0;
+  const keys: string[] = [];
+
+  async function onSave() {
+    if (!claimSave(lock)) return;
+    try {
+      await dedupeByKey(key, async () => {
+        keys.push(key);
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        creates += 1;
+        return { id: 'prj-once' };
+      });
+    } finally {
+      releaseSave(lock);
+    }
+  }
+
+  await Promise.all([onSave(), onSave(), onSave()]);
+  assert.equal(creates, 1);
+  assert.deepEqual(keys, [key]);
+  assert.equal(creationIdempotencyKey('проект|Кухня|16'), key);
+
+  const parallelKey = creationIdempotencyKey('параллельно');
+  let parallel = 0;
+  await Promise.all(
+    [0, 1, 2].map(() =>
+      dedupeByKey(parallelKey, async () => {
+        parallel += 1;
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        return { id: 'prj-parallel' };
+      }),
+    ),
+  );
+  assert.equal(parallel, 1);
+});
+
+test('в демо-режиме пустая очередь менеджера получает задачи', () => {
+  const user = { id: 'u_sales1', orgId: 'org_demo', role: 'sales' as const };
+  assert.equal(overlayDemoSalesRooms([], user, false).length, 0);
+  const quiet = overlayDemoSalesRooms([], user, true);
+  const actions = nextActionsForRole('sales', quiet, []);
+  assert.equal(actions.length > 0, true);
+  assert.equal(actions.every((action) => Boolean(action.objectId)), true);
+  const busy = overlayDemoSalesRooms([room({ id: 'kitchen', status: 'measured' })], user, true);
+  assert.equal(busy.length, 1);
+});
+
+test('подсказка сделки не врёт, когда проект с комнатами уже открыт', () => {
+  const text = dealGapCopy({ projectOpen: true, hasRooms: true, loading: false });
+  assert.equal(text.includes('когда проект открыт'), false);
+  assert.match(text, /этом проекте|сделку/);
+  assert.match(dealGapCopy({ projectOpen: true, hasRooms: true, loading: false, failed: true }), /ещё не создана/);
 });

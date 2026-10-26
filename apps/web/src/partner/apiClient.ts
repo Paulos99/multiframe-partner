@@ -194,12 +194,19 @@ export async function apiListObjects(): Promise<JobObject[]> {
   return data.objects;
 }
 
+function idempotencyHeaders(key?: string): Record<string, string> | undefined {
+  if (!key) return undefined;
+  return { 'Idempotency-Key': key };
+}
+
 export async function apiCreateObject(
   input: Partial<JobObject>,
+  init?: { idempotencyKey?: string },
 ): Promise<JobObject> {
   const data = await request<{ object: JobObject }>('/objects', {
     method: 'POST',
     body: JSON.stringify(input),
+    headers: idempotencyHeaders(init?.idempotencyKey),
   });
   return data.object;
 }
@@ -220,10 +227,14 @@ export async function apiListProjects(): Promise<Project[]> {
   return data.projects;
 }
 
-export async function apiCreateProject(input: ProjectInput): Promise<Project> {
+export async function apiCreateProject(
+  input: ProjectInput,
+  init?: { idempotencyKey?: string },
+): Promise<Project> {
   const data = await request<{ project: Project }>('/projects', {
     method: 'POST',
     body: JSON.stringify(input),
+    headers: idempotencyHeaders(init?.idempotencyKey),
   });
   return data.project;
 }
@@ -555,14 +566,18 @@ export async function apiListDeals(): Promise<ApiDeal[]> {
   return data.deals || [];
 }
 
-export async function apiCreateDeal(input: {
-  projectId: string;
-  stage?: string;
-  assignments?: ApiDeal['assignments'];
-}): Promise<ApiDeal> {
+export async function apiCreateDeal(
+  input: {
+    projectId: string;
+    stage?: string;
+    assignments?: ApiDeal['assignments'];
+  },
+  init?: { idempotencyKey?: string },
+): Promise<ApiDeal> {
   const data = await request<{ deal: ApiDeal }>('/deals', {
     method: 'POST',
     body: JSON.stringify(input),
+    headers: idempotencyHeaders(init?.idempotencyKey),
   });
   return data.deal;
 }
