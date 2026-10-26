@@ -201,9 +201,9 @@ export function ResultWideScreen() {
         <h1>Акустический профиль помещения</h1>
       </header>
 
-      <section className={`${styles.objectSpec} ${styles.driftSlow}`} data-reveal aria-label="Параметры объекта">
+      <section className={`${styles.objectSpec} ${styles.driftSlow}`} data-reveal aria-label="Параметры комнаты">
         <div className={styles.objectSpecLabel}>
-          <strong>Параметры объекта</strong>
+          <strong>Параметры комнаты</strong>
         </div>
         <dl className={styles.objectSpecGrid}>
           {objectCells.map((cell) => (

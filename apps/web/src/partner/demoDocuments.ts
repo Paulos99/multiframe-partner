@@ -185,7 +185,7 @@ export async function buildDemoPdfBlob(obj: JobObject, doc: JobObjectDocument): 
     areaEstimate: false,
     hidePrices: false,
     download: false,
-    fileLabel: obj.clientName || 'Объект',
+    fileLabel: obj.clientName || 'Комната',
     fileDate: doc.createdAt,
   });
   demoPdfCache.set(doc.id, file.blob);

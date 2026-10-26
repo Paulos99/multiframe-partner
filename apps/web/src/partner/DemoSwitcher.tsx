@@ -63,9 +63,9 @@ export function demoRoleHint(account: DemoAccount): string {
     case 'owner':
       return 'Прайс и команда';
     case 'sales':
-      return 'Сделки и КП';
+      return 'Проекты и КП';
     case 'measurer':
-      return 'Замер на объекте';
+      return 'Замер комнаты';
     case 'crew':
       return demoRoleLabel(account).includes('2') ? 'Вторая бригада' : 'Задания на монтаж';
     default:

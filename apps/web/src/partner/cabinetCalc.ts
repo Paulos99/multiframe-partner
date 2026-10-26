@@ -99,15 +99,14 @@ export function objectPatchFromCalc(
   const id = existing?.id || targetId;
   if (id) {
     patch.id = id;
-    if (existing?.status === 'draft') patch.status = 'measured';
     return patch;
   }
   return {
     ...patch,
-    clientName: area ? `Расчёт ${area} м²` : 'Расчёт калькулятора',
+    clientName: area ? `Потолок ${area} м²` : 'Расчёт потолка',
     clientPhone: '',
     address: '',
     city: org?.city || '',
-    status: 'measured',
+    status: 'draft',
   };
 }

@@ -37,6 +37,7 @@ import {
   apiBase,
   apiCreateStaff,
   apiDeleteStaff,
+  apiDeleteProject,
   apiListStaff,
   apiLogin,
   apiLogout,
@@ -67,6 +68,7 @@ import {
   createPartnerAccount,
   createStaffAccount,
   deletePartnerAccount,
+  deleteLocalProject,
   deleteStaffAccount,
   enqueueObjectDocuments,
   generatePassword,
@@ -130,6 +132,8 @@ type PartnerApi = {
   user: SessionUser | null;
   partner: PartnerProfile | null;
   loading: boolean;
+  /** Первая проверка сессии закончилась. Попытка входа это не сбрасывает. */
+  ready: boolean;
   error: string | null;
   remote: boolean;
   objects: JobObject[];
@@ -194,6 +198,7 @@ type PartnerApi = {
   attachRoomToProject: (roomId: string, projectId: string) => Promise<void>;
   saveObject: (input: Partial<JobObject> & { id?: string }) => Promise<JobObject>;
   deleteObject: (id: string) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
   flushObjectQueue: () => Promise<void>;
   /** Открыть калькулятор. objectId — обновить эту карточку, null — новый объект на первом расчёте. */
   requestCalculator: (objectId: string | null) => void;
@@ -225,6 +230,7 @@ const Ctx = createContext<PartnerApi | null>(null);
 export function PartnerProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [objects, setObjects] = useState<JobObject[]>([]);
@@ -335,6 +341,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     setUser(loadSession());
     setTick((n) => n + 1);
     setLoading(false);
+    setReady(true);
   }, []);
 
   useEffect(() => {
@@ -386,6 +393,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         }
       }
       setLoading(false);
+      setReady(true);
       void flushAnalyticsQueue();
       void flushObjectQueue();
     })();
@@ -510,6 +518,14 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (loginName: string, password: string) => {
       setError(null);
+      setCalcRequest(null);
+      setDiagnosisRequest(null);
+      try {
+        localStorage.removeItem(PARTNER_CALC_STORE);
+      } catch {
+        /* хранилище недоступно */
+      }
+      setOpenedObjectId(null);
       setLoading(true);
       try {
         let session: SessionUser;
@@ -547,6 +563,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setCalcRequest(null);
     setDiagnosisRequest(null);
+    try {
+      localStorage.removeItem(PARTNER_CALC_STORE);
+    } catch {
+      /* хранилище недоступно */
+    }
     setOpenedObjectId(null);
     setObjects([]);
     setProjects([]);
@@ -771,6 +792,21 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, remote, refreshObjects],
   );
 
+  const deleteProject = useCallback(
+    async (id: string) => {
+      if (!user) throw new Error('Нет сессии');
+      if (remote && loadToken() && navigator.onLine) await apiDeleteProject(id);
+      try {
+        deleteLocalProject(id, user);
+      } catch (err) {
+        if (!(remote && loadToken() && navigator.onLine)) throw err;
+      }
+      await refreshObjects();
+      await refreshProjects();
+    },
+    [user, remote, refreshObjects, refreshProjects],
+  );
+
   const requestDiagnosis = useCallback((objectId: string) => {
     setDiagnosisRequest({ objectId, nonce: Date.now() });
   }, []);
@@ -836,9 +872,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   const attachCalculation = useCallback(
     async (message: CabinetCalcMessage, objectId: string | null) => {
-      if (!user || !canCreateObjects(user.role)) return null;
-      if (!calcMessageHasScheme(message)) return null;
+      if (!user) return null;
       const existing = objectId ? objects.find((o) => o.id === objectId) : undefined;
+      if (!canCreateObjects(user.role) && !(user.role === 'measurer' && existing)) return null;
+      if (!calcMessageHasScheme(message)) return null;
       const patch = objectPatchFromCalc(message, existing, user.org, objectId);
       const saved = await saveObject(patch);
       const namedAt = new Date().toISOString();
@@ -859,7 +896,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   const attachProfile = useCallback(
     async (saved: JobObject, pdfBase64: string) => {
-      if (!user || !canCreateObjects(user.role)) return null;
+      if (!user || (!canCreateObjects(user.role) && user.role !== 'measurer')) return null;
       return attachDocuments(saved, [
         {
           kind: 'profile',
@@ -892,6 +929,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       user,
       partner,
       loading,
+      ready,
       error,
       remote,
       objects,
@@ -947,6 +985,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       attachRoomToProject,
       saveObject,
       deleteObject,
+      deleteProject,
       flushObjectQueue,
       requestCalculator,
       calcRequest,
@@ -961,11 +1000,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       refresh,
       apiBase: remote ? (import.meta.env.VITE_API_URL as string) || '' : '',
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       user,
       partner,
       loading,
+      ready,
       error,
       remote,
       objects,
@@ -997,6 +1036,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       attachRoomToProject,
       saveObject,
       deleteObject,
+      deleteProject,
       flushObjectQueue,
       requestCalculator,
       calcRequest,
@@ -1087,9 +1127,10 @@ export function calcUrlFromOrg(
   if (opts?.objectId && typeof opts.areaM2 === 'number' && Number.isFinite(opts.areaM2) && opts.areaM2 > 0) {
     q.set('area', String(opts.areaM2));
     q.set('mode', 'area');
-    q.set('walls', '0');
     q.set('source', 'cabinet');
   }
+  q.set('walls', '0');
+  q.set('surfaces', 'ceiling');
   q.set('partner', '1');
   const path = `${import.meta.env.BASE_URL || '/'}calculator/index.html`.replace(/\/{2,}/g, '/');
   const origin = typeof window !== 'undefined' ? window.location.origin : '';

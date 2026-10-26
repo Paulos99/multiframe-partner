@@ -18,10 +18,9 @@ export function StaffPanel() {
   const reduce=usePrefersReducedMotion();
   const user = api.user;
   const [execLogin, setExecLogin] = useState('');
-  const [execPassword, setExecPassword] = useState(() => generatePassword());
   const [execName, setExecName] = useState('');
   const [execRole, setExecRole] = useState<UserRole>('measurer');
-  const [execCreated, setExecCreated] = useState<string | null>(null);
+  const [issued, setIssued] = useState<{ login: string; password: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [savingStaff, setSavingStaff] = useState(false);
   const staff = api.partnerListStaff();
@@ -30,20 +29,19 @@ export function StaffPanel() {
 
   async function onCreateStaff(e: FormEvent) {
     e.preventDefault();
-    setExecCreated(null);
+    setIssued(null);
     setErr(null);
     setSavingStaff(true);
     try {
-      const password = execPassword.trim() || generatePassword();
+      const password = generatePassword();
       const res = await api.partnerCreateStaff({
         login: execLogin.trim(),
         password,
         displayName: execName.trim() || execLogin.trim(),
         role: execRole,
       });
-      setExecCreated(`${ROLE_LABELS[res.role]} ${res.login} · пароль: ${res.password}`);
+      setIssued({ login: res.login, password: res.password });
       setExecLogin('');
-      setExecPassword(generatePassword());
       setExecName('');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
@@ -56,8 +54,8 @@ export function StaffPanel() {
     <form className={`${styles.card} ${styles.panelCard}`} onSubmit={(e) => void onCreateStaff(e)}>
       <h2>Сотрудники</h2>
       <p className={styles.lead}>
-        Менеджер ведёт сделки и КП, замерщик сохраняет объекты, у каждого монтажника свой вход и
-        свои задания. Цены видят все: монтажник открывает ту же смету со схемой раскладки.
+        Менеджер ведёт проекты и КП. Замерщик сохраняет профиль комнаты. У каждого монтажника свой
+        вход и назначенные комнаты. Смету со схемой раскладки видят все.
       </p>
       <div className={styles.grid2}>
         <label className={styles.field}>
@@ -87,30 +85,14 @@ export function StaffPanel() {
             autoComplete="off"
           />
         </label>
-        <label className={`${styles.field} ${styles.passwordField}`}>
-          Пароль
-          <div className={styles.passwordRow}>
-            <input
-              type="text"
-              value={execPassword}
-              onChange={(e) => setExecPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-              spellCheck={false}
-            />
-            <button
-              type="button"
-              className={styles.ghost}
-              onClick={() => setExecPassword(generatePassword())}
-            >
-              Сгенерировать
-            </button>
-          </div>
-        </label>
       </div>
-      {execCreated ? (
+      <p className={styles.hint}>Пароль создаётся при сохранении и показывается один раз.</p>
+      {issued ? (
         <p className={styles.flash} role="status">
-          {execCreated}
+          Сотрудник {issued.login}. Пароль: {issued.password}{' '}
+          <button type="button" className={styles.ghost} onClick={() => setIssued(null)}>
+            Скрыть пароль
+          </button>
         </p>
       ) : null}
       {err ? (

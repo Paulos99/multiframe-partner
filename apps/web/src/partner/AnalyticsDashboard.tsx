@@ -404,7 +404,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
 
   const sectionTabs: Array<{ id: AnalyticsTab; label: string }> = [
     { id: 'overview', label: 'Сводка' },
-    { id: 'portrait', label: 'Объекты' },
+    { id: 'portrait', label: 'Комнаты' },
     ...(mode === 'admin' ? [{ id: 'companies' as const, label: 'Компании' }] : []),
     { id: 'team', label: mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники' },
     { id: 'objects', label: 'Журнал' },
@@ -536,7 +536,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             <BreakdownList title="Тип комнаты" items={dash.breakdowns.roomType} kind="room" />
             <BreakdownList title="Тип дома" items={dash.breakdowns.houseType} kind="house" />
             <BreakdownList
-              title="Стадия объекта"
+              title="Стадия комнаты"
               items={dash.breakdowns.objectStage}
               kind="stage"
             />

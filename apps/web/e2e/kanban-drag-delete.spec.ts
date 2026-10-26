@@ -9,6 +9,7 @@ async function enter(page: Page, role = 'owner') {
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Мой профиль', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
 }
 
 /** Grabs the card at (+20,+15), drags it and checks the overlay keeps that offset to the pointer. */
@@ -57,12 +58,12 @@ test('grab point holds with page and board scrolled', async ({ page }) => {
   const card = page.locator('[data-room-id="ui_measured"]');
   await expect(card).toBeVisible();
   await page.evaluate(() => window.scrollBy(0, 220));
-  await page.locator('[aria-label="Канбан объектов"]').evaluate((el) => {
+  await page.locator('[aria-label="Доска проектов"]').evaluate((el) => {
     el.scrollLeft = 120;
   });
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   expect(
-    await page.locator('[aria-label="Канбан объектов"]').evaluate((el) => el.scrollLeft),
+    await page.locator('[aria-label="Доска проектов"]').evaluate((el) => el.scrollLeft),
   ).toBeGreaterThan(0);
   await card.scrollIntoViewIfNeeded();
   await expectGrabPointStays(page, 'ui_measured');
@@ -72,10 +73,10 @@ test('owner deletes an object via «…» and confirm; it is gone after reload',
   await enter(page);
   const card = page.locator('[data-room-id="ui_room"]');
   await expect(card).toBeVisible();
-  await page.getByRole('button', { name: /^Действия с объектом «Спальня»/ }).click();
+  await page.getByRole('button', { name: /^Действия с комнатой «Спальня»/ }).click();
   await page.getByRole('menuitem', { name: 'Удалить' }).click();
   const dialog = page.getByRole('alertdialog');
-  await expect(dialog).toContainText('Удалить объект «');
+  await expect(dialog).toContainText('Удалить комнату «');
   await expect(dialog).toContainText('Действие нельзя отменить');
   await dialog.getByRole('button', { name: 'Отмена' }).click();
   await expect(dialog).toHaveCount(0);
@@ -90,8 +91,9 @@ test('owner deletes an object via «…» and confirm; it is gone after reload',
   await page.getByRole('alertdialog').getByRole('button', { name: 'Удалить' }).click();
   await del;
   await expect(card).toHaveCount(0);
-  await expect(page.getByRole('status').filter({ hasText: 'Объект удалён' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Комната удалена' })).toBeVisible();
   await page.reload();
+  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await expect(page.locator('[data-room-id="ui_measured"]')).toBeVisible();
   await expect(page.locator('[data-room-id="ui_room"]')).toHaveCount(0);
 });
@@ -100,7 +102,7 @@ test('crew has no delete action on cards', async ({ page }) => {
   await enter(page, 'crew');
   const card = page.locator('[data-room-id="ui_crew_room"]');
   await expect(card).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Действия с объектом/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Действия с комнатой/ })).toHaveCount(0);
   await card.click({ button: 'right' });
   await expect(page.getByRole('menuitem', { name: 'Удалить' })).toHaveCount(0);
 });

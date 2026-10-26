@@ -388,10 +388,14 @@ describe('projects', { concurrency: false }, () => {
       (await call('POST', '/objects', { token: crew, body: { clientName: 'Монтаж', address: 'нет' } })).statusCode,
       403,
     );
+    assert.equal(
+      (await call('POST', '/objects', { token: measurer, body: { clientName: 'Петрова', address: 'нет', roomName: 'Кухня' } })).statusCode,
+      403,
+    );
 
     const created = readJson(
       await call('POST', '/objects', {
-        token: measurer,
+        token: owner,
         body: {
           clientName: 'Петрова',
           clientPhone: '+7 495 000-11-22',

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { JobObject } from '../../../../packages/shared/partner';
-import { sortRooms, moveRoomOrder, orderAt, canMoveRoom, rankMovedColumn } from './kanban';
+import { sortRooms, moveRoomOrder, orderAt, canMoveRoom, rankMovedColumn, roomCountLabel } from './kanban';
 const room = (id: string, stageOrder?: number) =>
   ({
     id,
@@ -50,7 +50,10 @@ test('date and client sorting do not mutate input; crew restrictions remain', ()
     assert.equal(sortRooms(input, sort, [])[0].id, 'a');
   assert.equal(input[0].id, 'z');
   assert.equal(canMoveRoom('crew', 'measured'), false);
-  assert.equal(canMoveRoom('crew', 'closed'), true);
+  assert.equal(canMoveRoom('crew', 'closed'), false);
+  assert.equal(canMoveRoom('measurer', 'draft'), false);
+  assert.equal(canMoveRoom('sales', 'closed'), true);
+  assert.equal(canMoveRoom('owner', 'measured'), true);
 });
 
 test('drag in a client/date sorted view persists the entire displayed order', () => {
@@ -60,4 +63,11 @@ test('drag in a client/date sorted view persists the entire displayed order', ()
     sortRooms(saved, 'manual', []).map((r) => r.id),
     ['c', 'b', 'a'],
   );
+});
+
+test('room counts use Russian plural forms', () => {
+  assert.equal(roomCountLabel(1), '1 комната');
+  assert.equal(roomCountLabel(3), '3 комнаты');
+  assert.equal(roomCountLabel(11), '11 комнат');
+  assert.equal(roomCountLabel(22), '22 комнаты');
 });

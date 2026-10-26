@@ -22,7 +22,10 @@ import {
   aggregateAnalyticsDashboard,
   networkAdminScope,
   canEditOrg,
+  canCreateObjects,
+  canDeleteObjects,
   canManageStaff,
+  canMoveObjects,
   visibleDocuments,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
@@ -709,11 +712,7 @@ export function isObjectVisible(user: SessionUser, obj: JobObject): boolean {
  * measurer sees own rows, crew sees assignments and монтаж.
  */
 export function presentCachedObject(user: SessionUser, obj: JobObject): JobObject | null {
-  if (user.role !== 'admin') {
-    if (!user.orgId || obj.orgId !== user.orgId) return null;
-    if (user.role === 'measurer' && obj.createdBy !== user.id && obj.assignedTo !== user.id) return null;
-    if (user.role === 'crew' && obj.assignedTo !== user.id && obj.status !== 'install') return null;
-  }
+  if (!objectVisible(user, obj)) return null;
   return presentObject(obj);
 }
 
@@ -721,9 +720,7 @@ function objectVisible(user: SessionUser, obj: JobObject): boolean {
   if (user.role === 'admin') return true;
   if (!user.orgId || obj.orgId !== user.orgId) return false;
   if (user.role === 'owner') return true;
-  if (user.role === 'sales') {
-    return obj.createdBy === user.id || obj.assignedTo === user.id || !obj.assignedTo;
-  }
+  if (user.role === 'sales') return true;
   if (user.role === 'measurer') {
     return obj.createdBy === user.id || obj.assignedTo === user.id;
   }
@@ -829,11 +826,28 @@ export function deleteLocalObject(id: string, actor: SessionUser): void {
   const existing = db.objects.find((o) => o.id === id);
   if (!existing) return;
   if (!objectVisible(actor, existing)) throw new Error('Недостаточно прав');
-  if (actor.role !== 'admin' && actor.role !== 'owner') {
-    throw new Error('Удалять объекты могут только администратор и владелец');
+  if (!canDeleteObjects(actor.role) || existing.orgId !== actor.orgId) {
+    throw new Error('Удалять проект и комнату могут менеджер и владелец своей компании');
   }
   saveDb({ ...db, objects: db.objects.filter((o) => o.id !== id) });
   removeFromObjectQueue(id);
+  cacheObjects(listLocalObjects(actor));
+}
+
+export function deleteLocalProject(id: string, actor: SessionUser): void {
+  if (!canDeleteObjects(actor.role) || !actor.orgId) {
+    throw new Error('Удалять проект могут менеджер и владелец своей компании');
+  }
+  const db = loadDb();
+  const project = (db.projects || []).find((item) => item.id === id);
+  if (!project || project.orgId !== actor.orgId) throw new Error('Проект не найден');
+  const roomIds = new Set(db.objects.filter((obj) => obj.projectId === id).map((obj) => obj.id));
+  saveDb({
+    ...db,
+    projects: (db.projects || []).filter((item) => item.id !== id),
+    objects: db.objects.filter((obj) => obj.projectId !== id),
+  });
+  for (const roomId of roomIds) removeFromObjectQueue(roomId);
   cacheObjects(listLocalObjects(actor));
 }
 
@@ -842,12 +856,21 @@ export function upsertLocalObject(
   actor: SessionUser,
 ): JobObject {
   if (!actor.orgId) throw new Error('Нет организации');
-  if (actor.role === 'crew' && !input.id) throw new Error('Монтажник не создаёт объекты');
   const db = loadDb();
   const now = new Date().toISOString();
   const org = db.orgs.find((o) => o.id === actor.orgId);
   const existing = input.id ? db.objects.find((o) => o.id === input.id) : null;
+  if (!existing && !canCreateObjects(actor.role)) throw new Error('Недостаточно прав');
   if (existing && !objectVisible(actor, existing)) throw new Error('Недостаточно прав');
+  if (
+    existing &&
+    input.status &&
+    input.status !== existing.status &&
+    !canMoveObjects(actor.role)
+  ) {
+    throw new Error('Статус меняет менеджер или владелец');
+  }
+  if (actor.role === 'crew') throw new Error('Бригада не меняет проект и комнату');
 
   const status = (input.status || existing?.status || 'draft') as JobObjectStatus;
   const obj: JobObject = {
@@ -1135,7 +1158,7 @@ export function appendLocalObjectDocuments(
   if (actor.role === 'crew') throw new Error('Монтажник не прикладывает документы');
   const db = loadDb();
   const existing = db.objects.find((o) => o.id === objectId);
-  if (!existing || !objectVisible(actor, existing)) throw new Error('Объект не найден');
+  if (!existing || !objectVisible(actor, existing)) throw new Error('Комната не найдена');
   const now = new Date().toISOString();
   const meta = docs.map((d) => {
     if (d.dataBase64) {

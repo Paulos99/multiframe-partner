@@ -775,16 +775,16 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
   <section class="page" data-page="1">
     ${pageChrome(1, TOTAL, roomLine, logos)}
     <h1 class="hero-title">Акустический профиль помещения</h1>
-    <p class="hero-sub">Объект: <b>${escapeHtml(roomName)}</b>, ${escapeHtml(area)}. Эффект MultiFrame для этого помещения.</p>
+    <p class="hero-sub">Комната: <b>${escapeHtml(roomName)}</b>, ${escapeHtml(area)}. Эффект MultiFrame для этого помещения.</p>
     ${
       partnerCompany
         ? `<p class="hero-sub">Подготовлено: <b>${escapeHtml(partnerCompany)}</b></p>`
         : ''
     }
 
-    <section class="object" aria-label="Объект">
+    <section class="object" aria-label="Комната">
       <div class="object-label">
-        <strong>Параметры объекта</strong>
+        <strong>Параметры комнаты</strong>
       </div>
       <dl class="object-grid">
         <div><dt>Перекрытие</dt><dd>${escapeHtml(slabLabel)}</dd></div>
@@ -956,7 +956,7 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
     </div>
 
     <div class="closing">
-      Документ собран по ответам в Проблемомере для объекта «${escapeHtml(roomName)}».
+      Документ собран по ответам в Проблемомере для комнаты «${escapeHtml(roomName)}».
       Это <b>экспертная оценка</b>, не инженерный расчёт и не гарантия цифр.
     </div>
   </section>

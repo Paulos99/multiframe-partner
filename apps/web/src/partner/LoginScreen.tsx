@@ -16,7 +16,9 @@ export function LoginScreen() {
   const shownError = localError || error;
 
   useEffect(() => {
-    if (shownError) setShake((n) => n + 1);
+    if (!shownError) return;
+    setShake((n) => n + 1);
+    setManualOpen(true);
   }, [shownError]);
 
   async function onSubmit(event: FormEvent) {
@@ -77,7 +79,7 @@ export function LoginScreen() {
               />
               <h1>Кабинет партнёра</h1>
               <p className={styles.lead}>
-                {demo ? 'Выберите роль, чтобы открыть кабинет.' : 'Проблемомер, калькулятор и объекты компании.'}
+                {demo ? 'Выберите роль, чтобы открыть кабинет.' : 'Проблемомер, калькулятор и проекты компании.'}
               </p>
             </header>
             {demo ? <DemoLoginPicker /> : null}

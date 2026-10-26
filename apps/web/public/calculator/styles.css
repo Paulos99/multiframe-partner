@@ -8225,3 +8225,15 @@ body.theme-dark .sketch-inline-footer {
   border-color: #2a3140;
   color: #c5ccd4;
 }
+
+body.ceiling-only #areaWallsBlock,
+body.ceiling-only #wallSurfacesList,
+body.ceiling-only #wallMountingGroup,
+body.ceiling-only .surface-group-actions,
+body.ceiling-only [data-value='ceiling_framed'],
+body.ceiling-only #showFrameLabel,
+body.ceiling-only #showFrameMobileLabel,
+body.ceiling-only [data-tab='walls'],
+body.ceiling-only [data-tab-content='walls'] {
+  display: none !important;
+}

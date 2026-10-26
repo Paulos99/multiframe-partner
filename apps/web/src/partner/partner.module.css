@@ -3071,3 +3071,145 @@
     font-size: 0.95rem;
   }
 }
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--cab-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.today {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.todayHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.todayHead h2 {
+  margin: 0 0 6px;
+  font-size: 1.7rem;
+  letter-spacing: -0.03em;
+}
+
+.todayGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+  gap: 16px;
+}
+
+.todayCard {
+  background: var(--cab-card);
+  border: 1px solid var(--cab-border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.todayCard h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+.todayList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todayTask {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--cab-border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.todayList li:last-child .todayTask {
+  border-bottom: 0;
+}
+
+.todayTask span {
+  color: var(--cab-muted);
+  font-size: 0.82rem;
+}
+
+.todayActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: 0;
+  background: rgba(22, 48, 40, 0.28);
+  cursor: pointer;
+}
+
+.drawer {
+  position: fixed;
+  top: var(--cab-top, 72px);
+  right: 0;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(440px, 100%);
+  height: calc(100dvh - var(--cab-top, 72px));
+  overflow: auto;
+  padding: 16px 20px calc(28px + env(safe-area-inset-bottom));
+  background: var(--cab-card);
+  border-left: 1px solid var(--cab-border);
+  box-shadow: -16px 0 48px rgba(16, 40, 32, 0.12);
+}
+
+.drawerHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drawerHead h3 {
+  margin: 0;
+}
+
+@media (max-width: 800px) {
+  .todayHead {
+    flex-direction: column;
+  }
+
+  .todayGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .todayHead .primary,
+  .todayActions .primary,
+  .todayActions .ghost {
+    width: 100%;
+  }
+
+  .drawer {
+    padding-bottom: calc(108px + env(safe-area-inset-bottom));
+  }
+}

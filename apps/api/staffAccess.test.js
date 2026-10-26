@@ -53,20 +53,32 @@ describe('управление сотрудниками', { concurrency: false }
   /** @type {Record<string, string>} */
   const tokens = {};
 
-  test('менеджер добавляет и удаляет сотрудников своей компании, включая другого менеджера', async () => {
+  test('менеджер видит сотрудников своей компании и не создаёт их', async () => {
     tokens.sales = await login('sales1', 'exec1234');
     tokens.owner = await login('partner1', 'demo1234');
     tokens.otherSales = await login('sales2', 'exec1234');
 
+    const denied = await call('POST', '/org/staff', {
+      token: tokens.sales,
+      body: {
+        login: 'mgr_extra',
+        password: 'staff-pass-1',
+        displayName: 'Второй менеджер',
+        role: 'sales',
+        orgId: 'org_demo_spb',
+      },
+    });
+    assert.equal(denied.statusCode, 403);
+    assert.equal(userByLogin('mgr_extra'), undefined);
+
     const created = readJson(
       await call('POST', '/org/staff', {
-        token: tokens.sales,
+        token: tokens.owner,
         body: {
           login: 'mgr_extra',
           password: 'staff-pass-1',
           displayName: 'Второй менеджер',
           role: 'sales',
-          orgId: 'org_demo_spb',
         },
       }),
     );
@@ -78,7 +90,7 @@ describe('управление сотрудниками', { concurrency: false }
 
     const measurer = readJson(
       await call('POST', '/org/staff', {
-        token: tokens.sales,
+        token: tokens.owner,
         body: {
           login: 'mgr_measurer',
           password: 'staff-pass-1',
@@ -92,7 +104,7 @@ describe('управление сотрудниками', { concurrency: false }
 
     const crew = readJson(
       await call('POST', '/org/staff', {
-        token: tokens.sales,
+        token: tokens.owner,
         body: {
           login: 'mgr_crew',
           password: 'staff-pass-1',
@@ -129,11 +141,20 @@ describe('управление сотрудниками', { concurrency: false }
 
     assert.equal(
       (await call('DELETE', `/org/staff/${created.id}`, { token: tokens.sales })).statusCode,
+      403,
+    );
+    assert.ok(userById(created.id));
+    assert.equal(
+      (await call('DELETE', `/org/staff/${created.id}`, { token: tokens.owner })).statusCode,
       200,
     );
     assert.equal(userById(created.id), undefined);
     assert.equal(
       (await call('DELETE', `/org/staff/${measurer.id}`, { token: tokens.sales })).statusCode,
+      403,
+    );
+    assert.equal(
+      (await call('DELETE', `/org/staff/${measurer.id}`, { token: tokens.owner })).statusCode,
       200,
     );
     assert.equal(
@@ -166,7 +187,7 @@ describe('управление сотрудниками', { concurrency: false }
         role: 'measurer',
       },
     });
-    assert.equal(overwrite.statusCode, 409);
+    assert.equal(overwrite.statusCode, 403);
     assert.equal(userById('u_partner1').role, 'owner');
     assert.equal(userById('u_partner1').passwordHash, ownerBefore.passwordHash);
 
@@ -199,7 +220,7 @@ describe('управление сотрудниками', { concurrency: false }
       token: sales,
       body: { staffUserId: 'u_crew2', password: 'staff-pass-1' },
     });
-    assert.equal(resetForeign.statusCode, 404);
+    assert.equal(resetForeign.statusCode, 403);
     const foreignCrew = await call('POST', '/auth/login', {
       body: { login: 'crew2', password: 'exec1234' },
     });
@@ -216,14 +237,15 @@ describe('управление сотрудниками', { concurrency: false }
           role,
         },
       });
-      assert.equal(rejected.statusCode, 400, role);
+      assert.equal(rejected.statusCode, 403, role);
       assert.equal(userByLogin(`forbidden_${role}`), undefined);
     }
     assert.equal(storedUsers().length, beforeCount);
 
+    const owner = tokens.owner || (await login('partner1', 'demo1234'));
     const temp = readJson(
       await call('POST', '/org/staff', {
-        token: sales,
+        token: owner,
         body: {
           login: 'mgr_pw',
           password: 'staff-pass-1',
@@ -232,8 +254,17 @@ describe('управление сотрудниками', { concurrency: false }
         },
       }),
     );
+    assert.equal(
+      (
+        await call('POST', '/org/staff/reset-password', {
+          token: sales,
+          body: { staffUserId: temp.id, password: 'staff-pass-2' },
+        })
+      ).statusCode,
+      403,
+    );
     const reset = await call('POST', '/org/staff/reset-password', {
-      token: sales,
+      token: owner,
       body: { staffUserId: temp.id, password: 'staff-pass-2' },
     });
     assert.equal(reset.statusCode, 200);
@@ -247,7 +278,8 @@ describe('управление сотрудниками', { concurrency: false }
         .statusCode,
       200,
     );
-    assert.equal((await call('DELETE', `/org/staff/${temp.id}`, { token: sales })).statusCode, 200);
+    assert.equal((await call('DELETE', `/org/staff/${temp.id}`, { token: sales })).statusCode, 403);
+    assert.equal((await call('DELETE', `/org/staff/${temp.id}`, { token: owner })).statusCode, 200);
   });
 
   test('замерщик и монтажник не управляют сотрудниками', async () => {

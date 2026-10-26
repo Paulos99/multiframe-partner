@@ -62,13 +62,13 @@
 }
 
 .itemOn {
-  background: var(--cab-accent);
-  color: var(--cab-on-accent);
+  background: var(--cab-accent-soft);
+  color: var(--cab-accent-text);
 }
 
 .itemOn:hover {
-  background: var(--cab-accent-hover);
-  color: var(--cab-on-accent);
+  background: var(--cab-accent-soft);
+  color: var(--cab-accent-text);
 }
 
 .tools {

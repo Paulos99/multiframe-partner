@@ -1,8 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 const password = 'ui-fixture-password-only';
-/** У замерщика и монтажника меню — кнопки, у остальных — вкладки. */
-const navRole = (role: string) => (role === 'measurer' || role === 'crew' ? 'button' : 'tab');
+const navRole = (_role: string) => 'tab' as const;
 
 test.beforeEach(async ({ request }) => {
   await request.post('http://127.0.0.1:4181/__reset');
@@ -120,8 +119,8 @@ test('360px · admin: все шесть вкладок помещаются бе
   await pinPhoneFont(page);
   await enter(page, 'admin');
   const tabs = nav(page).getByRole('tab');
-  await expect(tabs).toHaveCount(6);
-  for (let i = 0; i < 6; i += 1) await expect(tabs.nth(i)).toBeInViewport({ ratio: 1 });
+  await expect(tabs).toHaveCount(5);
+  for (let i = 0; i < 5; i += 1) await expect(tabs.nth(i)).toBeInViewport({ ratio: 1 });
 });
 
 test('360px · admin: вкладки стоят ровно, без прокрутки и затухания', async ({ page }) => {
@@ -150,7 +149,7 @@ for (const width of [360, 390]) {
     await enter(page, 'owner');
     const el = strip(page);
     const tabs = nav(page).getByRole('tab');
-    await expect(tabs).toHaveCount(7);
+    await expect(tabs).toHaveCount(6);
     await expect(tabs.last()).toHaveAttribute('data-nav-id', 'profile');
 
     // Лента: прокрутка нативная, со snap, без видимой полосы прокрутки.
@@ -161,20 +160,16 @@ for (const width of [360, 390]) {
     expect(style.overflowX).toBe('auto');
     expect(style.snap).toContain('x');
     expect(style.bar).toBe('none');
-    expect(style.overflow).toBeGreaterThan(1);
+    expect(style.overflow).toBeLessThanOrEqual(1);
 
-    // В начале: первая вкладка видна, затухание только справа, «Профиль» за краем.
     await scrollStrip(page, 'start');
     await expect(tabs.first()).toBeInViewport({ ratio: 1 });
-    await expect(el).toHaveAttribute('data-fade-end', '');
+    await expect(el).not.toHaveAttribute('data-fade-end', /.*/);
     await expect(el).not.toHaveAttribute('data-fade-start', /.*/);
-    await expect(tabs.last()).not.toBeInViewport({ ratio: 1 });
+    await expect(tabs.last()).toBeInViewport({ ratio: 1 });
     await expectNoOverlap(page);
 
-    // В конце: «Профиль» виден целиком, кликается, затухание только слева.
     await scrollStrip(page, 'end');
-    await expect(el).toHaveAttribute('data-fade-start', '');
-    await expect(el).not.toHaveAttribute('data-fade-end', /.*/);
     await expect(tabs.last()).toBeInViewport({ ratio: 1 });
     expect(await hitTarget(page, 'profile')).toBe(true);
     await expectNoOverlap(page);
@@ -194,15 +189,11 @@ test('390px · owner: активная вкладка сама докручив�
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await enter(page, 'owner');
   const profile = nav(page).locator('[data-nav-id="profile"]');
-  await scrollStrip(page, 'start');
-  await expect(profile).not.toBeInViewport({ ratio: 1 });
-  // Вкладка стала активной, пока была за краем (например, переход из кода) — лента докручивает её.
-  await profile.evaluate((b) => (b as HTMLButtonElement).click());
-  await expect(profile).toHaveAttribute('aria-selected', 'true');
   await expect(profile).toBeInViewport({ ratio: 1 });
+  await profile.click();
+  await expect(profile).toHaveAttribute('aria-selected', 'true');
   const first = nav(page).getByRole('tab').first();
-  await scrollStrip(page, 'end');
-  await first.evaluate((b) => (b as HTMLButtonElement).click());
+  await first.click();
   await expect(first).toHaveAttribute('aria-selected', 'true');
   await expect(first).toBeInViewport({ ratio: 1 });
 });
@@ -213,7 +204,8 @@ test('phone: вкладка «Профиль» открывает профиль
   await enter(page, 'admin');
   const profileTab = nav(page).getByRole('tab', { name: 'Профиль', exact: true });
   const analytics = nav(page).getByRole('tab', { name: 'Аналитика', exact: true });
-  await expect(analytics).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Сегодня', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(analytics).toHaveAttribute('aria-selected', 'false');
   await expect(profileTab).toHaveAttribute('aria-selected', 'false');
 
   await profileTab.click();
@@ -231,7 +223,7 @@ test('phone: вкладка «Профиль» открывает профиль
   await expect(dialog).toHaveCount(0);
 
   // Другая вкладка закрывает профиль.
-  await nav(page).getByRole('tab', { name: 'Проекты', exact: true }).click();
+  await nav(page).getByRole('tab', { name: 'Партнёры', exact: true }).click();
   await expect(screen).toHaveCount(0);
   await expect(profileTab).toHaveAttribute('aria-selected', 'false');
 
@@ -246,7 +238,7 @@ test('phone · crew: «Профиль» и «Выйти» работают и в
   await enter(page, 'crew');
   const item = nav(page).getByRole(navRole('crew'), { name: 'Профиль', exact: true });
   await item.click();
-  await expect(item).toHaveAttribute('aria-pressed', 'true');
+  await expect(item).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('region', { name: 'Профиль' }).getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
 });

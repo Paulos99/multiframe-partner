@@ -7,11 +7,11 @@ const base = { at: '2026-10-18T09:00:00Z', userId: 'u1', login: 'manager', actio
 const people = [{ id: 'u1', displayName: 'Анна' }];
 equal(describeHistory({ ...base, detail: 'measured→quote_sent' }, people), 'Статус: Замер → КП отправлено');
 equal(describeHistory({ ...base, detail: 'closed' }, people), 'Статус: Закрыто');
-equal(describeHistory({ ...base, detail: 'unknown→unknown' }, people), 'Статус объекта изменён');
+equal(describeHistory({ ...base, detail: 'unknown→unknown' }, people), 'Статус комнаты изменён');
 equal(describeHistory({ ...base, action: 'assign', detail: 'u1' }, people), 'Назначен исполнитель: Анна');
 equal(describeHistory({ ...base, action: 'assign', detail: '—' }, people), 'Назначение исполнителя снято');
 equal(describeHistory({ ...base, action: 'assign', detail: 'unknown-id' }, people), 'Назначен исполнитель');
-equal(describeHistory({ ...base, action: 'new-event', detail: '{"price":12345}' }, people), 'Объект обновлён');
+equal(describeHistory({ ...base, action: 'new-event', detail: '{"price":12345}' }, people), 'Комната обновлена');
 equal(describeHistory({ ...base, action: 'calc_pdf', detail: 'private-estimate.pdf' }, people), 'Смета сохранена');
 equal(describeHistory({ ...base, action: 'profile_pdf', detail: 'profile.pdf' }, people), 'Профиль сохранён');
 equal(historyAuthor(base, people), 'Анна');

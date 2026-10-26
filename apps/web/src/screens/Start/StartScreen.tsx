@@ -11,13 +11,13 @@ export function StartScreen() {
       <div className={styles.hero}>
         <div className={styles.glow} aria-hidden />
         <h1 className={styles.title}>
-          Проверьте уровень акустического комфорта на своём объекте
+          Насколько тише станет потолок MultiFrame
         </h1>
         <p className={styles.lead}>
-          Ответьте на несколько вопросов, Проблемомер оценит уровень шума.
+          Несколько вопросов о комнате — и рекомендация по потолку.
         </p>
         <p className={styles.lead}>
-          Дальше вы увидите, насколько тише станет после монтажа MultiFrame.
+          Дальше видно, насколько тише станет после монтажа потолка.
         </p>
         <div className={styles.cta}>
           <Button onClick={goNext} fullWidth>

@@ -25,9 +25,9 @@ export function ObjectHistory({ entries, people }: {
   const sorted = sortedHistory(entries);
   const visible = expanded ? sorted : sorted.slice(0, 3);
   return (
-    <section className={styles.history} aria-label="История объекта">
+    <section className={styles.history} aria-label="История комнаты">
       <div className={styles.heading}>
-        <h3>История объекта</h3>
+        <h3>История комнаты</h3>
         <span>{recordsLabel(entries.length)}</span>
       </div>
       <ol className={styles.list} id={listId}>

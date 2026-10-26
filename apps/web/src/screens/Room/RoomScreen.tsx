@@ -28,7 +28,7 @@ const SUBSTEP_TITLE: Record<RoomSubstep, string> = {
   slabThickness: 'Выберите толщину перекрытия',
   basics: 'Укажите тип комнаты и площадь',
   plannedCeiling: 'Какой у вас потолок?',
-  objectStage: 'На какой стадии объект?',
+  objectStage: 'На какой стадии комната?',
   noisyNeighbors: 'Насколько шумно сверху?',
   noiseKind: 'Что именно слышно сверху?',
 };

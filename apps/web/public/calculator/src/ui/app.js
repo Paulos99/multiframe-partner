@@ -2338,6 +2338,27 @@ function applyQueryHandoff() {
   }, 0);
 }
 
+/** Кабинет считает только бескаркасный потолок MultiFrame: стены и каркас скрыты. */
+function lockPartnerCeiling() {
+  const params = new URLSearchParams(window.location.search);
+  const lock =
+    params.get('partner') === '1' || params.get('walls') === '0' || params.get('surfaces') === 'ceiling';
+  if (!lock) return;
+  document.body.classList.add('ceiling-only');
+  state.areaWalls = [];
+  renderAreaWallsList();
+  if (els.form.calcCeiling) els.form.calcCeiling.checked = true;
+  if (els.form.ceilingMounting) els.form.ceilingMounting.value = 'ceiling_frameless';
+  state.options = {
+    ...state.options,
+    ceilingMounting: 'ceiling_frameless',
+    calcCeiling: true,
+  };
+  document.querySelectorAll('[data-segment-for="ceilingMounting"] .segmented__btn').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.value === 'ceiling_frameless');
+  });
+}
+
 function initTheme() {
   try {
     const savedTheme = localStorage.getItem('mf_theme');
@@ -2432,6 +2453,7 @@ function init() {
   updateLayoutMode();
   updateResultsPreview();
   loadFromUrl();
+  lockPartnerCeiling();
   if (!state.inputMode) updateSchemeModeUi();
 
   const appOnboarding = setupAppOnboarding({

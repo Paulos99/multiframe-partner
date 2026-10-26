@@ -9,11 +9,11 @@ const statuses: Record<string, string> = {
 export function describeHistory(entry: JobObjectHistoryEntry, people: HistoryPerson[]) {
   const detail = entry.detail?.trim() || '';
   switch (entry.action) {
-    case 'create': return 'Объект создан';
-    case 'update': return 'Данные объекта обновлены';
+    case 'create': return 'Комната создана';
+    case 'update': return 'Данные комнаты обновлены';
     case 'calc_pdf': return 'Смета сохранена';
     case 'profile_pdf': return 'Профиль сохранён';
-    case 'conflict_kept_server': return 'Сохранена более свежая версия объекта';
+    case 'conflict_kept_server': return 'Сохранена более свежая версия комнаты';
     case 'assign': {
       if (!detail || detail === '—') return 'Назначение исполнителя снято';
       const name = people.find(person => person.id === detail)?.displayName;
@@ -24,9 +24,9 @@ export function describeHistory(entry: JobObjectHistoryEntry, people: HistoryPer
       const before = statuses[from];
       const after = statuses[to || from];
       if (before && to && after) return `Статус: ${before} → ${after}`;
-      return after ? `Статус: ${after}` : 'Статус объекта изменён';
+      return after ? `Статус: ${after}` : 'Статус комнаты изменён';
     }
-    default: return 'Объект обновлён';
+    default: return 'Комната обновлена';
   }
 }
 

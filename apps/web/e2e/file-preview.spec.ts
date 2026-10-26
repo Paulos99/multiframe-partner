@@ -55,7 +55,9 @@ async function enter(page: Page) {
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Обучение', exact: true }).first().click();
+  const training = page.getByRole('tab', { name: 'Обучение', exact: true });
+  if (await training.count()) await training.click();
+  else await page.getByRole('button', { name: 'Обучение', exact: true }).click();
 }
 
 test('preview opens PDF and image, navigates with arrows and closes', async ({ page }) => {

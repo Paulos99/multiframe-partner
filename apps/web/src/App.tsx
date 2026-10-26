@@ -118,19 +118,19 @@ function ToolChrome({
 }
 
 function PartnerShell() {
-  const { user, loading, noteTool, logout, objects, calcRequest, attachCalculation, requestCalculator, diagnosisRequest, clearDiagnosis } = usePartner();
+  const { user, ready, noteTool, logout, objects, calcRequest, attachCalculation, requestCalculator, diagnosisRequest, clearDiagnosis } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
   const linkedObjectId = useRef<string | null>(null);
 
+  const userId = user?.id ?? '';
   useEffect(() => {
-    if (user) return;
     linkedObjectId.current = null;
     setCalcObjectId(null);
     setCalcNotice(null);
     setRoute('cabinet');
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
     if (!calcRequest || !user) return;
@@ -151,16 +151,18 @@ function PartnerShell() {
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       if (!isCabinetCalcMessage(event.data)) return;
-      if (!user || !canCreateObjects(user.role)) return;
-      if (event.data.areaEstimate || event.data.inputMode === 'area' || event.data.hasScheme === false) return;
+      if (!user) return;
       const target = linkedObjectId.current || event.data.objectId || null;
-      setCalcNotice('Сохраняем объект и PDF…');
+      const allowed = canCreateObjects(user.role) || (user.role === 'measurer' && !!target);
+      if (!allowed) return;
+      if (event.data.areaEstimate || event.data.inputMode === 'area' || event.data.hasScheme === false) return;
+      setCalcNotice('Сохраняем комнату и PDF…');
       void attachCalculation(event.data, target)
         .then((obj) => {
           if (obj) linkedObjectId.current = obj.id;
-          setCalcNotice(obj ? 'Объект в кабинете обновлён, PDF приложен' : 'Не удалось сохранить');
+          setCalcNotice(obj ? 'Комната обновлена, PDF приложен' : 'Не удалось сохранить');
         })
-        .catch(() => setCalcNotice('Не удалось сохранить объект'));
+        .catch(() => setCalcNotice('Не удалось сохранить комнату'));
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -209,7 +211,7 @@ function PartnerShell() {
   ]);
 
   let body: ReactNode;
-  if (loading && !user) {
+  if (!ready) {
     body = (
       <div className={styles.shell}>
         <Skeleton kind="page" count={3} label="Загрузка кабинета"/>

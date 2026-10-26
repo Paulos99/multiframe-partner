@@ -38,6 +38,7 @@ import {
 } from './motionBits';
 import {
   canMoveRoom,
+  roomCountLabel,
   KANBAN_STAGES,
   sortRooms,
   rankMovedColumn,
@@ -68,6 +69,7 @@ function Column({
 function Card({
   room,
   disabled,
+  frozen,
   children,
   onOpen,
   onHover,
@@ -76,7 +78,10 @@ function Card({
   onMenu,
 }: {
   room: JobObject;
+  /** Blocks both drag and open (save in flight). */
   disabled: boolean;
+  /** Blocks drag only. The card still opens. */
+  frozen: boolean;
   children: ReactNode;
   onOpen: () => void;
   onHover: (id: string | null) => void;
@@ -95,7 +100,7 @@ function Card({
     isDragging,
   } = useSortable({
     id: room.id,
-    disabled,
+    disabled: disabled || frozen,
     transition: reduce ? null : undefined,
   });
   return (
@@ -109,6 +114,7 @@ function Card({
         {...listeners}
         type="button"
         data-room-id={room.id}
+        aria-disabled={disabled || undefined}
         className={`${styles.card} ${related ? styles.related : ''} ${isDragging ? styles.source : ''}`}
         aria-label={`${room.roomName || 'Комната'} · ${room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[room.status]}`}
         onPointerDown={(e) => {
@@ -142,7 +148,7 @@ function Card({
         <button
           type="button"
           className={styles.cardMenu}
-          aria-label={`Действия с объектом «${room.roomName || room.clientName || 'Комната'}»`}
+          aria-label={`Действия с комнатой «${room.roomName || room.clientName || 'Комната'}»`}
           aria-haspopup="menu"
           // Keep the dnd-kit sensors (pointer, long-press touch, keyboard) off this button.
           onPointerDown={(e) => e.stopPropagation()}
@@ -212,8 +218,11 @@ export function KanbanBoard({
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
+    // Focus and layout can scroll in the same turn the menu opens. Ignore that
+    // tick so the menu is not dismissed before the click finishes.
+    const arm = window.setTimeout(() => window.addEventListener('scroll', close, true), 200);
     return () => {
+      window.clearTimeout(arm);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', close);
       window.removeEventListener('scroll', close, true);
@@ -369,7 +378,7 @@ export function KanbanBoard({
   return (
     <>
       <div className={styles.toolbar}>
-        <strong>{visible.length} объектов</strong>
+        <strong>{roomCountLabel(visible.length)}</strong>
         <button
           type="button"
           aria-expanded={filters}
@@ -409,9 +418,9 @@ export function KanbanBoard({
       </div>
       {/* Visible hint removed at Pavel's request; the instructions stay for screen readers. */}
       <p className={styles.srOnly} id="kanban-help">
-        Перетащите карточку в стадию или измените порядок. Alt + ←/→ — стадия,
-        Пробел — поднять, стрелки — переместить, Escape — отменить. На телефоне
-        удерживайте карточку.
+        {canMoveRoom(role, 'draft')
+          ? 'Перетащите карточку в стадию или измените порядок. Alt + ←/→ — стадия, Пробел — поднять, стрелки — переместить, Escape — отменить. На телефоне удерживайте карточку.'
+          : 'Откройте карточку, чтобы посмотреть комнату. Статус меняет менеджер или владелец.'}
       </p>
       <div className={styles.tabs} aria-label="Стадии">
         {KANBAN_STAGES.map((s) => (
@@ -489,7 +498,7 @@ export function KanbanBoard({
         <div
           ref={board}
           className={styles.board}
-          aria-label="Канбан объектов"
+          aria-label="Доска проектов"
           aria-busy={loading}
           onScroll={() => {
             const el = board.current;
@@ -541,7 +550,7 @@ export function KanbanBoard({
                   {onCreate && (
                     <button
                       type="button"
-                      aria-label={`Новый объект: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
+                      aria-label={`Новая комната: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
                       onClick={() => onCreate(stage)}
                     >
                       +
@@ -585,11 +594,8 @@ export function KanbanBoard({
                             >
                               <Card
                                 room={room}
-                                disabled={
-                                  !!pendingId ||
-                                  busy.current ||
-                                  !canMoveRoom(role, room.status)
-                                }
+                                disabled={!!pendingId || busy.current}
+                                frozen={!canMoveRoom(role, room.status)}
                                 related={!!hover && hover === room.projectId}
                                 onMenu={
                                   onDelete
@@ -633,7 +639,7 @@ export function KanbanBoard({
                     )}
                   </SortableContext>
                   {!loading && !displayList.length && (
-                    <p className={styles.empty}>Пока нет объектов</p>
+                    <p className={styles.empty}>Пока нет комнат</p>
                   )}
                 </div>
               </Column>
@@ -679,7 +685,7 @@ export function KanbanBoard({
             >
               <div
                 role="menu"
-                aria-label="Действия с объектом"
+                aria-label="Действия с комнатой"
                 className={styles.menu}
                 style={{
                   left: Math.max(8, Math.min(menu.x, window.innerWidth - 188)),
@@ -691,7 +697,6 @@ export function KanbanBoard({
                   type="button"
                   role="menuitem"
                   className={styles.menuDanger}
-                  autoFocus
                   onClick={() => {
                     const room = menu.room;
                     setMenu(null);
