@@ -98,4 +98,6 @@ jobs:
           ANALYTICS_ADMIN_KEY: ${{ secrets.ANALYTICS_ADMIN_KEY }}
           JWT_SECRET_PREVIOUS_CLEAR: ${{ vars.JWT_SECRET_PREVIOUS_CLEAR }}
           CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
+          YDB_ENDPOINT: ${{ vars.YDB_ENDPOINT }}
+          YDB_DATABASE: ${{ vars.YDB_DATABASE }}
         run: python infra/deploy_yc.py
