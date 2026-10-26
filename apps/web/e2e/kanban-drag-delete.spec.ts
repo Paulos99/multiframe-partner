@@ -80,7 +80,7 @@ test('owner deletes an object via «…» and confirm; it is gone after reload',
   await page.getByRole('menuitem', { name: 'Удалить' }).click();
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toContainText('Удалить объект «');
-  await expect(dialog).toContainText('Действие нельзя отменить');
+  await expect(dialog).toContainText('Карточка исчезнет с доски');
   await dialog.getByRole('button', { name: 'Отмена' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(card).toBeVisible();
@@ -94,7 +94,7 @@ test('owner deletes an object via «…» and confirm; it is gone after reload',
   await page.getByRole('alertdialog').getByRole('button', { name: 'Удалить' }).click();
   await del;
   await expect(card).toHaveCount(0);
-  await expect(page.getByRole('status').filter({ hasText: 'Объект удалён' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Комната удалена' })).toBeVisible();
   await page.reload();
   await expect(page.locator('[data-room-id="ui_measured"]')).toBeVisible();
   await expect(page.locator('[data-room-id="ui_room"]')).toHaveCount(0);

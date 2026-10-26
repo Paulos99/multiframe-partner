@@ -326,6 +326,41 @@
 .cardWrap:has(.cardMenu) .card > strong {
   padding-right: 26px;
 }
+.steps {
+  display: none;
+}
+@media (max-width: 767px) {
+  .steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+}
+.step,
+.stepNext,
+.cardDelete {
+  flex: 1;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--cab-border);
+  background: var(--cab-card);
+  color: var(--cab-ink);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.stepNext {
+  border-color: transparent;
+  background: var(--cab-accent);
+  color: #fff;
+}
+.cardDelete {
+  color: #8a2424;
+  background: transparent;
+}
 .cardMenu {
   position: absolute;
   top: 6px;

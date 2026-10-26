@@ -506,3 +506,100 @@ export function installPoolFromMigration(deal, rooms) {
   if (deal.outcome !== 'accepted' || deal.closedAt) return [];
   return (rooms || []).filter((room) => deal.roomAssent?.[room.id] === 'ordered').map((room) => room.id);
 }
+
+const SENT_QUOTE_LIFECYCLES = new Set([
+  'quote_sent_confirmed',
+  'quote_accepted',
+  'quote_declined',
+  'quote_postponed',
+  'sent',
+]);
+
+function quoteMentionsRoom(quote, roomId) {
+  if (!quote || !roomId) return false;
+  if ((quote.roomObjectIds || []).includes(roomId)) return true;
+  return (quote.snapshot?.lines || []).some((line) => line && line.roomId === roomId);
+}
+
+function quoteWasSent(quote) {
+  return Boolean(quote?.sentConfirmedAt) || SENT_QUOTE_LIFECYCLES.has(quote?.lifecycle);
+}
+
+/**
+ * Отказ удалить комнату, если это сотрёт отправленное предложение или сделку.
+ * Пустая строка — удалять можно. Текст уже для человека, без кодов.
+ * @param {{ id?: string, status?: string }} room
+ * @param {{ quotes?: any[], deals?: any[] }} history
+ */
+export function describeRoomRemovalBlock(room, history = {}) {
+  const id = room?.id;
+  if (!id) return '';
+  const quotes = history.quotes || [];
+  const deals = history.deals || [];
+  const sent =
+    room.status === 'quote_sent' ||
+    quotes.some((quote) => quoteMentionsRoom(quote, id) && quoteWasSent(quote));
+  if (sent) {
+    return 'Эту комнату нельзя удалить: предложение клиенту уже отправлено. Карточка останется на доске, чтобы история не пропала. Новую продажу начните отдельной комнатой.';
+  }
+  const mentionedBy = (deal) => {
+    if (deal?.roomAssent && Object.prototype.hasOwnProperty.call(deal.roomAssent, id)) return true;
+    return quotes.some(
+      (quote) => (quote.dealId === deal.id || quote.parentId === deal.id) && quoteMentionsRoom(quote, id),
+    );
+  };
+  if (deals.some((deal) => deal && !deal.closedAt && mentionedBy(deal))) {
+    return 'Эту комнату нельзя удалить: по ней ещё идёт сделка. Завершите работу по ней или оставьте карточку на доске.';
+  }
+  if (deals.some((deal) => deal && deal.closedAt && mentionedBy(deal))) {
+    return 'Эту комнату нельзя удалить: по ней уже есть завершённая сделка. Карточка останется, чтобы история не пропала.';
+  }
+  return '';
+}
+
+function sameValue(left, right) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+/**
+ * Замерщик пишет только расчёт в уже назначенную комнату.
+ * Пустая строка — сохранять можно.
+ */
+export function measurerCalculationRefusal(body, existing) {
+  if (!existing) {
+    return 'Замерщик не создаёт комнаты. Сохраните расчёт в комнате, которую назначил менеджер.';
+  }
+  const next = body || {};
+  if (next.stageOrder !== undefined && next.stageOrder !== existing.stageOrder) {
+    return 'Переставлять карточки может менеджер или владелец. Сохраните расчёт в этой комнате.';
+  }
+  if (next.projectId !== undefined && String(next.projectId || '') !== String(existing.projectId || '')) {
+    return 'Переносить комнату к другому адресу может менеджер или владелец. Сохраните расчёт в этой комнате.';
+  }
+  for (const key of ['clientName', 'clientPhone', 'address', 'city', 'roomName']) {
+    if (next[key] !== undefined && String(next[key] ?? '').trim() !== String(existing[key] ?? '').trim()) {
+      return 'Имя, телефон и адрес меняет менеджер или владелец. Вы можете сохранить расчёт в назначенной комнате.';
+    }
+  }
+  if (next.assignedTo !== undefined && next.assignedTo !== existing.assignedTo) {
+    return 'Назначать людей может менеджер или владелец. Сохраните расчёт в этой комнате.';
+  }
+  if (next.assignments !== undefined && !sameValue(next.assignments, existing.assignments)) {
+    return 'Назначать людей может менеджер или владелец. Сохраните расчёт в этой комнате.';
+  }
+  if (next.status && next.status !== existing.status) {
+    const frozen = existing.status === 'quote_sent' || existing.status === 'install' || existing.status === 'closed';
+    if (frozen || next.status !== 'measured') {
+      return 'Отправку предложения и решение клиента фиксирует менеджер. Сохраните расчёт в этой комнате.';
+    }
+  }
+  const hasCalculation =
+    next.estimate !== undefined ||
+    next.room !== undefined ||
+    next.clientSummary !== undefined ||
+    next.status === 'measured';
+  if (!hasCalculation) {
+    return 'Можно сохранить только расчёт в назначенной комнате. Создание, перестановку и удаление делает менеджер или владелец.';
+  }
+  return '';
+}

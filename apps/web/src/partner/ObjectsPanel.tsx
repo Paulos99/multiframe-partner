@@ -1,5 +1,5 @@
 import { Skeleton } from './Skeleton';
-import { roomRank } from './kanban';
+import { canMoveRoom, roomRank } from './kanban';
 import { KanbanBoard } from './KanbanBoard';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
@@ -44,10 +44,12 @@ function formatDocWhen(iso: string): string {
 function ObjectDocuments({
   obj,
   busyId,
+  hidePrices,
   onOpen,
 }: {
   obj: JobObject;
   busyId: string | null;
+  hidePrices?: boolean;
   onOpen: (doc: JobObjectDocument, download: boolean) => void;
 }) {
   const docs = visibleDocuments(obj.documents);
@@ -56,9 +58,13 @@ function ObjectDocuments({
       <div className={styles.field}>
         Документы
         <span className={styles.hint}>
-          {docs.length
-            ? '«Смета» — из калькулятора: цены, количество и схема раскладки. «Профиль» — из проблемомера: акустика комнаты. Старые версии сохраняются.'
-            : '«Смета» появится после расчёта в калькуляторе, «Профиль» — после сохранения проблемомера.'}
+          {hidePrices
+            ? docs.length
+              ? '«Смета» — количество и схема раскладки. «Профиль» — акустика комнаты. Цены бригаде не показываются.'
+              : '«Смета» появится после расчёта, «Профиль» — после сохранения проблемомера. Цен нет.'
+            : docs.length
+              ? '«Смета» — из калькулятора: цены, количество и схема раскладки. «Профиль» — из проблемомера: акустика комнаты. Старые версии сохраняются.'
+              : '«Смета» появится после расчёта в калькуляторе, «Профиль» — после сохранения проблемомера.'}
         </span>
       </div>
       {docs.length ? (
@@ -236,13 +242,10 @@ export function ObjectsPanel({
   }, [selectedId, reduce]);
 
   useEffect(() => {
-    if (!msg && !err) return;
-    const t = window.setTimeout(() => {
-      setMsg(null);
-      setErr(null);
-    }, 3200);
+    if (!msg) return;
+    const t = window.setTimeout(() => setMsg(null), 3200);
     return () => window.clearTimeout(t);
-  }, [msg, err]);
+  }, [msg]);
 
   async function patch(obj: JobObject, next: Partial<JobObject>) {
     setMsg(null);
@@ -274,7 +277,7 @@ export function ObjectsPanel({
         savedIds.push(room.id);
         pendingSync ||= !!saved.pendingSync;
       }
-      setMsg(pendingSync ? 'Стадия сохранена на устройстве, ожидает синхронизации' : 'Стадия сохранена');
+      setMsg(pendingSync ? 'Перестановка сохранена на устройстве и уйдёт на сервер при сети' : 'Карточка переставлена');
     } catch (error) {
       let incomplete = false;
       for (const id of savedIds.reverse()) {
@@ -328,7 +331,7 @@ export function ObjectsPanel({
   const objectLabel = (obj: JobObject) =>
     [obj.clientName, obj.roomName].filter(Boolean).join(' · ') || obj.address || 'Комната';
 
-  // Confirmed in ConfirmDialog; the server checks the role again (admin/owner only).
+  // Сначала подтверждение. Сервер снова проверяет роль и компанию.
   async function remove(obj: JobObject) {
     setMsg(null);
     setErr(null);
@@ -336,7 +339,7 @@ export function ObjectsPanel({
     try {
       await api.deleteObject(obj.id);
       if (selectedId === obj.id) setSelectedId(null);
-      setMsg('Объект удалён');
+      setMsg('Комната удалена');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось удалить');
     } finally {
@@ -426,10 +429,7 @@ export function ObjectsPanel({
           : null;
 
   const allowedStatuses = (current: JobObjectStatus) =>
-    STATUSES.filter((s) => {
-      if (user.role === 'crew') return s === 'install' || s === 'closed' || s === current;
-      return true;
-    });
+    STATUSES.filter((s) => s === current || canMoveRoom(user.role, s));
 
   const filters: Array<JobObjectStatus | 'all'> =
     user.role === 'crew' ? ['install', 'closed', 'all'] : ['all', ...STATUSES];
@@ -446,7 +446,7 @@ export function ObjectsPanel({
           <h2>{user.role === 'crew' ? 'Задания на монтаж' : 'Объекты'}</h2>
           <p className={styles.lead}>
             {user.role === 'crew'
-              ? 'Только ваши комнаты. В карточке — «Смета» с ценами и схемой раскладки и «Профиль» комнаты.'
+              ? 'Только ваши комнаты. В карточке — схема раскладки и состав, без цен.'
               : 'Проект — это клиент и адрес. Комнаты внутри считаются отдельно, площади не смешиваются.'}
           </p>
         </div>
@@ -460,7 +460,7 @@ export function ObjectsPanel({
             }}
             aria-expanded={creating}
           >
-            {creating ? 'Закрыть' : compact ? 'Создать' : '+ Новый объект'}
+            {creating ? 'Закрыть' : 'Добавить'}
           </button>
         ) : null}
       </div>
@@ -497,19 +497,12 @@ export function ObjectsPanel({
         <form className={listStyles.form} onSubmit={(event) => void createProjectWithRoom(event)}>
           <label className={styles.field}>
             Клиент
-            <input value={draft.clientName} onChange={(event) => setDraft((value) => ({ ...value, clientName: event.target.value }))} />
-          </label>
-          <label className={styles.field}>
-            Телефон
-            <input value={draft.clientPhone} inputMode="tel" onChange={(event) => setDraft((value) => ({ ...value, clientPhone: event.target.value }))} />
-          </label>
-          <label className={styles.field}>
-            Адрес
-            <input value={draft.address} onChange={(event) => setDraft((value) => ({ ...value, address: event.target.value }))} />
-          </label>
-          <label className={styles.field}>
-            Город
-            <input value={draft.city} onChange={(event) => setDraft((value) => ({ ...value, city: event.target.value }))} />
+            <input
+              value={draft.clientName}
+              placeholder="Иванова"
+              autoFocus
+              onChange={(event) => setDraft((value) => ({ ...value, clientName: event.target.value }))}
+            />
           </label>
           <label className={styles.field}>
             Первая комната
@@ -519,10 +512,29 @@ export function ObjectsPanel({
               onChange={(event) => setDraft((value) => ({ ...value, roomName: event.target.value }))}
             />
           </label>
+          <details className={listStyles.extra}>
+            <summary>Адрес и телефон — по желанию</summary>
+            <label className={styles.field}>
+              Телефон
+              <input value={draft.clientPhone} inputMode="tel" onChange={(event) => setDraft((value) => ({ ...value, clientPhone: event.target.value }))} />
+            </label>
+            <label className={styles.field}>
+              Адрес
+              <input value={draft.address} onChange={(event) => setDraft((value) => ({ ...value, address: event.target.value }))} />
+            </label>
+            <label className={styles.field}>
+              Город
+              <input value={draft.city} onChange={(event) => setDraft((value) => ({ ...value, city: event.target.value }))} />
+            </label>
+          </details>
           <div className={styles.field}>
             <span className={styles.srOnly}>Сохранить</span>
-            <button type="submit" className={styles.primary} disabled={saving}>
-              {saving ? 'Сохраняем…' : 'Создать проект'}
+            <button
+              type="submit"
+              className={styles.primary}
+              disabled={saving || (!draft.clientName.trim() && !draft.roomName.trim())}
+            >
+              {saving ? 'Сохраняем…' : 'Сохранить'}
             </button>
           </div>
         </form>
@@ -535,7 +547,7 @@ export function ObjectsPanel({
           </button>
           <h3>{selectedCard.title}</h3>
           <p className={styles.lead}>{selectedCard.subtitle}</p>
-          {selectedRooms.length ? (
+          {selectedRooms.length && user.role !== 'crew' ? (
             <p className={styles.hint}>
               Предварительный итог: {summary.calculated ? formatRub(summary.total) : 'расчётов пока нет'}. Рассчитано {summary.calculated} из {summary.rooms}. Это ещё не зафиксированное предложение.
             </p>
@@ -666,7 +678,7 @@ export function ObjectsPanel({
                     </button>
                   ) : canCreate ? (
                     <button type="button" className={styles.primary} onClick={() => setCreating(true)}>
-                      Создать
+                      Добавить
                     </button>
                   ) : null}
                   {!cards.length && onCreate && canCreate ? (
@@ -706,7 +718,7 @@ export function ObjectsPanel({
                 Дюбели
                 <strong>{selected.estimate.dowels} шт.</strong>
               </div>
-              {selected.estimate.totalCost != null ? (
+              {user.role !== 'crew' && selected.estimate.totalCost != null ? (
                 <div className={styles.field}>
                   Итого комнаты
                   <strong>{formatRub(selected.estimate.totalCost)}</strong>
@@ -720,6 +732,7 @@ export function ObjectsPanel({
           <ObjectDocuments
             obj={selected}
             busyId={docBusy}
+            hidePrices={user.role === 'crew'}
             onOpen={(doc, download) => void openDocument(selected, doc, download)}
           />
 
@@ -756,8 +769,8 @@ export function ObjectsPanel({
           ) : null}
 
           <div className={styles.field}>
-            Статус
-            <div className={styles.chipRow} role="group" aria-label="Сменить статус">
+            Перенести
+            <div className={styles.chipRow} role="group" aria-label="Куда перенести комнату">
               {allowedStatuses(selected.status).map((s) => (
                 <button
                   key={s}
@@ -845,7 +858,7 @@ export function ObjectsPanel({
       <ConfirmDialog
         open={!!toDelete}
         title={toDelete ? `Удалить объект «${objectLabel(toDelete)}»?` : ''}
-        message="Действие нельзя отменить."
+        message="Карточка исчезнет с доски. Если предложение клиенту уже отправлено или сделка ещё идёт, комната останется — мы напишем, что сделать вместо удаления."
         confirmLabel="Удалить"
         busy={deleting}
         onCancel={() => setToDelete(null)}

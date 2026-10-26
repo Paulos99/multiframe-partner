@@ -21,8 +21,11 @@ import type {
 import {
   aggregateAnalyticsDashboard,
   networkAdminScope,
+  canCreateObjects,
+  canDeleteObjects,
   canEditOrg,
   canManageStaff,
+  canRearrangeObjects,
   visibleDocuments,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
@@ -33,6 +36,8 @@ import {
   OFFICIAL_PRICE_PER_M2,
   STAFF_ROLES,
 } from '../../../../packages/shared/partner';
+import { describeRoomRemovalBlock, measurerCalculationRefusal } from '../../../../packages/shared/commercialRules.js';
+import { listLocalDeals, listLocalQuotes } from './commercial/localDeals';
 import { carriedObjectLink } from './objectLink';
 import {
   buildLocalDemoAnalytics,
@@ -705,8 +710,9 @@ export function isObjectVisible(user: SessionUser, obj: JobObject): boolean {
 }
 
 /**
- * Remote cache visibility matches the API: owner and sales see the company,
- * measurer sees own rows, crew sees assignments and монтаж.
+ * Кэш с сервера: владелец и менеджер видят компанию,
+ * замерщик — свои строки, монтажник — назначения и монтаж.
+ * Цены монтажнику не отдаём, как и API.
  */
 export function presentCachedObject(user: SessionUser, obj: JobObject): JobObject | null {
   if (user.role !== 'admin') {
@@ -714,16 +720,17 @@ export function presentCachedObject(user: SessionUser, obj: JobObject): JobObjec
     if (user.role === 'measurer' && obj.createdBy !== user.id && obj.assignedTo !== user.id) return null;
     if (user.role === 'crew' && obj.assignedTo !== user.id && obj.status !== 'install') return null;
   }
-  return presentObject(obj);
+  return presentObject(obj, user.role);
 }
 
+/**
+ * Та же видимость, что у API: владелец и менеджер видят все объекты своей компании.
+ * Чужая компания закрыта. Замерщик видит свои и назначенные, монтажник — только свои назначения.
+ */
 function objectVisible(user: SessionUser, obj: JobObject): boolean {
   if (user.role === 'admin') return true;
   if (!user.orgId || obj.orgId !== user.orgId) return false;
-  if (user.role === 'owner') return true;
-  if (user.role === 'sales') {
-    return obj.createdBy === user.id || obj.assignedTo === user.id || !obj.assignedTo;
-  }
+  if (user.role === 'owner' || user.role === 'sales') return true;
   if (user.role === 'measurer') {
     return obj.createdBy === user.id || obj.assignedTo === user.id;
   }
@@ -733,16 +740,22 @@ function objectVisible(user: SessionUser, obj: JobObject): boolean {
   return false;
 }
 
-/** Цены видят все роли: меняется только список документов. */
-function presentObject(obj: JobObject): JobObject {
-  return { ...obj, documents: visibleDocuments(obj.documents) };
+function presentObject(obj: JobObject, role: UserRole): JobObject {
+  const next: JobObject = { ...obj, documents: visibleDocuments(obj.documents) };
+  if (role !== 'crew' || !next.estimate) return next;
+  const estimate = { ...next.estimate };
+  delete estimate.panelsCost;
+  delete estimate.installCost;
+  delete estimate.dowelsCost;
+  delete estimate.totalCost;
+  return { ...next, estimate };
 }
 
 export function listLocalObjects(user: SessionUser): JobObject[] {
   const db = loadDb();
   return db.objects
     .filter((o) => objectVisible(user, o))
-    .map((o) => presentObject(o));
+    .map((o) => presentObject(o, user.role));
 }
 
 function projectVisibleLocal(user: SessionUser, project: Project, objects: JobObject[]): boolean {
@@ -824,14 +837,31 @@ export function projectsApiReady(): boolean {
   }
 }
 
+function deleteDenial(role: UserRole): string {
+  if (role === 'admin') {
+    return 'Удалять комнаты компании может её владелец или менеджер. Администратор сети комнаты не удаляет.';
+  }
+  if (role === 'crew') return 'Бригада не удаляет комнаты. Если карточка лишняя, попросите менеджера.';
+  if (role === 'measurer') {
+    return 'Замерщик не удаляет комнаты. Сохраните расчёт в назначенной комнате или попросите менеджера.';
+  }
+  return 'Удалять комнаты может владелец или менеджер своей компании.';
+}
+
 export function deleteLocalObject(id: string, actor: SessionUser): void {
   const db = loadDb();
   const existing = db.objects.find((o) => o.id === id);
   if (!existing) return;
-  if (!objectVisible(actor, existing)) throw new Error('Недостаточно прав');
-  if (actor.role !== 'admin' && actor.role !== 'owner') {
-    throw new Error('Удалять объекты могут только администратор и владелец');
-  }
+  if (!objectVisible(actor, existing)) throw new Error('Удалять можно только комнаты своей компании.');
+  if (!canDeleteObjects(actor.role)) throw new Error(deleteDenial(actor.role));
+  const projectIds = new Set(
+    (db.projects || []).map((project) => project.id).concat(existing.projectId ? [existing.projectId] : []),
+  );
+  const hold = describeRoomRemovalBlock(existing, {
+    quotes: listLocalQuotes(projectIds),
+    deals: listLocalDeals(actor.orgId),
+  });
+  if (hold) throw new Error(hold);
   saveDb({ ...db, objects: db.objects.filter((o) => o.id !== id) });
   removeFromObjectQueue(id);
   cacheObjects(listLocalObjects(actor));
@@ -842,12 +872,79 @@ export function upsertLocalObject(
   actor: SessionUser,
 ): JobObject {
   if (!actor.orgId) throw new Error('Нет организации');
-  if (actor.role === 'crew' && !input.id) throw new Error('Монтажник не создаёт объекты');
+  if (!input.id && !canCreateObjects(actor.role)) {
+    throw new Error(
+      actor.role === 'measurer'
+        ? 'Замерщик не создаёт комнаты. Сохраните расчёт в комнате, которую назначил менеджер.'
+        : actor.role === 'crew'
+          ? 'Бригада не создаёт комнаты. Новую комнату добавляет менеджер или владелец.'
+          : 'Создавать комнаты может владелец или менеджер своей компании.',
+    );
+  }
   const db = loadDb();
   const now = new Date().toISOString();
   const org = db.orgs.find((o) => o.id === actor.orgId);
   const existing = input.id ? db.objects.find((o) => o.id === input.id) : null;
-  if (existing && !objectVisible(actor, existing)) throw new Error('Недостаточно прав');
+  if (existing && !objectVisible(actor, existing)) {
+    throw new Error(
+      actor.role === 'measurer'
+        ? 'Эта комната вам не назначена. Попросите менеджера открыть её для замера.'
+        : 'Менять можно только комнаты своей компании.',
+    );
+  }
+  if (existing && actor.role === 'measurer') {
+    const refusal = measurerCalculationRefusal(
+      input as Record<string, unknown>,
+      existing as unknown as Record<string, unknown>,
+    );
+    if (refusal) throw new Error(refusal);
+    const saved: JobObject = {
+      ...existing,
+      updatedAt: input.updatedAt || now,
+      estimate: input.estimate !== undefined ? input.estimate : existing.estimate ?? null,
+      room: input.room || existing.room || {},
+      clientSummary: input.clientSummary !== undefined ? input.clientSummary : existing.clientSummary,
+      status: input.status === 'measured' ? 'measured' : existing.status,
+      pendingSync: true,
+      history: [
+        {
+          at: now,
+          userId: actor.id,
+          login: actor.login,
+          action: 'update',
+          detail: 'расчёт',
+        },
+        ...(existing.history || []),
+      ].slice(0, 50),
+    };
+    saveDb({ ...db, objects: db.objects.map((item) => (item.id === saved.id ? saved : item)) });
+    enqueueObjectSync(saved);
+    cacheObjects(listLocalObjects(actor));
+    return presentObject(saved, actor.role);
+  }
+  if (existing && !canRearrangeObjects(actor.role)) {
+    if (actor.role !== 'crew') throw new Error('Менять комнаты может владелец или менеджер своей компании.');
+    const nextStatus = (input.status || existing.status) as JobObjectStatus;
+    if (nextStatus !== existing.status && nextStatus !== 'install' && nextStatus !== 'closed') {
+      throw new Error('Бригада переводит карточку только в монтаж или в закрыто.');
+    }
+    if (input.projectId && input.projectId !== existing.projectId) {
+      throw new Error('Бригада не переносит комнаты. Можно только закрыть свой монтаж.');
+    }
+    if (input.stageOrder !== undefined && input.stageOrder !== existing.stageOrder) {
+      throw new Error('Бригада не переставляет карточки. Можно только закрыть свой монтаж.');
+    }
+    const textKeys = ['clientName', 'clientPhone', 'address', 'city', 'roomName', 'clientSummary'] as const;
+    for (const key of textKeys) {
+      if (input[key] !== undefined && String(input[key] ?? '').trim() !== String(existing[key] ?? '').trim()) {
+        throw new Error('Недостаточно прав');
+      }
+    }
+    if (input.room !== undefined || input.estimate !== undefined) throw new Error('Недостаточно прав');
+    if (input.assignedTo !== undefined && input.assignedTo !== existing.assignedTo) {
+      throw new Error('Недостаточно прав');
+    }
+  }
 
   const status = (input.status || existing?.status || 'draft') as JobObjectStatus;
   const obj: JobObject = {
@@ -930,7 +1027,7 @@ export function upsertLocalObject(
   saveDb({ ...db, objects, projects });
   enqueueObjectSync(obj);
   cacheObjects(listLocalObjects(actor));
-  return presentObject(obj);
+  return presentObject(obj, actor.role);
 }
 
 export function cacheObjects(objects: JobObject[]): void {
@@ -1170,5 +1267,5 @@ export function appendLocalObjectDocuments(
   };
   saveDb({ ...db, objects: db.objects.map((o) => (o.id === next.id ? next : o)) });
   cacheObjects(listLocalObjects(actor));
-  return presentObject(next);
+  return presentObject(next, actor.role);
 }

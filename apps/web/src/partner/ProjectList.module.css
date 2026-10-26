@@ -50,6 +50,22 @@
   margin: 12px 0 16px;
 }
 
+.extra {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+}
+
+.extra summary {
+  cursor: pointer;
+  color: #086b55;
+  font-weight: 650;
+}
+
+.form > :last-child {
+  grid-column: 1 / -1;
+}
+
 .back {
   border: 0;
   background: transparent;
