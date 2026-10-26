@@ -75,6 +75,7 @@ function Card({
   onStep,
   onMenu,
   stepLabels,
+  onQuickDelete,
 }: {
   room: JobObject;
   disabled: boolean;
