@@ -19,13 +19,20 @@ export function QuoteActions({
 }) {
   const [comment, setComment] = useState('');
   const sent = lifecycle === 'quote_sent_confirmed';
+  const statusLabel: Record<string, string> = {
+    quote_created: 'Сформировано',
+    quote_shared: 'Текст передан, отправка не подтверждена',
+    quote_sent_confirmed: 'Отправка подтверждена',
+    quote_accepted: 'Клиент согласился',
+    quote_declined: 'Клиент отказался',
+    quote_postponed: 'Решение отложено',
+  };
 
   return (
     <div className={styles.hintCard}>
       <h2>Коммерческое предложение</h2>
       <p className={styles.lead}>
-        Статус: <strong>{lifecycle}</strong>
-        {sent ? ' · отправка подтверждена' : null}
+        Статус: <strong>{statusLabel[lifecycle] || 'Готовится'}</strong>
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
         <Button type="button" variant="ghost" disabled={busy} onClick={() => void onCopyText()}>

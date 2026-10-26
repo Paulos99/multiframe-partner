@@ -3071,3 +3071,174 @@
     font-size: 0.95rem;
   }
 }
+
+.salesHome {
+  display: grid;
+  gap: 16px;
+}
+
+.salesSync {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.salesSync .syncBadge {
+  min-height: 44px;
+}
+
+.salesDock,
+.salesCtas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.salesLink {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0 2px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  font: inherit;
+  font-weight: 750;
+  color: var(--cab-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.queueBtn {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--cab-radius-md);
+  border: 1px solid var(--cab-border-strong);
+  background: var(--cab-card);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+}
+
+.queueBtn:hover {
+  border-color: var(--cab-accent);
+}
+
+.entryBtn {
+  text-align: left;
+  min-height: 44px;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.toolBack {
+  width: auto;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.unsavedBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  border-radius: var(--cab-radius-lg);
+  background: var(--cab-card);
+  border: 1px solid var(--cab-border-strong);
+}
+
+.unsavedBar p {
+  margin: 0;
+}
+
+.saveOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--cab-ink) 40%, transparent);
+}
+
+.saveDialog,
+.saveInline {
+  width: min(560px, 100%);
+  display: grid;
+  gap: 12px;
+}
+
+.saveDialog {
+  max-height: min(92vh, 760px);
+  overflow: auto;
+  padding: 20px;
+  border-radius: var(--cab-radius-lg);
+  background: var(--cab-card);
+  color: var(--cab-ink);
+  box-shadow: var(--cab-shadow-sm);
+}
+
+.saveSummary {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.saveFields,
+.saveChoice {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.saveChoice {
+  padding: 12px;
+  border-radius: var(--cab-radius-md);
+  border: 1px dashed var(--cab-border-strong);
+}
+
+@media (max-width: 720px) {
+  .salesCtas {
+    grid-template-columns: 1fr;
+  }
+
+  .salesDock {
+    position: sticky;
+    bottom: 8px;
+    z-index: 6;
+    grid-template-columns: 1fr 1fr;
+    padding: 8px;
+    background: var(--cab-card);
+    border: 1px solid var(--cab-border);
+    border-radius: var(--cab-radius-lg);
+    box-shadow: var(--cab-shadow-sm);
+  }
+}

@@ -45,7 +45,8 @@ export function OwnerHome({
   const api = usePartner();
   const user = api.user!;
   const [tab, setTab] = useState<OwnerTab>(() => (consumeReturnToTools() ? 'tools' : 'objects'));
-  const { deals, projectId, activeDealId, refresh } = useCommercialDeals({
+  const [openedProjectId, setOpenedProjectId] = useState<string | null>(null);
+  const { deals, refresh } = useCommercialDeals({
     user,
     objects: api.objects,
     projects: api.projects,
@@ -128,9 +129,17 @@ export function OwnerHome({
         <TabPanel>
           {/* Kanban first: objects tab must keep the board in the first viewport
               (drag/delete e2e and day-to-day use). Commercial blocks follow. */}
-          <WorkToday actions={actions} />
+          <WorkToday
+            actions={actions}
+            onOpen={(action) => {
+              if (action.objectId) api.openObject(action.objectId);
+            }}
+          />
           <SupportRequestButton module="owner_home" />
-          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
+          <RoleWorkspace
+            onCreate={() => onNavigate('problemomer')}
+            onOpened={(selection) => setOpenedProjectId(selection.projectId)}
+          />
           <EntryPoints
             onSelect={(_id, route) => {
               if (route === 'calculator') onOpenCalc();
@@ -138,8 +147,12 @@ export function OwnerHome({
             }}
           />
           <CommercialPanel
-            projectId={projectId}
-            dealId={activeDealId}
+            projectId={openedProjectId}
+            dealId={
+              deals.find((deal) => deal.projectId === openedProjectId && !deal.outcome)?.id ||
+              deals.find((deal) => deal.projectId === openedProjectId)?.id ||
+              null
+            }
             staff={staff.map((s) => ({
               id: s.id,
               label: s.displayName || s.login,

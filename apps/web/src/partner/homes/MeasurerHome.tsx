@@ -72,7 +72,13 @@ export function MeasurerHome({
             {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
             {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'}
           </p>
-          <WorkToday title="Мои замеры" actions={actions} />
+          <WorkToday
+            title="Мои замеры"
+            actions={actions}
+            onOpen={(action) => {
+              if (action.objectId) api.openObject(action.objectId);
+            }}
+          />
           <SupportRequestButton module="measurer_home" />
           <EntryPoints
             onSelect={(_id, route) => {

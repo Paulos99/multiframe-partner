@@ -15,8 +15,12 @@ equal(resolveSyncUi({ online: false, pending: 1, authHold: false }).label, 'Со
 equal(resolveSyncUi({ online: true, pending: 1, authHold: false, failed: true }).label, 'Требуется повторить');
 equal(resolveSyncUi({ online: true, pending: 3, authHold: true }).label, 'Сохранено на устройстве');
 
-equal(WORK_ENTRIES.length, 3);
-equal(WORK_ENTRIES.map((e) => e.id), ['consultation', 'quick_calc', 'acoustic']);
+equal(WORK_ENTRIES.length, 2);
+equal(WORK_ENTRIES.map((e) => e.id), ['consultation', 'quick_calc']);
+equal(WORK_ENTRIES.map((e) => e.route), ['problemomer', 'calculator']);
+if (new Set(WORK_ENTRIES.map((e) => e.route)).size !== 2) {
+  throw new Error('входы должны вести в разные инструменты');
+}
 
 const objects = [
   {

@@ -61,7 +61,14 @@ export function CrewHome({
         <HelpTrainingPanel role="crew" />
       ) : (
         <>
-          <WorkToday title="Мои задания" actions={actions} empty="Нет назначенных монтажей." />
+          <WorkToday
+            title="Мои задания"
+            actions={actions}
+            empty="Нет назначенных монтажей."
+            onOpen={(action) => {
+              if (action.objectId) api.openObject(action.objectId);
+            }}
+          />
           <RoleWorkspace />
           <details className={styles.hintCard}>
             <summary>Офлайн на телефоне</summary>
