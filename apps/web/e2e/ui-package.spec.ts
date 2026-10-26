@@ -154,22 +154,11 @@ test('reorder within a column persists after reload', async ({ page }) => {
   );
 });
 
-test('crew cannot drag a room into a forbidden stage', async ({ page }) => {
+test('crew has no object board to drag', async ({ page }) => {
   await enter(page, 'crew');
-  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
-    0,
-  );
-
-  const card = page.locator('[data-room-id="ui_crew_room"]');
-  await card.focus();
-  await card.press('Alt+ArrowLeft');
-  await expect(
-    page.locator('[data-kanban-stage="install"] [data-room-id="ui_crew_room"]'),
-  ).toBeVisible();
-  await card.press('Alt+ArrowRight');
-  await expect(
-    page.locator('[data-kanban-stage="closed"] [data-room-id="ui_crew_room"]'),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Мои задания' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(0);
+  await expect(page.locator('[data-room-id]')).toHaveCount(0);
 });
 // Профиль: см. e2e/profile.spec.ts.
 test('mobile and reduced motion: profile and board stay within viewport', async ({

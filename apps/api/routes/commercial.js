@@ -21,6 +21,15 @@ function publicDeal(deal, role) {
       recordVersion: deal.recordVersion ?? 1,
     };
   }
+  if (role === 'measurer') {
+    return {
+      id: deal.id,
+      orgId: deal.orgId ?? null,
+      projectId: deal.projectId,
+      recordVersion: deal.recordVersion ?? 1,
+      rooms: Array.isArray(deal.rooms) ? deal.rooms : [],
+    };
+  }
   return {
     id: deal.id,
     orgId: deal.orgId,
@@ -117,6 +126,10 @@ export async function handleCommercial(ctx) {
   }
 
   if (method === 'GET' && path.endsWith('/deals')) {
+    if (role === 'measurer') {
+      const deals = await service.measurerWork(user);
+      return ctx.json(200, { deals: deals.map((deal) => publicDeal(deal, role)) });
+    }
     const deals = await service.listDeals(user);
     return ctx.json(200, { deals: deals.map((deal) => publicDeal(deal, role)) });
   }

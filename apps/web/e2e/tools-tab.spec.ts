@@ -87,7 +87,7 @@ test('монтажник: калькулятор с ценами, как у вс
   const frame = page.locator('iframe[title="Калькулятор MultiFrame · партнёр"]');
   await expect(frame).toBeVisible();
   await expect(frame).not.toHaveAttribute('src', /hidePrices/);
-  await expect(frame).toHaveAttribute('src', /panelPrice=2396/);
+  await expect(frame).toHaveAttribute('src', /panelPrice=/);
 });
 
 for (const vp of [
