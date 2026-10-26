@@ -61,6 +61,13 @@
   color: var(--text-primary);
 }
 
+.indexHint {
+  margin-left: 4px;
+  font-size: 0.78em;
+  font-weight: 650;
+  color: var(--text-secondary);
+}
+
 .feltTrack {
   position: relative;
   height: 72px;

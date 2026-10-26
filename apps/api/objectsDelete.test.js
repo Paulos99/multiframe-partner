@@ -52,7 +52,7 @@ describe('удаление объектов', { concurrency: false }, () => {
     return created.object;
   }
 
-  test('менеджер, замерщик и монтажник получают 403, объект остаётся', async () => {
+  test('замерщик, монтажник и админ получают 403, комната остаётся', async () => {
     tokens.owner = await login('partner1', 'demo1234');
     tokens.sales = await login('sales1', 'exec1234');
     tokens.measurer = await login('exec1', 'exec1234');
@@ -61,7 +61,7 @@ describe('удаление объектов', { concurrency: false }, () => {
     tokens.admin = await login('admin', 'admin1234');
 
     const room = await createRoom('Запрет удаления');
-    for (const role of ['sales', 'measurer', 'crew']) {
+    for (const role of ['measurer', 'crew', 'admin']) {
       const response = await call('DELETE', `/objects/${room.id}`, { token: tokens[role] });
       assert.equal(response.statusCode, 403, `${role}: ${response.body}`);
       assert.ok(storedObject(room.id), `${role} не удалил объект`);
@@ -96,9 +96,9 @@ describe('удаление объектов', { concurrency: false }, () => {
     );
   });
 
-  test('администратор удаляет объект любой компании', async () => {
-    const room = await createRoom('Удаление админом');
-    const removed = await call('DELETE', `/objects/${room.id}`, { token: tokens.admin });
+  test('менеджер удаляет комнату своей компании', async () => {
+    const room = await createRoom('Удаление менеджером');
+    const removed = await call('DELETE', `/objects/${room.id}`, { token: tokens.sales });
     assert.equal(removed.statusCode, 200, removed.body);
     assert.equal(storedObject(room.id), undefined);
   });

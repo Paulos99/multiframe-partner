@@ -22,7 +22,10 @@ import {
   aggregateAnalyticsDashboard,
   networkAdminScope,
   canEditOrg,
+  canCreateObjects,
+  canDeleteObjects,
   canManageStaff,
+  canMoveObjects,
   visibleDocuments,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
@@ -42,8 +45,8 @@ import {
 } from './demoSeed';
 
 /** Bumped to force leadership demo seed (two companies + objects). */
-const DB_KEY = 'mf_partner_db_v4';
-const DB_KEY_LEGACY = 'mf_partner_db_v3';
+const DB_KEY = 'mf_partner_db_v5';
+const DB_KEY_LEGACY = 'mf_partner_db_v4';
 const SESSION_KEY = 'mf_partner_session_v2';
 const TOKEN_KEY = 'mf_partner_token_v1';
 const ANALYTICS_KEY = 'mf_partner_analytics_v1';
@@ -53,7 +56,7 @@ const OBJECTS_QUEUE_KEY = 'mf_partner_objects_queue_v1';
 const PROJECTS_CACHE_KEY = 'mf_partner_projects_v1';
 const PROJECTS_READY_KEY = 'mf_partner_projects_ready_v1';
 const HISTORY_RESET_KEY = 'mf_partner_history_reset_v2';
-const DEMO_ANALYTICS_SEED_KEY = 'mf_partner_demo_analytics_seed_v1';
+const DEMO_ANALYTICS_SEED_KEY = 'mf_partner_demo_analytics_seed_v2';
 const ANALYTICS_CAP = 2000;
 
 export type StoredUser = {
@@ -136,10 +139,31 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     orgs,
     links: raw.links || [],
     activity: raw.activity || [],
-    objects: raw.objects || [],
+    objects: repairStoredHistory(raw.objects || [], users),
     projects: Array.isArray(raw.projects) ? raw.projects : [],
     ...(materials ? { materials } : {}),
   };
+}
+
+/** Старые демо-записи с login system подписывались тем, кто открыл историю. Имя пишется в саму запись. */
+function repairStoredHistory(objects: JobObject[], users: StoredUser[]): JobObject[] {
+  const byId = new Map(users.map((user) => [user.id, user]));
+  const ownerByOrg = new Map(users.filter((user) => user.role === 'owner').map((user) => [user.orgId, user]));
+  return objects.map((obj) => ({
+    ...obj,
+    history: (obj.history || []).map((entry) => {
+      const crewWroteStatus = entry.action === 'status' && byId.get(entry.userId || '')?.role === 'crew';
+      const userId = crewWroteStatus ? ownerByOrg.get(obj.orgId)?.id || obj.createdBy : entry.userId;
+      const person = userId ? byId.get(userId) : undefined;
+      if (entry.authorName && !crewWroteStatus) return entry;
+      return {
+        ...entry,
+        userId,
+        login: person?.login || entry.login,
+        authorName: entry.authorName || person?.displayName || undefined,
+      };
+    }),
+  }));
 }
 
 /** Wipe local activity log and analytics events/queue. */
@@ -170,9 +194,10 @@ export function loadDb(): PartnerDb {
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (!raw) {
-      // Fresh v4 seed (two demo companies). Drop prior local DBs.
+      // Fresh seed. Drop prior local DBs so старые демо-часы не остаются.
       try {
         localStorage.removeItem(DB_KEY_LEGACY);
+        localStorage.removeItem('mf_partner_db_v3');
         localStorage.removeItem('mf_partner_db_v2');
       } catch {
         /* ignore */
@@ -709,11 +734,7 @@ export function isObjectVisible(user: SessionUser, obj: JobObject): boolean {
  * measurer sees own rows, crew sees assignments and монтаж.
  */
 export function presentCachedObject(user: SessionUser, obj: JobObject): JobObject | null {
-  if (user.role !== 'admin') {
-    if (!user.orgId || obj.orgId !== user.orgId) return null;
-    if (user.role === 'measurer' && obj.createdBy !== user.id && obj.assignedTo !== user.id) return null;
-    if (user.role === 'crew' && obj.assignedTo !== user.id && obj.status !== 'install') return null;
-  }
+  if (!objectVisible(user, obj)) return null;
   return presentObject(obj);
 }
 
@@ -721,9 +742,7 @@ function objectVisible(user: SessionUser, obj: JobObject): boolean {
   if (user.role === 'admin') return true;
   if (!user.orgId || obj.orgId !== user.orgId) return false;
   if (user.role === 'owner') return true;
-  if (user.role === 'sales') {
-    return obj.createdBy === user.id || obj.assignedTo === user.id || !obj.assignedTo;
-  }
+  if (user.role === 'sales') return true;
   if (user.role === 'measurer') {
     return obj.createdBy === user.id || obj.assignedTo === user.id;
   }
@@ -829,11 +848,28 @@ export function deleteLocalObject(id: string, actor: SessionUser): void {
   const existing = db.objects.find((o) => o.id === id);
   if (!existing) return;
   if (!objectVisible(actor, existing)) throw new Error('Недостаточно прав');
-  if (actor.role !== 'admin' && actor.role !== 'owner') {
-    throw new Error('Удалять объекты могут только администратор и владелец');
+  if (!canDeleteObjects(actor.role) || existing.orgId !== actor.orgId) {
+    throw new Error('Удалять проект и комнату могут менеджер и владелец своей компании');
   }
   saveDb({ ...db, objects: db.objects.filter((o) => o.id !== id) });
   removeFromObjectQueue(id);
+  cacheObjects(listLocalObjects(actor));
+}
+
+export function deleteLocalProject(id: string, actor: SessionUser): void {
+  if (!canDeleteObjects(actor.role) || !actor.orgId) {
+    throw new Error('Удалять проект могут менеджер и владелец своей компании');
+  }
+  const db = loadDb();
+  const project = (db.projects || []).find((item) => item.id === id);
+  if (!project || project.orgId !== actor.orgId) throw new Error('Проект не найден');
+  const roomIds = new Set(db.objects.filter((obj) => obj.projectId === id).map((obj) => obj.id));
+  saveDb({
+    ...db,
+    projects: (db.projects || []).filter((item) => item.id !== id),
+    objects: db.objects.filter((obj) => obj.projectId !== id),
+  });
+  for (const roomId of roomIds) removeFromObjectQueue(roomId);
   cacheObjects(listLocalObjects(actor));
 }
 
@@ -842,12 +878,21 @@ export function upsertLocalObject(
   actor: SessionUser,
 ): JobObject {
   if (!actor.orgId) throw new Error('Нет организации');
-  if (actor.role === 'crew' && !input.id) throw new Error('Монтажник не создаёт объекты');
   const db = loadDb();
   const now = new Date().toISOString();
   const org = db.orgs.find((o) => o.id === actor.orgId);
   const existing = input.id ? db.objects.find((o) => o.id === input.id) : null;
+  if (!existing && !canCreateObjects(actor.role)) throw new Error('Недостаточно прав');
   if (existing && !objectVisible(actor, existing)) throw new Error('Недостаточно прав');
+  if (
+    existing &&
+    input.status &&
+    input.status !== existing.status &&
+    !canMoveObjects(actor.role)
+  ) {
+    throw new Error('Статус меняет менеджер или владелец');
+  }
+  if (actor.role === 'crew') throw new Error('Бригада не меняет проект и комнату');
 
   const status = (input.status || existing?.status || 'draft') as JobObjectStatus;
   const obj: JobObject = {
@@ -869,7 +914,7 @@ export function upsertLocalObject(
     clientSummary: input.clientSummary ?? existing?.clientSummary ?? '',
     history: existing?.history || [],
     documents: existing?.documents,
-    pendingSync: true,
+    pendingSync: input.pendingSync === true,
     ...carriedObjectLink(input, existing),
   };
 
@@ -891,44 +936,28 @@ export function upsertLocalObject(
     obj.projectId = project.id;
   }
 
+  const stamp = (action: string, detail?: string) => ({
+    at: now,
+    userId: actor.id,
+    login: actor.login,
+    authorName: actor.displayName || actor.login,
+    action,
+    ...(detail !== undefined ? { detail } : {}),
+  });
   if (!existing) {
-    obj.history = [
-      {
-        at: now,
-        userId: actor.id,
-        login: actor.login,
-        action: 'create',
-        detail: status,
-      },
-    ];
+    obj.history = [stamp('create', status)];
   } else if (input.status && input.status !== existing.status) {
-    obj.history = [
-      {
-        at: now,
-        userId: actor.id,
-        login: actor.login,
-        action: 'status',
-        detail: `${existing.status}→${input.status}`,
-      },
-      ...existing.history,
-    ].slice(0, 50);
+    obj.history = [stamp('status', `${existing.status}→${input.status}`), ...existing.history].slice(0, 50);
   } else {
-    obj.history = [
-      {
-        at: now,
-        userId: actor.id,
-        login: actor.login,
-        action: 'update',
-      },
-      ...(existing.history || []),
-    ].slice(0, 50);
+    obj.history = [stamp('update'), ...(existing.history || [])].slice(0, 50);
   }
 
   const objects = existing
     ? db.objects.map((o) => (o.id === obj.id ? obj : o))
     : [obj, ...db.objects];
   saveDb({ ...db, objects, projects });
-  enqueueObjectSync(obj);
+  if (obj.pendingSync) enqueueObjectSync(obj);
+  else removeFromObjectQueue(obj.id);
   cacheObjects(listLocalObjects(actor));
   return presentObject(obj);
 }
@@ -1135,7 +1164,7 @@ export function appendLocalObjectDocuments(
   if (actor.role === 'crew') throw new Error('Монтажник не прикладывает документы');
   const db = loadDb();
   const existing = db.objects.find((o) => o.id === objectId);
-  if (!existing || !objectVisible(actor, existing)) throw new Error('Объект не найден');
+  if (!existing || !objectVisible(actor, existing)) throw new Error('Комната не найдена');
   const now = new Date().toISOString();
   const meta = docs.map((d) => {
     if (d.dataBase64) {
@@ -1159,6 +1188,7 @@ export function appendLocalObjectDocuments(
         at: now,
         userId: actor.id,
         login: actor.login,
+        authorName: actor.displayName || actor.login,
         action: meta.every((d) => d.kind === 'profile') ? 'profile_pdf' : 'calc_pdf',
         detail: meta.map((d) => d.filename).join(', '),
       },

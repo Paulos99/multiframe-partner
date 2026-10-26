@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { canCreateObjects, type JobObject } from '../../../../packages/shared/partner';
+import { canCreateObjects, canMoveObjects, type JobObject } from '../../../../packages/shared/partner';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { useSession } from '../state/SessionContext';
-import type { RoomAnswers } from '../state/types';
 import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
+import { answersFromStoredRoom, roomRecordFromAnswers } from './roomLink';
 import { usePartner } from './PartnerContext';
 import listStyles from './ProjectList.module.css';
 import styles from './partner.module.css';
@@ -53,9 +53,10 @@ export function SaveObjectCard() {
     setCity(obj.city || user?.org?.city || '');
     setProjectChoice(obj.projectId || 'new');
     setRoomName(obj.roomName || '');
-    const answers = obj.room?.answers;
-    if (answers && typeof answers === 'object') patchRoom(answers as Partial<RoomAnswers>);
-    if (typeof obj.room?.areaM2 === 'number') setCeilingArea(obj.room.areaM2);
+    const stored = answersFromStoredRoom(obj.room);
+    if (stored) patchRoom(stored);
+    if (typeof stored?.ceilingAreaM2 === 'number') setCeilingArea(stored.ceilingAreaM2);
+    else if (typeof obj.room?.areaM2 === 'number') setCeilingArea(obj.room.areaM2);
   }, [diagnosisRequest, objects, patchRoom, setCeilingArea, user?.org?.city]);
 
   useEffect(() => {
@@ -67,7 +68,10 @@ export function SaveObjectCard() {
     return () => window.clearTimeout(t);
   }, [savedFlash, sentFlash]);
 
-  if (!user || !canCreateObjects(user.role)) return null;
+  if (!user) return null;
+  const canCreate = canCreateObjects(user.role);
+  const canMove = canMoveObjects(user.role);
+  if (!canCreate && !objectId) return null;
 
   const room = session.answers.room;
   const area = room.ceilingAreaM2 ?? null;
@@ -78,16 +82,12 @@ export function SaveObjectCard() {
   const sim = session.derived?.simulation;
 
   function roomPayload() {
-    return {
-      roomType: room.roomType,
-      roomTypeCustom: room.roomTypeCustom || null,
-      areaM2: area,
-      houseType: room.houseType,
-      objectStage: room.objectStage,
-      classBefore: sim ? `Rw ${sim.before.Rw} / Lnw ${sim.before.Lnw}` : null,
-      classAfter: sim ? `Rw ${sim.after.Rw} / Lnw ${sim.after.Lnw}` : null,
-      answers: room as unknown as Record<string, unknown>,
-    };
+    return roomRecordFromAnswers(
+      room,
+      sim
+        ? { before: { Rw: sim.before.Rw, Lnw: sim.before.Lnw }, after: { Rw: sim.after.Rw, Lnw: sim.after.Lnw } }
+        : null,
+    );
   }
 
   function estimatePayload() {
@@ -102,8 +102,9 @@ export function SaveObjectCard() {
     };
   }
 
-  function objectFields(status: 'measured' | 'quote_sent', projectId?: string) {
+  function objectFields(next: 'keep' | 'quote_sent', projectId?: string) {
     const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
+    const status = next === 'quote_sent' ? 'quote_sent' : existing?.status || 'draft';
     const chosen = projectId || (projectChoice !== 'new' ? projectChoice : existing?.projectId || undefined);
     const roomLabel = roomName.trim() || existing?.roomName || room.roomTypeCustom || '';
     return {
@@ -142,14 +143,14 @@ export function SaveObjectCard() {
     const sig = `${obj.id}:${JSON.stringify(session.answers)}`;
     if (attachedProfile.current === sig) return;
     attachedProfile.current = sig;
-    setProfileNote('Прикладываем «Профиль» к объекту…');
+    setProfileNote('Прикладываем «Профиль» к комнате…');
     try {
       const { blob } = await renderAcousticProfilePdf(session, { compact: true });
       const saved = await attachProfile(obj, await blobToBase64(blob));
-      setProfileNote(saved ? '«Профиль» приложен к объекту' : null);
+      setProfileNote(saved ? '«Профиль» приложен к комнате' : null);
     } catch {
       attachedProfile.current = null;
-      setProfileNote('Не удалось приложить «Профиль». Сохраните объект ещё раз.');
+      setProfileNote('Не удалось приложить «Профиль». Сохраните комнату ещё раз.');
     }
   }
 
@@ -161,17 +162,17 @@ export function SaveObjectCard() {
     try {
       const updating = Boolean(objectId);
       const linked = await projectForSave();
-      const obj = await saveObject(objectFields('measured', linked));
+      const obj = await saveObject(objectFields('keep', linked));
       if (obj.projectId) setProjectChoice(obj.projectId);
       setObjectId(obj.id);
       void attachProfileTo(obj);
       setSavedFlash(true);
       setMsg(
         obj.pendingSync
-          ? 'Объект сохранён на устройстве — отправится при сети'
+          ? 'Комната сохранена на устройстве — отправится при сети'
           : updating
-            ? 'Объект обновлён'
-            : 'Объект сохранён',
+            ? 'Комната обновлена'
+            : 'Комната сохранена',
       );
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Не удалось сохранить');
@@ -219,17 +220,19 @@ export function SaveObjectCard() {
   }
 
   return (
-    <section className={styles.card} style={{ width: '100%', marginTop: 8 }} aria-label="Объект">
-      <h2>Сохранить объект</h2>
+    <section className={styles.card} style={{ width: '100%', marginTop: 8 }} aria-label="Комната">
+      <h2>Сохранить комнату</h2>
       <p className={styles.lead}>
-        Замер появится у менеджера. Монтажник увидит объект, когда его назначат. Без сети сохранится на телефоне.
+        {canCreate
+          ? 'Комната останется черновиком, пока менеджер или владелец не переставит её. Без сети сохранится на телефоне.'
+          : 'Профиль запишется в назначенную комнату. Новую комнату создаёт менеджер или владелец.'}
       </p>
       <form onSubmit={(e) => void onSave(e)}>
         <div className={listStyles.picker}>
           <label className={styles.field}>
             Проект
             <select aria-label="Проект" value={projectChoice} onChange={(event) => setProjectChoice(event.target.value)}>
-              <option value="new">Новый проект</option>
+              {canCreate ? <option value="new">Новый проект</option> : null}
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -295,11 +298,13 @@ export function SaveObjectCard() {
           </p>
         ) : null}
         <div className={styles.actionRow}>
-          <Button type="submit" loading={busy} success={savedFlash} disabled={busy || sending}>
-            {busy ? 'Сохраняем…' : 'Сохранить объект'}
+          <Button type="submit" fullWidth loading={busy} success={savedFlash} disabled={busy || sending}>
+            {busy ? 'Сохраняем…' : 'Сохранить комнату'}
           </Button>
+          {canMove ? (
           <Button
             type="button"
+            fullWidth
             variant="secondary"
             loading={sending}
             success={sentFlash}
@@ -308,6 +313,7 @@ export function SaveObjectCard() {
           >
             {sending ? 'Отправляем…' : 'Отправить КП'}
           </Button>
+          ) : null}
         </div>
       </form>
     </section>

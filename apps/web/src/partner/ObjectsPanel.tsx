@@ -1,14 +1,15 @@
-import { Skeleton } from './Skeleton';
-import { roomRank } from './kanban';
+import { roomCountLabel, roomRank } from './kanban';
 import { KanbanBoard } from './KanbanBoard';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   JOB_OBJECT_STATUS_LABELS,
   ROLE_LABELS,
   canAssignObjects,
   canCreateObjects,
   canDeleteObjects,
+  canMoveObjects,
   documentDisplayKind,
   documentLabel,
   visibleDocuments,
@@ -19,14 +20,18 @@ import {
 } from '../../../../packages/shared/partner';
 import { apiFetchObjectDocument } from './apiClient';
 import { buildDemoPdfBlob, openPdfBlob } from './demoDocuments';
+import { documentOpenPolicy } from './roomDocuments';
+import { answersFromStoredRoom } from './roomLink';
+import { createInitialSession, withDerived } from '../state/session';
+import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
-import { RiseItem, StatusSwap, usePrefersReducedMotion } from './motionBits';
+import { StatusSwap } from './motionBits';
 import { usePartner } from './PartnerContext';
+import { formatDocStamp } from './historyFormatting';
 import { ObjectHistory } from './ObjectHistory';
 import listStyles from './ProjectList.module.css';
 import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
-import { preliminaryRoomTotal } from './projectSummary';
 import styles from './partner.module.css';
 
 const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
@@ -36,31 +41,57 @@ function telHref(phone: string): string {
 }
 
 function formatDocWhen(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return formatDocStamp(iso);
+}
+
+/** Профиль проблемомера без блока сметы. Если ответов комнаты нет — схема и количества. */
+async function plainProfileBlob(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+  const answers = answersFromStoredRoom(obj.room);
+  if (answers?.roomType && answers.ceilingAreaM2) {
+    try {
+      const base = createInitialSession();
+      const session = withDerived({
+        ...base,
+        answers: {
+          ...base.answers,
+          room: { ...base.answers.room, ...answers, plannedCeiling: 'stretch' },
+        },
+      });
+      if (session.derived) {
+        const { blob } = await renderAcousticProfilePdf(session, { compact: true, hidePrices: true });
+        return blob;
+      }
+    } catch {
+      /* ниже — схема без цен */
+    }
+  }
+  return buildDemoPdfBlob(obj, doc, { hidePrices: true });
 }
 
 function ObjectDocuments({
   obj,
   busyId,
+  hidePrices,
   onOpen,
+  onShare,
 }: {
   obj: JobObject;
   busyId: string | null;
+  hidePrices: boolean;
   onOpen: (doc: JobObjectDocument, download: boolean) => void;
+  onShare: (doc: JobObjectDocument) => void;
 }) {
   const docs = visibleDocuments(obj.documents);
   return (
-    <div className={styles.docBlock}>
-      <div className={styles.field}>
-        Документы
-        <span className={styles.hint}>
-          {docs.length
-            ? '«Смета» — из калькулятора: цены, количество и схема раскладки. «Профиль» — из проблемомера: акустика комнаты. Старые версии сохраняются.'
-            : '«Смета» появится после расчёта в калькуляторе, «Профиль» — после сохранения проблемомера.'}
-        </span>
-      </div>
+    <details className={styles.docBlock}>
+      <summary>Документы</summary>
+      <span className={styles.hint}>
+        {docs.length
+          ? hidePrices
+            ? 'Схема, материалы и количества. Цен в этих файлах нет. Клиенту файл уходит только по кнопке «Клиенту».'
+            : '«Смета» — цены, количество и схема. «Профиль» — акустика комнаты. Само никому не отправляется: «Клиенту» — только по нажатию.'
+          : '«Смета» появится после PDF в калькуляторе, «Профиль» — после PDF в проблемомере. В комнате файл лежит до нажатия.'}
+      </span>
       {docs.length ? (
         <ul className={styles.docList}>
           {docs.map((doc, index) => {
@@ -96,13 +127,21 @@ function ObjectDocuments({
                   >
                     Скачать
                   </button>
+                  <button
+                    type="button"
+                    className={styles.ghost}
+                    disabled={busyId === doc.id}
+                    onClick={() => onShare(doc)}
+                  >
+                    Клиенту
+                  </button>
                 </div>
               </li>
             );
           })}
         </ul>
       ) : null}
-    </div>
+    </details>
   );
 }
 
@@ -125,32 +164,30 @@ const emptyDraft = (city = ''): RoomDraft => ({
 });
 
 export function ObjectsPanel({
-  compact,
   onCreate,
+  openCreateToken = 0,
 }: {
   compact?: boolean;
   onCreate?: () => void;
+  openCreateToken?: number;
 }) {
   const api = usePartner();
   const user = api.user!;
-  const reduce = usePrefersReducedMotion();
   const canAssign = canAssignObjects(user.role);
   const canDelete = canDeleteObjects(user.role);
   const canCreate = canCreateObjects(user.role);
+  const canMove = canMoveObjects(user.role);
+  const hideMoney = user.role === 'crew';
   const staff = api.partnerListStaff();
-  const [createStage, setCreateStage] = useState<JobObjectStatus>('draft');
   const [toDelete, setToDelete] = useState<JobObject | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<JobObjectStatus | 'all'>(
-    user.role === 'crew' ? 'install' : 'all',
-  );
-  // On the board stages are columns, so the status filter applies only to the compact list.
-  const roomFilter = compact ? statusFilter : 'all';
+  const roomFilter = 'all' as const;
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [docBusy, setDocBusy] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -158,13 +195,11 @@ export function ObjectsPanel({
   const [saving, setSaving] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [adding, setAdding] = useState(false);
-  const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!api.openedObjectId) return;
     const room = api.objects.find((obj) => obj.id === api.openedObjectId);
     if (!room) return;
-    setStatusFilter('all');
     setQuery('');
     setSelectedKey(room.projectId || `room:${room.id}`);
     setSelectedId(room.id);
@@ -192,15 +227,22 @@ export function ObjectsPanel({
     () => api.objects.find((o) => o.id === selectedId) || null,
     [api.objects, selectedId],
   );
-  const summary = useMemo(() => preliminaryRoomTotal(selectedRooms), [selectedRooms]);
+  useEffect(() => {
+    if (!openCreateToken || !canCreate) return;
+    setCreating(true);
+  }, [openCreateToken, canCreate]);
 
   useEffect(() => {
-    if (!selectedId || !detailRef.current) return;
-    detailRef.current.scrollIntoView({
-      behavior: reduce ? 'auto' : 'smooth',
-      block: 'nearest',
-    });
-  }, [selectedId, reduce]);
+    if (!selectedId) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setSelectedId(null);
+        setSelectedKey(null);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId]);
 
   useEffect(() => {
     if (!msg && !err) return;
@@ -266,27 +308,51 @@ export function ObjectsPanel({
     }
   }
 
+  async function blobForDocument(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+    if (documentOpenPolicy(user.role) === 'without-prices') {
+      if (documentDisplayKind(doc.kind) === 'profile') return plainProfileBlob(obj, doc);
+      return buildDemoPdfBlob(obj, doc, { hidePrices: true });
+    }
+    if (doc.demo) return buildDemoPdfBlob(obj, doc, { hidePrices: false });
+    const local = doc.dataBase64 || loadLocalDocBytes(doc.id);
+    const pdfBase64 = local || (await apiFetchObjectDocument(obj.id, doc.id)).pdfBase64;
+    const bin = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
+    return new Blob([bin], { type: 'application/pdf' });
+  }
+
   async function openDocument(obj: JobObject, doc: JobObjectDocument, download: boolean) {
     setDocBusy(doc.id);
     setErr(null);
     try {
-      let blob: Blob;
-      if (doc.demo) {
-        blob = await buildDemoPdfBlob(obj, doc);
-      } else {
-        const local = doc.dataBase64 || loadLocalDocBytes(doc.id);
-        if (local) {
-          const bin = Uint8Array.from(atob(local), (c) => c.charCodeAt(0));
-          blob = new Blob([bin], { type: 'application/pdf' });
-        } else {
-          const file = await apiFetchObjectDocument(obj.id, doc.id);
-          const bin = Uint8Array.from(atob(file.pdfBase64), (c) => c.charCodeAt(0));
-          blob = new Blob([bin], { type: 'application/pdf' });
-        }
-      }
-      openPdfBlob(blob, doc.filename, download);
+      openPdfBlob(await blobForDocument(obj, doc), doc.filename, download);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось открыть PDF');
+    } finally {
+      setDocBusy(null);
+    }
+  }
+
+  async function shareDocument(obj: JobObject, doc: JobObjectDocument) {
+    setDocBusy(doc.id);
+    setErr(null);
+    try {
+      const blob = await blobForDocument(obj, doc);
+      const file = new File([blob], doc.filename || 'документ.pdf', { type: 'application/pdf' });
+      if (typeof navigator.share === 'function') {
+        const withFile = typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+        await navigator.share(
+          withFile
+            ? { files: [file], title: doc.filename }
+            : { title: documentLabel(doc.kind), text: doc.filename },
+        );
+        setMsg('Окно «Поделиться» открыто. Само по себе ничего не отправлено.');
+      } else {
+        await navigator.clipboard.writeText(doc.filename);
+        setMsg('Имя файла скопировано. Отправка клиенту — только из этого окна.');
+      }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      setErr(e instanceof Error ? e.message : 'Не удалось поделиться');
     } finally {
       setDocBusy(null);
     }
@@ -303,7 +369,7 @@ export function ObjectsPanel({
     try {
       await api.deleteObject(obj.id);
       if (selectedId === obj.id) setSelectedId(null);
-      setMsg('Объект удалён');
+      setMsg('Комната удалена');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось удалить');
     } finally {
@@ -317,9 +383,9 @@ export function ObjectsPanel({
     if (!canCreate) return;
     setSaving(true);
     setErr(null);
-    const roomLabel = draft.roomName.trim() || 'Комната';
+    const roomLabel = draft.roomName.trim();
     const fields = {
-      status: createStage,
+      status: 'draft' as const,
       clientName: draft.clientName.trim(),
       clientPhone: draft.clientPhone.trim(),
       address: draft.address.trim(),
@@ -381,40 +447,51 @@ export function ObjectsPanel({
     }
   }
 
-  const reminder =
-    user.role === 'crew'
-      ? counts.install
-        ? `${counts.install} в монтаже — закройте объект, когда потолок готов`
-        : 'Нет объектов в монтаже'
-      : counts.quote_sent
-        ? `${counts.quote_sent} КП ждут следующего шага`
-        : counts.draft
-          ? `${counts.draft} ещё в черновике`
-          : null;
+  const reminder = canMove
+    ? counts.quote_sent
+      ? `${counts.quote_sent} КП ждут следующего шага`
+      : counts.draft
+        ? `${roomCountLabel(counts.draft)} ещё в черновике`
+        : counts.install
+          ? `${roomCountLabel(counts.install)} в монтаже`
+          : null
+    : counts.install
+      ? `${roomCountLabel(counts.install)} в монтаже`
+      : null;
 
-  const allowedStatuses = (current: JobObjectStatus) =>
-    STATUSES.filter((s) => {
-      if (user.role === 'crew') return s === 'install' || s === 'closed' || s === current;
-      return true;
-    });
+  const emptyHint =
+    user.role === 'crew' || user.role === 'measurer'
+      ? 'Пока нет назначенных комнат. Назначение приходит от менеджера или владельца.'
+      : 'Пока нет проектов. Создайте проект с первой комнатой — она появится на доске.';
 
-  const filters: Array<JobObjectStatus | 'all'> =
-    user.role === 'crew' ? ['install', 'closed', 'all'] : ['all', ...STATUSES];
+  async function removeProject(id: string) {
+    setDeleting(true);
+    setErr(null);
+    try {
+      await api.deleteProject(id);
+      setSelectedId(null);
+      setSelectedKey(null);
+      setMsg('Проект удалён');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Не удалось удалить проект');
+    } finally {
+      setDeleting(false);
+      setProjectToDelete(null);
+    }
+  }
 
-  function openCard(key: string, rooms: JobObject[]) {
-    setSelectedKey(key);
-    setSelectedId(rooms.length === 1 ? rooms[0].id : null);
+  function closeDrawer() {
+    setSelectedId(null);
+    setSelectedKey(null);
   }
 
   return (
     <div className={`${styles.card} ${styles.panelCard}`}>
       <div className={listStyles.toolbar}>
         <div>
-          <h2>{user.role === 'crew' ? 'Задания на монтаж' : 'Объекты'}</h2>
+          <h2>Проекты</h2>
           <p className={styles.lead}>
-            {user.role === 'crew'
-              ? 'Только ваши комнаты. В карточке — «Смета» с ценами и схемой раскладки и «Профиль» комнаты.'
-              : 'Проект — это клиент и адрес. Комнаты внутри считаются отдельно, площади не смешиваются.'}
+            Проект — это клиент и адрес. Комната внутри считается отдельно. Карточка открывается рядом, доска остаётся на месте.
           </p>
         </div>
         {canCreate ? (
@@ -422,12 +499,11 @@ export function ObjectsPanel({
             type="button"
             className={styles.primary}
             onClick={() => {
-              setCreateStage('draft');
               setCreating((value) => !value);
             }}
             aria-expanded={creating}
           >
-            {creating ? 'Закрыть' : compact ? 'Создать' : '+ Новый объект'}
+            {creating ? 'Закрыть' : 'Новый проект'}
           </button>
         ) : null}
       </div>
@@ -438,26 +514,8 @@ export function ObjectsPanel({
       ) : null}
       {!api.online ? (
         <p className={styles.flash} role="status">
-          Нет сети — показаны замеры и расчёты, сохранённые на устройстве.
+          Нет сети — показаны комнаты, сохранённые на устройстве.
         </p>
-      ) : null}
-      {!api.online && api.calculations.length ? (
-        <div className={styles.calcCache}>
-          <h3>Расчёты на устройстве</h3>
-          <ul>
-            {api.calculations.map((calc) => (
-              <li key={calc.id}>
-                <strong>{calc.tool === 'calculator' ? 'Калькулятор' : 'Проблемомер'}</strong>
-                <span>
-                  {calc.label ? `${calc.label} · ` : ''}
-                  {calc.areaM2 != null ? `${calc.areaM2} м² · ` : ''}
-                  {calc.panels != null ? `${calc.panels} пан. · ` : ''}
-                  {new Date(calc.at).toLocaleString('ru-RU')}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
       ) : null}
 
       {creating && canCreate ? (
@@ -465,10 +523,6 @@ export function ObjectsPanel({
           <label className={styles.field}>
             Клиент
             <input value={draft.clientName} onChange={(event) => setDraft((value) => ({ ...value, clientName: event.target.value }))} />
-          </label>
-          <label className={styles.field}>
-            Телефон
-            <input value={draft.clientPhone} inputMode="tel" onChange={(event) => setDraft((value) => ({ ...value, clientPhone: event.target.value }))} />
           </label>
           <label className={styles.field}>
             Адрес
@@ -487,7 +541,6 @@ export function ObjectsPanel({
             />
           </label>
           <div className={styles.field}>
-            <span className={styles.srOnly}>Сохранить</span>
             <button type="submit" className={styles.primary} disabled={saving}>
               {saving ? 'Сохраняем…' : 'Создать проект'}
             </button>
@@ -495,309 +548,269 @@ export function ObjectsPanel({
         </form>
       ) : null}
 
-      {selectedCard ? (
-        <div>
-          <button type="button" className={listStyles.back} onClick={() => { setSelectedKey(null); setSelectedId(null); }}>
-            ← {compact ? 'К списку' : 'К доске'}
-          </button>
-          <h3>{selectedCard.title}</h3>
-          <p className={styles.lead}>{selectedCard.subtitle}</p>
-          {selectedRooms.length ? (
-            <p className={styles.hint}>
-              Предварительный итог: {summary.calculated ? formatRub(summary.total) : 'расчётов пока нет'}. Рассчитано {summary.calculated} из {summary.rooms}. Это ещё не зафиксированное предложение.
-            </p>
-          ) : null}
-          <div className={listStyles.rooms}>
-            {selectedRooms.map((room) => (
-              <button
-                key={room.id}
-                type="button"
-                className={`${listStyles.room} ${selectedId === room.id ? listStyles.roomOn : ''}`}
-                onClick={() => setSelectedId(room.id)}
-              >
-                <span>
-                  <strong>{room.roomName || room.clientName || 'Комната'}</strong>
-                  <span className={listStyles.meta}>
-                    {room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'Площадь не указана'} · {JOB_OBJECT_STATUS_LABELS[room.status]}
-                  </span>
-                </span>
-                <StatusBadge status={room.status} />
-              </button>
-            ))}
-            {!selectedRooms.length ? <p className={styles.hint}>В проекте пока нет комнат с этим статусом.</p> : null}
-          </div>
-          {canCreate && selectedCard.project ? (
-            <div className={listStyles.add}>
-              <label className={styles.field}>
-                Новая комната
-                <input value={roomName} placeholder="Спальня" onChange={(event) => setRoomName(event.target.value)} />
-              </label>
-              <button type="button" className={styles.primary} disabled={adding || !roomName.trim()} onClick={() => void addRoom()}>
-                {adding ? 'Сохраняем…' : 'Добавить комнату'}
-              </button>
-            </div>
+      <label className={styles.searchField}>
+        <span className={styles.srOnly}>Поиск проекта</span>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Клиент, адрес или комната"
+          inputMode="search"
+          enterKeyHint="search"
+        />
+      </label>
+
+      {!api.objectsLoading && !cards.length ? (
+        <div className={styles.emptyState}>
+          <p className={styles.lead}>
+            {api.objects.length || api.projects.length ? 'Ничего не нашлось. Сбросьте поиск.' : emptyHint}
+          </p>
+          {api.objects.length || api.projects.length ? (
+            <button type="button" className={styles.ghost} onClick={() => setQuery('')}>
+              Сбросить поиск
+            </button>
+          ) : canCreate ? (
+            <button type="button" className={styles.primary} onClick={() => setCreating(true)}>
+              Новый проект
+            </button>
+          ) : onCreate ? (
+            <button type="button" className={styles.ghost} onClick={onCreate}>
+              Проблемомер
+            </button>
           ) : null}
         </div>
       ) : (
-        <>
-          <label className={styles.searchField}>
-            <span className={styles.srOnly}>Поиск проекта</span>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Клиент, адрес или комната"
-              inputMode="search"
-              enterKeyHint="search"
-            />
-          </label>
-          {compact ? (
-            <div className={styles.chipRow} role="toolbar" aria-label="Фильтр по статусу">
-              {filters.map((id) => {
-                const on = statusFilter === id;
-                const label = id === 'all' ? 'Все' : JOB_OBJECT_STATUS_LABELS[id];
-                const n = id === 'all' ? api.objects.length : counts[id];
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    className={on ? styles.chipOn : styles.chip}
-                    aria-pressed={on}
-                    onClick={() => setStatusFilter(id)}
-                  >
-                    {label} · {n}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-          {!compact ? (
-            <KanbanBoard
-              rooms={cards.flatMap((card) => visibleRooms(card.rooms, 'all'))}
-              projects={api.projects}
-              role={user.role}
-              pendingId={pendingId}
-              loading={api.objectsLoading && !api.objects.length}
-              staff={staff}
-              onCreate={
-                canCreate
-                  ? (stage) => {
-                      setCreateStage(stage);
-                      setCreating(true);
-                    }
-                  : undefined
-              }
-              onMove={moveRoom}
-              onDelete={canDelete ? setToDelete : undefined}
-              onOpen={(room) => {
-                setSelectedKey(room.projectId || `room:${room.id}`);
-                setSelectedId(room.id);
-              }}
-            />
-          ) : api.objectsLoading && !api.objects.length ? (
-            <Skeleton kind="cards" count={3} label="Загрузка объектов"/>
-          ) : (
-            <div className={listStyles.grid}>
-              {cards.map((card, index) => (
-                <RiseItem key={card.key} index={index}>
-                  <button type="button" className={listStyles.card} onClick={() => openCard(card.key, card.rooms)}>
-                    <span className={listStyles.meta}>Комнат: {visibleRooms(card.rooms, statusFilter).length}</span>
-                    <strong>
-                      {card.title}
-                      {card.rooms.some((room) => room.pendingSync) ? ' · ↻' : ''}
-                    </strong>
-                    <span className={listStyles.meta}>{card.subtitle}</span>
-                  </button>
-                </RiseItem>
-              ))}
-              {!cards.length ? (
-                <div className={styles.emptyState}>
-                  <p className={styles.lead}>
-                    {api.objects.length || api.projects.length
-                      ? 'Ничего не нашлось по этому фильтру.'
-                      : compact
-                        ? 'Пока нет проектов. Создайте проект с первой комнатой или сохраните замер.'
-                        : user.role === 'crew'
-                          ? 'Пока нет заданий.'
-                          : 'Пока нет проектов.'}
-                  </p>
-                  {api.objects.length || api.projects.length ? (
-                    <button
-                      type="button"
-                      className={styles.ghost}
-                      onClick={() => {
-                        setQuery('');
-                        setStatusFilter(user.role === 'crew' ? 'install' : 'all');
-                      }}
-                    >
-                      Сбросить фильтр
-                    </button>
-                  ) : canCreate ? (
-                    <button type="button" className={styles.primary} onClick={() => setCreating(true)}>
-                      Создать
-                    </button>
-                  ) : null}
-                  {!cards.length && onCreate && canCreate ? (
-                    <button type="button" className={styles.ghost} onClick={onCreate}>
-                      Открыть проблемомер
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          )}
-        </>
+        <KanbanBoard
+          rooms={cards.flatMap((card) => visibleRooms(card.rooms, 'all'))}
+          projects={api.projects}
+          role={user.role}
+          pendingId={pendingId}
+          loading={api.objectsLoading && !api.objects.length}
+          staff={staff}
+          onCreate={
+            canCreate
+              ? () => {
+                  setCreating(true);
+                }
+              : undefined
+          }
+          onMove={moveRoom}
+          onDelete={canDelete ? setToDelete : undefined}
+          onOpen={(room) => {
+            setSelectedKey(room.projectId || `room:${room.id}`);
+            setSelectedId(room.id);
+          }}
+        />
       )}
 
-      {selected && selectedCard ? (
-        <div className={styles.objectDetail} ref={detailRef}>
-          <h3>
-            {selected.roomName || selected.clientName || 'Комната'} · {JOB_OBJECT_STATUS_LABELS[selected.status]}
-          </h3>
-          <p className={styles.lead}>
-            {[selected.address, selected.city].filter(Boolean).join(' · ') || 'Адрес не заполнен'}
-          </p>
-          {selected.clientPhone ? (
-            <a className={styles.callLink} href={telHref(selected.clientPhone)}>
-              Позвонить {selected.clientPhone}
-            </a>
-          ) : (
-            <p className={styles.hint}>Телефон не указан</p>
-          )}
-          {selected.estimate ? (
-            <div className={styles.grid2}>
-              <div className={styles.field}>
-                Панели
-                <strong>{selected.estimate.panels} шт.</strong>
+      {selected && selectedCard
+        ? createPortal(
+        <>
+          <button type="button" className={styles.drawerBackdrop} aria-label="Закрыть карточку" onClick={closeDrawer} />
+          <aside className={styles.drawer} role="dialog" aria-label="Комната">
+            <div className={styles.drawerHead}>
+              <div>
+                <h3>{selected.clientName || selectedCard.project?.clientName || selectedCard.title}</h3>
+                <p className={styles.lead}>
+                  {[
+                    selectedRooms.length > 1 ? null : selected.roomName,
+                    [selected.address, selected.city].filter(Boolean).join(' · ') || 'Добавить адрес',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
               </div>
-              <div className={styles.field}>
-                Дюбели
-                <strong>{selected.estimate.dowels} шт.</strong>
-              </div>
-              {selected.estimate.totalCost != null ? (
-                <div className={styles.field}>
-                  Итого комнаты
-                  <strong>{formatRub(selected.estimate.totalCost)}</strong>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <p className={styles.hint}>Смета ещё не посчитана</p>
-          )}
-
-          <ObjectDocuments
-            obj={selected}
-            busyId={docBusy}
-            onOpen={(doc, download) => void openDocument(selected, doc, download)}
-          />
-
-          {canCreate ? (
-            <div className={styles.navRow}>
-              <button type="button" className={styles.ghost} onClick={() => api.requestDiagnosis(selected.id)}>
-                Диагностика
-              </button>
-              <button type="button" className={styles.ghost} onClick={() => api.requestCalculator(selected.id)}>
-                Рассчитать
+              <button type="button" className={styles.ghost} onClick={closeDrawer}>
+                Закрыть
               </button>
             </div>
-          ) : null}
-
-          {canCreate && api.projects.length ? (
-            <label className={styles.field}>
-              Проект
-              <span className={styles.hint}>Комнату можно перенести в другой проект своей компании.</span>
-              <select
-                value={selected.projectId || ''}
-                disabled={pendingId === selected.id}
-                onChange={(event) => {
-                  if (event.target.value) void patch(selected, { projectId: event.target.value });
-                }}
-              >
-                {!selected.projectId ? <option value="">Выберите проект</option> : null}
-                {api.projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-
-          <div className={styles.field}>
-            Статус
-            <div className={styles.chipRow} role="group" aria-label="Сменить статус">
-              {allowedStatuses(selected.status).map((s) => (
+            {selectedRooms.length > 1 ? (
+            <div className={listStyles.rooms}>
+              {selectedRooms.map((room) => (
                 <button
-                  key={s}
+                  key={room.id}
                   type="button"
-                  className={selected.status === s ? styles.chipOn : styles.chip}
-                  aria-pressed={selected.status === s}
-                  disabled={pendingId === selected.id}
-                  onClick={() => {
-                    if (s !== selected.status) void patch(selected, { status: s });
-                  }}
+                  className={`${listStyles.room} ${selectedId === room.id ? listStyles.roomOn : ''}`}
+                  onClick={() => setSelectedId(room.id)}
                 >
-                  {JOB_OBJECT_STATUS_LABELS[s]}
+                  <span>
+                    <strong>{room.roomName || room.clientName || 'Комната'}</strong>
+                    <span className={listStyles.meta}>
+                      {room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'Площадь не указана'} · {JOB_OBJECT_STATUS_LABELS[room.status]}
+                    </span>
+                  </span>
+                  <StatusBadge status={room.status} />
                 </button>
               ))}
             </div>
-          </div>
+            ) : null}
+            {canCreate && selectedCard.project ? (
+              <div className={listStyles.add}>
+                <label className={styles.field}>
+                  Новая комната
+                  <input value={roomName} placeholder="Спальня" onChange={(event) => setRoomName(event.target.value)} />
+                </label>
+                <button type="button" className={styles.primary} disabled={adding || !roomName.trim()} onClick={() => void addRoom()}>
+                  {adding ? 'Сохраняем…' : 'Добавить комнату'}
+                </button>
+              </div>
+            ) : null}
 
-          {canAssign && staff.length ? (
-            <label className={styles.field}>
-              Исполнитель
-              <span className={styles.hint}>
-                Монтажник видит только комнаты, назначенные лично ему.
-              </span>
-              <select
-                value={selected.assignedTo || ''}
-                disabled={pendingId === selected.id}
-                onChange={(e) => void patch(selected, { assignedTo: e.target.value || null })}
-              >
-                <option value="">Не назначен</option>
-                {staff.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.displayName} · {ROLE_LABELS[s.role as UserRole] || s.role}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
+            {selectedRooms.length > 1 ? (
+              <>
+                <h3>
+                  {selected.roomName || selected.clientName || 'Комната'} · {JOB_OBJECT_STATUS_LABELS[selected.status]}
+                </h3>
+                <p className={styles.lead}>
+                  {[selected.address, selected.city].filter(Boolean).join(' · ') || 'Добавить адрес'}
+                </p>
+              </>
+            ) : (
+              <p className={styles.hint}>{JOB_OBJECT_STATUS_LABELS[selected.status]}</p>
+            )}
+            {selected.clientPhone ? (
+              <a className={styles.callLink} href={telHref(selected.clientPhone)}>
+                Позвонить {selected.clientPhone}
+              </a>
+            ) : null}
+            {selected.estimate ? (
+              <div className={styles.grid2}>
+                <div className={styles.field}>
+                  <span>Панели</span>
+                  <strong>{selected.estimate.panels} шт.</strong>
+                </div>
+                <div className={styles.field}>
+                  <span>Дюбели</span>
+                  <strong>{selected.estimate.dowels} шт.</strong>
+                </div>
+                {!hideMoney && selected.estimate.totalCost != null ? (
+                  <div className={styles.field}>
+                    <span>Итого комнаты</span>
+                    <strong>{formatRub(selected.estimate.totalCost)}</strong>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className={styles.hint}>Смета ещё не посчитана</p>
+            )}
 
-          {selected.clientSummary ? (
-            <div className={styles.field}>
-              Сводка для клиента
-              <pre className={styles.summaryBox}>{selected.clientSummary}</pre>
-              <button
-                type="button"
-                className={styles.ghost}
-                onClick={() => {
-                  const clip = navigator.clipboard;
-                  if (!clip) {
-                    setErr('Не удалось скопировать');
-                    return;
-                  }
-                  void clip.writeText(selected.clientSummary).then(
-                    () => setMsg('Сводка скопирована'),
-                    () => setErr('Не удалось скопировать'),
-                  );
-                }}
-              >
-                Скопировать сводку
-              </button>
-            </div>
-          ) : null}
+            <ObjectDocuments
+              obj={selected}
+              busyId={docBusy}
+              hidePrices={hideMoney}
+              onOpen={(doc, download) => void openDocument(selected, doc, download)}
+              onShare={(doc) => void shareDocument(selected, doc)}
+            />
 
-          <ObjectHistory key={selected.id} entries={selected.history || []} people={[user, ...staff]} />
-
-          {canDelete ? (
             <div className={styles.navRow}>
-              <button type="button" className={styles.danger} onClick={() => setToDelete(selected)}>
-                Удалить комнату
+              <button type="button" className={styles.ghost} onClick={() => api.requestDiagnosis(selected.id)}>
+                Проблемомер
+              </button>
+              <button type="button" className={styles.ghost} onClick={() => api.requestCalculator(selected.id)}>
+                Калькулятор
               </button>
             </div>
-          ) : null}
-        </div>
-      ) : null}
+
+            {canCreate && api.projects.length ? (
+              <label className={styles.field}>
+                Проект
+                <span className={styles.hint}>Комнату можно перенести в другой проект своей компании.</span>
+                <select
+                  value={selected.projectId || ''}
+                  disabled={pendingId === selected.id}
+                  onChange={(event) => {
+                    if (event.target.value) void patch(selected, { projectId: event.target.value });
+                  }}
+                >
+                  {!selected.projectId ? <option value="">Выберите проект</option> : null}
+                  {api.projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {canMove ? (
+              <div className={styles.field}>
+                Статус
+                <div className={styles.chipRow} role="group" aria-label="Сменить статус">
+                  {STATUSES.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className={selected.status === s ? styles.chipOn : styles.chip}
+                      aria-pressed={selected.status === s}
+                      disabled={pendingId === selected.id}
+                      onClick={() => {
+                        if (s !== selected.status) void patch(selected, { status: s });
+                      }}
+                    >
+                      {JOB_OBJECT_STATUS_LABELS[s]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className={styles.hint}>Статус меняет менеджер или владелец.</p>
+            )}
+
+            {canAssign && staff.length ? (
+              <label className={styles.field}>
+                Исполнитель
+                <span className={styles.hint}>Замерщик и бригада видят только назначенные им комнаты.</span>
+                <select
+                  value={selected.assignedTo || ''}
+                  disabled={pendingId === selected.id}
+                  onChange={(e) => void patch(selected, { assignedTo: e.target.value || null })}
+                >
+                  <option value="">Не назначен</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.displayName} · {ROLE_LABELS[s.role as UserRole] || s.role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {selected.clientSummary && !hideMoney ? (
+              <div className={styles.field}>
+                Сводка для клиента
+                <pre className={styles.summaryBox}>{selected.clientSummary}</pre>
+              </div>
+            ) : null}
+
+            {(selected.history || []).length ? (
+              <details className={styles.docBlock}>
+                <summary>История</summary>
+                <ObjectHistory key={selected.id} entries={selected.history || []} people={[user, ...staff]} />
+              </details>
+            ) : null}
+
+            {canDelete ? (
+              <div className={styles.navRow}>
+                <button type="button" className={styles.danger} onClick={() => setToDelete(selected)}>
+                  Удалить комнату
+                </button>
+                {selectedCard.project ? (
+                  <button
+                    type="button"
+                    className={styles.danger}
+                    onClick={() =>
+                      setProjectToDelete({ id: selectedCard.project!.id, name: selectedCard.project!.name })
+                    }
+                  >
+                    Удалить проект
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </aside>
+        </>,
+        document.body,
+      )
+        : null}
 
       {msg ? (
         <p className={styles.toast} role="status">
@@ -811,13 +824,24 @@ export function ObjectsPanel({
       ) : null}
       <ConfirmDialog
         open={!!toDelete}
-        title={toDelete ? `Удалить объект «${objectLabel(toDelete)}»?` : ''}
+        title={toDelete ? `Удалить комнату «${objectLabel(toDelete)}»?` : ''}
         message="Действие нельзя отменить."
         confirmLabel="Удалить"
         busy={deleting}
         onCancel={() => setToDelete(null)}
         onConfirm={() => {
           if (toDelete) void remove(toDelete);
+        }}
+      />
+      <ConfirmDialog
+        open={!!projectToDelete}
+        title={projectToDelete ? `Удалить проект «${projectToDelete.name}»?` : ''}
+        message="Вместе с проектом удалятся его комнаты."
+        confirmLabel="Удалить проект"
+        busy={deleting}
+        onCancel={() => setProjectToDelete(null)}
+        onConfirm={() => {
+          if (projectToDelete) void removeProject(projectToDelete.id);
         }}
       />
     </div>

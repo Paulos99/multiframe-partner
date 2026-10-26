@@ -7,6 +7,7 @@ async function enter(page: Page) {
   await page.getByLabel('Логин', { exact: true }).fill('ui.owner');
   await page.getByLabel('Пароль', { exact: true }).fill('ui-fixture-password-only');
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await expect(page.locator('[data-room-id="ui_room"]')).toBeVisible();
 }
 const bg = (page: Page, selector: string) =>

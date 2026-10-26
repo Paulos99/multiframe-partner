@@ -23,7 +23,6 @@ function KpiRow({
   deltaLnw,
   quieterAir,
   quieterImpact,
-  quieterMax,
   echoBefore,
   echoAfter,
   rwBefore,
@@ -35,7 +34,6 @@ function KpiRow({
   deltaLnw: number;
   quieterAir: number;
   quieterImpact: number;
-  quieterMax: number;
   echoBefore: number;
   echoAfter: number;
   rwBefore: number;
@@ -43,6 +41,10 @@ function KpiRow({
   lnwBefore: number;
   lnwAfter: number;
 }) {
+  const airNow = Math.round(rwBefore);
+  const airAfter = Math.round(rwAfter);
+  const impactNow = Math.round(lnwBefore);
+  const impactAfter = Math.round(lnwAfter);
   return (
     <section
       className={`${styles.kpiRow} ${styles.driftSoft}`}
@@ -52,56 +54,34 @@ function KpiRow({
       <article className={styles.kpiCard}>
         <span className={styles.kpiLabel}>Воздушный шум</span>
         <div className={styles.kpiMain}>
-          {quieterAir > 0 ? (
-            <strong className={styles.kpiValue}>
-              −{quieterAir}
-              <em>%</em>
-            </strong>
-          ) : (
-            <strong className={styles.kpiValue}>
-              —<em>%</em>
-            </strong>
-          )}
+          <strong className={styles.kpiValue}>
+            {airNow} → {airAfter}
+            <em>дБ</em>
+          </strong>
           <DeltaBars before={rwBefore} after={rwAfter} />
         </div>
         <span className={styles.kpiDbHint}>
-          изоляция воздуха · +{deltaRw} дБ (Rw)
-          <em>больше Rw — лучше изоляция</em>
+          изоляция лучше на {deltaRw} дБ · примерно на {quieterAir}% тише
+          <em>чем больше децибел, тем лучше изоляция · Rw</em>
         </span>
       </article>
       <article className={styles.kpiCard}>
         <span className={styles.kpiLabel}>Ударный шум</span>
         <div className={styles.kpiMain}>
-          {quieterImpact > 0 ? (
-            <strong className={styles.kpiValue}>
-              −{quieterImpact}
-              <em>%</em>
-            </strong>
-          ) : (
-            <strong className={styles.kpiValue}>
-              —<em>%</em>
-            </strong>
-          )}
+          <strong className={styles.kpiValue}>
+            {impactNow} → {impactAfter}
+            <em>дБ</em>
+          </strong>
           <DeltaBars before={lnwBefore} after={lnwAfter} invert />
         </div>
         <span className={styles.kpiDbHint}>
-          удар · −{deltaLnw} дБ (Lnw)
-          <em>меньше Lnw — тише удар сверху</em>
+          удар сверху тише на {deltaLnw} дБ · примерно на {quieterImpact}% тише
+          <em>чем меньше децибел, тем тише шаги · Lnw</em>
         </span>
       </article>
       <article className={styles.kpiCard}>
         <span className={styles.kpiLabel}>Акустический комфорт</span>
         <EchoComfortRings before={echoBefore} after={echoAfter} compact />
-      </article>
-      <article className={styles.kpiCard}>
-        <span className={styles.kpiLabel}>Снижение шума</span>
-        <strong className={styles.kpiValue}>
-          −{quieterMax}
-          <em>%</em>
-        </strong>
-        <span className={styles.kpiPill}>
-          воздух {quieterAir}% · удар {quieterImpact}%
-        </span>
       </article>
     </section>
   );
@@ -175,7 +155,6 @@ export function ResultWideScreen() {
   const deltaLnw = Math.abs(Math.round(p.sim.delta.Lnw));
   const quieterAir = p.sim.perceivedAirPct;
   const quieterImpact = p.sim.perceivedImpactPct;
-  const quieterMax = Math.max(quieterAir, quieterImpact);
   const classNow = p.hybridBefore as ClassLabel;
   const classMf = p.hybridAfter as ClassLabel;
 
@@ -187,7 +166,6 @@ export function ResultWideScreen() {
   if (p.room.ceilingAreaM2) {
     objectCells.push({ label: 'Площадь', value: `${p.room.ceilingAreaM2} м²` });
   }
-  objectCells.push({ label: 'Потолок', value: p.ceilingLabel });
   if (p.room.noisyNeighbors !== 'unknown') {
     objectCells.push({ label: 'Шум сверху', value: p.neighborsLabel });
   }
@@ -201,9 +179,9 @@ export function ResultWideScreen() {
         <h1>Акустический профиль помещения</h1>
       </header>
 
-      <section className={`${styles.objectSpec} ${styles.driftSlow}`} data-reveal aria-label="Параметры объекта">
+      <section className={`${styles.objectSpec} ${styles.driftSlow}`} data-reveal aria-label="Параметры комнаты">
         <div className={styles.objectSpecLabel}>
-          <strong>Параметры объекта</strong>
+          <strong>Параметры комнаты</strong>
         </div>
         <dl className={styles.objectSpecGrid}>
           {objectCells.map((cell) => (
@@ -220,7 +198,6 @@ export function ResultWideScreen() {
         deltaLnw={deltaLnw}
         quieterAir={quieterAir}
         quieterImpact={quieterImpact}
-        quieterMax={quieterMax}
         echoBefore={p.sim.reverb.echoInRoomBefore}
         echoAfter={p.sim.reverb.echoInRoomAfter}
         rwBefore={p.sim.before.Rw}
@@ -271,7 +248,8 @@ export function ResultWideScreen() {
             <span className={styles.normsSp}>по СП 51.13330.2011</span>
           </h2>
           <p className={styles.normDefs}>
-            <b>Rw</b> воздух · больше лучше &nbsp;·&nbsp; <b>Lnw</b> удар · меньше лучше
+            <b>Изоляция воздуха</b> <small className={styles.indexHint}>Rw</small> · больше лучше
+            &nbsp;·&nbsp; <b>Удар сверху</b> <small className={styles.indexHint}>Lnw</small> · меньше лучше
           </p>
         </div>
         <div className={styles.tableWrap}>
@@ -279,8 +257,12 @@ export function ResultWideScreen() {
             <thead>
               <tr>
                 <th>Уровень</th>
-                <th>Rw</th>
-                <th>Lnw</th>
+                <th>
+                  Изоляция <small className={styles.indexHint}>Rw</small>
+                </th>
+                <th>
+                  Удар <small className={styles.indexHint}>Lnw</small>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -369,7 +351,7 @@ export function ResultWideScreen() {
             <div className={styles.listenCol}>
               <header className={styles.listenColHead}>
                 <h3>
-                  Звукоизоляция <span>(снижение шума)</span>
+                  Звукоизоляция <span>(голоса и шаги сверху)</span>
                 </h3>
               </header>
               <CompactAudio

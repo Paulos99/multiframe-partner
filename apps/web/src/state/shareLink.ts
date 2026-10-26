@@ -14,11 +14,8 @@ import { normalizeRoomWishes } from './wish';
 const SHARE_PARAM = 'p';
 
 /** Migrate legacy ceiling ids from older share links. */
-function migratePlannedCeiling(raw: unknown): PlannedCeilingOption {
-  if (raw === 'stretch_planned' || raw === 'stretch') return 'stretch';
-  if (raw === 'ceiling_exists' || raw === 'other_exists') return 'other_exists';
-  if (raw === 'gypsum' || raw === 'plaster' || raw === 'unknown') return raw;
-  return 'unknown';
+function migratePlannedCeiling(_raw: unknown): PlannedCeilingOption {
+  return 'stretch';
 }
 
 function migrateNoiseKind(raw: unknown): NoiseKindOption {

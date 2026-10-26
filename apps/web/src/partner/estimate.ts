@@ -2,11 +2,11 @@ import {
   DEFAULT_DOWELS_PER_PANEL,
   OFFICIAL_PANEL_PRICE_RUB,
   DOWEL_RESERVE,
-  PANEL_AREA_M2,
   normalizeOrgSettings,
   type OrgSettings,
   type PartnerProfile,
 } from '../../../../packages/shared/partner';
+import { panelsForCeilingArea } from '../../public/calculator/src/core/ceiling-quote.js';
 
 export type PartnerEstimate = {
   areaM2: number;
@@ -32,7 +32,7 @@ export function buildPartnerEstimate(
   partner: EstimateInput,
 ): PartnerEstimate | null {
   if (!(areaM2 > 0)) return null;
-  const panels = Math.ceil(areaM2 / PANEL_AREA_M2);
+  const panels = panelsForCeilingArea(areaM2);
   const perPanel = partner.dowelsPerPanel > 0 ? partner.dowelsPerPanel : DEFAULT_DOWELS_PER_PANEL;
   const dowels = Math.ceil(panels * perPanel * (1 + DOWEL_RESERVE));
   const panelPriceRub =

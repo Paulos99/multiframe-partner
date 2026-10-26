@@ -13,22 +13,16 @@ async function enter(page: Page, role: string) {
   await page.getByLabel('Логин', { exact: true }).fill(`ui.${role}`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(toolsTab(page)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Проблемомер', exact: true })).toBeVisible();
 }
 
-/** Вкладка «Инструменты»: в боковом меню на компьютере, в нижней панели на телефоне. */
 function toolsTab(page: Page) {
-  return page
-    .getByRole('tab', { name: 'Инструменты', exact: true })
-    .or(page.getByRole('button', { name: 'Инструменты', exact: true }))
-    .filter({ visible: true })
-    .first();
+  return page.getByRole('button', { name: 'Проблемомер', exact: true });
 }
 
 /** Проходит Проблемомер руками, как партнёр: Старт → Объект → Расчёт → Итог. */
 async function walkToResult(page: Page) {
   await toolsTab(page).click();
-  await page.getByRole('button', { name: 'Открыть Проблемомер', exact: true }).click();
   await page.getByRole('button', { name: 'Начать', exact: true }).click();
   const title = page.getByRole('heading', { name: 'Акустический профиль помещения' });
   for (let i = 0; i < 20; i += 1) {
@@ -48,7 +42,7 @@ async function walkToResult(page: Page) {
 }
 
 const SECTIONS = [
-  'Параметры объекта',
+  'Параметры комнаты',
   'Ключевые показатели',
   'Рекомендации и продукт',
   'Нормы комфорта для жилья',
@@ -87,7 +81,7 @@ async function expectFullResult(page: Page, withSave: boolean) {
   if (!withSave) return;
   // Смета для КП и «Сохранить объект» остаются у ролей, которые создают объекты.
   await expect(page.getByRole('heading', { name: 'Смета для КП' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Сохранить объект', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Сохранить комнату', exact: true })).toBeVisible();
 }
 
 for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {

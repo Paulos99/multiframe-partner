@@ -54,10 +54,10 @@ export function canEditOrg(role: UserRole): boolean {
 
 /**
  * Создание, удаление и смена пароля сотрудников своей компании.
- * Менеджер (`sales`) — как владелец, но не owner и не админ StP.
+ * Только владелец. Менеджер видит список, чтобы назначить комнату, но не управляет людьми.
  */
 export function canManageStaff(role: UserRole): boolean {
-  return role === 'owner' || role === 'sales';
+  return role === 'owner';
 }
 
 export function canSeeOrgAnalytics(role: UserRole): boolean {
@@ -68,13 +68,19 @@ export function canManagePartners(role: UserRole): boolean {
   return role === 'admin';
 }
 
+/** Новый проект и новая комната — только менеджер и владелец своей компании. */
 export function canCreateObjects(role: UserRole): boolean {
-  return role === 'owner' || role === 'sales' || role === 'measurer';
+  return role === 'owner' || role === 'sales';
 }
 
-/** Only the platform admin and the company owner may delete objects (enforced by the API too). */
+/** Удаление проекта и комнаты своей компании — менеджер и владелец. */
 export function canDeleteObjects(role: UserRole): boolean {
-  return role === 'admin' || role === 'owner';
+  return role === 'owner' || role === 'sales';
+}
+
+/** Перестановка комнаты по статусам доски — менеджер и владелец. */
+export function canMoveObjects(role: UserRole): boolean {
+  return role === 'owner' || role === 'sales';
 }
 
 export function canAssignObjects(role: UserRole): boolean {
@@ -262,6 +268,8 @@ export type JobObjectHistoryEntry = {
   at: string;
   userId: string | null;
   login: string;
+  /** Имя на момент записи. Не подменяется именем того, кто открыл историю. */
+  authorName?: string;
   action: string;
   detail?: string;
 };

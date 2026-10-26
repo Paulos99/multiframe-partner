@@ -2,7 +2,7 @@
   min-height: 100dvh;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
-  align-items: stretch;
+  align-items: start;
   background:
     radial-gradient(900px 420px at 100% -8%, color-mix(in srgb, var(--cab-accent) 7%, transparent), transparent 60%),
     var(--cab-page);
@@ -20,7 +20,7 @@
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 6;
+  z-index: 45;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;

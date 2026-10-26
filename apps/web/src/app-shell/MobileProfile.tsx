@@ -4,6 +4,7 @@ import { apiProfile, hasRemoteApi } from '../partner/apiClient';
 import { ProfilePanel } from '../partner/ProfilePanel';
 import { usePartner } from '../partner/PartnerContext';
 import { AnimatePresence } from '../partner/motionBits';
+import { DemoSwitcherFab } from '../partner/DemoSwitcher';
 import { Button } from '../ui/Button';
 import styles from './MobileProfile.module.css';
 
@@ -81,6 +82,7 @@ export function MobileProfileScreen({
         </Button>
         <p className={styles.hint}>Фото, логин и пароль.</p>
       </div>
+      <DemoSwitcherFab menu />
       <button type="button" className={styles.logout} onClick={onLogout}>
         Выйти
       </button>

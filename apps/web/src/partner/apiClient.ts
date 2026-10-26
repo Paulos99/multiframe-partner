@@ -224,6 +224,10 @@ export async function apiCreateProject(input: ProjectInput): Promise<Project> {
   return data.project;
 }
 
+export async function apiDeleteProject(id: string): Promise<void> {
+  await request(`/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export async function apiUpdateProject(id: string, input: ProjectInput): Promise<Project> {
   const data = await request<{ project: Project }>(`/projects/${encodeURIComponent(id)}`, {
     method: 'PATCH',

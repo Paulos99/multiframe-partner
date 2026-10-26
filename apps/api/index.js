@@ -44,7 +44,7 @@ const OBJECTS_CAP = 5000;
 const ORG_ROLES = ['owner', 'sales', 'measurer', 'crew'];
 const STAFF_ROLES = ['sales', 'measurer', 'crew'];
 /** Владелец и менеджер компании. Админ StP сотрудников компании здесь не ведёт. */
-const STAFF_MANAGER_ROLES = ['owner', 'sales'];
+const STAFF_MANAGER_ROLES = ['owner'];
 const OFFICIAL_PANEL = 2396;
 const OFFICIAL_M2 = 5990;
 const DEFAULT_INSTALL = 1500;
@@ -381,6 +381,18 @@ function incomingWins(body, existing) {
   return inc >= cur;
 }
 
+function historyEvent(actor, at, action, detail) {
+  const entry = {
+    at,
+    userId: actor.id,
+    login: actor.login,
+    authorName: String(actor.displayName || actor.login || '').trim() || 'Сотрудник',
+    action,
+  };
+  if (detail !== undefined) entry.detail = detail;
+  return entry;
+}
+
 function skippedHistory(existing, body, actor) {
   const snap = {
     updatedAt: body?.updatedAt || null,
@@ -390,13 +402,7 @@ function skippedHistory(existing, body, actor) {
     areaM2: body?.room?.areaM2 ?? null,
   };
   return [
-    {
-      at: new Date().toISOString(),
-      userId: actor.id,
-      login: actor.login,
-      action: 'conflict_kept_server',
-      detail: JSON.stringify(snap).slice(0, 400),
-    },
+    historyEvent(actor, new Date().toISOString(), 'conflict_kept_server', JSON.stringify(snap).slice(0, 400)),
     ...(existing.history || []),
   ].slice(0, 50);
 }
@@ -870,6 +876,7 @@ export async function handler(event = {}) {
       uid,
       objectVisibleTo,
       pushActivity,
+      deleteStorage: (key) => s3Delete(key),
     });
     if (projectsResponse) return projectsResponse;
 
@@ -1192,7 +1199,7 @@ export async function handler(event = {}) {
 
     if (method === 'POST' && path.endsWith('/org/staff/reset-password')) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, ['owner', 'sales', 'admin']);
+      assertRole(user, STAFF_MANAGER_ROLES);
       const { staffUserId, password } = getBody(event);
       const target = platform.users.find((u) => u.id === staffUserId);
       if (!target) return json(404, { message: 'Сотрудник не найден' });
@@ -1267,7 +1274,7 @@ export async function handler(event = {}) {
       const objectId = decodeURIComponent(docFileMatch[1]);
       const docId = decodeURIComponent(docFileMatch[2]);
       const obj = (platform.objects || []).find((o) => o.id === objectId);
-      if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Объект не найден' });
+      if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Комната не найдена' });
       const meta = findVisibleDocument(obj.documents, docId);
       if (!meta) return json(404, { message: 'Документ не найден' });
       const stored = (obj.documents || []).find((d) => d.id === meta.id);
@@ -1292,7 +1299,7 @@ export async function handler(event = {}) {
       }
       const objectId = decodeURIComponent(docPostMatch[1]);
       const idx = (platform.objects || []).findIndex((o) => o.id === objectId);
-      if (idx < 0) return json(404, { message: 'Объект не найден' });
+      if (idx < 0) return json(404, { message: 'Комната не найдена' });
       const existing = platform.objects[idx];
       if (user.role !== 'admin' && existing.orgId !== user.orgId) {
         return json(403, { message: 'Недостаточно прав' });
@@ -1349,13 +1356,12 @@ export async function handler(event = {}) {
         documents: [...added, ...(existing.documents || [])].slice(0, 40),
         updatedAt: now,
         history: [
-          {
-            at: now,
-            userId: user.id,
-            login: user.login,
-            action: added.every((d) => d.kind === 'profile') ? 'profile_pdf' : 'calc_pdf',
-            detail: added.map((d) => d.kind).join('+'),
-          },
+          historyEvent(
+            user,
+            now,
+            added.every((d) => d.kind === 'profile') ? 'profile_pdf' : 'calc_pdf',
+            added.map((d) => d.kind).join('+'),
+          ),
           ...(existing.history || []),
         ].slice(0, 50),
       };
@@ -1379,7 +1385,7 @@ export async function handler(event = {}) {
 
     if (method === 'POST' && path.endsWith('/objects')) {
       const { platform, user } = await requireAuth(event);
-      if (!['owner', 'sales', 'measurer'].includes(user.role)) {
+      if (!['owner', 'sales'].includes(user.role)) {
         return json(403, { message: 'Недостаточно прав' });
       }
       if (!user.orgId) return json(400, { message: 'Нет организации' });
@@ -1428,37 +1434,18 @@ export async function handler(event = {}) {
       if (existing) {
         if (body.status && body.status !== existing.status) {
           obj.history = [
-            {
-              at: obj.updatedAt,
-              userId: user.id,
-              login: user.login,
-              action: 'status',
-              detail: `${existing.status}→${body.status}`,
-            },
+            historyEvent(user, obj.updatedAt, 'status', `${existing.status}→${body.status}`),
             ...(existing.history || []),
           ].slice(0, 50);
         } else {
           obj.history = [
-            {
-              at: obj.updatedAt,
-              userId: user.id,
-              login: user.login,
-              action: 'update',
-            },
+            historyEvent(user, obj.updatedAt, 'update'),
             ...(existing.history || []),
           ].slice(0, 50);
         }
         platform.objects[existingIdx] = obj;
       } else {
-        obj.history = [
-          {
-            at: obj.createdAt,
-            userId: user.id,
-            login: user.login,
-            action: 'create',
-            detail: obj.status,
-          },
-        ];
+        obj.history = [historyEvent(user, obj.createdAt, 'create', obj.status)];
         platform.objects = [obj, ...(platform.objects || [])].slice(0, OBJECTS_CAP);
         pushActivity(platform, {
           orgId: user.orgId,
@@ -1476,42 +1463,13 @@ export async function handler(event = {}) {
       const { platform, user } = await requireAuth(event);
       const objectId = path.split('/').pop();
       const idx = (platform.objects || []).findIndex((o) => o.id === objectId);
-      if (idx < 0) return json(404, { message: 'Объект не найден' });
+      if (idx < 0) return json(404, { message: 'Комната не найдена' });
       const existing = platform.objects[idx];
       if (!objectVisibleTo(user, existing)) {
         return json(403, { message: 'Недостаточно прав' });
       }
       if (user.role === 'crew') {
-        const body = getBody(event);
-        if (!incomingWins(body, existing)) {
-          const kept = { ...existing, history: skippedHistory(existing, body, user) };
-          platform.objects[idx] = kept;
-          await savePlatform(platform);
-          return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
-        }
-        const nextStatus = body.status;
-        if (nextStatus && !['install', 'closed'].includes(nextStatus)) {
-          return json(403, { message: 'Монтажник меняет только статус монтажа' });
-        }
-        const next = {
-          ...existing,
-          status: nextStatus || existing.status,
-          stageOrder: stageOrderInput(body, existing),
-          updatedAt: clampClientTime(body.updatedAt),
-          history: [
-            {
-              at: new Date().toISOString(),
-              userId: user.id,
-              login: user.login,
-              action: 'status',
-              detail: nextStatus || existing.status,
-            },
-            ...(existing.history || []),
-          ].slice(0, 50),
-        };
-        platform.objects[idx] = next;
-        await savePlatform(platform);
-        return json(200, { object: publicObject(next, user.role) });
+        return json(403, { message: 'Бригада не меняет проект и комнату' });
       }
       const org = findOrg(platform, existing.orgId);
       const body = getBody(event);
@@ -1521,40 +1479,26 @@ export async function handler(event = {}) {
         await savePlatform(platform);
         return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
       }
+      if (body.status && body.status !== existing.status && !['owner', 'sales'].includes(user.role)) {
+        return json(403, { message: 'Статус меняет менеджер или владелец' });
+      }
       if (body.assignedTo !== undefined && !['owner', 'sales'].includes(user.role)) {
-        return json(403, { message: 'Назначать объекты может владелец или менеджер' });
+        return json(403, { message: 'Назначать комнату может владелец или менеджер' });
       }
       const next = normalizeObjectInput(body, existing, user, org, platform);
       if (body.status && body.status !== existing.status) {
         next.history = [
-          {
-            at: next.updatedAt,
-            userId: user.id,
-            login: user.login,
-            action: 'status',
-            detail: `${existing.status}→${body.status}`,
-          },
+          historyEvent(user, next.updatedAt, 'status', `${existing.status}→${body.status}`),
           ...(existing.history || []),
         ].slice(0, 50);
       } else if (body.assignedTo !== undefined && body.assignedTo !== existing.assignedTo) {
         next.history = [
-          {
-            at: next.updatedAt,
-            userId: user.id,
-            login: user.login,
-            action: 'assign',
-            detail: String(body.assignedTo || '—'),
-          },
+          historyEvent(user, next.updatedAt, 'assign', String(body.assignedTo || '—')),
           ...(existing.history || []),
         ].slice(0, 50);
       } else {
         next.history = [
-          {
-            at: next.updatedAt,
-            userId: user.id,
-            login: user.login,
-            action: 'update',
-          },
+          historyEvent(user, next.updatedAt, 'update'),
           ...(existing.history || []),
         ].slice(0, 50);
       }
@@ -1567,19 +1511,19 @@ export async function handler(event = {}) {
       const { platform, user } = await requireAuth(event);
       const objectId = path.split('/').pop();
       const obj = (platform.objects || []).find((o) => o.id === objectId);
-      if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Объект не найден' });
+      if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Комната не найдена' });
       return json(200, { object: publicObject(obj, user.role) });
     }
 
     if (method === 'DELETE' && /\/objects\/[^/]+$/.test(path)) {
       const { platform, user } = await requireAuth(event);
-      // Only admin and the company owner delete objects; sales, measurer and crew get 403.
-      if (!['admin', 'owner'].includes(user.role)) {
+      // Менеджер и владелец удаляют комнаты своей компании. Чужая компания и остальные роли — отказ.
+      if (!['owner', 'sales'].includes(user.role)) {
         return json(403, { message: 'Недостаточно прав' });
       }
       const objectId = path.split('/').pop();
       const idx = (platform.objects || []).findIndex((o) => o.id === objectId);
-      if (idx < 0) return json(404, { message: 'Объект не найден' });
+      if (idx < 0) return json(404, { message: 'Комната не найдена' });
       const existing = platform.objects[idx];
       if (!objectVisibleTo(user, existing)) {
         return json(403, { message: 'Недостаточно прав' });

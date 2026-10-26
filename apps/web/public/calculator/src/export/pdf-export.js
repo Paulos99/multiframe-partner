@@ -252,6 +252,14 @@ function totalsRowsList(bom, hidePrices = false) {
   ];
 }
 
+/** Строки сметы для проверки: без цен у монтажника нет знака рубля. */
+export function ceilingQuoteLine(bom, hidePrices = false) {
+  return totalsRowsList(bom, hidePrices)
+    .filter(Boolean)
+    .map((row) => `${row.label}: ${row.value}`)
+    .join('\n');
+}
+
 function frameStatsRows(frame) {
   if (!frame?.items?.length) return [];
   return frame.items.map((item) => ({

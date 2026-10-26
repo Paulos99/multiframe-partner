@@ -9,14 +9,14 @@ describe('kanban permissions', () => {
       'install',
       'closed',
     ]));
-  it.each(['owner', 'sales', 'measurer', 'admin'] as const)(
-    '%s can select every stage',
+  it.each(['owner', 'sales'] as const)(
+    '%s can move a room through every stage',
     (role) =>
       expect(KANBAN_STAGES.every((s) => canMoveRoom(role, s))).toBe(true),
   );
-  it('crew can only move into install or closed', () =>
-    expect(KANBAN_STAGES.filter((s) => canMoveRoom('crew', s))).toEqual([
-      'install',
-      'closed',
-    ]));
+  it.each(['measurer', 'crew', 'admin'] as const)(
+    '%s does not move rooms',
+    (role) =>
+      expect(KANBAN_STAGES.filter((s) => canMoveRoom(role, s))).toEqual([]),
+  );
 });

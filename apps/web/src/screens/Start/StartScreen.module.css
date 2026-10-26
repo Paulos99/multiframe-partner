@@ -18,24 +18,26 @@
   position: absolute;
   inset: auto -20% -40% 20%;
   height: 220px;
-  background: radial-gradient(circle, rgba(1, 100, 79, 0.22), transparent 65%);
+  background: radial-gradient(circle, rgba(1, 100, 79, 0.12), transparent 65%);
   pointer-events: none;
   animation: softGlow 4.5s ease-in-out infinite;
 }
 
 .title {
   margin: 0;
-  font-size: clamp(1.55rem, 5vw, 2.1rem);
-  line-height: 1.18;
+  font-size: clamp(1.7rem, 5vw, 2.2rem);
+  line-height: 1.2;
   letter-spacing: -0.025em;
   position: relative;
+  color: var(--text-primary, #142018);
 }
 
 .lead {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: 15px;
-  max-width: 42ch;
+  color: var(--text-primary, #142018);
+  font-size: 1.05rem;
+  line-height: 1.5;
+  max-width: 38rem;
   position: relative;
 }
 

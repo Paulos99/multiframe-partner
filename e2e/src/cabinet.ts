@@ -59,18 +59,12 @@ export async function login(page: Page, role: RoleCase): Promise<void> {
 
 export async function expectHome(page: Page, role: RoleCase): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: role.title })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Сегодня', exact: true })).toHaveAttribute('aria-selected', 'true');
   if (role.id === 'admin') {
-    const period = page.getByRole('group', { name: 'Период аналитики' });
-    await expect(period).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Управление партнёрской сетью' })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: role.homeText, exact: true })).toBeVisible();
-    await expect(period.getByRole('button')).toHaveCount(1);
-    await expect(page.getByText('Партнёры и поддержка команды', { exact: true })).toHaveCount(0);
-    await expect(page.locator('button[aria-controls]')).toHaveCount(1);
-    await expect(page.getByText('облако', { exact: false }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Добавить партнёра', exact: true })).toBeVisible();
     return;
   }
-  await expect(page.getByText(role.homeText).first()).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Сегодня' })).toBeVisible();
 }
 
 export async function openList(page: Page, role: RoleCase): Promise<void> {
@@ -80,16 +74,8 @@ export async function openList(page: Page, role: RoleCase): Promise<void> {
     await expect(page.getByText('Северный Потолок').first()).toBeVisible();
     return;
   }
-  await expect(page.getByRole('heading', { level: 2, name: role.objectsHeading })).toBeVisible();
-  const all = page.getByRole('button', { name: /^Все · \d+/ });
-  await expect(all).toBeVisible();
-  await expect
-    .poll(async () => Number((await all.innerText()).match(/(\d+)/)?.[1] || '0'), {
-      timeout: 25_000,
-    })
-    .toBeGreaterThan(0);
-  await all.click();
-  await expect(page.getByPlaceholder('Имя, адрес или телефон')).toBeVisible();
+  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Проекты' })).toBeVisible();
 }
 
 /** Вкладка или блок «Проекты». Форму создания не открываем. */
@@ -118,11 +104,9 @@ export async function openProjects(page: Page): Promise<'opened' | 'unavailable'
 }
 
 export async function openTraining(page: Page, role: RoleCase): Promise<void> {
-  if (role.id === 'measurer' || role.id === 'crew') {
-    await page.getByRole('button', { name: 'Обучение', exact: true }).click();
-  } else {
-    await page.getByRole('tab', { name: 'Обучение' }).click();
-  }
+  const tab = page.getByRole('tab', { name: 'Обучение', exact: true });
+  if (await tab.count()) await tab.click();
+  else await page.getByRole('button', { name: 'Обучение', exact: true }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'Обучение' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Материалы' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Инструкции и презентации по продукту.')).toBeVisible();

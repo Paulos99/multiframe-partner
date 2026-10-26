@@ -156,7 +156,7 @@ export async function handleProjects(ctx) {
   const itemRoute = /\/projects\/[^/]+$/.test(path);
   if (!listRoute && !itemRoute) return null;
   if (listRoute && method !== 'GET' && method !== 'POST') return null;
-  if (itemRoute && method !== 'PATCH') return null;
+  if (itemRoute && method !== 'PATCH' && method !== 'DELETE') return null;
 
   const { platform, user } = await ctx.requireAuth();
   const rows = projectRows(platform);
@@ -201,6 +201,35 @@ export async function handleProjects(ctx) {
 
   const projectId = decodeURIComponent(path.split('/').pop() || '');
   const idx = rows.findIndex((project) => project.id === projectId);
+
+  if (method === 'DELETE' && itemRoute) {
+    if (!canWriteProject(user)) return ctx.json(403, { message: 'Недостаточно прав' });
+    if (idx < 0 || rows[idx].orgId !== user.orgId) {
+      return ctx.json(404, { message: 'Проект не найден' });
+    }
+    const doomed = (platform.objects || []).filter((obj) => obj.projectId === projectId);
+    platform.projects = projectRows(platform).filter((item) => item.id !== projectId);
+    platform.objects = (platform.objects || []).filter((obj) => obj.projectId !== projectId);
+    if (ctx.pushActivity) {
+      ctx.pushActivity(platform, {
+        orgId: user.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'delete_project',
+        detail: rows[idx].name,
+      });
+    }
+    await ctx.savePlatform(platform);
+    if (ctx.deleteStorage) {
+      for (const obj of doomed) {
+        for (const doc of obj.documents || []) {
+          if (doc.storageKey) await ctx.deleteStorage(doc.storageKey);
+        }
+      }
+    }
+    return ctx.json(200, { ok: true });
+  }
+
   if (idx < 0 || !projectVisible(user, rows[idx], platform, ctx.objectVisibleTo)) {
     return ctx.json(404, { message: 'Проект не найден' });
   }

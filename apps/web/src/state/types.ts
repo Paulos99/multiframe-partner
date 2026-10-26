@@ -85,7 +85,6 @@ export type RoomSubstep =
   | 'slabType'
   | 'slabThickness'
   | 'basics'
-  | 'plannedCeiling'
   | 'objectStage'
   | 'noisyNeighbors'
   | 'noiseKind';
@@ -97,7 +96,6 @@ export const ROOM_SUBSTEPS: RoomSubstep[] = [
   'slabType',
   'slabThickness',
   'basics',
-  'plannedCeiling',
   'objectStage',
   'noisyNeighbors',
   'noiseKind',
@@ -108,7 +106,6 @@ export const ROOM_FACTOR_GROUP: Record<RoomSubstep, RoomFactorGroup> = {
   slabType: 'external',
   slabThickness: 'external',
   basics: 'internal',
-  plannedCeiling: 'internal',
   objectStage: 'internal',
   noisyNeighbors: 'internal',
   noiseKind: 'internal',

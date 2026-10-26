@@ -2,9 +2,10 @@ import { usePartner } from './PartnerContext';
 import { buildPartnerEstimate, formatRub } from './estimate';
 import styles from './partner.module.css';
 
-/** Ориентир сметы на экране проблемомера. Цены видят все роли. */
+/** Ориентир сметы на экране проблемомера. Бригада суммы не видит (концепция 5.3). */
 export function PartnerEstimateCard({ areaM2 }: { areaM2: number | null }) {
-  const { partner } = usePartner();
+  const { partner, user } = usePartner();
+  if (user?.role === 'crew') return null;
   if (!partner || areaM2 == null || areaM2 <= 0) return null;
   const est = buildPartnerEstimate(areaM2, partner);
   if (!est) return null;
@@ -12,6 +13,7 @@ export function PartnerEstimateCard({ areaM2 }: { areaM2: number | null }) {
   return (
     <section className={styles.card} style={{ width: '100%', marginTop: 8 }} aria-label="Смета партнёра">
       <h2>Смета для КП</h2>
+      <p className={styles.hint}>По площади потолка: число панелей = площадь / 0,4125 м², без подрезки раскладки.</p>
       {partner.companyName ? <p className={styles.lead}>Подготовлено: {partner.companyName}</p> : null}
       <div className={styles.grid2}>
         <div className={styles.field}>

@@ -15,6 +15,7 @@ import {
 
 /** Иконки разделов кабинета: на планшете меню сворачивается в рельс с иконками, на телефоне — нижняя панель. */
 const ICONS: Record<string, ComponentType<Omit<SVGProps<SVGSVGElement>, 'ref'> & { size?: number | string }>> = {
+  today: HouseIcon,
   objects: HouseIcon,
   tasks: ChecklistIcon,
   deals: KanbanIcon,

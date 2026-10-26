@@ -115,7 +115,7 @@ export const JOURNAL_COLUMNS: JournalColumn[] = [
   },
   {
     key: 'objectStage',
-    header: 'Стадия объекта',
+    header: 'Стадия комнаты',
     format: 'text',
     value: (e) => STAGE_LABELS[String(e.object?.objectStage || '')] || e.object?.objectStage || '',
   },

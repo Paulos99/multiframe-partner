@@ -55,20 +55,26 @@ export function PageTransition({
   children,
   pageKey,
   className,
+  shift = true,
 }: {
   children: ReactNode;
   pageKey: string;
   className?: string;
+  /** Сдвиг по Y оставляет transform и ломает липкое меню. Для оболочки кабинета — false. */
+  shift?: boolean;
 }) {
   const reduce = usePrefersReducedMotion();
+  const initial = reduce ? false : shift ? motionPresets.page.initial : { opacity: 0 };
+  const animate = shift ? motionPresets.page.animate : { opacity: 1 };
+  const exit = reduce ? { opacity: 1 } : shift ? motionPresets.page.exit : { opacity: 0 };
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
         key={pageKey}
         className={className}
-        initial={reduce ? false : motionPresets.page.initial}
-        animate={motionPresets.page.animate}
-        exit={reduce ? { opacity: 1 } : motionPresets.page.exit}
+        initial={initial}
+        animate={animate}
+        exit={exit}
         transition={reduce ? { duration: 0 } : motionPresets.transition}
       >
         {children}

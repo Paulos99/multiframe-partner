@@ -52,7 +52,7 @@ function defaultRoom() {
     floorAbove: 'unknown' as const,
     houseType: 'unknown' as const,
     objectStage: 'unknown' as const,
-    plannedCeiling: 'unknown' as const,
+    plannedCeiling: 'stretch' as const,
     noisyNeighbors: 'unknown' as const,
     noiseKind: 'unknown' as const,
     roomWishes: [...DEFAULT_ROOM_WISHES] as RoomWishOption[],

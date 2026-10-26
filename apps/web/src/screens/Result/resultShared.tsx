@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { usePartner } from '../../partner/PartnerContext';
 import { SoundPressureHelpButton } from '../../ui/SoundPressureHelp';
 import { useSession } from '../../state/SessionContext';
 import {
@@ -6,7 +7,6 @@ import {
   HOUSE_TYPE_OPTIONS,
   NOISE_KIND_OPTIONS,
   NOISY_NEIGHBORS_OPTIONS,
-  PLANNED_CEILING_OPTIONS,
   roomTypeLabel,
   SLAB_THICKNESS_OPTIONS,
   SLAB_TYPE_OPTIONS,
@@ -23,11 +23,10 @@ import {
   officialComfortLabel,
   type FeltStep,
 } from '../../state/simulation';
-import { resolveSlab } from '../../state/acoustic/construction';
 import { buildCalculatorUrl } from '../../state/session';
 import {
-  downloadAcousticProfilePdf,
   prefetchAcousticProfilePdf,
+  renderAcousticProfilePdf,
   shareAcousticProfile,
 } from '../../state/reportPdf';
 import {
@@ -119,7 +118,8 @@ export function FeltScale({
   const nowVal = Math.round(nowIndex);
   const afterVal = afterIndex != null ? Math.round(afterIndex) : null;
   const direction =
-    indexKind === 'Rw' ? 'чем больше число, тем лучше' : 'чем меньше число, тем лучше';
+    indexKind === 'Rw' ? 'чем больше децибел, тем лучше изоляция' : 'чем меньше децибел, тем тише шаги';
+  const indexWord = indexKind === 'Rw' ? 'изоляция воздуха' : 'удар сверху';
 
   return (
     <div
@@ -127,11 +127,11 @@ export function FeltScale({
       role="img"
       aria-label={
         mode === 'nowOnly'
-          ? `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexKind} ≈ ${nowVal} дБ`
-          : `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexKind} ≈ ${nowVal} дБ; с MultiFrame ${
+          ? `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexWord} ≈ ${nowVal} дБ`
+          : `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexWord} ≈ ${nowVal} дБ; с MultiFrame ${
               after ? FELT_STEP_LABELS[after] : ''
-            }${afterVal != null ? `, ${indexKind} ≈ ${afterVal} дБ` : ''}${
-              quieterPct != null ? `, станет на ≈ ${quieterPct}% тише` : ''
+            }${afterVal != null ? `, ${indexWord} ≈ ${afterVal} дБ` : ''}${
+              quieterPct != null ? `, в комнате примерно на ${quieterPct}% тише` : ''
             }`
       }
     >
@@ -139,7 +139,7 @@ export function FeltScale({
         <strong>{title}</strong>
         {mode === 'nowAndAfter' && quieterPct != null ? (
           <b className={styles.quieterLine}>
-            станет на ≈ {quieterPct}% тише
+            в комнате примерно на {quieterPct}% тише
             <SoundPressureHelpButton
               highlightDb={quieterDeltaDb}
               label={`Таблица снижения звукового давления для ${indexKind}`}
@@ -151,12 +151,14 @@ export function FeltScale({
       <p className={styles.feltDb}>
         {mode === 'nowOnly' || afterVal == null ? (
           <>
-            Сейчас: <b>{indexKind} ≈ {nowVal} дБ</b>
+            Сейчас: <b>{indexWord} ≈ {nowVal} дБ</b>
+            <span className={styles.indexHint}>{indexKind}</span>
             <span> · {direction}</span>
           </>
         ) : (
           <>
-            <b>{indexKind}</b>:{' '}
+            <b>{indexWord}</b>{' '}
+            <span className={styles.indexHint}>{indexKind}</span>:{' '}
             <b>≈ {nowVal} дБ</b>
             <span aria-hidden> → </span>
             <b>≈ {afterVal} дБ</b>
@@ -200,8 +202,31 @@ export function FeltScale({
 }
 
 /** Shared derived data + actions for the Result dashboard. */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').replace(/^data:[^,]*,/, ''));
+    reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать PDF'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export function useResultProfile() {
   const { session, restart } = useSession();
+  const { diagnosisRequest, objects, attachProfile } = usePartner();
   const room = session.answers.room;
   const sim = session.derived?.simulation ?? deriveSimulation(session.answers);
   const hybridBefore = comfortClassFor(sim.before.Rw, sim.before.Lnw);
@@ -215,12 +240,13 @@ export function useResultProfile() {
   const impactAfterFelt = impactFeltFromIndex(sim.after.Lnw);
 
   const roomLabel = room.roomType ? roomTypeLabel(room) : null;
-  const slab = resolveSlab(room);
   const slabTypeLabel = optionLabel(SLAB_TYPE_OPTIONS, room.slabType);
-  const slabThickLabel = optionLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness);
+  const slabThickLabel =
+    !room.slabThickness || room.slabThickness === 'unknown'
+      ? 'типовая ~220 мм'
+      : optionLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness);
   const houseLabel = optionLabel(HOUSE_TYPE_OPTIONS, room.houseType);
   const wishLabel = 'Все эффекты материала';
-  const ceilingLabel = optionLabel(PLANNED_CEILING_OPTIONS, room.plannedCeiling);
   const neighborsLabel = optionLabel(NOISY_NEIGHBORS_OPTIONS, room.noisyNeighbors);
   const noiseKindLabel =
     shouldAskNoiseKind(room.noisyNeighbors) && room.noiseKind !== 'unknown'
@@ -232,10 +258,15 @@ export function useResultProfile() {
     perceivedAirPct: sim.perceivedAirPct,
     perceivedImpactPct: sim.perceivedImpactPct,
   });
-  const about = productAbout(room, noiseType);
+  const about = productAbout(room, noiseType, {
+    airDb: sim.delta.Rw,
+    impactDb: sim.delta.Lnw,
+  });
   const slabContext =
-    room.slabType === 'unknown' && room.slabThickness === 'unknown'
-      ? `ориентир по типу дома (${houseLabel}), ~${slab.thicknessMm} мм`
+    room.slabThickness === 'unknown' || !room.slabThickness
+      ? room.slabType === 'unknown'
+        ? 'типовая ~220 мм'
+        : `${slabTypeLabel}, типовая ~220 мм`
       : `${slabTypeLabel}, ${slabThickLabel}`;
 
   const calcUrl = buildCalculatorUrl(session.cta);
@@ -265,8 +296,6 @@ export function useResultProfile() {
       action: 'result',
       object: partnerObject,
     });
-    // once per result mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function openCalc() {
@@ -286,7 +315,11 @@ export function useResultProfile() {
     setPdfBusy(true);
     setPdfError(false);
     try {
-      await downloadAcousticProfilePdf(session);
+      const { blob, filename } = await renderAcousticProfilePdf(session, { compact: true });
+      saveBlob(blob, filename);
+      const objectId = diagnosisRequest?.objectId;
+      const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
+      if (existing) await attachProfile(existing, await blobToBase64(blob));
     } catch (err) {
       console.error('[pdf]', err);
       setPdfError(true);
@@ -328,7 +361,6 @@ export function useResultProfile() {
     roomLabel,
     houseLabel,
     wishLabel,
-    ceilingLabel,
     neighborsLabel,
     noiseKindLabel,
     wish,

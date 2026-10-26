@@ -1,12 +1,12 @@
 import { PageTransition } from './partner/motionBits';
 import { Skeleton } from './partner/Skeleton';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { SessionProvider } from './state/SessionContext';
 import { AppShell } from './app-shell/AppShell';
 import { InstallPromptHost } from './app-shell/InstallAppButton';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
-import { canCreateObjects, type SessionUser } from '../../../packages/shared/partner';
+import { type SessionUser } from '../../../packages/shared/partner';
 import { isCabinetCalcMessage } from './partner/cabinetCalc';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
@@ -24,6 +24,7 @@ function ShellFrame({ children, install }: { children: ReactNode; install: boole
 }
 
 function toolCaption(user: SessionUser): string {
+  if (user.role === 'crew') return '';
   const org = user.org;
   const bits: string[] = [];
   if (org?.panelPriceRub != null) bits.push(`РРЦ ${org.panelPriceRub} ₽/панель`);
@@ -42,6 +43,37 @@ function concealCalcBanner(frame: HTMLIFrameElement) {
     doc.head.appendChild(style);
   } catch {
     /* калькулятор ещё не готов */
+  }
+}
+
+class ToolErrorBoundary extends Component<{ onBack: () => void; children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[tool]', error, info);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className={styles.shell}>
+        <p className={styles.lead}>Не удалось открыть инструмент. Вернитесь в кабинет и откройте его ещё раз.</p>
+        <button
+          type="button"
+          className={styles.primary}
+          onClick={() => {
+            this.setState({ error: null });
+            this.props.onBack();
+          }}
+        >
+          Вернуться
+        </button>
+      </div>
+    );
   }
 }
 
@@ -104,6 +136,7 @@ function ToolChrome({
             <p className={styles.toolMenuCompany}>{company}</p>
             <p className={styles.toolMenuCaption}>{caption}</p>
             {notice ? <p className={styles.toolMenuNotice}>{notice}</p> : null}
+            <DemoSwitcherFab menu />
             <button type="button" className={styles.logoutBtn} onClick={onLogout}>
               Выйти
             </button>
@@ -118,23 +151,21 @@ function ToolChrome({
 }
 
 function PartnerShell() {
-  const { user, loading, noteTool, logout, objects, calcRequest, attachCalculation, requestCalculator, diagnosisRequest, clearDiagnosis } = usePartner();
+  const { user, ready, noteTool, logout, objects, calcRequest, requestCalculator, diagnosisRequest, clearDiagnosis, applyCalculation } =
+    usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
-  const linkedObjectId = useRef<string | null>(null);
 
+  const userId = user?.id ?? '';
   useEffect(() => {
-    if (user) return;
-    linkedObjectId.current = null;
     setCalcObjectId(null);
     setCalcNotice(null);
     setRoute('cabinet');
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
     if (!calcRequest || !user) return;
-    linkedObjectId.current = calcRequest.objectId;
     setCalcObjectId(calcRequest.objectId);
     setCalcNotice(null);
     if (user) noteTool('calculator');
@@ -148,27 +179,28 @@ function PartnerShell() {
   }, [diagnosisRequest, noteTool, user]);
 
   useEffect(() => {
+    applyStoredTheme();
+  }, []);
+
+  useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       if (!isCabinetCalcMessage(event.data)) return;
-      if (!user || !canCreateObjects(user.role)) return;
-      if (event.data.areaEstimate || event.data.inputMode === 'area' || event.data.hasScheme === false) return;
-      const target = linkedObjectId.current || event.data.objectId || null;
-      setCalcNotice('Сохраняем объект и PDF…');
-      void attachCalculation(event.data, target)
-        .then((obj) => {
-          if (obj) linkedObjectId.current = obj.id;
-          setCalcNotice(obj ? 'Объект в кабинете обновлён, PDF приложен' : 'Не удалось сохранить');
-        })
-        .catch(() => setCalcNotice('Не удалось сохранить объект'));
+      const objectId = event.data.objectId || calcObjectId;
+      if (!objectId) return;
+      void applyCalculation(event.data, objectId).then((saved) => {
+        if (!saved) return;
+        const attached = Boolean(event.data.pdfBase64 && event.data.pdfBase64.length >= 32);
+        setCalcNotice(
+          attached
+            ? 'Смета приложена к комнате. Клиенту она уйдёт только из карточки.'
+            : 'Площадь сохранена в комнате',
+        );
+      });
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [user, attachCalculation]);
-
-  useEffect(() => {
-    applyStoredTheme();
-  }, []);
+  }, [applyCalculation, calcObjectId]);
 
   useEffect(() => {
     if (route === 'cabinet' || !user) return;
@@ -209,7 +241,7 @@ function PartnerShell() {
   ]);
 
   let body: ReactNode;
-  if (loading && !user) {
+  if (!ready) {
     body = (
       <div className={styles.shell}>
         <Skeleton kind="page" count={3} label="Загрузка кабинета"/>
@@ -247,8 +279,9 @@ function PartnerShell() {
         onLogout={logout}
       />
     );
-    body =
-      route === 'calculator' ? (
+    body = (
+      <ToolErrorBoundary onBack={() => setRoute('cabinet')}>
+      {route === 'calculator' ? (
         <div className={styles.toolHost}>
           {chrome}
           <div className={styles.toolBody}>
@@ -282,10 +315,12 @@ function PartnerShell() {
             </div>
           </div>
         </div>
-      );
+      )}
+      </ToolErrorBoundary>
+    );
   }
 
-  return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${user?.id||'login'}-${route}`}>{body}</PageTransition></ShellFrame>;
+  return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${user?.id||'login'}-${route}`} shift={false}>{body}</PageTransition></ShellFrame>;
 }
 
 export default function App() {

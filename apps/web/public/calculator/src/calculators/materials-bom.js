@@ -5,8 +5,7 @@ import {
   RESERVES,
   getPartnerPricing,
 } from '../core/constants.js';
-import { calculateFrameMaterials, formatFrameMaterials, mergeFrameTotals, MOUNTING_RULES } from './mounting-rules.js';
-import { getBounds } from '../core/polygon-geometry.js';
+import { calculateFrameMaterials, formatFrameMaterials, MOUNTING_RULES } from './mounting-rules.js';
 
 export function applyPricing(stats) {
   if (!stats) return stats;
@@ -31,47 +30,29 @@ function partnerExtras(areaM2, dowels) {
 }
 
 function resolveCoveredAreaM2(bom) {
-  let area = (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
+  const area = Number(bom.ceiling?.area ?? 0);
   if (area > 0) return area;
-  area =
-    (bom.ceiling?.stats?.netArea ?? bom.ceiling?.stats?.coverageArea ?? 0) +
-    (bom.walls?.stats?.netArea ?? bom.walls?.stats?.coverageArea ?? bom.walls?.area ?? 0);
-  if (area > 0) return area;
-  const panels =
-    (bom.ceiling?.stats?.withReserve ?? 0) + (bom.walls?.stats?.withReserve ?? 0);
+  const fromStats = Number(bom.ceiling?.stats?.netArea ?? bom.ceiling?.stats?.coverageArea ?? 0);
+  if (fromStats > 0) return fromStats;
+  const panels = bom.ceiling?.stats?.withReserve ?? 0;
   return panels > 0 ? panels * PANEL_COVERAGE_AREA : 0;
 }
 
-export function buildBOM({ room, ceilingResult, wallResult, options }) {
-  const {
-    calcCeiling = true,
-    calcWalls = true,
-    ceilingMounting = 'ceiling_frameless',
-    wallMounting = 'wall_framed',
-  } = options;
+export function buildBOM({ room, ceilingResult, options }) {
+  const { calcCeiling = true } = options || {};
+  const ceilingMounting = 'ceiling_frameless';
 
   const bom = {
     ceiling: null,
     walls: null,
     total: null,
     ceilingMounting,
-    wallMounting,
+    wallMounting: 'wall_frameless',
   };
 
   if (calcCeiling && ceilingResult) {
     const stats = applyPricing({ ...ceilingResult.stats });
-    const b = getBounds(room.vertices ?? []);
-    const frameW = b.maxX - b.minX;
-    const frameH = b.maxY - b.minY;
-    const frame =
-      ceilingMounting === 'ceiling_framed'
-        ? calculateFrameMaterials(
-            'ceiling_framed',
-            frameW,
-            frameH,
-            { panelCount: ceilingResult.stats?.total ?? ceilingResult.panels?.length ?? 0 }
-          )
-        : null;
+    const frame = null;
 
     bom.ceiling = {
       stats,
@@ -83,36 +64,9 @@ export function buildBOM({ room, ceilingResult, wallResult, options }) {
     };
   }
 
-  if (calcWalls && wallResult) {
-    const stats = applyPricing({ ...wallResult.stats });
-    let totalFrame = null;
-    if (wallMounting === 'wall_framed') {
-      const wallFrames = wallResult.wallResults.map((wr) =>
-        calculateFrameMaterials('wall_framed', wr.wall.length, room.wallHeight, {
-          panelCount: wr.panelCount ?? wr.panels?.length ?? 0,
-          openings: wr.openings ?? [],
-        })
-      );
-      totalFrame = mergeFrameTotals(wallFrames);
-    }
-
-    const wallsArea = wallResult.wallResults.reduce((s, wr) => s + wr.netArea, 0);
-
-    bom.walls = {
-      stats,
-      wallResults: wallResult.wallResults,
-      frame: totalFrame,
-      mountingLabel: MOUNTING_RULES[wallMounting]?.label ?? wallMounting,
-      area: wallsArea,
-    };
-  }
-
-  const panelsTotal =
-    (bom.ceiling?.stats.withReserve ?? 0) + (bom.walls?.stats.withReserve ?? 0);
-  const costTotal =
-    (bom.ceiling?.stats.totalCost ?? 0) + (bom.walls?.stats.totalCost ?? 0);
-  const dowelsTotal =
-    (bom.ceiling?.stats.dowels?.withReserve ?? 0) + (bom.walls?.stats.dowels?.withReserve ?? 0);
+  const panelsTotal = bom.ceiling?.stats.withReserve ?? 0;
+  const costTotal = bom.ceiling?.stats.totalCost ?? 0;
+  const dowelsTotal = bom.ceiling?.stats.dowels?.withReserve ?? 0;
 
   let dowelsForCost = dowelsTotal;
   if (!(dowelsForCost > 0) && panelsTotal > 0) {
@@ -134,10 +88,8 @@ export function buildBOM({ room, ceilingResult, wallResult, options }) {
     dowelsCost: extras.dowelCost,
     grandTotal,
     partnerCompany: pricing.company || PARTNER_PRICING.company || '',
-    frame: mergeFrameTotals([bom.ceiling?.frame, bom.walls?.frame].filter(Boolean)),
-    profileLengthM:
-      (bom.ceiling?.frame?.totalProfileLengthM ?? 0) +
-      (bom.walls?.frame?.totalProfileLengthM ?? 0),
+    frame: null,
+    profileLengthM: 0,
   };
 
   return bom;

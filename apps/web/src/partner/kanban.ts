@@ -1,8 +1,9 @@
-import type {
-  JobObject,
-  JobObjectStatus,
-  Project,
-  UserRole,
+import {
+  canMoveObjects,
+  type JobObject,
+  type JobObjectStatus,
+  type Project,
+  type UserRole,
 } from '../../../../packages/shared/partner';
 export const KANBAN_STAGES: JobObjectStatus[] = [
   'draft',
@@ -12,10 +13,28 @@ export const KANBAN_STAGES: JobObjectStatus[] = [
   'closed',
 ];
 export function canMoveRoom(role: UserRole, target: JobObjectStatus) {
-  return (
-    KANBAN_STAGES.includes(target) &&
-    (role !== 'crew' || target === 'install' || target === 'closed')
-  );
+  return canMoveObjects(role) && KANBAN_STAGES.includes(target);
+}
+
+/** Имя в меню карточки: своё название комнаты, иначе клиент. Заглушка «Комната» не заменяет имя. */
+export function roomDisplayName(room: { roomName?: string | null; clientName?: string | null }): string {
+  const named = room.roomName?.trim();
+  if (named && named !== 'Комната' && named !== 'Помещение') return named;
+  return room.clientName?.trim() || 'Комната';
+}
+
+/** «1 комната», «3 комнаты», «11 комнат». */
+export function roomCountLabel(count: number): string {
+  const n = Math.abs(count);
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11
+      ? 'комната'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'комнаты'
+        : 'комнат';
+  return `${count} ${word}`;
 }
 export type BoardSort = 'manual' | 'updatedAt' | 'createdAt' | 'client';
 export function sortRooms(

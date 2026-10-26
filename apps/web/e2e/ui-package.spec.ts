@@ -10,8 +10,13 @@ async function enter(page: Page, role = 'owner', pw = password) {
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
 }
+async function openProjects(page: Page) {
+  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
+}
 test('admin keeps one shared period control inside the analytics card', async ({ page }) => {
   await enter(page, 'admin');
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Управление партнёрской сетью' })).toHaveCount(0);
   await expect(page.getByText('Партнёры и поддержка команды', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Последнее событие', { exact: false })).toHaveCount(0);
@@ -28,7 +33,7 @@ test('admin keeps one shared period control inside the analytics card', async ({
   await page.getByRole('button', { name: 'Всё время', exact: true }).click();
   await updated;
   await expect(calendar).toHaveText('Всё время');
-  await page.getByRole('tab', { name: /^Партнёры ·/ }).click();
+  await page.getByRole('tab', { name: 'Партнёры', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Партнёры/ })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Период аналитики' })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'Добавить', exact: true })).toHaveCount(0);
@@ -45,6 +50,7 @@ test('admin keeps one shared period control inside the analytics card', async ({
 test('phone: analytics period wraps under the title, full width, 44px', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await enter(page, 'admin');
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   const calendar = page.getByRole('group', { name: 'Период аналитики' }).locator('button[aria-controls]');
   await expect(calendar).toBeVisible();
   const title = (await page.getByRole('heading', { name: 'Аналитика', exact: true }).boundingBox())!;
@@ -63,6 +69,7 @@ test('kanban drag persists stage after reload, opens existing room editor', asyn
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await enter(page);
+  await openProjects(page);
   await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
     0,
   );
@@ -102,6 +109,7 @@ test('kanban drag persists stage after reload, opens existing room editor', asyn
     page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
   ).toBeVisible();
   await page.reload();
+  await openProjects(page);
   await expect(target.locator('[data-room-id]').first()).toHaveAttribute(
     'data-room-id',
     'ui_room',
@@ -120,6 +128,7 @@ test('kanban drag persists stage after reload, opens existing room editor', asyn
 });
 test('reorder within a column persists after reload', async ({ page }) => {
   await enter(page);
+  await openProjects(page);
   const card = page.locator('[data-room-id="ui_room"]');
   await card.focus();
   await card.press('Alt+ArrowRight');
@@ -144,6 +153,7 @@ test('reorder within a column persists after reload', async ({ page }) => {
     page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
   ).toBeVisible();
   await page.reload();
+  await openProjects(page);
   await expect(column.locator('[data-room-id]').first()).toHaveAttribute(
     'data-room-id',
     'ui_measured',
@@ -152,6 +162,7 @@ test('reorder within a column persists after reload', async ({ page }) => {
 
 test('crew cannot drag a room into a forbidden stage', async ({ page }) => {
   await enter(page, 'crew');
+  await openProjects(page);
   await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
     0,
   );
@@ -159,13 +170,13 @@ test('crew cannot drag a room into a forbidden stage', async ({ page }) => {
   const card = page.locator('[data-room-id="ui_crew_room"]');
   await card.focus();
   await card.press('Alt+ArrowLeft');
+  await card.press('Alt+ArrowRight');
   await expect(
     page.locator('[data-kanban-stage="install"] [data-room-id="ui_crew_room"]'),
   ).toBeVisible();
-  await card.press('Alt+ArrowRight');
   await expect(
     page.locator('[data-kanban-stage="closed"] [data-room-id="ui_crew_room"]'),
-  ).toBeVisible();
+  ).toHaveCount(0);
 });
 // Профиль: см. e2e/profile.spec.ts.
 test('mobile and reduced motion: profile and board stay within viewport', async ({
@@ -196,6 +207,7 @@ test('failed stage save keeps the original card and shows the error', async ({
   page,
 }) => {
   await enter(page);
+  await openProjects(page);
   await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
     0,
   );
@@ -216,28 +228,27 @@ test('failed stage save keeps the original card and shows the error', async ({
     page.locator('[data-kanban-stage="draft"] [data-room-id="ui_room"]'),
   ).toBeVisible();
 });
-test('admin uses the same board and editor in projects', async ({ page }) => {
-  await enter(page, 'admin');
-  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
-    0,
-  );
+test('owner opens a room in the side panel and stays on the board', async ({ page }) => {
+  await enter(page, 'owner');
+  await openProjects(page);
   await page.locator('[data-room-id="ui_room"]').click();
-  await expect(
-    page.getByRole('heading', { name: /Спальня.*Черновик/ }),
-  ).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Комната' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Спальня.*Черновик/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
 });
 
 test('diagnostic and calculator open without runtime regressions', async ({page}) => {
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await enter(page);
- await page.getByRole('tab',{name:'Инструменты',exact:true}).click();await page.getByRole('button',{name:'Открыть Проблемомер',exact:true}).click();await expect(page.getByRole('button',{name:'Начать',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Кабинет',exact:true}).click();await page.getByRole('button',{name:'Открыть Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
+ await page.getByRole('button',{name:'Проблемомер',exact:true}).click();await expect(page.getByRole('button',{name:'Начать',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Кабинет',exact:true}).click();await page.getByRole('button',{name:'Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
 });
 
 for (const role of ['admin', 'owner'] as const) {
   test(`${role}: сводка аналитики без «Объёма», «Отправок», «Входов» и «По дням месяца»`, async ({ page }) => {
     await enter(page, role);
-    if (role === 'owner') await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+    await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: /Площадь, м²/ }).click();
     await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toBeVisible();
     for (const label of ['Средняя м²', 'Готовых расчётов', 'Площадь, м²', 'Панели']) {
       await expect(page.getByText(label, { exact: true })).toHaveCount(1);

@@ -61,30 +61,46 @@ test('API: монтажник видит цены и все документы, 
   expect((await file.json()).kind).toBe('profile');
 });
 
-test('монтажник: «Смета» и «Профиль» в карточке, цены видны, предпросмотр открывается', async ({ page, request }) => {
+test('монтажник: PDF в комнате без цен, предпросмотр открывается по нажатию', async ({ page, request }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await uploadAsOwner(request);
   await enter(page, 'crew');
+  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
 
   const card = page.locator('[data-room-id="ui_crew_room"]');
   await expect(card).toContainText('Смета · Профиль');
   await card.click();
 
+  await page.locator('summary', { hasText: 'Документы' }).click();
   const rows = page.locator('[data-doc-kind]');
   await expect(rows).toHaveCount(3);
   await expect(page.locator('[data-doc-kind="profile"]')).toHaveCount(1);
   await expect(page.locator('[data-doc-kind="estimate"]')).toHaveCount(2);
   await expect(page.getByText('Спецификация', { exact: false })).toHaveCount(0);
-  await expect(page.getByText('Итого комнаты')).toBeVisible();
+  await expect(page.getByText('Итого комнаты')).toHaveCount(0);
+  await expect(page.getByText('Панели', { exact: true })).toBeVisible();
 
+  await expect(page.getByRole('button', { name: 'Клиенту', exact: true }).first()).toBeVisible();
   await page.locator('[data-doc-kind="profile"]').getByRole('button', { name: 'Открыть', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: /Просмотр: .*профиль/ });
-  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeVisible({ timeout: 20000 });
   await expect(dialog).toHaveAttribute('data-file-kind', 'pdf');
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test('менеджер видит те же PDF в карточке комнаты', async ({ page, request }) => {
+  await uploadAsOwner(request);
+  await enter(page, 'sales');
+  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
+  await page.locator('[data-room-id="ui_crew_room"]').click();
+  await page.locator('summary', { hasText: 'Документы' }).click();
+  await expect(page.locator('[data-doc-kind="profile"]')).toHaveCount(1);
+  await expect(page.locator('[data-doc-kind="estimate"]')).toHaveCount(2);
+  await expect(page.getByText('Итого комнаты')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Клиенту', exact: true }).first()).toBeVisible();
 });
 
 test('проблемомер: «Сохранить объект» прикладывает «Профиль» к объекту', async ({ page, request }) => {
@@ -101,13 +117,12 @@ test('проблемомер: «Сохранить объект» приклад
   });
   await page.goto(`/?p=${token}`);
   await expect(page.getByRole('button', { name: 'Мой профиль', exact: true })).toBeVisible();
-  await page.getByRole('complementary', { name: 'Разделы кабинета' }).getByRole('tab', { name: 'Инструменты', exact: true }).click();
-  await page.getByRole('button', { name: 'Открыть Проблемомер', exact: true }).click();
-  const save = page.getByRole('region', { name: 'Объект', exact: true });
+  await page.getByRole('button', { name: 'Проблемомер', exact: true }).click();
+  const save = page.getByRole('region', { name: 'Комната', exact: true });
   await expect(save).toBeVisible({ timeout: 30000 });
   await save.getByPlaceholder('Имя').fill('Профиль Тест');
-  await save.getByRole('button', { name: 'Сохранить объект', exact: true }).click();
-  await expect(page.getByTestId('profile-attach-note')).toHaveText('«Профиль» приложен к объекту', { timeout: 60000 });
+  await save.getByRole('button', { name: 'Сохранить комнату', exact: true }).click();
+  await expect(page.getByTestId('profile-attach-note')).toHaveText('«Профиль» приложен к комнате', { timeout: 60000 });
 
   const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.owner', password } });
   const { token: auth } = await login.json();
@@ -124,7 +139,7 @@ test('проблемомер: «Сохранить объект» приклад
   expect(pdf.length).toBeLessThan(2_000_000);
 
   // Повторное сохранение без правок не плодит второй профиль.
-  await page.getByRole('region', { name: 'Объект', exact: true }).getByRole('button', { name: 'Сохранить объект', exact: true }).click();
+  await page.getByRole('region', { name: 'Комната', exact: true }).getByRole('button', { name: 'Сохранить комнату', exact: true }).click();
   await page.waitForTimeout(1500);
   const again = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${auth}` } });
   const after = (await again.json()).objects.find((o: { id: string }) => o.id === saved.id);

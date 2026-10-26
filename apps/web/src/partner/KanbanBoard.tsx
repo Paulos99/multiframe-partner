@@ -24,6 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   JOB_OBJECT_STATUS_LABELS,
+  canMoveObjects,
   documentKindsSummary,
   type JobObject,
   type Project,
@@ -38,6 +39,8 @@ import {
 } from './motionBits';
 import {
   canMoveRoom,
+  roomCountLabel,
+  roomDisplayName,
   KANBAN_STAGES,
   sortRooms,
   rankMovedColumn,
@@ -68,6 +71,7 @@ function Column({
 function Card({
   room,
   disabled,
+  frozen,
   children,
   onOpen,
   onHover,
@@ -76,7 +80,10 @@ function Card({
   onMenu,
 }: {
   room: JobObject;
+  /** Blocks both drag and open (save in flight). */
   disabled: boolean;
+  /** Blocks drag only. The card still opens. */
+  frozen: boolean;
   children: ReactNode;
   onOpen: () => void;
   onHover: (id: string | null) => void;
@@ -95,7 +102,7 @@ function Card({
     isDragging,
   } = useSortable({
     id: room.id,
-    disabled,
+    disabled: disabled || frozen,
     transition: reduce ? null : undefined,
   });
   return (
@@ -109,8 +116,10 @@ function Card({
         {...listeners}
         type="button"
         data-room-id={room.id}
+        aria-roledescription="карточка"
+        aria-disabled={disabled || undefined}
         className={`${styles.card} ${related ? styles.related : ''} ${isDragging ? styles.source : ''}`}
-        aria-label={`${room.roomName || 'Комната'} · ${room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[room.status]}`}
+        aria-label={`${roomDisplayName(room)} · ${room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[room.status]}`}
         onPointerDown={(e) => {
           if (e.pointerType !== 'touch') listeners?.onPointerDown?.(e);
         }}
@@ -142,7 +151,7 @@ function Card({
         <button
           type="button"
           className={styles.cardMenu}
-          aria-label={`Действия с объектом «${room.roomName || room.clientName || 'Комната'}»`}
+          aria-label={`Действия с комнатой «${roomDisplayName(room)}»`}
           aria-haspopup="menu"
           // Keep the dnd-kit sensors (pointer, long-press touch, keyboard) off this button.
           onPointerDown={(e) => e.stopPropagation()}
@@ -212,8 +221,11 @@ export function KanbanBoard({
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
+    // Focus and layout can scroll in the same turn the menu opens. Ignore that
+    // tick so the menu is not dismissed before the click finishes.
+    const arm = window.setTimeout(() => window.addEventListener('scroll', close, true), 200);
     return () => {
+      window.clearTimeout(arm);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', close);
       window.removeEventListener('scroll', close, true);
@@ -242,6 +254,19 @@ export function KanbanBoard({
       [],
       projects,
     );
+  const namedRooms = local ?? rooms;
+  function dragCardName(id: unknown) {
+    const room = namedRooms.find((item) => item.id === id);
+    if (!room) return 'комнаты';
+    return `«${room.clientName || 'Клиент'}, ${room.roomName || 'Комната'}»`;
+  }
+  function dragColumnName(id: unknown) {
+    if (typeof id === 'string' && KANBAN_STAGES.includes(id as JobObjectStatus)) {
+      return `«${JOB_OBJECT_STATUS_LABELS[id as JobObjectStatus]}»`;
+    }
+    const room = namedRooms.find((item) => item.id === id);
+    return room ? `«${JOB_OBJECT_STATUS_LABELS[room.status]}»` : 'доски';
+  }
   function preview(next: JobObject[]) {
     draft.current = next;
     setLocal(next);
@@ -292,18 +317,37 @@ export function KanbanBoard({
       setLocal(null);
       return;
     }
-    let next = draft.current;
-    const room = next.find((r) => r.id === drag.id);
-    const target = next.find((r) => r.id === over.id);
-    const destination = target?.status ?? (over.id as JobObjectStatus);
-    if (!canMoveRoom(role, destination)) {
+    let next = draft.current.length ? draft.current : snapshot.current;
+    let room = next.find((r) => r.id === drag.id);
+    if (!room) {
       setLocal(null);
       return;
     }
-    if (KANBAN_STAGES.includes(over.id as JobObjectStatus) && room) {
-      next = [room, ...next.filter((r) => r.id !== room.id)];
+    const stageHit = KANBAN_STAGES.includes(over.id as JobObjectStatus)
+      ? (over.id as JobObjectStatus)
+      : null;
+    const target = next.find((r) => r.id === over.id);
+    const destination = stageHit ?? target?.status;
+    if (!destination || !canMoveRoom(role, destination)) {
+      setLocal(null);
+      return;
     }
-    if (!room || !canMoveRoom(role, room.status)) {
+    if (room.status !== destination) {
+      const moved = { ...room, status: destination };
+      const rest = next.filter((r) => r.id !== moved.id);
+      if (target && target.id !== moved.id) {
+        const index = rest.findIndex((r) => r.id === target.id);
+        rest.splice(index < 0 ? rest.length : index, 0, moved);
+      } else {
+        rest.unshift(moved);
+      }
+      room = moved;
+      next = rest;
+    } else if (stageHit) {
+      const staying = room;
+      next = [staying, ...next.filter((r) => r.id !== staying.id)];
+    }
+    if (!canMoveRoom(role, room.status)) {
       setLocal(null);
       return;
     }
@@ -327,18 +371,14 @@ export function KanbanBoard({
   }
   function content(room: JobObject) {
     const project = projects.find((p) => p.id === room.projectId);
-    const person = staff.find((s) => s.id === room.assignedTo)?.displayName;
     return (
       <>
         <strong>
           {project?.clientName || room.clientName || 'Клиент'} ·{' '}
-          {room.roomName || 'Комната'}
+          {roomDisplayName(room)}
         </strong>
         <small>
-          {project?.address ||
-            room.address ||
-            project?.name ||
-            'Адрес не указан'}
+          {(project?.address || room.address || '').trim() || 'Добавить адрес'}
         </small>
         <div className={styles.metadata}>
           <span title="Обновлено">
@@ -349,18 +389,6 @@ export function KanbanBoard({
           </span>
           <span title="Документы">{documentKindsSummary(room.documents) || 'Без PDF'}</span>
           <span>{room.room.areaM2 ?? '—'} м²</span>
-          <span
-            className={styles.avatar}
-            title={person || 'Ответственный не назначен'}
-          >
-            {person
-              ? person
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((n) => n[0])
-                  .join('')
-              : '—'}
-          </span>
         </div>
         {room.pendingSync && <small>↻ Ожидает синхронизации</small>}
       </>
@@ -369,7 +397,7 @@ export function KanbanBoard({
   return (
     <>
       <div className={styles.toolbar}>
-        <strong>{visible.length} объектов</strong>
+        <strong>{roomCountLabel(visible.length)}</strong>
         <button
           type="button"
           aria-expanded={filters}
@@ -409,9 +437,9 @@ export function KanbanBoard({
       </div>
       {/* Visible hint removed at Pavel's request; the instructions stay for screen readers. */}
       <p className={styles.srOnly} id="kanban-help">
-        Перетащите карточку в стадию или измените порядок. Alt + ←/→ — стадия,
-        Пробел — поднять, стрелки — переместить, Escape — отменить. На телефоне
-        удерживайте карточку.
+        {canMoveRoom(role, 'draft')
+          ? 'Перетащите карточку в стадию или измените порядок. Alt + ←/→ — стадия, Пробел — поднять, стрелки — переместить, Escape — отменить. На телефоне удерживайте карточку.'
+          : 'Откройте карточку, чтобы посмотреть комнату. Статус меняет менеджер или владелец.'}
       </p>
       <div className={styles.tabs} aria-label="Стадии">
         {KANBAN_STAGES.map((s) => (
@@ -435,20 +463,41 @@ export function KanbanBoard({
         ))}
       </div>
       <DndContext
+        accessibility={{
+          screenReaderInstructions: {
+            draggable:
+              'Чтобы взять карточку, нажмите пробел. Стрелками переносите её между колонками. Пробел — отпустить в колонке, Escape — отменить.',
+          },
+          announcements: {
+            onDragStart({ active }) {
+              return `Взята карточка ${dragCardName(active.id)}.`;
+            },
+            onDragOver({ active, over }) {
+              return over
+                ? `Карточка ${dragCardName(active.id)} над колонкой ${dragColumnName(over.id)}.`
+                : `Карточка ${dragCardName(active.id)} вне колонок.`;
+            },
+            onDragEnd({ active, over }) {
+              return over
+                ? `Карточка ${dragCardName(active.id)} отпущена в колонке ${dragColumnName(over.id)}.`
+                : `Карточка ${dragCardName(active.id)} отпущена.`;
+            },
+            onDragCancel({ active }) {
+              return `Перенос карточки ${dragCardName(active.id)} отменён.`;
+            },
+          },
+        }}
         sensors={sensors}
         collisionDetection={(args) => {
           const hits = pointerWithin(args);
-          return hits.length
-            ? hits.some((h) => !KANBAN_STAGES.includes(h.id as JobObjectStatus))
-              ? hits.filter(
-                  (h) => !KANBAN_STAGES.includes(h.id as JobObjectStatus),
-                )
-              : hits
-            : args.pointerCoordinates
-              ? []
-              : closestCorners(args);
+          if (hits.length) {
+            const cards = hits.filter((h) => !KANBAN_STAGES.includes(h.id as JobObjectStatus));
+            return cards.length ? cards : hits;
+          }
+          return closestCorners(args).filter((hit) => hit.id !== args.active.id);
         }}
         onDragStart={({ active: drag, activatorEvent }) => {
+          activatorEvent?.preventDefault();
           if (busy.current) return;
           setMenu(null);
           const room = visible.find((r) => r.id === drag.id);
@@ -489,7 +538,7 @@ export function KanbanBoard({
         <div
           ref={board}
           className={styles.board}
-          aria-label="Канбан объектов"
+          aria-label="Доска проектов"
           aria-busy={loading}
           onScroll={() => {
             const el = board.current;
@@ -525,6 +574,7 @@ export function KanbanBoard({
                   </span>
                   <h3>{JOB_OBJECT_STATUS_LABELS[stage]}</h3>
                   <span className={styles.count}>{list.length}</span>
+                  {canMoveObjects(role) ? (
                   <details>
                     <summary
                       aria-label={`Действия: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
@@ -538,10 +588,11 @@ export function KanbanBoard({
                       По клиенту
                     </button>
                   </details>
+                  ) : null}
                   {onCreate && (
                     <button
                       type="button"
-                      aria-label={`Новый объект: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
+                      aria-label={`Новая комната: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
                       onClick={() => onCreate(stage)}
                     >
                       +
@@ -585,11 +636,8 @@ export function KanbanBoard({
                             >
                               <Card
                                 room={room}
-                                disabled={
-                                  !!pendingId ||
-                                  busy.current ||
-                                  !canMoveRoom(role, room.status)
-                                }
+                                disabled={!!pendingId || busy.current}
+                                frozen={!canMoveRoom(role, room.status)}
                                 related={!!hover && hover === room.projectId}
                                 onMenu={
                                   onDelete
@@ -633,7 +681,7 @@ export function KanbanBoard({
                     )}
                   </SortableContext>
                   {!loading && !displayList.length && (
-                    <p className={styles.empty}>Пока нет объектов</p>
+                    <p className={styles.empty}>Пока нет комнат</p>
                   )}
                 </div>
               </Column>
@@ -679,7 +727,7 @@ export function KanbanBoard({
             >
               <div
                 role="menu"
-                aria-label="Действия с объектом"
+                aria-label={`Действия с комнатой «${roomDisplayName(menu.room)}»`}
                 className={styles.menu}
                 style={{
                   left: Math.max(8, Math.min(menu.x, window.innerWidth - 188)),
@@ -691,7 +739,6 @@ export function KanbanBoard({
                   type="button"
                   role="menuitem"
                   className={styles.menuDanger}
-                  autoFocus
                   onClick={() => {
                     const room = menu.room;
                     setMenu(null);

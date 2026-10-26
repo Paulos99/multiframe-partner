@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import type { JobObjectHistoryEntry } from '../../../../packages/shared/partner';
-import { describeHistory, historyAuthor, sortedHistory, type HistoryPerson } from './historyFormatting';
+import { describeHistory, formatHistoryTime, historyAuthor, sortedHistory, type HistoryPerson } from './historyFormatting';
 import styles from './ObjectHistory.module.css';
 
 export function recordsLabel(count: number): string {
@@ -25,14 +25,14 @@ export function ObjectHistory({ entries, people }: {
   const sorted = sortedHistory(entries);
   const visible = expanded ? sorted : sorted.slice(0, 3);
   return (
-    <section className={styles.history} aria-label="История объекта">
+    <section className={styles.history} aria-label="История комнаты">
       <div className={styles.heading}>
-        <h3>История объекта</h3>
+        <h3>История комнаты</h3>
         <span>{recordsLabel(entries.length)}</span>
       </div>
       <ol className={styles.list} id={listId}>
         {visible.map((entry, index) => {
-          const validDate = !Number.isNaN(Date.parse(entry.at));
+          const when = formatHistoryTime(entry.at);
           return (
             <li className={styles.event} key={`${entry.at}-${index}`}>
               <span className={styles.dot} aria-hidden="true" />
@@ -40,9 +40,7 @@ export function ObjectHistory({ entries, people }: {
                 <p className={styles.title}>{describeHistory(entry, people)}</p>
                 <div className={styles.meta}>
                   <span className={styles.author}>{historyAuthor(entry, people)}</span>
-                  {validDate ? <time dateTime={entry.at}>{new Date(entry.at).toLocaleString('ru-RU', {
-                    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                  })}</time> : <span>Дата не указана</span>}
+                  {when ? <time dateTime={entry.at}>{when}</time> : <span>Дата не указана</span>}
                 </div>
               </div>
             </li>

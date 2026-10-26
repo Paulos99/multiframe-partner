@@ -123,15 +123,19 @@ function KpiCard({
   value,
   prev,
   showDelta,
+  pressed,
+  onSelect,
 }: {
   label: string;
   value: number;
   prev?: number | null;
   showDelta: boolean;
+  pressed: boolean;
+  onSelect: () => void;
 }) {
   const delta = showDelta ? deltaText(value, prev) : null;
   return (
-    <div className={styles.kpi}>
+    <button type="button" className={styles.kpi} aria-pressed={pressed} onClick={onSelect}>
       <span className={styles.kpiLabel}>{label}</span>
       <strong>
         <CountUp value={value} />
@@ -145,7 +149,7 @@ function KpiCard({
           {'\u00a0'}
         </span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -335,6 +339,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   const fromYmd = period.fromYmd;
   const toYmd = period.toYmd;
   const [section, setSection] = useState<AnalyticsTab>('overview');
+  const [openTile, setOpenTile] = useState<string | null>(null);
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -404,7 +409,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
 
   const sectionTabs: Array<{ id: AnalyticsTab; label: string }> = [
     { id: 'overview', label: 'Сводка' },
-    { id: 'portrait', label: 'Объекты' },
+    { id: 'portrait', label: 'Комнаты' },
     ...(mode === 'admin' ? [{ id: 'companies' as const, label: 'Компании' }] : []),
     { id: 'team', label: mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники' },
     { id: 'objects', label: 'Журнал' },
@@ -465,68 +470,58 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
       {section === 'overview' ? (
         <div className={styles.dashSection}>
           <FadeRise className={styles.kpiRow}>
-            {mode === 'admin' ? (
+            {(
+              [
+                ...(mode === 'admin'
+                  ? [{ id: 'partners', label: 'Активные компании', value: dash.kpi.activePartners, prev: prev?.activePartners, showDelta }]
+                  : []),
+                { id: 'staff', label: 'Сотрудники', value: dash.kpi.executors, prev: prev?.executors, showDelta },
+                { id: 'pm', label: 'Проблемомер', value: dash.kpi.problemomerResults, prev: prev?.problemomerResults, showDelta },
+                { id: 'calc', label: 'Калькулятор', value: dash.kpi.calculatorDone, prev: prev?.calculatorDone, showDelta },
+                { id: 'pdf', label: 'PDF', value: dash.kpi.pdf, prev: prev?.pdf, showDelta },
+                { id: 'area', label: 'Площадь, м²', value: dash.kpi.areaM2, prev: prev?.areaM2, showDelta },
+                { id: 'panels', label: 'Панели', value: dash.kpi.panels, prev: prev?.panels, showDelta },
+                { id: 'avg', label: 'Средняя м²', value: dash.volume.areaM2Avg, prev: null, showDelta: false },
+                { id: 'done', label: 'Готовых расчётов', value: dash.volume.completedCount, prev: null, showDelta: false },
+              ] as Array<{ id: string; label: string; value: number; prev?: number | null; showDelta: boolean }>
+            ).map((tile) => (
               <KpiCard
-                label="Активные компании"
-                value={dash.kpi.activePartners}
-                prev={prev?.activePartners}
-                showDelta={showDelta}
+                key={tile.id}
+                label={tile.label}
+                value={tile.value}
+                prev={tile.prev}
+                showDelta={tile.showDelta}
+                pressed={openTile === tile.id}
+                onSelect={() => setOpenTile(openTile === tile.id ? null : tile.id)}
               />
-            ) : null}
-            <KpiCard
-              label="Сотрудники"
-              value={dash.kpi.executors}
-              prev={prev?.executors}
-              showDelta={showDelta}
-            />
-            <KpiCard
-              label="Проблемомер"
-              value={dash.kpi.problemomerResults}
-              prev={prev?.problemomerResults}
-              showDelta={showDelta}
-            />
-            <KpiCard
-              label="Калькулятор"
-              value={dash.kpi.calculatorDone}
-              prev={prev?.calculatorDone}
-              showDelta={showDelta}
-            />
-            <KpiCard label="PDF" value={dash.kpi.pdf} prev={prev?.pdf} showDelta={showDelta} />
-            <KpiCard
-              label="Площадь, м²"
-              value={dash.kpi.areaM2}
-              prev={prev?.areaM2}
-              showDelta={showDelta}
-            />
-            <KpiCard
-              label="Панели"
-              value={dash.kpi.panels}
-              prev={prev?.panels}
-              showDelta={showDelta}
-            />
-            <KpiCard label="Средняя м²" value={dash.volume.areaM2Avg} showDelta={false} />
-            <KpiCard label="Готовых расчётов" value={dash.volume.completedCount} showDelta={false} />
+            ))}
           </FadeRise>
 
-          <h3 className={styles.dashSub}>Воронка</h3>
-          <div className={styles.funnelGrid}>
-            <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
-            <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
-          </div>
-
-          <h3 className={styles.dashSub}>Динамика</h3>
-          {dash.series.length ? (
-            <SeriesChart series={dash.series} />
-          ) : (
-            <p className={styles.lead}>Пока нет точек для графика</p>
-          )}
-
-          {spansMoreThanTwoMonths(fromYmd, toYmd, dash.series) ? (
+          {openTile ? (
             <>
-              <h3 className={styles.dashSub}>По месяцам</h3>
-              <MonthSlice rows={monthsFromSeries(dash.series)} />
+              <h3 className={styles.dashSub}>Воронка</h3>
+              <div className={styles.funnelGrid}>
+                <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
+                <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
+              </div>
+
+              <h3 className={styles.dashSub}>Динамика</h3>
+              {dash.series.length ? (
+                <SeriesChart series={dash.series} />
+              ) : (
+                <p className={styles.lead}>Пока нет точек для графика</p>
+              )}
+
+              {spansMoreThanTwoMonths(fromYmd, toYmd, dash.series) ? (
+                <>
+                  <h3 className={styles.dashSub}>По месяцам</h3>
+                  <MonthSlice rows={monthsFromSeries(dash.series)} />
+                </>
+              ) : null}
             </>
-          ) : null}
+          ) : (
+            <p className={styles.hint}>Нажмите показатель — откроются воронка и динамика.</p>
+          )}
         </div>
       ) : null}
 
@@ -536,7 +531,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             <BreakdownList title="Тип комнаты" items={dash.breakdowns.roomType} kind="room" />
             <BreakdownList title="Тип дома" items={dash.breakdowns.houseType} kind="house" />
             <BreakdownList
-              title="Стадия объекта"
+              title="Стадия комнаты"
               items={dash.breakdowns.objectStage}
               kind="stage"
             />

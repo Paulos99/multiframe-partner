@@ -106,11 +106,26 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
   },
 ];
 
-function daysAgo(n: number, hour = 10, minute = 0): string {
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  d.setDate(d.getDate() - n);
-  return d.toISOString();
+/** Реальное «сейчас» минус n суток. Час берётся из Date.now(), не из выдуманных демо-часов. */
+function daysAgo(n: number, _hour?: number, _minute?: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+}
+
+const DEMO_PEOPLE: Record<string, { login: string; name: string }> = {
+  u_partner1: { login: 'partner1', name: 'Владелец · Потолки Столицы' },
+  u_sales1: { login: 'sales1', name: 'Менеджер · Потолки Столицы' },
+  u_exec1: { login: 'exec1', name: 'Замерщик · Потолки Столицы' },
+  u_crew1: { login: 'crew1', name: 'Монтажник · Потолки Столицы' },
+  u_crew1b: { login: 'crew1b', name: 'Монтажник 2 · Потолки Столицы' },
+  u_partner2: { login: 'partner2', name: 'Владелец · Северный Потолок' },
+  u_sales2: { login: 'sales2', name: 'Менеджер · Северный Потолок' },
+  u_exec2: { login: 'exec2', name: 'Замерщик · Северный Потолок' },
+  u_crew2: { login: 'crew2', name: 'Монтажник · Северный Потолок' },
+};
+
+function historyStamp(userId: string, at: string, action: string, detail?: string) {
+  const person = DEMO_PEOPLE[userId] || { login: 'system', name: 'Сотрудник' };
+  return { at, userId, login: person.login, authorName: person.name, action, detail };
 }
 
 function orgSettings(companyName: string, city: string): OrgSettings {
@@ -211,38 +226,18 @@ function makeObject(
   const quoteAt = daysAgo(Math.max(0, spec.day - 3), 14, 0);
   const installAt = daysAgo(Math.max(0, spec.day - 10), 10, 0);
   const closedAt = daysAgo(Math.max(0, spec.day - 14), 16, 0);
-  const history = [
-    { at: createdAt, userId: createdBy, login: 'system', action: 'create', detail: 'measured' },
-  ];
+  const history = [historyStamp(createdBy, createdAt, 'create', 'measured')];
   let updatedAt = createdAt;
   if (['quote_sent', 'install', 'closed'].includes(spec.status)) {
-    history.unshift({
-      at: quoteAt,
-      userId: createdBy,
-      login: 'system',
-      action: 'status',
-      detail: 'measured→quote_sent',
-    });
+    history.unshift(historyStamp(createdBy, quoteAt, 'status', 'measured→quote_sent'));
     updatedAt = quoteAt;
   }
   if (['install', 'closed'].includes(spec.status)) {
-    history.unshift({
-      at: installAt,
-      userId: crew,
-      login: 'system',
-      action: 'status',
-      detail: 'quote_sent→install',
-    });
+    history.unshift(historyStamp(createdBy, installAt, 'status', 'quote_sent→install'));
     updatedAt = installAt;
   }
   if (spec.status === 'closed') {
-    history.unshift({
-      at: closedAt,
-      userId: crew,
-      login: 'system',
-      action: 'status',
-      detail: 'install→closed',
-    });
+    history.unshift(historyStamp(createdBy, closedAt, 'status', 'install→closed'));
     updatedAt = closedAt;
   }
   const roomType = pick(ROOM_TYPES, spec.rt);
