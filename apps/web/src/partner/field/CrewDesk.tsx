@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '../../ui/Button';
 import { Skeleton } from '../Skeleton';
 import { usePartner } from '../PartnerContext';
-import { FadeRise } from '../motionBits';
+import { PageTransition } from '../motionBits';
 import {
   fieldGet,
   fieldPost,
@@ -16,6 +16,7 @@ import {
   BLOCKER_PRESETS,
   checklistOrTemplate,
   closeBlockedReason,
+  compositionFigure,
   createIdempotencyKey,
   fieldErrorText,
   fieldSync,
@@ -124,9 +125,11 @@ export function CrewDesk() {
 
   if (loading) return <Skeleton kind="rows" count={3} label="Загрузка заданий" />;
 
-  if (!room) {
-    return (
-      <FadeRise>
+  const openBlockers = room?.blockers.filter((item) => item.status === 'open') ?? [];
+
+  return (
+    <PageTransition pageKey={room ? room.id : 'list'}>
+      {!room ? (
       <div className={styles.stack}>
         <section className={styles.card}>
           <h2>Мои задания</h2>
@@ -159,14 +162,7 @@ export function CrewDesk() {
           )}
         </section>
       </div>
-      </FadeRise>
-    );
-  }
-
-  const openBlockers = room.blockers.filter((item) => item.status === 'open');
-
-  return (
-    <FadeRise>
+      ) : (
       <div className={styles.stack}>
         <div className={styles.actions}>
           <Button variant="secondary" onClick={() => {
@@ -190,16 +186,14 @@ export function CrewDesk() {
           </div>
           {schemeOpen ? (
             <div className={styles.slot}>
-              {room.composition ? (
-                <>
-                  <strong>{room.composition.hasScheme ? 'Схема есть в расчёте по замеру' : 'Схемы в расчёте нет'}</strong>
-                  <span>Площадь: {room.composition.areaM2 == null ? '—' : `${room.composition.areaM2} м²`}</span>
-                  <span>Панели: {room.composition.panels ?? '—'}</span>
-                  <span>Дюбели: {room.composition.dowels ?? '—'}</span>
-                </>
+              {room.composition?.schemeImage ? (
+                <img className={styles.scheme} alt="Схема раскладки" src={room.composition.schemeImage} />
               ) : (
-                <span>В расчёте по замеру нет состава. Попросите замерщика сохранить схему ещё раз.</span>
+                <p className={styles.muted}>Чертёж в расчёте не сохранён.</p>
               )}
+              <span>Площадь: {compositionFigure(room.composition?.areaM2, 'м²')}</span>
+              <span>Панели: {compositionFigure(room.composition?.panels)}</span>
+              <span>Дюбели: {compositionFigure(room.composition?.dowels)}</span>
             </div>
           ) : null}
         </section>
@@ -333,6 +327,7 @@ export function CrewDesk() {
           </div>
         </section>
       </div>
-    </FadeRise>
+      )}
+    </PageTransition>
   );
 }

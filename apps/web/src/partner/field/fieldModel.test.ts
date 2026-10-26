@@ -11,6 +11,7 @@ import {
   fieldErrorText,
   fieldHeaders,
   fieldSync,
+  compositionFigure,
   measurementStatusLabel,
   nextCrewAction,
   sortMeasurements,
@@ -98,6 +99,14 @@ test('задания бригады: сначала текущие, потом �
   assert.equal(nextCrewAction(rooms[1]!), 'Есть препятствие');
   assert.equal(nextCrewAction(rooms[2]!), 'Заполнить список проверки');
   assert.equal(containsMoney(rooms), false);
+});
+
+test('пустой состав рисуется прочерком, а не нулём', () => {
+  assert.equal(compositionFigure(null, 'м²'), '—');
+  assert.equal(compositionFigure(0, 'м²'), '—');
+  assert.equal(compositionFigure(undefined), '—');
+  assert.equal(compositionFigure(12.4, 'м²'), '12.4 м²');
+  assert.equal(compositionFigure(12), '12');
 });
 
 test('расчёт по замеру не оставляет статус «Нужен замер»', () => {
