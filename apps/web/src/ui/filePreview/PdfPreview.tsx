@@ -11,6 +11,8 @@ type PageSize = { w: number; h: number };
 export type PdfViewProps = {
   name: string;
   url: string;
+  /** Сам файл, если он уже в памяти: не ходим по blob:-ссылке, её воркер не открывает. */
+  file?: Blob | null;
   /** PDF не открылся: окно покажет карточку со «Скачать». */
   onFail: (message: string) => void;
 };
@@ -20,7 +22,7 @@ export type PdfViewProps = {
  * внутри страницы, и на компьютере. Страницы по ширине окна, лента с прокруткой,
  * масштаб кнопками, щипком и Ctrl+колесо, счётчик страниц.
  */
-export function PdfView({ name, url, onFail }: PdfViewProps) {
+export function PdfView({ name, url, file, onFail }: PdfViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef<HTMLDivElement>(null);
   const failRef = useRef(onFail);
@@ -31,6 +33,7 @@ export function PdfView({ name, url, onFail }: PdfViewProps) {
   const [zoom, setZoom] = useState(1);
   const [current, setCurrent] = useState(1);
   const [near, setNear] = useState<Set<number>>(() => new Set([0, 1]));
+  const [native, setNative] = useState(false);
   const anchor = useRef<{ fx: number; fy: number; vx: number; vy: number } | null>(null);
   const pinch = useRef<{ dist: number; zoom: number; fx: number; fy: number; vx: number; vy: number; ratio: number } | null>(null);
 
@@ -49,10 +52,23 @@ export function PdfView({ name, url, onFail }: PdfViewProps) {
     setDoc(null);
     setSizes([]);
     setProgress(null);
+    setNative(false);
     (async () => {
       const pdfjs = await loadPdfJs();
       if (cancelled) return;
-      const task = pdfjs.getDocument({ url, ...pdfDocumentOptions() });
+      // Своя копия байтов: pdf.js забирает буфер, а blob: воркер в Chromium не открывает.
+      const raw = file ? await file.arrayBuffer() : await (await fetch(url)).arrayBuffer();
+      if (cancelled) return;
+      const data = new Uint8Array(raw.byteLength);
+      data.set(new Uint8Array(raw));
+      const task = pdfjs.getDocument({
+        data,
+        useWorkerFetch: false,
+        disableRange: true,
+        disableStream: true,
+        isOffscreenCanvasSupported: false,
+        ...pdfDocumentOptions(),
+      });
       destroyTask = () => void task.destroy();
       task.onProgress = ({ loaded: done, total }: { loaded: number; total: number }) => {
         if (!cancelled && total > 0) setProgress(Math.min(99, Math.floor((done / total) * 100)));
@@ -79,6 +95,11 @@ export function PdfView({ name, url, onFail }: PdfViewProps) {
     })().catch((error: unknown) => {
       if (cancelled) return;
       const name = error && typeof error === 'object' && 'name' in error ? String((error as { name: unknown }).name) : '';
+      if (url && name !== 'PasswordException' && name !== 'InvalidPDFException') {
+        // Chromium сам рисует PDF во фрейме, если pdf.js не справился.
+        setNative(true);
+        return;
+      }
       failRef.current(
         name === 'PasswordException'
           ? 'PDF защищён паролем, в браузере его не открыть'
@@ -91,7 +112,7 @@ export function PdfView({ name, url, onFail }: PdfViewProps) {
       cancelled = true;
       destroyTask?.();
     };
-  }, [url]);
+  }, [url, file]);
 
   // Ширина области просмотра.
   useLayoutEffect(() => {
@@ -267,6 +288,13 @@ export function PdfView({ name, url, onFail }: PdfViewProps) {
   }, []);
 
   const total = sizes.length;
+  if (native && url) {
+    return (
+      <div className={styles.pdfWrap} data-pdf-state="native">
+        <iframe className={styles.pdfNative} title={name} src={url} data-testid="pdf-native" />
+      </div>
+    );
+  }
   return (
     <div className={styles.pdfWrap} data-pdf-state={ready ? 'ready' : 'loading'}>
       {!ready ? (

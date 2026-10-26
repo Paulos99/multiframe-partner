@@ -21,7 +21,7 @@ import {
 import { apiFetchObjectDocument } from './apiClient';
 import { buildDemoPdfBlob, openPdfBlob } from './demoDocuments';
 import { documentOpenPolicy } from './roomDocuments';
-import { answersFromStoredRoom } from './roomLink';
+import { answersFromStoredRoom, roomStubFromLabel } from './roomLink';
 import { createInitialSession, withDerived } from '../state/session';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { formatRub } from './estimate';
@@ -105,6 +105,9 @@ function ObjectDocuments({
                     {latest ? 'Последняя версия' : 'Предыдущая версия'}
                     {formatDocWhen(doc.createdAt) ? ` · ${formatDocWhen(doc.createdAt)}` : ''}
                     {doc.areaM2 ? ` · ${doc.areaM2} м²` : ''}
+                    {doc.areaM2 != null && obj.room?.areaM2 != null && Math.abs(doc.areaM2 - obj.room.areaM2) > 0.049
+                      ? ' · устарел, пересобрать'
+                      : ''}
                     {kind === 'estimate' && doc.panels ? ` · ${doc.panels} пан.` : ''}
                     {kind === 'estimate' ? (doc.hasScheme ? ' · схема раскладки' : ' · без схемы') : ''}
                     {doc.kind === 'spec' ? ' · старый файл без цен' : ''}
@@ -391,7 +394,7 @@ export function ObjectsPanel({
       address: draft.address.trim(),
       city: draft.city.trim() || user.org?.city || '',
       roomName: roomLabel,
-      room: { roomTypeCustom: roomLabel },
+      room: roomStubFromLabel(roomLabel),
     };
     try {
       let saved: JobObject;
@@ -435,7 +438,7 @@ export function ObjectsPanel({
         clientPhone: project.clientPhone || '',
         address: project.address || '',
         city: project.city || '',
-        room: { roomTypeCustom: label },
+        room: roomStubFromLabel(label),
       });
       setRoomName('');
       setSelectedId(saved.id);
@@ -499,6 +502,8 @@ export function ObjectsPanel({
             type="button"
             className={styles.primary}
             onClick={() => {
+              setSelectedId(null);
+              setSelectedKey(null);
               setCreating((value) => !value);
             }}
             aria-expanded={creating}
@@ -516,36 +521,6 @@ export function ObjectsPanel({
         <p className={styles.flash} role="status">
           Нет сети — показаны комнаты, сохранённые на устройстве.
         </p>
-      ) : null}
-
-      {creating && canCreate ? (
-        <form className={listStyles.form} onSubmit={(event) => void createProjectWithRoom(event)}>
-          <label className={styles.field}>
-            Клиент
-            <input value={draft.clientName} onChange={(event) => setDraft((value) => ({ ...value, clientName: event.target.value }))} />
-          </label>
-          <label className={styles.field}>
-            Адрес
-            <input value={draft.address} onChange={(event) => setDraft((value) => ({ ...value, address: event.target.value }))} />
-          </label>
-          <label className={styles.field}>
-            Город
-            <input value={draft.city} onChange={(event) => setDraft((value) => ({ ...value, city: event.target.value }))} />
-          </label>
-          <label className={styles.field}>
-            Первая комната
-            <input
-              value={draft.roomName}
-              placeholder="Кухня"
-              onChange={(event) => setDraft((value) => ({ ...value, roomName: event.target.value }))}
-            />
-          </label>
-          <div className={styles.field}>
-            <button type="submit" className={styles.primary} disabled={saving}>
-              {saving ? 'Сохраняем…' : 'Создать проект'}
-            </button>
-          </div>
-        </form>
       ) : null}
 
       <label className={styles.searchField}>
@@ -601,6 +576,50 @@ export function ObjectsPanel({
           }}
         />
       )}
+
+      {creating && canCreate
+        ? createPortal(
+            <>
+              <button type="button" className={styles.drawerBackdrop} aria-label="Закрыть форму" onClick={() => setCreating(false)} />
+              <aside className={styles.drawer} role="dialog" aria-label="Новый проект">
+                <div className={styles.drawerHead}>
+                  <h3>Новый проект</h3>
+                  <button type="button" className={styles.ghost} onClick={() => setCreating(false)}>
+                    Закрыть
+                  </button>
+                </div>
+                <form className={listStyles.form} onSubmit={(event) => void createProjectWithRoom(event)}>
+                  <label className={styles.field}>
+                    Клиент
+                    <input value={draft.clientName} onChange={(event) => setDraft((value) => ({ ...value, clientName: event.target.value }))} />
+                  </label>
+                  <label className={styles.field}>
+                    Адрес
+                    <input value={draft.address} onChange={(event) => setDraft((value) => ({ ...value, address: event.target.value }))} />
+                  </label>
+                  <label className={styles.field}>
+                    Город
+                    <input value={draft.city} onChange={(event) => setDraft((value) => ({ ...value, city: event.target.value }))} />
+                  </label>
+                  <label className={styles.field}>
+                    Первая комната
+                    <input
+                      value={draft.roomName}
+                      placeholder="Название"
+                      onChange={(event) => setDraft((value) => ({ ...value, roomName: event.target.value }))}
+                    />
+                  </label>
+                  <div className={styles.field}>
+                    <button type="submit" className={styles.primary} disabled={saving}>
+                      {saving ? 'Сохраняем…' : 'Создать проект'}
+                    </button>
+                  </div>
+                </form>
+              </aside>
+            </>,
+            document.body,
+          )
+        : null}
 
       {selected && selectedCard
         ? createPortal(
@@ -710,21 +729,32 @@ export function ObjectsPanel({
               </button>
             </div>
 
-            {canCreate && api.projects.length ? (
+            {canCreate && (api.projects.length || selected.clientName || selectedCard.project) ? (
               <label className={styles.field}>
                 Проект
                 <span className={styles.hint}>Комнату можно перенести в другой проект своей компании.</span>
                 <select
-                  value={selected.projectId || ''}
+                  aria-label="Проект"
+                  value={
+                    selected.projectId && api.projects.some((project) => project.id === selected.projectId)
+                      ? selected.projectId
+                      : selected.projectId || '__current'
+                  }
                   disabled={pendingId === selected.id}
                   onChange={(event) => {
-                    if (event.target.value) void patch(selected, { projectId: event.target.value });
+                    if (event.target.value && event.target.value !== '__current') {
+                      void patch(selected, { projectId: event.target.value });
+                    }
                   }}
                 >
-                  {!selected.projectId ? <option value="">Выберите проект</option> : null}
+                  {selected.projectId && api.projects.some((project) => project.id === selected.projectId) ? null : (
+                    <option value={selected.projectId || '__current'}>
+                      {selectedCard.project?.name || selected.clientName || selectedCard.title || 'Этот проект'}
+                    </option>
+                  )}
                   {api.projects.map((project) => (
                     <option key={project.id} value={project.id}>
-                      {project.name}
+                      {project.name || project.clientName}
                     </option>
                   ))}
                 </select>

@@ -471,9 +471,15 @@ function animateStatValue(el, toValue, formatter, { duration = 520 } = {}) {
   statAnimRafs[key] = requestAnimationFrame(tick);
 }
 
+function moneyArea(area) {
+  const n = Number(area);
+  if (!(n > 0)) return 0;
+  return Math.round(n * 100) / 100;
+}
+
 function partnerInstallCost(area) {
   if (!PARTNER_PRICING.enabled || PARTNER_PRICING.installPerM2 == null) return null;
-  return Math.round(Math.max(0, Number(area) || 0) * PARTNER_PRICING.installPerM2);
+  return Math.round(moneyArea(area) * PARTNER_PRICING.installPerM2);
 }
 
 function partnerDowelCost(bom) {
@@ -493,25 +499,41 @@ function partnerGrandTotal(bom, area, panelsCost) {
   return (panelsCost ?? 0) + install + dowelCost;
 }
 
+function paintStat(el, toValue, formatter) {
+  if (!el) return;
+  const key = el.id || 'stat';
+  if (statAnimRafs[key]) {
+    cancelAnimationFrame(statAnimRafs[key]);
+    delete statAnimRafs[key];
+  }
+  const to = Number(toValue) || 0;
+  el.dataset.raw = String(to);
+  el.textContent = formatter(to);
+  el.classList.remove('is-updating', 'is-stale');
+  el.closest('.stat-card')?.classList.remove('is-updating', 'is-recalculating');
+}
+
 function updateStatCards() {
   const bom = state.bom;
   if (!resultsUnlockedForUi() || !bom?.total) {
-    animateStatValue($('totalPanels'), 0, formatStatPanels, { duration: 280 });
-    animateStatValue($('coverageArea'), 0, formatStatArea, { duration: 280 });
-    animateStatValue($('totalCost'), 0, formatStatCost, { duration: 280 });
-    animateStatValue($('partnerTotalCost'), 0, formatStatCost, { duration: 280 });
+    paintStat($('totalPanels'), 0, formatStatPanels);
+    paintStat($('coverageArea'), 0, formatStatArea);
+    paintStat($('totalCost'), 0, formatStatCost);
+    paintStat($('partnerTotalCost'), 0, formatStatCost);
     updateMobileSummary();
     return;
   }
 
   const panels = bom.ceiling?.stats?.withReserve ?? bom.ceiling?.stats?.panelsToPurchase ?? 0;
-  const area = bom.ceiling?.area ?? 0;
+  const area = moneyArea(bom.ceiling?.area ?? 0);
   const cost = bom.total.totalCost ?? 0;
-  animateStatValue($('totalPanels'), panels, formatStatPanels);
-  animateStatValue($('coverageArea'), area, formatStatArea);
-  animateStatValue($('totalCost'), cost, formatStatCost);
-  const grand = partnerGrandTotal(bom, area, cost);
-  if (grand != null) animateStatValue($('partnerTotalCost'), grand, formatStatCost);
+  paintStat($('totalPanels'), panels, formatStatPanels);
+  paintStat($('coverageArea'), area, formatStatArea);
+  if (!getPartnerPricing().hidePrices) {
+    paintStat($('totalCost'), cost, formatStatCost);
+    const grand = partnerGrandTotal(bom, area, cost);
+    if (grand != null) paintStat($('partnerTotalCost'), grand, formatStatCost);
+  }
   updateMobileSummary();
 }
 
@@ -1310,7 +1332,9 @@ function updatePreviewStatsFromCeiling(ceilingResult) {
   const cost = panels * PANEL.priceRub;
   $('totalPanels').textContent = `${panels} шт.`;
   $('coverageArea').textContent = `${area.toFixed(2)} м²`;
-  $('totalCost').textContent = `${cost.toLocaleString('ru-RU')} ₽`;
+  if (!getPartnerPricing().hidePrices) {
+    $('totalCost').textContent = `${cost.toLocaleString('ru-RU')} ₽`;
+  }
   const grand = partnerGrandTotal(
     {
       total: {
@@ -1322,7 +1346,7 @@ function updatePreviewStatsFromCeiling(ceilingResult) {
     area,
     cost,
   );
-  if (grand != null && $('partnerTotalCost')) {
+  if (!getPartnerPricing().hidePrices && grand != null && $('partnerTotalCost')) {
     $('partnerTotalCost').textContent = `${Math.round(grand).toLocaleString('ru-RU')} ₽`;
     $('partnerTotalCost').dataset.raw = String(grand);
   }
@@ -1535,10 +1559,16 @@ function flashCalcReadyStatus() {
 }
 
 function runQuickAreaCalc(area) {
-  const panels = panelsForCeilingArea(area);
+  const pricedArea = moneyArea(area);
+  const panels = panelsForCeilingArea(pricedArea);
   const withReserve = Math.ceil(panels * (1 + RESERVES.panels));
   const dowels = Math.ceil(panels * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels));
   const cost = withReserve * PANEL.priceRub;
+  const pricing = getPartnerPricing();
+  const installCost =
+    pricing.enabled && pricing.installPerM2 != null ? Math.round(pricedArea * pricing.installPerM2) : 0;
+  const dowelsCost =
+    pricing.enabled && pricing.dowelPrice != null ? Math.round(dowels * pricing.dowelPrice) : 0;
   // Не оставляем геометрические схемы от предыдущего режима —
   // иначе PDF подхватит старый план/стены вместо оценки по площади.
   state.ceilingResult = null;
@@ -1550,19 +1580,23 @@ function runQuickAreaCalc(area) {
       panelsWithReserve: withReserve,
       totalCost: cost,
       dowelsWithReserve: dowels,
+      installCost,
+      dowelsCost,
+      grandTotal: cost + installCost + dowelsCost,
+      partnerCompany: pricing.company || '',
     },
     ceiling: {
       schemeName: 'По площади',
       mountingLabel: 'Оценка по площади',
-      area,
+      area: pricedArea,
       stats: {
         total: panels,
         fullPanels: panels,
         cutPanels: 0,
         panelsToPurchase: panels,
         withReserve,
-        coverageArea: area.toFixed(2),
-        netArea: area.toFixed(2),
+        coverageArea: pricedArea.toFixed(2),
+        netArea: pricedArea.toFixed(2),
         dowels: { base: panels * RESERVES.dowelsPerPanel, withReserve: dowels },
         totalCost: cost,
       },
@@ -2149,7 +2183,10 @@ async function publishCalcToCabinet(options = {}) {
     panels,
     dowels,
     areaM2: Math.round(area * 10) / 10,
-    panelsCost: state.bom?.ceiling?.stats?.totalCost ?? null,
+    panelsCost: state.bom?.ceiling?.stats?.totalCost ?? state.bom?.total?.totalCost ?? null,
+    installCost: state.bom?.total?.installCost ?? null,
+    dowelsCost: state.bom?.total?.dowelsCost ?? null,
+    grandTotal: state.bom?.total?.grandTotal ?? null,
   };
   if (withPdf && state.bom) {
     try {
@@ -2157,7 +2194,7 @@ async function publishCalcToCabinet(options = {}) {
       const input = await collectPdfInput();
       const file = await exportCalculationPDF({
         ...input,
-        hidePrices: false,
+        hidePrices: getPartnerPricing().hidePrices,
         download: false,
         fileLabel: params.get('client') || '',
       });
@@ -2196,7 +2233,7 @@ async function handlePDF() {
   trackPartnerCalcEvent('pdf');
   const file = await exportCalculationPDF({
     ...input,
-    hidePrices: false,
+    hidePrices: getPartnerPricing().hidePrices,
     download: false,
     fileLabel: new URLSearchParams(window.location.search).get('client') || '',
   });
@@ -2398,8 +2435,17 @@ function initTheme() {
   }
 }
 
+function lockHiddenPrices() {
+  if (!getPartnerPricing().hidePrices) return;
+  document.body.classList.add('hide-prices');
+  document.querySelector('[data-stat="cost"]')?.remove();
+  document.querySelector('.workspace-section--panel-info')?.remove();
+  document.getElementById('partnerCalcBanner')?.remove();
+  document.getElementById('partnerTotalCard')?.remove();
+}
+
 function mountPartnerBanner() {
-  if (!PARTNER_PRICING.enabled) return;
+  if (!PARTNER_PRICING.enabled || getPartnerPricing().hidePrices) return;
   if (document.getElementById('partnerCalcBanner')) return;
   const banner = document.createElement('div');
   banner.id = 'partnerCalcBanner';
@@ -2416,7 +2462,7 @@ function mountPartnerBanner() {
 
 /** Replace store CTA with green «Итого» card — one grand total; breakdown lives in results. */
 function mountPartnerTotalCard() {
-  if (!PARTNER_PRICING.enabled) return;
+  if (!PARTNER_PRICING.enabled || getPartnerPricing().hidePrices) return;
   if (document.getElementById('partnerTotalCard')) return;
   const buy = document.getElementById('buyMultiframeBtn');
   if (!buy) return;
@@ -2434,6 +2480,7 @@ function mountPartnerTotalCard() {
 }
 
 function init() {
+  lockHiddenPrices();
   mountPartnerBanner();
   mountPartnerTotalCard();
   cacheElements();

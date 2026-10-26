@@ -31,11 +31,13 @@ function partnerExtras(areaM2, dowels) {
 
 function resolveCoveredAreaM2(bom) {
   const area = Number(bom.ceiling?.area ?? 0);
-  if (area > 0) return area;
-  const fromStats = Number(bom.ceiling?.stats?.netArea ?? bom.ceiling?.stats?.coverageArea ?? 0);
-  if (fromStats > 0) return fromStats;
-  const panels = bom.ceiling?.stats?.withReserve ?? 0;
-  return panels > 0 ? panels * PANEL_COVERAGE_AREA : 0;
+  const raw =
+    area > 0
+      ? area
+      : Number(bom.ceiling?.stats?.netArea ?? bom.ceiling?.stats?.coverageArea ?? 0) ||
+        (bom.ceiling?.stats?.withReserve > 0 ? bom.ceiling.stats.withReserve * PANEL_COVERAGE_AREA : 0);
+  if (!(raw > 0)) return 0;
+  return Math.round(raw * 100) / 100;
 }
 
 export function buildBOM({ room, ceilingResult, options }) {
@@ -210,7 +212,7 @@ export function renderResultsHtml(bom, { mode = null } = {}) {
     const area = s.netArea ?? s.coverageArea ?? bom.ceiling.area;
     const meta = areaMode
       ? `Оценка по площади · ${fmtArea(area)}`
-      : `${esc(bom.ceiling.schemeName || 'Схема')} · ${esc(bom.ceiling.mountingLabel || '')} · ${fmtArea(area)}`;
+      : `${esc(bom.ceiling.schemeName || 'Схема')} · ${fmtArea(area)}`;
 
     parts.push(`
       <section class="rb-block">
@@ -278,7 +280,7 @@ export function renderResultsHtml(bom, { mode = null } = {}) {
       </section>`);
   }
 
-  if (getPartnerPricing().enabled && bom.total) {
+  if (getPartnerPricing().enabled && bom.total && !getPartnerPricing().hidePrices) {
     const pricing = getPartnerPricing();
     const panelsRub = Math.round(bom.total.totalCost ?? 0);
     const installRub = Math.round(bom.total.installCost ?? 0);
@@ -339,7 +341,7 @@ export function formatResultsText(bom, room, { mode = null } = {}) {
       lines.push(`Оценка по площади · ${fmtArea(area)}`);
       lines.push(`Панелей: ${s.panelsToPurchase ?? s.fullPanels ?? 0}`);
     } else {
-      lines.push(`${bom.ceiling.schemeName} · ${bom.ceiling.mountingLabel}`);
+      lines.push(bom.ceiling.schemeName || 'Схема');
       const cut = s.cutPanels ?? 0;
       lines.push(cut > 0
         ? `${s.fullPanels ?? 0} целых + ${cut} с подрезкой`
@@ -356,9 +358,7 @@ export function formatResultsText(bom, room, { mode = null } = {}) {
   if (bom.walls?.stats) {
     const s = bom.walls.stats;
     lines.push('Стены');
-    lines.push(areaMode
-      ? `Оценка по площади · ${fmtArea(bom.walls.area)}`
-      : `${bom.walls.mountingLabel} · ${fmtArea(bom.walls.area)}`);
+    lines.push(`Оценка по площади · ${fmtArea(bom.walls.area)}`);
     const cut = s.cutPanels ?? 0;
     lines.push((areaMode || cut === 0)
       ? `Панелей: ${s.panelsToPurchase ?? s.fullPanels ?? 0}`

@@ -62,6 +62,35 @@ test('площадь расчёта остаётся у своей комнат�
   assert.notEqual(kitchen.room?.areaM2, bedroom.room?.areaM2);
 });
 
+test('смена площади помечает прежнюю сводку устаревшей', () => {
+  const patch = objectPatchFromCalc(
+    { type: 'mf-cabinet-calc', areaM2: 24, panels: 59, dowels: 136, hasScheme: false, grandTotal: 180000 },
+    {
+      id: 'room-1',
+      orgId: 'org',
+      createdAt: '',
+      updatedAt: '',
+      createdBy: 'u',
+      assignedTo: null,
+      status: 'draft',
+      clientName: 'Тест Т.',
+      clientPhone: '',
+      address: '',
+      city: '',
+      room: { areaM2: 17 },
+      estimate: null,
+      clientSummary: 'Тест Т. · 17 м² · адрес',
+      history: [],
+    },
+    null,
+    'room-1',
+  );
+  assert.equal(patch.room?.areaM2, 24);
+  assert.match(patch.clientSummary || '', /устарела, пересоберите/);
+  assert.doesNotMatch(patch.clientSummary || '', /17 м²/);
+  assert.equal(patch.estimate?.totalCost, 180000);
+});
+
 test('привязка к проекту не пропадает, если PATCH её не прислал', () => {
   assert.deepEqual(
     carriedObjectLink({ status: 'measured' }, {

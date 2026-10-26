@@ -16,6 +16,17 @@ export function canMoveRoom(role: UserRole, target: JobObjectStatus) {
   return canMoveObjects(role) && KANBAN_STAGES.includes(target);
 }
 
+/** Заголовок карточки: клиент и комната. Без своего названия комнаты клиент не повторяется. */
+export function roomCardTitle(
+  room: { roomName?: string | null },
+  clientName: string | null | undefined,
+): string {
+  const client = clientName?.trim() || 'Клиент';
+  const named = room.roomName?.trim();
+  if (!named || named === 'Комната' || named === 'Помещение' || named === client) return client;
+  return `${client} · ${named}`;
+}
+
 /** Имя в меню карточки: своё название комнаты, иначе клиент. Заглушка «Комната» не заменяет имя. */
 export function roomDisplayName(room: { roomName?: string | null; clientName?: string | null }): string {
   const named = room.roomName?.trim();

@@ -111,7 +111,7 @@ export async function createMaterialFolder(
 
 async function filePayload(file: File): Promise<{ mime: string; contentBase64: string }> {
   if (file.size > MAX_FILE_BYTES) {
-    throw new Error('Файл больше 2 МБ. Крупнее текущий шлюз API не примет.');
+    throw new Error('Файл больше 2 МБ. Сервер такой файл не примет.');
   }
   const contentBase64 = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();

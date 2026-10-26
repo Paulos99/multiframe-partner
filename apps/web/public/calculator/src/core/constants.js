@@ -59,6 +59,14 @@ function partnerString(name) {
   }
 }
 
+function partnerFlag(name) {
+  try {
+    return new URLSearchParams(window.location.search).get(name) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function numOrNull(v) {
   if (v == null || v === '') return null;
   const n = Number(v);
@@ -72,7 +80,8 @@ function numOrNull(v) {
 export function getPartnerPricing() {
   const stored = readStoredPartner();
   const org = readSessionOrg();
-  // Цены видят все роли. Старый ?hidePrices=1 больше ничего не прячет.
+  // Монтажник открывает калькулятор с ?hidePrices=1: суммы не показываем.
+  const hidePrices = partnerFlag('hidePrices');
   const partnerPanel = partnerParam('panelPrice') ?? numOrNull(stored?.panelPrice) ?? null;
   const partnerM2 = partnerParam('pricePerM2') ?? numOrNull(stored?.pricePerM2) ?? null;
   const partnerDowels =
@@ -107,7 +116,7 @@ export function getPartnerPricing() {
     dowelsPerPanel: partnerDowels && partnerDowels > 0 ? partnerDowels : 2,
     company: partnerCompany,
     enabled: isPartnerMode,
-    hidePrices: false,
+    hidePrices,
     officialPanelPrice: OFFICIAL_PANEL,
     officialPricePerM2: OFFICIAL_M2,
   };
@@ -153,6 +162,9 @@ export const PARTNER_PRICING = {
   },
   get enabled() {
     return getPartnerPricing().enabled;
+  },
+  get hidePrices() {
+    return getPartnerPricing().hidePrices;
   },
   officialPanelPrice: OFFICIAL_PANEL,
   officialPricePerM2: OFFICIAL_M2,

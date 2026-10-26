@@ -221,6 +221,7 @@ function makeObject(
   createdBy: string,
   measurer: string,
   crew: string,
+  sales: string,
 ): JobObject {
   const createdAt = daysAgo(spec.day, 9, 30);
   const quoteAt = daysAgo(Math.max(0, spec.day - 3), 14, 0);
@@ -249,7 +250,13 @@ function makeObject(
     createdAt,
     updatedAt,
     createdBy,
-    assignedTo: ['install', 'closed'].includes(spec.status) ? crew : measurer,
+    assignedTo: ['install', 'closed'].includes(spec.status)
+      ? crew
+      : spec.status === 'measured'
+        ? measurer
+        : spec.status === 'quote_sent'
+          ? sales
+          : null,
     status: spec.status,
     clientName: spec.clientName,
     clientPhone: spec.phone,
@@ -305,12 +312,12 @@ export function buildLocalDemoOrgs(): DemoOrg[] {
 
 export function buildLocalDemoObjects(): JobObject[] {
   const moscow = SPECS_A.map((s) =>
-    makeObject(s, 'org_demo', 'Москва', 'u_partner1', 'u_exec1', s.id === 'obj_a04' ? 'u_crew1b' : 'u_crew1'),
+    makeObject(s, 'org_demo', 'Москва', 'u_partner1', 'u_exec1', s.id === 'obj_a04' ? 'u_crew1b' : 'u_crew1', 'u_sales1'),
   );
   return [
     ...moscow,
     ...SPECS_B.map((s) =>
-      makeObject(s, 'org_demo_spb', 'Санкт-Петербург', 'u_partner2', 'u_exec2', 'u_crew2'),
+      makeObject(s, 'org_demo_spb', 'Санкт-Петербург', 'u_partner2', 'u_exec2', 'u_crew2', 'u_sales2'),
     ),
   ];
 }

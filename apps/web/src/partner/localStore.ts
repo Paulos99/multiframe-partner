@@ -731,7 +731,7 @@ export function isObjectVisible(user: SessionUser, obj: JobObject): boolean {
 
 /**
  * Remote cache visibility matches the API: owner and sales see the company,
- * measurer sees own rows, crew sees assignments and монтаж.
+ * measurer and crew see only rooms assigned to them.
  */
 export function presentCachedObject(user: SessionUser, obj: JobObject): JobObject | null {
   if (!objectVisible(user, obj)) return null;
@@ -744,7 +744,7 @@ function objectVisible(user: SessionUser, obj: JobObject): boolean {
   if (user.role === 'owner') return true;
   if (user.role === 'sales') return true;
   if (user.role === 'measurer') {
-    return obj.createdBy === user.id || obj.assignedTo === user.id;
+    return obj.assignedTo === user.id;
   }
   if (user.role === 'crew') {
     return obj.assignedTo === user.id;

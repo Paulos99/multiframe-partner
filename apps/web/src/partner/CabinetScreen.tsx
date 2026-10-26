@@ -38,14 +38,14 @@ function SyncBadge() {
 
 function InstallHint() {
   return (
-    <div className={styles.hintCard}>
-      <h2>Офлайн на планшете / телефоне</h2>
+    <details className={styles.docBlock}>
+      <summary>Офлайн на планшете и телефоне</summary>
       <p className={styles.lead}>
         Установите кабинет на устройство: в Chrome — «Установить приложение», на iPhone —
         «Поделиться → На экран Домой». После первого открытия прайс и комнаты доступны без сети;
         отправка на сервер встаёт в очередь.
       </p>
-    </div>
+    </details>
   );
 }
 
@@ -393,7 +393,7 @@ function OwnerCabinet({
   const user = api.user!;
   const [tab, setTab] = useState<OwnerTab>(() => {
     consumeReturnToTools();
-    return 'today';
+    return api.openedObjectId ? 'projects' : 'today';
   });
   const [createToken, setCreateToken] = useState(0);
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
@@ -627,7 +627,7 @@ function SalesCabinet({
   const [createToken, setCreateToken] = useState(0);
   const [tab, setTab] = useState<'today' | 'projects' | 'analytics' | 'help'>(() => {
     consumeReturnToTools();
-    return 'today';
+    return api.openedObjectId ? 'projects' : 'today';
   });
 
   const salesNav: SideItem[] = [
@@ -703,7 +703,7 @@ function FieldCabinet({
   const user = api.user!;
   const [view, setView] = useState<'today' | 'projects' | 'help'>(() => {
     consumeReturnToTools();
-    return 'today';
+    return api.openedObjectId ? 'projects' : 'today';
   });
 
   return (

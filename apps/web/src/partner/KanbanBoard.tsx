@@ -40,6 +40,7 @@ import {
 import {
   canMoveRoom,
   roomCountLabel,
+  roomCardTitle,
   roomDisplayName,
   KANBAN_STAGES,
   sortRooms,
@@ -374,8 +375,7 @@ export function KanbanBoard({
     return (
       <>
         <strong>
-          {project?.clientName || room.clientName || 'Клиент'} ·{' '}
-          {roomDisplayName(room)}
+          {roomCardTitle(room, project?.clientName || room.clientName)}
         </strong>
         <small>
           {(project?.address || room.address || '').trim() || 'Добавить адрес'}
@@ -388,7 +388,7 @@ export function KanbanBoard({
             })}
           </span>
           <span title="Документы">{documentKindsSummary(room.documents) || 'Без PDF'}</span>
-          <span>{room.room.areaM2 ?? '—'} м²</span>
+          <span>{room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'площадь не указана'}</span>
         </div>
         {room.pendingSync && <small>↻ Ожидает синхронизации</small>}
       </>

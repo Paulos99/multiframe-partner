@@ -8,6 +8,7 @@ import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
 import { type SessionUser } from '../../../packages/shared/partner';
 import { isCabinetCalcMessage } from './partner/cabinetCalc';
+import { sessionFromRoom } from './partner/roomLink';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
@@ -151,13 +152,32 @@ function ToolChrome({
 }
 
 function PartnerShell() {
-  const { user, ready, noteTool, logout, objects, calcRequest, requestCalculator, diagnosisRequest, clearDiagnosis, applyCalculation } =
-    usePartner();
+  const {
+    user,
+    ready,
+    noteTool,
+    logout,
+    objects,
+    calcRequest,
+    requestCalculator,
+    diagnosisRequest,
+    clearDiagnosis,
+    applyCalculation,
+    openObject,
+    cabinetLeaveNonce,
+  } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
 
   const userId = user?.id ?? '';
+  const seenLeave = useRef(0);
+  useEffect(() => {
+    if (cabinetLeaveNonce === seenLeave.current) return;
+    seenLeave.current = cabinetLeaveNonce;
+    setRoute('cabinet');
+  }, [cabinetLeaveNonce]);
+
   useEffect(() => {
     setCalcObjectId(null);
     setCalcNotice(null);
@@ -220,12 +240,19 @@ function PartnerShell() {
     ? objects.find((obj) => obj.id === calcObjectId)?.clientName || ''
     : '';
 
+  const diagnosisSeed = useMemo(() => {
+    if (!diagnosisRequest) return null;
+    const room = objects.find((obj) => obj.id === diagnosisRequest.objectId);
+    return room ? sessionFromRoom(room) : null;
+  }, [diagnosisRequest, objects]);
+
   const calcSrc = useMemo(() => {
     if (!user) return '';
     return calcUrlFromOrg(user.org, user.org?.companyName, {
       objectId: calcObjectId,
       clientName: calcClientName,
       areaM2: calcRequest?.objectId === calcObjectId ? calcRequest?.areaM2 : null,
+      hidePrices: user.role === 'crew',
     });
   }, [
     user,
@@ -275,7 +302,12 @@ function PartnerShell() {
         company={user.org?.companyName || user.displayName}
         caption={toolCaption(user)}
         notice={route === 'calculator' ? calcNotice : null}
-        onCabinet={() => setRoute('cabinet')}
+        onCabinet={() => {
+          const roomId = route === 'calculator' ? calcObjectId : diagnosisRequest?.objectId || null;
+          openObject(roomId);
+          clearDiagnosis();
+          setRoute('cabinet');
+        }}
         onLogout={logout}
       />
     );
@@ -307,7 +339,7 @@ function PartnerShell() {
           <div className={styles.toolBody}>
             <div className={styles.toolFill}>
               <SmoothScroll>
-                <SessionProvider>
+                <SessionProvider key={diagnosisRequest?.nonce ?? 'plain'} seed={diagnosisSeed}>
                   <AppShell />
                   <CookieNotice />
                 </SessionProvider>

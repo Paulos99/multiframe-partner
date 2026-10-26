@@ -70,7 +70,7 @@ export const MULTIFRAME_PILLARS = [
   },
   {
     title: 'Быстрый монтаж',
-    text: 'Сначала панели, затем натяжное полотно — без каркаса и без долгой стройки.',
+    text: 'Сначала панели, затем натяжное полотно — без долгой стройки.',
   },
   {
     title: 'Универсальность',
@@ -226,7 +226,7 @@ function saveBlob(blob: Blob, filename: string) {
 
 export function useResultProfile() {
   const { session, restart } = useSession();
-  const { diagnosisRequest, objects, attachProfile } = usePartner();
+  const { diagnosisRequest, objects, attachProfile, user } = usePartner();
   const room = session.answers.room;
   const sim = session.derived?.simulation ?? deriveSimulation(session.answers);
   const hybridBefore = comfortClassFor(sim.before.Rw, sim.before.Lnw);
@@ -300,7 +300,9 @@ export function useResultProfile() {
 
   function openCalc() {
     track('pm_cta_calc', eventParamsFromSession(session));
-    window.open(calcUrl, '_blank', 'noopener,noreferrer');
+    const url = new URL(calcUrl, window.location.origin);
+    if (user?.role === 'crew') url.searchParams.set('hidePrices', '1');
+    window.open(url.toString(), '_blank', 'noopener,noreferrer');
   }
 
   function openConsultation() {
@@ -315,7 +317,10 @@ export function useResultProfile() {
     setPdfBusy(true);
     setPdfError(false);
     try {
-      const { blob, filename } = await renderAcousticProfilePdf(session, { compact: true });
+      const { blob, filename } = await renderAcousticProfilePdf(session, {
+        compact: true,
+        hidePrices: user?.role === 'crew',
+      });
       saveBlob(blob, filename);
       const objectId = diagnosisRequest?.objectId;
       const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;

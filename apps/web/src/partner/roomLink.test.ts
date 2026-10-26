@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { JobObject } from '../../../../packages/shared/partner.ts';
 import { calcUrlFromOrg } from './calcUrl.ts';
-import { answersFromStoredRoom, linkCalcToRoom, roomRecordFromAnswers } from './roomLink.ts';
+import { answersFromStoredRoom, linkCalcToRoom, roomRecordFromAnswers, sessionFromRoom } from './roomLink.ts';
 
 const room = {
   roomType: 'bedroom' as const,
@@ -60,6 +60,16 @@ test('проект → проблемомер: площадь комнаты п�
   assert.equal(back?.ceilingAreaM2, 22);
   assert.equal(back?.roomType, 'kids');
   assert.equal(back?.plannedCeiling, 'stretch');
+});
+
+test('комната «Спальня» без типа открывает вопрос с площадью и спальней', () => {
+  const session = sessionFromRoom({
+    roomName: 'Спальня',
+    room: { areaM2: 24, roomTypeCustom: '' },
+  });
+  assert.equal(session.answers.room.roomType, 'bedroom');
+  assert.equal(session.answers.room.ceilingAreaM2, 24);
+  assert.equal(session.answers.room.plannedCeiling, 'stretch');
 });
 
 test('проект → калькулятор: в ссылке уже стоит площадь комнаты', () => {

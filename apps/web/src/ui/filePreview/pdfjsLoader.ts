@@ -11,10 +11,17 @@ export function loadPdfJs(): Promise<PdfJs> {
   if (!pending) {
     pending = Promise.all([
       import('pdfjs-dist/legacy/build/pdf.mjs'),
-      import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'),
+      // Обычный чанк приложения, не Worker: модульный воркер в Chromium падает
+      // на blob:-адресе (ERR_FILE_NOT_FOUND) и предпросмотр пишет «Не удалось открыть PDF».
+      import('pdfjs-dist/legacy/build/pdf.worker.min.mjs'),
     ])
       .then(([lib, worker]) => {
-        lib.GlobalWorkerOptions.workerSrc = worker.default;
+        const host = globalThis as typeof globalThis & {
+          pdfjsWorker?: { WorkerMessageHandler?: unknown };
+        };
+        host.pdfjsWorker = worker;
+        // Адрес воркера больше не используется: страницы считаются на этой вкладке.
+        lib.GlobalWorkerOptions.workerSrc = 'main-thread';
         return lib;
       })
       .catch((error: unknown) => {

@@ -210,8 +210,11 @@ type PartnerApi = {
   requestDiagnosis: (objectId: string) => void;
   clearDiagnosis: () => void;
   diagnosisRequest: { objectId: string; nonce: number } | null;
-  openObject: (id: string) => void;
+  openObject: (id: string | null) => void;
   openedObjectId: string | null;
+  /** Закрыть инструмент и открыть карточку комнаты, из которой пришли. */
+  leaveToCabinet: (objectId?: string | null) => void;
+  cabinetLeaveNonce: number;
   attachCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
   /** Площадь и, если PDF уже собран, смета — в существующую комнату. Новую комнату не создаёт и никому не шлёт. */
   applyCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
@@ -249,6 +252,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [projectsUnavailable, setProjectsUnavailable] = useState(false);
   const [diagnosisRequest, setDiagnosisRequest] = useState<{ objectId: string; nonce: number } | null>(null);
   const [openedObjectId, setOpenedObjectId] = useState<string | null>(null);
+  const [cabinetLeaveNonce, setCabinetLeaveNonce] = useState(0);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const [calculations, setCalculations] = useState<CachedCalculation[]>([]);
@@ -823,7 +827,13 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   const clearDiagnosis = useCallback(() => setDiagnosisRequest(null), []);
 
-  const openObject = useCallback((id: string) => setOpenedObjectId(id), []);
+  const openObject = useCallback((id: string | null) => setOpenedObjectId(id), []);
+
+  const leaveToCabinet = useCallback((objectId?: string | null) => {
+    if (objectId) setOpenedObjectId(objectId);
+    setDiagnosisRequest(null);
+    setCabinetLeaveNonce((n) => n + 1);
+  }, []);
 
   const requestCalculator = useCallback((objectId: string | null) => {
     const areaM2 = objectId ? objects.find(obj => obj.id === objectId)?.room.areaM2 : null;
@@ -1028,6 +1038,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       diagnosisRequest,
       openObject,
       openedObjectId,
+      leaveToCabinet,
+      cabinetLeaveNonce,
       attachCalculation,
       applyCalculation,
       attachProfile,
@@ -1080,6 +1092,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       diagnosisRequest,
       openObject,
       openedObjectId,
+      leaveToCabinet,
+      cabinetLeaveNonce,
       attachCalculation,
       applyCalculation,
       attachProfile,

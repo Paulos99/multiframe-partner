@@ -423,7 +423,7 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
           <p className={styles.lead}>
             {dash.source === 'api'
               ? 'Данные с сервера'
-              : 'Только этот браузер (API недоступен)'}
+              : 'Только этот браузер, сервер недоступен'}
             {` · ${formatPeriodLabel(fromYmd, toYmd)}`}
           </p>
         </div>

@@ -67,14 +67,18 @@ test('карточки открывают нужный инструмент, «�
   expect(errors).toEqual([]);
 });
 
-test('монтажник: калькулятор с ценами, как у всех', async ({ page }) => {
+test('монтажник: калькулятор без цен', async ({ page }) => {
   await enter(page, 'crew');
   await expect(page.getByText('спецификац', { exact: false })).toHaveCount(0);
   await page.getByRole('button', { name: 'Калькулятор', exact: true }).click();
   const frame = page.locator('iframe[title="Калькулятор MultiFrame · партнёр"]');
   await expect(frame).toBeVisible();
-  await expect(frame).not.toHaveAttribute('src', /hidePrices/);
-  await expect(frame).toHaveAttribute('src', /panelPrice=2396/);
+  await expect(frame).toHaveAttribute('src', /hidePrices=1/);
+  await expect(frame).not.toHaveAttribute('src', /panelPrice|pricePerM2|installPerM2|dowelPrice/);
+  const calc = page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]');
+  await expect(calc.getByRole('heading', { name: 'Что вы знаете о помещении?' })).toBeVisible();
+  await expect(calc.locator('body')).toHaveClass(/hide-prices/);
+  await expect(calc.locator('body')).not.toContainText('₽');
 });
 
 for (const vp of [

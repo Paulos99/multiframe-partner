@@ -13,6 +13,7 @@ import {
 } from './resultShared';
 import { PartnerEstimateCard } from '../../partner/PartnerEstimateCard';
 import { SaveObjectCard } from '../../partner/SaveObjectCard';
+import { usePartner } from '../../partner/PartnerContext';
 import styles from './ResultWideScreen.module.css';
 
 /** Flip to true to restore frequency charts if clients ask. */
@@ -147,6 +148,8 @@ function useScrollDrift() {
 }
 
 export function ResultWideScreen() {
+  const { diagnosisRequest, leaveToCabinet } = usePartner();
+  const linkedRoom = Boolean(diagnosisRequest?.objectId);
   const { goBack } = useSession();
   const p = useResultProfile();
   const rootRef = useScrollDrift();
@@ -410,7 +413,6 @@ export function ResultWideScreen() {
       ) : null}
 
       <PartnerEstimateCard areaM2={p.room.ceilingAreaM2} />
-      <SaveObjectCard />
 
       <div className={styles.closeRow}>
         <section className={styles.panel} data-reveal aria-label="Уникальность системы MultiFrame">
@@ -435,13 +437,34 @@ export function ResultWideScreen() {
         >
           <h2>Следующий шаг</h2>
           <p className={styles.panelLead}>
-            Подберите комплектацию MultiFrame или запросите консультацию.
+            {linkedRoom
+              ? 'Результат запишется в эту комнату.'
+              : 'Сохраните комнату. Остальные шаги — по желанию.'}
           </p>
+          <SaveObjectCard />
+          {linkedRoom ? (
+            <details className={styles.moreActions}>
+              <summary>Другие действия</summary>
+              <div className={styles.moreLinks}>
+                <button type="button" onClick={p.openCalc}>Рассчитать количество</button>
+                <button type="button" onClick={p.openConsultation}>Консультация</button>
+                <button type="button" disabled={p.pdfBusy} onClick={() => void p.onDownloadProfile()}>
+                  {p.pdfBusy ? 'Готовим PDF…' : 'PDF'}
+                </button>
+                <button type="button" onClick={() => void p.onShare()}>{p.shareLabel}</button>
+              </div>
+              {p.pdfError ? (
+                <p className={styles.pdfError} role="alert">
+                  Не удалось скачать. Разрешите всплывающие окна и нажмите ещё раз.
+                </p>
+              ) : null}
+            </details>
+          ) : (
           <div className={styles.nextActions}>
-            <Button fullWidth onClick={p.openCalc}>
+            <Button variant="ghost" fullWidth onClick={p.openCalc}>
               Рассчитать количество MultiFrame
             </Button>
-            <Button variant="secondary" fullWidth onClick={p.openConsultation}>
+            <Button variant="ghost" fullWidth onClick={p.openConsultation}>
               Запросить консультацию или подбор
             </Button>
             <div className={styles.splitActions}>
@@ -462,11 +485,22 @@ export function ResultWideScreen() {
               </p>
             ) : null}
           </div>
+          )}
         </section>
       </div>
 
       <nav className={styles.footerActions} aria-label="Действия после расчёта">
-        <button type="button" className={styles.footerBtn} onClick={goBack}>
+        <button
+          type="button"
+          className={styles.footerBtn}
+          onClick={() => {
+            if (linkedRoom && diagnosisRequest?.objectId) {
+              leaveToCabinet(diagnosisRequest.objectId);
+              return;
+            }
+            goBack();
+          }}
+        >
           <span className={styles.footerBtnIcon} aria-hidden>
             ←
           </span>

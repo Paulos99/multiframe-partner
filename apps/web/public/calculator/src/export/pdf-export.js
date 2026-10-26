@@ -141,11 +141,8 @@ function buildSchemeSummaryBody({ bom, room, dateStr, planImage, hidePrices = fa
 
   const paramsBlock = statsBlock(
     [
-      { label: 'Форма помещения', value: `Полигон, ${sizeLabel}` },
-      { label: 'Высота стен', value: `${room.wallHeight.toFixed(2)} м` },
+      { label: 'Форма помещения', value: `${roomShapeLabel(room)}, ${sizeLabel}` },
       { label: 'Площадь потолка', value: `${room.getTotalArea().toFixed(2)} м²` },
-      { label: 'Площадь стен (чистая)', value: `${room.getTotalWallArea().toFixed(2)} м²` },
-      { label: 'Проёмов', value: `${room.openings.length} шт.` },
       { label: 'Размер панели', value: '0,75×0,55 м' },
     ],
     { compact: true }
@@ -165,9 +162,6 @@ function buildSchemeSummaryBody({ bom, room, dateStr, planImage, hidePrices = fa
       ${statsBlock(totalsRows, { compact: true, columns: 2 })}
       <h2 style="font-size:12px;color:${BRAND};margin:4px 0 2px;flex-shrink:0">Состав отчёта</h2>
       <ul style="font-size:10px;line-height:1.45;margin:0;padding-left:16px;color:#333;flex-shrink:0">${surfacesList}</ul>
-      <p style="font-size:9px;color:#8899a4;margin:6px 0 0;line-height:1.35;flex-shrink:0">
-        Каждая поверхность — на отдельной странице со схемой укладки и спецификацией.
-      </p>
     </div>`;
 }
 
@@ -216,7 +210,7 @@ function totalsRowsList(bom, hidePrices = false) {
   return [
     bom.ceiling
       ? {
-          label: `Потолок (${bom.ceiling.mountingLabel})`,
+          label: 'Потолок',
           value: hidePrices
             ? `${bom.ceiling.stats.withReserve} пан.`
             : `${bom.ceiling.stats.withReserve} пан. · ${formatRub(bom.ceiling.stats.totalCost)}`,
@@ -252,6 +246,80 @@ function totalsRowsList(bom, hidePrices = false) {
   ];
 }
 
+/** Прямоугольник, если площадь совпадает с описанным прямоугольником. Иначе — произвольная форма. */
+export function roomShapeLabel(room) {
+  const vertices = room?.vertices ?? [];
+  if (!vertices.length) return 'Произвольная';
+  const bounds = getBounds(vertices);
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  const box = width * height;
+  const area = typeof room.getTotalArea === 'function' ? Number(room.getTotalArea()) : 0;
+  if (vertices.length === 4 && box > 0 && area > 0 && Math.abs(area - box) / box <= 0.04) {
+    return 'Прямоугольная';
+  }
+  return 'Произвольная';
+}
+
+/** Текст сметы для слоя PDF: без каркаса, стен и слова «полигон». */
+export function pdfPlainLines({ bom, room, hidePrices = false, areaEstimate = false }) {
+  const lines = [];
+  if (!areaEstimate && room) lines.push(`Форма помещения: ${roomShapeLabel(room)}`);
+  if (bom?.ceiling) {
+    lines.push('Потолок');
+    const area = Number(bom.ceiling.area ?? 0);
+    if (area > 0) lines.push(`Площадь: ${area.toFixed(2)} м²`);
+    if (bom.ceiling.schemeName) lines.push(`Схема укладки: ${bom.ceiling.schemeName}`);
+  }
+  for (const row of totalsRowsList(bom, hidePrices).filter(Boolean)) {
+    lines.push(`${row.label}: ${row.value}`);
+  }
+  return lines;
+}
+
+let fontCache = null;
+
+async function liberationBase64() {
+  if (fontCache) return fontCache;
+  const url = new URL('../../fonts/LiberationSans-Regular.ttf', import.meta.url);
+  let bytes;
+  if (url.protocol === 'file:') {
+    const { readFile } = await import('node:fs/promises');
+    bytes = await readFile(url);
+  } else {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Шрифт сметы не открылся');
+    bytes = new Uint8Array(await res.arrayBuffer());
+  }
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  fontCache = btoa(binary);
+  return fontCache;
+}
+
+/** Кладёт строки в PDF как настоящий текст, чтобы их можно было найти в файле. */
+export async function stampQuoteText(doc, lines) {
+  const usable = (lines || []).map((line) => String(line || '').trim()).filter(Boolean);
+  if (!usable.length) return;
+  if (!doc.__mfFont) {
+    const b64 = await liberationBase64();
+    doc.addFileToVFS('LiberationSans-Regular.ttf', b64);
+    doc.addFont('LiberationSans-Regular.ttf', 'Liberation', 'normal');
+    doc.__mfFont = true;
+  }
+  doc.setFont('Liberation', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(21, 32, 24);
+  usable.forEach((line, index) => {
+    const y = 18 + index * 5;
+    // Знак рубля в этом шрифте jsPDF не вкладывает в файл, слово «руб.» остаётся в тексте.
+    if (y < 280) doc.text(line.replaceAll('₽', 'руб.'), 14, y);
+  });
+}
+
 /** Строки сметы для проверки: без цен у монтажника нет знака рубля. */
 export function ceilingQuoteLine(bom, hidePrices = false) {
   return totalsRowsList(bom, hidePrices)
@@ -272,7 +340,6 @@ function buildCeilingBody({ bom, ceilingImage, hidePrices = false }) {
   const s = bom.ceiling.stats;
   const frame = bom.ceiling.frame;
   const rows = [
-    { label: 'Монтаж', value: bom.ceiling.mountingLabel },
     { label: 'Схема укладки', value: bom.ceiling.schemeName },
     { label: 'Площадь', value: `${bom.ceiling.area.toFixed(2)} м²` },
     { label: 'Панелей', value: `${s.total} шт. (${s.fullPanels} целых + ${s.cutPanels} подрез.)` },
@@ -360,7 +427,7 @@ function buildWallBody({ wr, stats, image, mountingLabel, areaEstimate = false, 
     </div>`;
 }
 
-async function renderPageToPdf(doc, html, { isFirstPage, pageW, pageH }) {
+async function renderPageToPdf(doc, html, { isFirstPage, pageW, pageH, lines = [] }) {
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff;';
   container.innerHTML = html;
@@ -397,6 +464,13 @@ async function renderPageToPdf(doc, html, { isFirstPage, pageW, pageH }) {
 
   if (!isFirstPage) doc.addPage();
 
+  // Сначала текст, затем картинка страницы закрывает его. Слова остаются в файле.
+  try {
+    await stampQuoteText(doc, lines);
+  } catch {
+    /* снимок страницы всё равно сохранится */
+  }
+
   const imgData = canvas.toDataURL('image/jpeg', 0.92);
   doc.addImage(imgData, 'JPEG', 0, 0, pageW, pageH);
 }
@@ -412,6 +486,17 @@ function pdfFileName({ hidePrices, fileLabel, fileDate }) {
     ? String(fileDate).slice(0, 10)
     : new Date().toISOString().slice(0, 10);
   return `${who} — ${kind} — ${day}.pdf`;
+}
+
+/** HTML страниц сметы: для проверки, что в картинке нет каркаса и «полигона». */
+export function pdfReportHtml({ bom, room, hidePrices = false, areaEstimate = false }) {
+  const dateStr = '01.01.26';
+  return [
+    areaEstimate
+      ? buildAreaSummaryBody({ bom, dateStr, hidePrices })
+      : buildSchemeSummaryBody({ bom, room, dateStr, planImage: null, hidePrices }),
+    bom?.ceiling ? buildCeilingBody({ bom, ceilingImage: null, hidePrices }) : '',
+  ].join('\n');
 }
 
 export async function exportCalculationPDF({
@@ -493,9 +578,10 @@ export async function exportCalculationPDF({
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
+  const lines = pdfPlainLines({ bom, room, hidePrices, areaEstimate });
 
   for (let i = 0; i < pages.length; i += 1) {
-    await renderPageToPdf(doc, pages[i], { isFirstPage: i === 0, pageW, pageH });
+    await renderPageToPdf(doc, pages[i], { isFirstPage: i === 0, pageW, pageH, lines });
   }
 
   const filename = pdfFileName({ hidePrices, fileLabel, fileDate });

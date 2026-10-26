@@ -1,6 +1,7 @@
 import { Skeleton } from './Skeleton';
 import { m, AnimatePresence, motionPresets, usePrefersReducedMotion } from './motionBits';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   canManageStaff,
   ROLE_LABELS,
@@ -27,6 +28,16 @@ export function StaffPanel() {
   const [openId, setOpenId] = useState<string | null>(null);
   const staff = api.partnerListStaff();
 
+  useEffect(() => {
+    if (!openId) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      setOpenId(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openId]);
+
   if (!user || !canManageStaff(user.role)) return null;
 
   async function onCreateStaff(e: FormEvent) {
@@ -51,6 +62,8 @@ export function StaffPanel() {
       setSavingStaff(false);
     }
   }
+
+  const open = staff.find((member) => member.id === openId) || null;
 
   return (
     <section className={`${styles.card} ${styles.panelCard}`}>
@@ -119,35 +132,51 @@ export function StaffPanel() {
               type="button"
               className={styles.ghost}
               aria-expanded={openId === ex.id}
-              onClick={() => setOpenId(openId === ex.id ? null : ex.id)}
+              onClick={() => setOpenId(ex.id)}
             >
               <strong>{ex.displayName}</strong>
               <div className={styles.hint}>
                 {ex.login} · {ROLE_LABELS[ex.role] || ex.role}
               </div>
             </button>
-            {openId === ex.id ? (
-              <div className={styles.rowActions}>
-                <NewPasswordButton staffId={ex.id} staffName={ex.displayName} />
-                {ex.id === user.id ? null : (
-                  <button
-                    type="button"
-                    className={styles.danger}
-                    onClick={() => {
-                      if (confirm(`Удалить сотрудника «${ex.displayName}» (${ex.login})?`)) {
-                        void api.partnerDeleteStaff(ex.id);
-                      }
-                    }}
-                  >
-                    Удалить
-                  </button>
-                )}
-              </div>
-            ) : null}
           </m.div>
         ))}</AnimatePresence>
         {!api.staffLoading && !staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
       </div>
+      {open ? createPortal(
+        <>
+          <button type="button" className={styles.drawerBackdrop} aria-label="Закрыть карточку" onClick={() => setOpenId(null)} />
+          <aside className={styles.drawer} role="dialog" aria-label={open.displayName}>
+            <div className={styles.drawerHead}>
+              <div>
+                <h3>{open.displayName}</h3>
+                <p className={styles.lead}>
+                  {open.login} · {ROLE_LABELS[open.role] || open.role}
+                </p>
+              </div>
+              <button type="button" className={styles.ghost} onClick={() => setOpenId(null)}>
+                Закрыть
+              </button>
+            </div>
+            <NewPasswordButton staffId={open.id} staffName={open.displayName} />
+            {open.id === user.id ? null : (
+              <button
+                type="button"
+                className={styles.danger}
+                onClick={() => {
+                  if (confirm(`Удалить сотрудника «${open.displayName}» (${open.login})?`)) {
+                    void api.partnerDeleteStaff(open.id);
+                    setOpenId(null);
+                  }
+                }}
+              >
+                Удалить
+              </button>
+            )}
+          </aside>
+        </>,
+        document.body,
+      ) : null}
     </section>
   );
 }

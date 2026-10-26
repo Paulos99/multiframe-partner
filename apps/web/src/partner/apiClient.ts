@@ -38,7 +38,7 @@ async function request<T>(
   opts: RequestInit & { token?: string | null } = {},
 ): Promise<T> {
   const base = apiBase();
-  if (!base) throw new Error('API не настроен');
+  if (!base) throw new Error('Сервер не настроен');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(opts.headers as Record<string, string> | undefined),

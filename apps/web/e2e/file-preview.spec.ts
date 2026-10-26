@@ -1,24 +1,23 @@
 import { test, expect, type Page } from '@playwright/test';
+import { jsPDF } from 'jspdf';
 
 const password = 'ui-fixture-password-only';
 
-function tinyPdfBase64(): string {
-  const objs = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>',
-  ];
-  let body = '%PDF-1.4\n';
-  const offsets: number[] = [];
-  objs.forEach((o, i) => {
-    offsets.push(body.length);
-    body += `${i + 1} 0 obj\n${o}\nendobj\n`;
-  });
-  const xref = body.length;
-  body += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
-  offsets.forEach((off) => (body += `${String(off).padStart(10, '0')} 00000 n \n`));
-  body += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return Buffer.from(body, 'latin1').toString('base64');
+function imagePdfBase64(): string {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  doc.setFillColor(1, 100, 79);
+  doc.rect(40, 40, 220, 120, 'F');
+  doc.addImage(
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'PNG',
+    80,
+    70,
+    40,
+    40,
+  );
+  doc.setFontSize(16);
+  doc.text('Estimate page', 40, 200);
+  return Buffer.from(doc.output('arraybuffer')).toString('base64');
 }
 
 // 1×1 PNG.
@@ -31,7 +30,7 @@ const materials = [
   { id: 'mat_doc', parentId: null, kind: 'file', name: 'Договор.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 20480, stub: null, hasFile: true, updatedAt: '2026-10-01T00:00:00.000Z' },
 ];
 const content: Record<string, { name: string; mime: string; base64: string }> = {
-  mat_pdf: { name: 'Инструкция.pdf', mime: 'application/pdf', base64: tinyPdfBase64() },
+  mat_pdf: { name: 'Инструкция.pdf', mime: 'application/pdf', base64: imagePdfBase64() },
   mat_png: { name: 'Схема.png', mime: 'image/png', base64: PNG },
   mat_doc: { name: 'Договор.docx', mime: materials[2]!.mime, base64: Buffer.from('PK').toString('base64') },
 };
@@ -70,7 +69,22 @@ test('preview opens PDF and image, navigates with arrows and closes', async ({ p
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute('data-file-kind', 'pdf');
   // PDF рисует pdf.js на холсте — без iframe (мобильный браузер не показывает PDF во фрейме).
-  await expect(dialog.locator('[data-testid="pdf-preview"] canvas').first()).toBeAttached({ timeout: 20000 });
+  const canvas = dialog.locator('[data-testid="pdf-preview"] canvas').first();
+  await expect(canvas).toBeAttached({ timeout: 20000 });
+  await expect(dialog.getByText('Не удалось открыть PDF')).toHaveCount(0);
+  await expect.poll(async () =>
+    canvas.evaluate((node: HTMLCanvasElement) => {
+      const ctx = node.getContext('2d');
+      if (!ctx || node.width < 8 || node.height < 8) return 0;
+      const { data } = ctx.getImageData(0, 0, node.width, node.height);
+      let ink = 0;
+      const step = Math.max(16, Math.floor(data.length / 5000) * 4);
+      for (let i = 0; i < data.length; i += step) {
+        if ((data[i] ?? 255) < 245 || (data[i + 1] ?? 245) < 245 || (data[i + 2] ?? 245) < 245) ink += 1;
+      }
+      return ink;
+    }),
+  ).toBeGreaterThan(0);
   await expect(dialog.locator('iframe, object, embed')).toHaveCount(0);
   await expect(dialog.getByRole('link', { name: 'Скачать' })).toHaveAttribute('download', 'Инструкция.pdf');
   await expect(dialog.getByRole('link', { name: 'Открыть в новой вкладке' })).toHaveAttribute('target', '_blank');
