@@ -1246,15 +1246,14 @@
 
 .toolTitle {
   flex: 1 1 auto;
-  min-width: 6.8rem;
-  margin: 0 6px;
+  min-width: min-content;
+  margin: 0 4px;
   font-size: 0.95rem;
   font-weight: 750;
   letter-spacing: -0.01em;
   color: var(--cab-ink);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: clip;
+  overflow: visible;
 }
 
 .toolSaveRow {

@@ -24,18 +24,23 @@ test('из комнаты «Назад в комнату», без сохран�
   const back = page.getByRole('button', { name: 'Назад в комнату', exact: true });
   await expect(back).toBeVisible();
   await expect(page.getByRole('button', { name: 'Назад', exact: true })).toHaveCount(0);
-  const title = page.getByText('Калькулятор', { exact: true });
+  const bar = back.locator('xpath=..');
+  const title = bar.getByText('Калькулятор', { exact: true });
   await expect(title).toBeVisible();
   const fit = await Promise.all([back, title].map((locator) =>
     locator.evaluate((el) => {
       const box = el.getBoundingClientRect();
       return {
+        text: el.textContent,
         full: el.scrollWidth <= el.clientWidth + 1,
         inside: box.left >= -1 && box.right <= window.innerWidth + 1,
       };
     }),
   ));
-  expect(fit.every((item) => item.full && item.inside)).toBe(true);
+  expect(fit, JSON.stringify(fit)).toEqual([
+    expect.objectContaining({ full: true, inside: true }),
+    expect.objectContaining({ full: true, inside: true }),
+  ]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 
   await page.evaluate(() => {
