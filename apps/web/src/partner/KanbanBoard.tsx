@@ -24,6 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   JOB_OBJECT_STATUS_LABELS,
+  canMoveObjects,
   documentKindsSummary,
   type JobObject,
   type Project,
@@ -114,6 +115,7 @@ function Card({
         {...listeners}
         type="button"
         data-room-id={room.id}
+        aria-roledescription="карточка"
         aria-disabled={disabled || undefined}
         className={`${styles.card} ${related ? styles.related : ''} ${isDragging ? styles.source : ''}`}
         aria-label={`${room.roomName || 'Комната'} · ${room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[room.status]}`}
@@ -251,6 +253,19 @@ export function KanbanBoard({
       [],
       projects,
     );
+  const namedRooms = local ?? rooms;
+  function dragCardName(id: unknown) {
+    const room = namedRooms.find((item) => item.id === id);
+    if (!room) return 'комнаты';
+    return `«${room.clientName || 'Клиент'}, ${room.roomName || 'Комната'}»`;
+  }
+  function dragColumnName(id: unknown) {
+    if (typeof id === 'string' && KANBAN_STAGES.includes(id as JobObjectStatus)) {
+      return `«${JOB_OBJECT_STATUS_LABELS[id as JobObjectStatus]}»`;
+    }
+    const room = namedRooms.find((item) => item.id === id);
+    return room ? `«${JOB_OBJECT_STATUS_LABELS[room.status]}»` : 'доски';
+  }
   function preview(next: JobObject[]) {
     draft.current = next;
     setLocal(next);
@@ -336,7 +351,6 @@ export function KanbanBoard({
   }
   function content(room: JobObject) {
     const project = projects.find((p) => p.id === room.projectId);
-    const person = staff.find((s) => s.id === room.assignedTo)?.displayName;
     return (
       <>
         <strong>
@@ -344,10 +358,7 @@ export function KanbanBoard({
           {room.roomName || 'Комната'}
         </strong>
         <small>
-          {project?.address ||
-            room.address ||
-            project?.name ||
-            'Адрес не указан'}
+          {(project?.address || room.address || '').trim() || 'Добавить адрес'}
         </small>
         <div className={styles.metadata}>
           <span title="Обновлено">
@@ -358,18 +369,6 @@ export function KanbanBoard({
           </span>
           <span title="Документы">{documentKindsSummary(room.documents) || 'Без PDF'}</span>
           <span>{room.room.areaM2 ?? '—'} м²</span>
-          <span
-            className={styles.avatar}
-            title={person || 'Ответственный не назначен'}
-          >
-            {person
-              ? person
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((n) => n[0])
-                  .join('')
-              : '—'}
-          </span>
         </div>
         {room.pendingSync && <small>↻ Ожидает синхронизации</small>}
       </>
@@ -444,6 +443,30 @@ export function KanbanBoard({
         ))}
       </div>
       <DndContext
+        accessibility={{
+          screenReaderInstructions: {
+            draggable:
+              'Чтобы взять карточку, нажмите пробел. Стрелками переносите её между колонками. Пробел — отпустить в колонке, Escape — отменить.',
+          },
+          announcements: {
+            onDragStart({ active }) {
+              return `Взята карточка ${dragCardName(active.id)}.`;
+            },
+            onDragOver({ active, over }) {
+              return over
+                ? `Карточка ${dragCardName(active.id)} над колонкой ${dragColumnName(over.id)}.`
+                : `Карточка ${dragCardName(active.id)} вне колонок.`;
+            },
+            onDragEnd({ active, over }) {
+              return over
+                ? `Карточка ${dragCardName(active.id)} отпущена в колонке ${dragColumnName(over.id)}.`
+                : `Карточка ${dragCardName(active.id)} отпущена.`;
+            },
+            onDragCancel({ active }) {
+              return `Перенос карточки ${dragCardName(active.id)} отменён.`;
+            },
+          },
+        }}
         sensors={sensors}
         collisionDetection={(args) => {
           const hits = pointerWithin(args);
@@ -534,6 +557,7 @@ export function KanbanBoard({
                   </span>
                   <h3>{JOB_OBJECT_STATUS_LABELS[stage]}</h3>
                   <span className={styles.count}>{list.length}</span>
+                  {canMoveObjects(role) ? (
                   <details>
                     <summary
                       aria-label={`Действия: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
@@ -547,6 +571,7 @@ export function KanbanBoard({
                       По клиенту
                     </button>
                   </details>
+                  ) : null}
                   {onCreate && (
                     <button
                       type="button"

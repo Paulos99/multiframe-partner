@@ -74,11 +74,33 @@ export const DEMO_ACCOUNTS = [
   },
 ];
 
+/** Час — по Москве, в базе лежит UTC. Клиент показывает пояс зрителя. */
 function daysAgo(n, hour = 10, minute = 0) {
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  d.setDate(d.getDate() - n);
-  return d.toISOString();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const pick = (type) => Number(parts.find((part) => part.type === type)?.value);
+  const utc = Date.UTC(pick('year'), pick('month') - 1, pick('day') - n, hour, minute, 0);
+  return new Date(utc - 3 * 60 * 60 * 1000).toISOString();
+}
+
+const DEMO_PEOPLE = {
+  u_partner1: { login: 'partner1', name: 'Владелец · Потолки Столицы' },
+  u_sales1: { login: 'sales1', name: 'Менеджер · Потолки Столицы' },
+  u_measurer1: { login: 'exec1', name: 'Замерщик · Потолки Столицы' },
+  u_crew1: { login: 'crew1', name: 'Монтажник · Потолки Столицы' },
+  u_partner2: { login: 'partner2', name: 'Владелец · Северный Потолок' },
+  u_sales2: { login: 'sales2', name: 'Менеджер · Северный Потолок' },
+  u_measurer2: { login: 'exec2', name: 'Замерщик · Северный Потолок' },
+  u_crew2: { login: 'crew2', name: 'Монтажник · Северный Потолок' },
+};
+
+function historyStamp(userId, at, action, detail) {
+  const person = DEMO_PEOPLE[userId] || { login: 'system', name: 'Сотрудник' };
+  return { at, userId, login: person.login, authorName: person.name, action, detail };
 }
 
 function estimate(areaM2) {
@@ -147,43 +169,26 @@ function makeObject(spec) {
     objectStage,
   } = spec;
   const createdAt = daysAgo(dayOffset, 9, 30);
-  const measuredAt = daysAgo(Math.max(0, dayOffset - 1), 11, 0);
   const quoteAt = daysAgo(Math.max(0, dayOffset - 3), 14, 0);
   const installAt = daysAgo(Math.max(0, dayOffset - 10), 10, 0);
   const closedAt = daysAgo(Math.max(0, dayOffset - 14), 16, 0);
+  const quoteAuthor = orgId === 'org_demo_spb' ? 'u_sales2' : 'u_sales1';
+  const moveAuthor = orgId === 'org_demo_spb' ? 'u_partner2' : 'u_partner1';
   const est = estimate(areaM2);
   const classBefore = pick(DEMO_CLASS_PAIRS, dayOffset)[0];
   const classAfter = pick(DEMO_CLASS_PAIRS, dayOffset)[1];
-  const history = [{ at: createdAt, userId: createdBy, login: 'system', action: 'create', detail: 'measured' }];
+  const history = [historyStamp(createdBy, createdAt, 'create', 'measured')];
   let updatedAt = createdAt;
   if (['quote_sent', 'install', 'closed'].includes(status)) {
-    history.unshift({
-      at: quoteAt,
-      userId: createdBy,
-      login: 'system',
-      action: 'status',
-      detail: 'measured→quote_sent',
-    });
+    history.unshift(historyStamp(quoteAuthor, quoteAt, 'status', 'measured→quote_sent'));
     updatedAt = quoteAt;
   }
   if (['install', 'closed'].includes(status)) {
-    history.unshift({
-      at: installAt,
-      userId: assignedTo || createdBy,
-      login: 'system',
-      action: 'status',
-      detail: 'quote_sent→install',
-    });
+    history.unshift(historyStamp(moveAuthor, installAt, 'status', 'quote_sent→install'));
     updatedAt = installAt;
   }
   if (status === 'closed') {
-    history.unshift({
-      at: closedAt,
-      userId: assignedTo || createdBy,
-      login: 'system',
-      action: 'status',
-      detail: 'install→closed',
-    });
+    history.unshift(historyStamp(moveAuthor, closedAt, 'status', 'install→closed'));
     updatedAt = closedAt;
   }
   return {

@@ -24,7 +24,9 @@ export function Header() {
             alt="MultiFRAME"
             height={28}
           />
-          <span className={styles.product}>Проблемомер</span>
+          <span className={styles.product} hidden>
+            Проблемомер
+          </span>
         </div>
         <ThemeToggle />
       </div>

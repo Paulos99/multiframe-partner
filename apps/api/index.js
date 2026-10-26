@@ -381,6 +381,18 @@ function incomingWins(body, existing) {
   return inc >= cur;
 }
 
+function historyEvent(actor, at, action, detail) {
+  const entry = {
+    at,
+    userId: actor.id,
+    login: actor.login,
+    authorName: String(actor.displayName || actor.login || '').trim() || 'Сотрудник',
+    action,
+  };
+  if (detail !== undefined) entry.detail = detail;
+  return entry;
+}
+
 function skippedHistory(existing, body, actor) {
   const snap = {
     updatedAt: body?.updatedAt || null,
@@ -390,13 +402,7 @@ function skippedHistory(existing, body, actor) {
     areaM2: body?.room?.areaM2 ?? null,
   };
   return [
-    {
-      at: new Date().toISOString(),
-      userId: actor.id,
-      login: actor.login,
-      action: 'conflict_kept_server',
-      detail: JSON.stringify(snap).slice(0, 400),
-    },
+    historyEvent(actor, new Date().toISOString(), 'conflict_kept_server', JSON.stringify(snap).slice(0, 400)),
     ...(existing.history || []),
   ].slice(0, 50);
 }
@@ -1350,13 +1356,12 @@ export async function handler(event = {}) {
         documents: [...added, ...(existing.documents || [])].slice(0, 40),
         updatedAt: now,
         history: [
-          {
-            at: now,
-            userId: user.id,
-            login: user.login,
-            action: added.every((d) => d.kind === 'profile') ? 'profile_pdf' : 'calc_pdf',
-            detail: added.map((d) => d.kind).join('+'),
-          },
+          historyEvent(
+            user,
+            now,
+            added.every((d) => d.kind === 'profile') ? 'profile_pdf' : 'calc_pdf',
+            added.map((d) => d.kind).join('+'),
+          ),
           ...(existing.history || []),
         ].slice(0, 50),
       };
@@ -1429,37 +1434,18 @@ export async function handler(event = {}) {
       if (existing) {
         if (body.status && body.status !== existing.status) {
           obj.history = [
-            {
-              at: obj.updatedAt,
-              userId: user.id,
-              login: user.login,
-              action: 'status',
-              detail: `${existing.status}→${body.status}`,
-            },
+            historyEvent(user, obj.updatedAt, 'status', `${existing.status}→${body.status}`),
             ...(existing.history || []),
           ].slice(0, 50);
         } else {
           obj.history = [
-            {
-              at: obj.updatedAt,
-              userId: user.id,
-              login: user.login,
-              action: 'update',
-            },
+            historyEvent(user, obj.updatedAt, 'update'),
             ...(existing.history || []),
           ].slice(0, 50);
         }
         platform.objects[existingIdx] = obj;
       } else {
-        obj.history = [
-          {
-            at: obj.createdAt,
-            userId: user.id,
-            login: user.login,
-            action: 'create',
-            detail: obj.status,
-          },
-        ];
+        obj.history = [historyEvent(user, obj.createdAt, 'create', obj.status)];
         platform.objects = [obj, ...(platform.objects || [])].slice(0, OBJECTS_CAP);
         pushActivity(platform, {
           orgId: user.orgId,
@@ -1502,34 +1488,17 @@ export async function handler(event = {}) {
       const next = normalizeObjectInput(body, existing, user, org, platform);
       if (body.status && body.status !== existing.status) {
         next.history = [
-          {
-            at: next.updatedAt,
-            userId: user.id,
-            login: user.login,
-            action: 'status',
-            detail: `${existing.status}→${body.status}`,
-          },
+          historyEvent(user, next.updatedAt, 'status', `${existing.status}→${body.status}`),
           ...(existing.history || []),
         ].slice(0, 50);
       } else if (body.assignedTo !== undefined && body.assignedTo !== existing.assignedTo) {
         next.history = [
-          {
-            at: next.updatedAt,
-            userId: user.id,
-            login: user.login,
-            action: 'assign',
-            detail: String(body.assignedTo || '—'),
-          },
+          historyEvent(user, next.updatedAt, 'assign', String(body.assignedTo || '—')),
           ...(existing.history || []),
         ].slice(0, 50);
       } else {
         next.history = [
-          {
-            at: next.updatedAt,
-            userId: user.id,
-            login: user.login,
-            action: 'update',
-          },
+          historyEvent(user, next.updatedAt, 'update'),
           ...(existing.history || []),
         ].slice(0, 50);
       }

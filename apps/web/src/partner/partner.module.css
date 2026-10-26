@@ -1869,14 +1869,9 @@
 
 .chipRow {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
   padding-bottom: 2px;
-}
-
-.chipRow::-webkit-scrollbar {
-  display: none;
 }
 
 .chip,

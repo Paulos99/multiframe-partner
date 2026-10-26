@@ -149,10 +149,11 @@ for (const width of [360, 390]) {
     await enter(page, 'owner');
     const el = strip(page);
     const tabs = nav(page).getByRole('tab');
-    await expect(tabs).toHaveCount(6);
+    await expect(tabs).toHaveCount(7);
     await expect(tabs.last()).toHaveAttribute('data-nav-id', 'profile');
+    await expect(nav(page).getByRole('tab', { name: 'Обучение', exact: true })).toHaveCount(1);
 
-    // Лента: прокрутка нативная, со snap, без видимой полосы прокрутки.
+    // Семь вкладок не влезают: лента со snap, без полосы, «Профиль» докручивается.
     const style = await el.evaluate((e) => {
       const cs = getComputedStyle(e);
       return { overflowX: cs.overflowX, snap: cs.scrollSnapType, bar: cs.scrollbarWidth, overflow: e.scrollWidth - e.clientWidth };
@@ -160,13 +161,11 @@ for (const width of [360, 390]) {
     expect(style.overflowX).toBe('auto');
     expect(style.snap).toContain('x');
     expect(style.bar).toBe('none');
-    expect(style.overflow).toBeLessThanOrEqual(1);
+    expect(style.overflow).toBeGreaterThan(1);
 
     await scrollStrip(page, 'start');
     await expect(tabs.first()).toBeInViewport({ ratio: 1 });
-    await expect(el).not.toHaveAttribute('data-fade-end', /.*/);
     await expect(el).not.toHaveAttribute('data-fade-start', /.*/);
-    await expect(tabs.last()).toBeInViewport({ ratio: 1 });
     await expectNoOverlap(page);
 
     await scrollStrip(page, 'end');
@@ -189,6 +188,7 @@ test('390px · owner: активная вкладка сама докручив�
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await enter(page, 'owner');
   const profile = nav(page).locator('[data-nav-id="profile"]');
+  await profile.evaluate((b) => b.scrollIntoView({ inline: 'center', block: 'nearest' }));
   await expect(profile).toBeInViewport({ ratio: 1 });
   await profile.click();
   await expect(profile).toHaveAttribute('aria-selected', 'true');

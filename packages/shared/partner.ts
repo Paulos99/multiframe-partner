@@ -268,6 +268,8 @@ export type JobObjectHistoryEntry = {
   at: string;
   userId: string | null;
   login: string;
+  /** Имя на момент записи. Не подменяется именем того, кто открыл историю. */
+  authorName?: string;
   action: string;
   detail?: string;
 };

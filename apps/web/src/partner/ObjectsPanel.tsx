@@ -546,15 +546,14 @@ export function ObjectsPanel({
           <aside className={styles.drawer} role="dialog" aria-label="Комната">
             <div className={styles.drawerHead}>
               <div>
-                <h3>
-                  {selectedRooms.length > 1
-                    ? selectedCard.title
-                    : selected.roomName || selected.clientName || selectedCard.title}
-                </h3>
+                <h3>{selected.clientName || selectedCard.project?.clientName || selectedCard.title}</h3>
                 <p className={styles.lead}>
-                  {selectedRooms.length > 1
-                    ? selectedCard.subtitle
-                    : [selected.address, selected.city].filter(Boolean).join(' · ') || selectedCard.subtitle}
+                  {[
+                    selectedRooms.length > 1 ? null : selected.roomName,
+                    [selected.address, selected.city].filter(Boolean).join(' · ') || 'Добавить адрес',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </p>
               </div>
               <button type="button" className={styles.ghost} onClick={closeDrawer}>
@@ -599,7 +598,7 @@ export function ObjectsPanel({
                   {selected.roomName || selected.clientName || 'Комната'} · {JOB_OBJECT_STATUS_LABELS[selected.status]}
                 </h3>
                 <p className={styles.lead}>
-                  {[selected.address, selected.city].filter(Boolean).join(' · ') || 'Адрес не заполнен'}
+                  {[selected.address, selected.city].filter(Boolean).join(' · ') || 'Добавить адрес'}
                 </p>
               </>
             ) : (

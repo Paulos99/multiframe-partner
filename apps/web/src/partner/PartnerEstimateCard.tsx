@@ -2,9 +2,10 @@ import { usePartner } from './PartnerContext';
 import { buildPartnerEstimate, formatRub } from './estimate';
 import styles from './partner.module.css';
 
-/** Ориентир сметы на экране проблемомера. Цены видят все роли. */
+/** Ориентир сметы на экране проблемомера. Бригада суммы не видит (концепция 5.3). */
 export function PartnerEstimateCard({ areaM2 }: { areaM2: number | null }) {
-  const { partner } = usePartner();
+  const { partner, user } = usePartner();
+  if (user?.role === 'crew') return null;
   if (!partner || areaM2 == null || areaM2 <= 0) return null;
   const est = buildPartnerEstimate(areaM2, partner);
   if (!est) return null;

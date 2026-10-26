@@ -45,8 +45,8 @@ export function buildProjectCards<R extends RoomLike, P extends ProjectLike>(
   const cards: ProjectCard<R, P>[] = projects.map((project) => ({
     key: project.id,
     project,
-    title: project.name,
-    subtitle: [project.clientName, project.address, project.city].filter(Boolean).join(' · ') || 'Адрес не заполнен',
+    title: project.clientName || project.name,
+    subtitle: [project.address, project.city].filter(Boolean).join(' · ') || 'Добавить адрес',
     rooms: grouped.get(project.id) || [],
     loose: false,
   }));
@@ -56,8 +56,8 @@ export function buildProjectCards<R extends RoomLike, P extends ProjectLike>(
     cards.push({
       key: projectId,
       project: null,
-      title: sample.clientName || sample.address || 'Проект',
-      subtitle: [sample.address, sample.city].filter(Boolean).join(' · ') || 'Комнаты проекта',
+      title: sample.clientName || 'Клиент',
+      subtitle: [sample.address, sample.city].filter(Boolean).join(' · ') || 'Добавить адрес',
       rooms: projectRooms,
       loose: false,
     });
@@ -66,8 +66,8 @@ export function buildProjectCards<R extends RoomLike, P extends ProjectLike>(
     cards.push({
       key: `room:${room.id}`,
       project: null,
-      title: room.clientName || room.address || 'Помещение',
-      subtitle: room.address || 'Свой проект появится при сохранении на сервере',
+      title: room.clientName || 'Клиент',
+      subtitle: [room.address, room.city].filter(Boolean).join(' · ') || 'Добавить адрес',
       rooms: [room],
       loose: true,
     });

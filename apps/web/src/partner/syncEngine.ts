@@ -89,10 +89,15 @@ export async function loadVisibleObjects(user: SessionUser, remote: boolean): Pr
     base = await loadAllObjects();
     if (!base.length) base = loadCachedObjects();
   }
+  const pendingIds = new Set([
+    ...outbox.map((op) => op.id),
+    ...peekObjectDocumentQueue().map((doc) => doc.objectId),
+  ]);
   const merged = withQueuedDocuments(mergeObjects(base, outbox));
   return merged
     .map((obj) => presentCachedObject(user, obj))
-    .filter((obj): obj is JobObject => obj != null);
+    .filter((obj): obj is JobObject => obj != null)
+    .map((obj) => ({ ...obj, pendingSync: pendingIds.has(obj.id) }));
 }
 
 function withoutDocBytes(obj: JobObject): JobObject {
@@ -134,7 +139,7 @@ function withQueuedDocuments(objects: JobObject[]): JobObject[] {
 }
 
 async function queueUpsert(user: SessionUser, draft: Partial<JobObject> & { id: string; updatedAt: string }) {
-  const obj = upsertLocalObject(withoutDocBytes(draft as JobObject), user);
+  const obj = upsertLocalObject(withoutDocBytes({ ...draft, pendingSync: true } as JobObject), user);
   const payload: JobObject = withoutDocBytes({ ...obj, pendingSync: true });
   const op: OutboxOp = {
     id: obj.id,
@@ -159,7 +164,7 @@ export async function saveObjectSynced(
   const id = input.id || newObjectId();
   const updatedAt = new Date().toISOString();
   const draft = stripObjectDocuments({ ...input, id, updatedAt });
-  if (!remote) return upsertLocalObject(draft, user);
+  if (!remote) return upsertLocalObject({ ...draft, pendingSync: false }, user);
 
   if (loadToken() && navigator.onLine) {
     try {

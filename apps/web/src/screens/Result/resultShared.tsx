@@ -23,7 +23,6 @@ import {
   officialComfortLabel,
   type FeltStep,
 } from '../../state/simulation';
-import { resolveSlab } from '../../state/acoustic/construction';
 import { buildCalculatorUrl } from '../../state/session';
 import {
   downloadAcousticProfilePdf,
@@ -119,7 +118,8 @@ export function FeltScale({
   const nowVal = Math.round(nowIndex);
   const afterVal = afterIndex != null ? Math.round(afterIndex) : null;
   const direction =
-    indexKind === 'Rw' ? 'чем больше число, тем лучше' : 'чем меньше число, тем лучше';
+    indexKind === 'Rw' ? 'чем больше децибел, тем лучше изоляция' : 'чем меньше децибел, тем тише шаги';
+  const indexWord = indexKind === 'Rw' ? 'изоляция воздуха' : 'удар сверху';
 
   return (
     <div
@@ -127,11 +127,11 @@ export function FeltScale({
       role="img"
       aria-label={
         mode === 'nowOnly'
-          ? `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexKind} ≈ ${nowVal} дБ`
-          : `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexKind} ≈ ${nowVal} дБ; с MultiFrame ${
+          ? `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexWord} ≈ ${nowVal} дБ`
+          : `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexWord} ≈ ${nowVal} дБ; с MultiFrame ${
               after ? FELT_STEP_LABELS[after] : ''
-            }${afterVal != null ? `, ${indexKind} ≈ ${afterVal} дБ` : ''}${
-              quieterPct != null ? `, станет на ≈ ${quieterPct}% тише` : ''
+            }${afterVal != null ? `, ${indexWord} ≈ ${afterVal} дБ` : ''}${
+              quieterPct != null ? `, в комнате примерно на ${quieterPct}% тише` : ''
             }`
       }
     >
@@ -139,7 +139,7 @@ export function FeltScale({
         <strong>{title}</strong>
         {mode === 'nowAndAfter' && quieterPct != null ? (
           <b className={styles.quieterLine}>
-            станет на ≈ {quieterPct}% тише
+            в комнате примерно на {quieterPct}% тише
             <SoundPressureHelpButton
               highlightDb={quieterDeltaDb}
               label={`Таблица снижения звукового давления для ${indexKind}`}
@@ -151,12 +151,14 @@ export function FeltScale({
       <p className={styles.feltDb}>
         {mode === 'nowOnly' || afterVal == null ? (
           <>
-            Сейчас: <b>{indexKind} ≈ {nowVal} дБ</b>
+            Сейчас: <b>{indexWord} ≈ {nowVal} дБ</b>
+            <span className={styles.indexHint}>{indexKind}</span>
             <span> · {direction}</span>
           </>
         ) : (
           <>
-            <b>{indexKind}</b>:{' '}
+            <b>{indexWord}</b>{' '}
+            <span className={styles.indexHint}>{indexKind}</span>:{' '}
             <b>≈ {nowVal} дБ</b>
             <span aria-hidden> → </span>
             <b>≈ {afterVal} дБ</b>
@@ -215,9 +217,11 @@ export function useResultProfile() {
   const impactAfterFelt = impactFeltFromIndex(sim.after.Lnw);
 
   const roomLabel = room.roomType ? roomTypeLabel(room) : null;
-  const slab = resolveSlab(room);
   const slabTypeLabel = optionLabel(SLAB_TYPE_OPTIONS, room.slabType);
-  const slabThickLabel = optionLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness);
+  const slabThickLabel =
+    !room.slabThickness || room.slabThickness === 'unknown'
+      ? 'типовая ~220 мм'
+      : optionLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness);
   const houseLabel = optionLabel(HOUSE_TYPE_OPTIONS, room.houseType);
   const wishLabel = 'Все эффекты материала';
   const ceilingLabel = optionLabel(PLANNED_CEILING_OPTIONS, room.plannedCeiling);
@@ -234,8 +238,10 @@ export function useResultProfile() {
   });
   const about = productAbout(room, noiseType);
   const slabContext =
-    room.slabType === 'unknown' && room.slabThickness === 'unknown'
-      ? `ориентир по типу дома (${houseLabel}), ~${slab.thicknessMm} мм`
+    room.slabThickness === 'unknown' || !room.slabThickness
+      ? room.slabType === 'unknown'
+        ? 'типовая ~220 мм'
+        : `${slabTypeLabel}, типовая ~220 мм`
       : `${slabTypeLabel}, ${slabThickLabel}`;
 
   const calcUrl = buildCalculatorUrl(session.cta);
@@ -265,8 +271,6 @@ export function useResultProfile() {
       action: 'result',
       object: partnerObject,
     });
-    // once per result mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function openCalc() {

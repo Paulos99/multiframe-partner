@@ -139,10 +139,31 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     orgs,
     links: raw.links || [],
     activity: raw.activity || [],
-    objects: raw.objects || [],
+    objects: repairStoredHistory(raw.objects || [], users),
     projects: Array.isArray(raw.projects) ? raw.projects : [],
     ...(materials ? { materials } : {}),
   };
+}
+
+/** Старые демо-записи с login system подписывались тем, кто открыл историю. Имя пишется в саму запись. */
+function repairStoredHistory(objects: JobObject[], users: StoredUser[]): JobObject[] {
+  const byId = new Map(users.map((user) => [user.id, user]));
+  const ownerByOrg = new Map(users.filter((user) => user.role === 'owner').map((user) => [user.orgId, user]));
+  return objects.map((obj) => ({
+    ...obj,
+    history: (obj.history || []).map((entry) => {
+      const crewWroteStatus = entry.action === 'status' && byId.get(entry.userId || '')?.role === 'crew';
+      const userId = crewWroteStatus ? ownerByOrg.get(obj.orgId)?.id || obj.createdBy : entry.userId;
+      const person = userId ? byId.get(userId) : undefined;
+      if (entry.authorName && !crewWroteStatus) return entry;
+      return {
+        ...entry,
+        userId,
+        login: person?.login || entry.login,
+        authorName: entry.authorName || person?.displayName || undefined,
+      };
+    }),
+  }));
 }
 
 /** Wipe local activity log and analytics events/queue. */
@@ -892,7 +913,7 @@ export function upsertLocalObject(
     clientSummary: input.clientSummary ?? existing?.clientSummary ?? '',
     history: existing?.history || [],
     documents: existing?.documents,
-    pendingSync: true,
+    pendingSync: input.pendingSync === true,
     ...carriedObjectLink(input, existing),
   };
 
@@ -914,44 +935,28 @@ export function upsertLocalObject(
     obj.projectId = project.id;
   }
 
+  const stamp = (action: string, detail?: string) => ({
+    at: now,
+    userId: actor.id,
+    login: actor.login,
+    authorName: actor.displayName || actor.login,
+    action,
+    ...(detail !== undefined ? { detail } : {}),
+  });
   if (!existing) {
-    obj.history = [
-      {
-        at: now,
-        userId: actor.id,
-        login: actor.login,
-        action: 'create',
-        detail: status,
-      },
-    ];
+    obj.history = [stamp('create', status)];
   } else if (input.status && input.status !== existing.status) {
-    obj.history = [
-      {
-        at: now,
-        userId: actor.id,
-        login: actor.login,
-        action: 'status',
-        detail: `${existing.status}→${input.status}`,
-      },
-      ...existing.history,
-    ].slice(0, 50);
+    obj.history = [stamp('status', `${existing.status}→${input.status}`), ...existing.history].slice(0, 50);
   } else {
-    obj.history = [
-      {
-        at: now,
-        userId: actor.id,
-        login: actor.login,
-        action: 'update',
-      },
-      ...(existing.history || []),
-    ].slice(0, 50);
+    obj.history = [stamp('update'), ...(existing.history || [])].slice(0, 50);
   }
 
   const objects = existing
     ? db.objects.map((o) => (o.id === obj.id ? obj : o))
     : [obj, ...db.objects];
   saveDb({ ...db, objects, projects });
-  enqueueObjectSync(obj);
+  if (obj.pendingSync) enqueueObjectSync(obj);
+  else removeFromObjectQueue(obj.id);
   cacheObjects(listLocalObjects(actor));
   return presentObject(obj);
 }
@@ -1182,6 +1187,7 @@ export function appendLocalObjectDocuments(
         at: now,
         userId: actor.id,
         login: actor.login,
+        authorName: actor.displayName || actor.login,
         action: meta.every((d) => d.kind === 'profile') ? 'profile_pdf' : 'calc_pdf',
         detail: meta.map((d) => d.filename).join(', '),
       },

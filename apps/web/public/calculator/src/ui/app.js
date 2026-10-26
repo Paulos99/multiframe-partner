@@ -2357,6 +2357,10 @@ function lockPartnerCeiling() {
   document.querySelectorAll('[data-segment-for="ceilingMounting"] .segmented__btn').forEach((btn) => {
     btn.classList.toggle('is-active', btn.dataset.value === 'ceiling_frameless');
   });
+  document.querySelector('label[for="quickHeight"]')?.closest('.form-group')?.setAttribute('hidden', '');
+  document.querySelector('label[for="drawHeight"]')?.closest('.form-group')?.setAttribute('hidden', '');
+  const areaDesc = document.querySelector('#entryAreaBtn .entry-card__desc');
+  if (areaDesc) areaDesc.textContent = 'Знаю площадь потолка — примерная оценка в м²';
 }
 
 function initTheme() {

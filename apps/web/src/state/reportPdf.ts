@@ -15,7 +15,6 @@ import {
   type SessionState,
 } from './types';
 import { caseVerdictParts, productAbout } from './recommendations';
-import { resolveSlab } from './acoustic/construction';
 import {
   airClassFor,
   airFeltFromIndex,
@@ -232,7 +231,6 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
   const { qr, logos, panel } = assets;
   const handoff = buildLeadHandoff(session);
   const room = handoff.room;
-  const slab = resolveSlab(room);
   const sim = session.derived!.simulation;
   const rev = sim.reverb;
   const b = sim.before;
@@ -242,10 +240,13 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
   const roomName = roomTypeLabel(room);
   const area = room.ceilingAreaM2 != null ? `${room.ceilingAreaM2} м²` : 'н/д';
   const roomLine = `${roomName} · ${area}`;
+  const slabTypeLabel = optLabel(SLAB_TYPE_OPTIONS, room.slabType);
   const slabLabel =
-    room.slabType === 'unknown' && room.slabThickness === 'unknown'
-      ? `ориентир по типу дома (${optLabel(HOUSE_TYPE_OPTIONS, room.houseType)}), ~${slab.thicknessMm} мм`
-      : `${optLabel(SLAB_TYPE_OPTIONS, room.slabType)}, ${optLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness)}`;
+    !room.slabThickness || room.slabThickness === 'unknown'
+      ? room.slabType === 'unknown'
+        ? 'типовая ~220 мм'
+        : `${slabTypeLabel}, типовая ~220 мм`
+      : `${slabTypeLabel}, ${optLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness)}`;
 
   const airNow = airFeltFromIndex(b.Rw);
   const airAfter = airFeltFromIndex(a.Rw);
@@ -265,7 +266,6 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
 
   const deltaRw = Math.abs(Math.round(sim.delta.Rw));
   const deltaLnw = Math.abs(Math.round(sim.delta.Lnw));
-  const quieterMax = Math.max(sim.perceivedAirPct, sim.perceivedImpactPct);
   const noiseKindCell =
     shouldAskNoiseKind(room.noisyNeighbors) && room.noiseKind !== 'unknown'
       ? `<div><dt>Тип шума</dt><dd>${escapeHtml(optLabel(NOISE_KIND_OPTIONS, room.noiseKind))}</dd></div>`
@@ -799,18 +799,13 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
     <div class="kpi-row">
       <article class="kpi">
         <span class="k">Воздушный шум</span>
-        <span class="v">−${sim.perceivedAirPct}<em>%</em></span>
-        <span class="db-hint">изоляция · +${deltaRw} дБ (Rw)</span>
+        <span class="v">${Math.round(b.Rw)} → ${Math.round(a.Rw)}<em>дБ</em></span>
+        <span class="db-hint">изоляция лучше на ${deltaRw} дБ · примерно на ${sim.perceivedAirPct}% тише · Rw</span>
       </article>
       <article class="kpi">
         <span class="k">Ударный шум</span>
-        <span class="v">−${sim.perceivedImpactPct}<em>%</em></span>
-        <span class="db-hint">удар · −${deltaLnw} дБ (Lnw)</span>
-      </article>
-      <article class="kpi">
-        <span class="k">Снижение шума</span>
-        <span class="v">−${quieterMax}<em>%</em></span>
-        ${pillSvg(`воздух ${sim.perceivedAirPct}% · удар ${sim.perceivedImpactPct}%`, { bg: '#dceee8', fg: '#01644f', fontSize: 9, padX: 8 })}
+        <span class="v">${Math.round(b.Lnw)} → ${Math.round(a.Lnw)}<em>дБ</em></span>
+        <span class="db-hint">удар сверху тише на ${deltaLnw} дБ · примерно на ${sim.perceivedImpactPct}% тише · Lnw</span>
       </article>
       <article class="kpi">
         <span class="k">Акустический комфорт</span>
@@ -831,13 +826,13 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
         <div class="cmp">
           <div class="k">Сейчас</div>
           <h3>«${escapeHtml(officialComfortLabel(hybridBefore))}»</h3>
-          <div class="nums">Rw ≈ ${Math.round(b.Rw)} дБ · Lnw ≈ ${Math.round(b.Lnw)} дБ</div>
+          <div class="nums">изоляция воздуха ≈ ${Math.round(b.Rw)} дБ · удар сверху ≈ ${Math.round(b.Lnw)} дБ</div>
           <div class="chips">воздух ${chipLabel(airClassFor(b.Rw))} · удар ${chipLabel(impactClassFor(b.Lnw))}</div>
         </div>
         <div class="cmp after">
           <div class="k">С MultiFrame</div>
           <h3>«${escapeHtml(officialComfortLabel(hybridAfter))}»</h3>
-          <div class="nums">Rw ≈ ${Math.round(a.Rw)} дБ · Lnw ≈ ${Math.round(a.Lnw)} дБ</div>
+          <div class="nums">изоляция воздуха ≈ ${Math.round(a.Rw)} дБ · удар сверху ≈ ${Math.round(a.Lnw)} дБ</div>
           <div class="chips">воздух ${chipLabel(airClassFor(a.Rw))} · удар ${chipLabel(impactClassFor(a.Lnw))}</div>
         </div>
       </div>
@@ -851,11 +846,11 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
       <h2><span class="sec-idx">02</span>Прогноз с MultiFrame</h2>
       <div class="felt">
         <div class="felt-row">
-          <span>Воздух · ${FELT_STEP_LABELS[airNow]} → <b>${FELT_STEP_LABELS[airAfter]}</b> · Rw ≈ ${Math.round(b.Rw)} → ≈ ${Math.round(a.Rw)} дБ</span>
+          <span>Воздух · ${FELT_STEP_LABELS[airNow]} → <b>${FELT_STEP_LABELS[airAfter]}</b> · изоляция ≈ ${Math.round(b.Rw)} → ≈ ${Math.round(a.Rw)} дБ</span>
           ${pillSvg(`≈ ${sim.perceivedAirPct}% тише`, { bg: '#dceee8', fg: '#01644f', fontSize: 11, height: 24 })}
         </div>
         <div class="felt-row">
-          <span>Удар · ${FELT_STEP_LABELS[impactNow]} → <b>${FELT_STEP_LABELS[impactAfter]}</b> · Lnw ≈ ${Math.round(b.Lnw)} → ≈ ${Math.round(a.Lnw)} дБ</span>
+          <span>Удар · ${FELT_STEP_LABELS[impactNow]} → <b>${FELT_STEP_LABELS[impactAfter]}</b> · удар сверху ≈ ${Math.round(b.Lnw)} → ≈ ${Math.round(a.Lnw)} дБ</span>
           ${pillSvg(`≈ ${sim.perceivedImpactPct}% тише`, { bg: '#dceee8', fg: '#01644f', fontSize: 11, height: 24 })}
         </div>
       </div>

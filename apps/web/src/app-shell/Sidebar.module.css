@@ -1,7 +1,9 @@
 .side {
   position: sticky;
   top: 0;
+  align-self: start;
   height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
   display: flex;
   flex-direction: column;

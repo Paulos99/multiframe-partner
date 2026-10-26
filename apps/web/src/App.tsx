@@ -24,6 +24,7 @@ function ShellFrame({ children, install }: { children: ReactNode; install: boole
 }
 
 function toolCaption(user: SessionUser): string {
+  if (user.role === 'crew') return '';
   const org = user.org;
   const bits: string[] = [];
   if (org?.panelPriceRub != null) bits.push(`РРЦ ${org.panelPriceRub} ₽/панель`);
@@ -287,7 +288,7 @@ function PartnerShell() {
       );
   }
 
-  return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${user?.id||'login'}-${route}`}>{body}</PageTransition></ShellFrame>;
+  return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${user?.id||'login'}-${route}`} shift={false}>{body}</PageTransition></ShellFrame>;
 }
 
 export default function App() {

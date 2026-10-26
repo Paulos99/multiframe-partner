@@ -443,6 +443,7 @@ function OwnerCabinet({
     { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => setTab('company') },
     { id: 'staff', label: 'Сотрудники', active: tab === 'staff', onSelect: () => setTab('staff') },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => setTab('analytics') },
+    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => setTab('help') },
   ];
 
   return (
@@ -473,7 +474,6 @@ function OwnerCabinet({
             }}
             onProblemomer={() => onNavigate('problemomer')}
             onCalculator={onOpenCalc}
-            onTraining={() => setTab('help')}
           />
         </TabPanel>
       ) : null}

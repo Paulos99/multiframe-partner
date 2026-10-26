@@ -10,14 +10,9 @@ export function StartScreen() {
     <Screen hero>
       <div className={styles.hero}>
         <div className={styles.glow} aria-hidden />
-        <h1 className={styles.title}>
-          Насколько тише станет потолок MultiFrame
-        </h1>
+        <h1 className={styles.title}>Насколько тише станет комната</h1>
         <p className={styles.lead}>
-          Несколько вопросов о комнате — и рекомендация по потолку.
-        </p>
-        <p className={styles.lead}>
-          Дальше видно, насколько тише станет после монтажа потолка.
+          Несколько вопросов о комнате — и рекомендация, насколько тише станет после монтажа потолка MultiFrame.
         </p>
         <div className={styles.cta}>
           <Button onClick={goNext} fullWidth>

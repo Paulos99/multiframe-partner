@@ -31,10 +31,37 @@ export function describeHistory(entry: JobObjectHistoryEntry, people: HistoryPer
 }
 
 export function historyAuthor(entry: JobObjectHistoryEntry, people: HistoryPerson[]) {
+  const stored = entry.authorName?.trim();
+  if (stored) return stored;
   const name = people.find(person => person.id === entry.userId)?.displayName;
   if (name) return name;
   if (entry.login === 'system') return 'Система';
   return entry.login?.trim() || 'Сотрудник';
+}
+
+/** Строка без пояса — это UTC-мгновение, а не уже местные часы. Иначе часы сдвигаются на пояс зрителя. */
+export function parseHistoryInstant(value: string): Date {
+  const raw = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(raw)) {
+    return new Date(`${raw.replace(' ', 'T')}Z`);
+  }
+  return new Date(raw);
+}
+
+/** Часы зрителя: пояс браузера, не UTC и не повторный сдвиг. */
+export function formatHistoryTime(value: string, timeZone?: string): string {
+  const date = parseHistoryInstant(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const zone = timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    ...(zone ? { timeZone: zone } : {}),
+  }).format(date);
 }
 
 export function sortedHistory(entries: JobObjectHistoryEntry[]) {
