@@ -1,0 +1,56 @@
+name: Apply YDB schema
+
+# С бокса порт 2135 закрыт, схему применяет раннер GitHub.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - name: Install API deps
+        working-directory: apps/api
+        run: npm ci --omit=dev
+      - name: Install yc
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          echo "$HOME/yc/bin" >> "$GITHUB_PATH"
+      - name: Apply schema
+        working-directory: apps/api
+        env:
+          YC_SA_KEY_JSON: ${{ secrets.YC_SA_KEY_JSON }}
+          YDB_ENDPOINT: ${{ vars.YDB_ENDPOINT }}
+          YDB_DATABASE: ${{ vars.YDB_DATABASE }}
+        run: |
+          if [ -z "${YC_SA_KEY_JSON:-}" ]; then
+            echo "Missing secret YC_SA_KEY_JSON (authorized key JSON for service account)"
+            exit 1
+          fi
+          if [ -z "${YDB_ENDPOINT:-}" ] || [ -z "${YDB_DATABASE:-}" ]; then
+            echo "Missing GitHub variables YDB_ENDPOINT or YDB_DATABASE"
+            exit 1
+          fi
+          key_file="$RUNNER_TEMP/key.json"
+          cleanup() {
+            rm -f "$key_file"
+            rm -rf "$HOME/.config/yandex-cloud"
+          }
+          trap cleanup EXIT
+          printf '%s\n' "$YC_SA_KEY_JSON" > "$key_file"
+          unset YC_SA_KEY_JSON
+          yc config set service-account-key "$key_file" >/dev/null
+          token="$(yc iam create-token)"
+          echo "::add-mask::$token"
+          cleanup
+          trap - EXIT
+          YDB_ACCESS_TOKEN_CREDENTIALS="$token" node scripts/apply-ydb-schema.mjs --apply
