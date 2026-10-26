@@ -113,6 +113,9 @@ function Card({
         {...attributes}
         {...listeners}
         type="button"
+        // Drag can be off for a role. The card itself still opens the room.
+        aria-disabled={undefined}
+        tabIndex={0}
         data-room-id={room.id}
         className={`${styles.card} ${related ? styles.related : ''} ${isDragging ? styles.source : ''}`}
         aria-label={`${room.roomName || 'Комната'} · ${room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[room.status]}`}
