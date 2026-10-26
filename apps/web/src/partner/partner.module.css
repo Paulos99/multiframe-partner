@@ -3214,6 +3214,10 @@
     grid-template-columns: 1fr;
   }
 
+  .todayGrid .todayCard:nth-child(2) {
+    order: -1;
+  }
+
   .todayHead .primary,
   .todayActions .primary,
   .todayActions .ghost {
