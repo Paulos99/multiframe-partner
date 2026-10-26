@@ -34,6 +34,12 @@ async function invoke(method, path, { token, body, headers, query } = {}) {
   return decode(res);
 }
 
+function matchOf(res, key) {
+  const version = res.body?.[key]?.recordVersion;
+  assert.ok(version != null, JSON.stringify(res.body));
+  return { 'If-Match': String(version) };
+}
+
 async function login(name, password) {
   const res = await invoke('POST', '/auth/login', { body: { login: name, password } });
   assert.equal(res.status, 200, JSON.stringify(res.body));
@@ -96,6 +102,28 @@ test('учебный контекст не создаёт сделку, чужа
   assert.equal(leak.status, 404);
 });
 
+test('без If-Match изменение существующей сделки отвечает 428', async () => {
+  const token = await login('sales1', 'exec1234');
+  const created = await invoke('POST', '/inquiries', {
+    token,
+    headers: { 'Idempotency-Key': 'match-1' },
+    body: { name: 'Версия', roomName: 'Коридор' },
+  });
+  const id = created.body.deal.id;
+  const missing = await invoke('POST', `/deals/${id}/pause`, {
+    token,
+    body: { reason: 'postponed_repair' },
+  });
+  assert.equal(missing.status, 428, JSON.stringify(missing.body));
+  const paused = await invoke('POST', `/deals/${id}/pause`, {
+    token,
+    headers: { 'If-Match': String(created.body.deal.recordVersion) },
+    body: { reason: 'postponed_repair' },
+  });
+  assert.equal(paused.status, 200, JSON.stringify(paused.body));
+  assert.equal(paused.body.deal.outcome, 'early_paused');
+});
+
 test('пауза, отказ, одна активная сделка и новый id после закрытия', async () => {
   const token = await login('sales1', 'exec1234');
   const created = await invoke('POST', '/inquiries', {
@@ -107,6 +135,7 @@ test('пауза, отказ, одна активная сделка и новы
   const projectId = created.body.project.id;
   const paused = await invoke('POST', `/deals/${id}/pause`, {
     token,
+    headers: matchOf(created, 'deal'),
     body: { reason: 'postponed_repair' },
   });
   assert.equal(paused.status, 200, JSON.stringify(paused.body));
@@ -116,13 +145,25 @@ test('пауза, отказ, одна активная сделка и новы
   assert.equal(paused.body.deal.id, id);
   const second = await invoke('POST', '/deals', { token, body: { projectId } });
   assert.equal(second.status, 409);
-  const resumed = await invoke('POST', `/deals/${id}/resume`, { token, body: {} });
+  const resumed = await invoke('POST', `/deals/${id}/resume`, {
+    token,
+    headers: matchOf(paused, 'deal'),
+    body: {},
+  });
   assert.equal(resumed.body.deal.id, id);
   assert.equal(resumed.body.deal.outcome, null);
-  const refused = await invoke('POST', `/deals/${id}/decline`, { token, body: { reason: 'no_need' } });
+  const refused = await invoke('POST', `/deals/${id}/decline`, {
+    token,
+    headers: matchOf(resumed, 'deal'),
+    body: { reason: 'no_need' },
+  });
   assert.equal(refused.body.deal.outcome, 'early_declined');
   assert.ok(refused.body.deal.closedAt);
-  const reopen = await invoke('POST', `/deals/${id}/resume`, { token, body: {} });
+  const reopen = await invoke('POST', `/deals/${id}/resume`, {
+    token,
+    headers: matchOf(refused, 'deal'),
+    body: {},
+  });
   assert.equal(reopen.status, 409);
   const next = await invoke('POST', '/deals', { token, body: { projectId } });
   assert.equal(next.status, 200);
@@ -175,19 +216,33 @@ test('КП: снимок, заморозка, N+1, частичное согла
   assert.equal(quote.body.quote.snapshot.lines[0].calcType, 'detailed');
   const quoteId = quote.body.quote.id;
 
-  const copied = await invoke('POST', `/quotes/${quoteId}/copy`, { token, body: {} });
-  const pdf = await invoke('POST', `/quotes/${quoteId}/pdf`, { token, body: {} });
-  const shared = await invoke('POST', `/quotes/${quoteId}/share`, { token, body: {} });
+  const copied = await invoke('POST', `/quotes/${quoteId}/copy`, { token, headers: matchOf(quote, 'quote'), body: {} });
+  const pdf = await invoke('POST', `/quotes/${quoteId}/pdf`, { token, headers: matchOf(quote, 'quote'), body: {} });
+  const shared = await invoke('POST', `/quotes/${quoteId}/share`, { token, headers: matchOf(quote, 'quote'), body: {} });
   assert.equal(copied.body.quote.sentConfirmedAt, null);
   assert.equal(pdf.body.quote.lifecycle, 'quote_created');
   assert.equal(shared.body.quote.lifecycle, 'quote_shared');
   assert.equal(shared.body.quote.sentConfirmedAt, null);
 
-  const sent = await invoke('POST', `/quotes/${quoteId}/confirm-sent`, { token, body: { comment: 'лично' } });
+  const sent = await invoke('POST', `/quotes/${quoteId}/confirm-sent`, {
+    token,
+    headers: matchOf(shared, 'quote'),
+    body: { comment: 'лично' },
+  });
   assert.equal(sent.body.quote.lifecycle, 'quote_sent_confirmed');
-  const sentAgain = await invoke('POST', `/quotes/${quoteId}/confirm-sent`, { token, body: {} });
+  const sentAgain = await invoke('POST', `/quotes/${quoteId}/confirm-sent`, {
+    token,
+    headers: matchOf(sent, 'quote'),
+    body: {},
+  });
   assert.equal(sentAgain.body.quote.sentConfirmedAt, sent.body.quote.sentConfirmedAt);
-  const patched = await invoke('PATCH', `/quotes/${quoteId}`, { token, body: { amount: 1 } });
+  const barePatch = await invoke('PATCH', `/quotes/${quoteId}`, { token, body: { amount: 1 } });
+  assert.equal(barePatch.status, 428);
+  const patched = await invoke('PATCH', `/quotes/${quoteId}`, {
+    token,
+    headers: matchOf(sent, 'quote'),
+    body: { amount: 1 },
+  });
   assert.equal(patched.status, 409);
 
   const room2 = created.body.room.id;
@@ -207,9 +262,15 @@ test('КП: снимок, заморозка, N+1, частичное согла
   const other = await invoke('GET', '/quotes', { token, query: { dealId: extra.body.deal.id } });
   assert.equal(other.body.quotes.length, 0);
 
-  await invoke('POST', `/quotes/${next.body.quote.id}/confirm-sent`, { token, body: {} });
+  await invoke('POST', `/quotes/${next.body.quote.id}/confirm-sent`, {
+    token,
+    headers: matchOf(next, 'quote'),
+    body: {},
+  });
+  const beforeAccept = await invoke('GET', `/deals/${dealId}`, { token });
   const accepted = await invoke('POST', `/deals/${dealId}/accept`, {
     token,
+    headers: matchOf(beforeAccept, 'deal'),
     body: { roomAssent: { [roomId]: 'ordered' } },
   });
   assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
@@ -236,55 +297,126 @@ test('монтаж и закрытие: чек-лист, препятствие,
     token: sales,
     body: { type: 'detailed', amount: 80, expectedRevision: 0 },
   });
-  await invoke('POST', `/rooms/${roomId}/profile`, { token: sales, body: { usable: true } });
+  let roomVersion = '1';
+  const profile = await invoke('POST', `/rooms/${roomId}/profile`, {
+    token: sales,
+    headers: { 'If-Match': roomVersion },
+    body: { usable: true },
+  });
+  assert.equal(profile.status, 200, JSON.stringify(profile.body));
+  roomVersion = String(profile.body.room.recordVersion);
   const stage = await invoke('GET', `/deals/${dealId}`, { token: sales });
   assert.equal(stage.body.deal.stage, 'calculated');
   const quote = await invoke('POST', '/quotes', {
     token: sales,
     body: { projectId, dealId, roomObjectIds: [roomId] },
   });
-  await invoke('POST', `/quotes/${quote.body.quote.id}/confirm-sent`, { token: sales, body: {} });
-  await invoke('POST', `/deals/${dealId}/accept`, { token: sales, body: { roomAssent: { [roomId]: 'ordered' } } });
+  await invoke('POST', `/quotes/${quote.body.quote.id}/confirm-sent`, {
+    token: sales,
+    headers: matchOf(quote, 'quote'),
+    body: {},
+  });
+  const beforeAccept = await invoke('GET', `/deals/${dealId}`, { token: sales });
+  await invoke('POST', `/deals/${dealId}/accept`, {
+    token: sales,
+    headers: matchOf(beforeAccept, 'deal'),
+    body: { roomAssent: { [roomId]: 'ordered' } },
+  });
   const crew = await login('crew1', 'exec1234');
+  const hidden = await invoke('GET', '/deals', { token: crew });
+  assert.equal(hidden.body.deals.length, 0);
+  const hiddenOne = await invoke('GET', `/deals/${dealId}`, { token: crew });
+  assert.equal(hiddenOne.status, 404);
   const earlyInbox = await invoke('GET', '/install/inbox', { token: crew });
   assert.equal(earlyInbox.body.rooms.length, 0);
-  await invoke('POST', `/rooms/${roomId}/readiness`, {
+  const ready = await invoke('POST', `/rooms/${roomId}/readiness`, {
     token: sales,
+    headers: { 'If-Match': roomVersion },
     body: { materialsComplete: true, crewUserId: 'u_crew1' },
   });
+  assert.equal(ready.status, 200, JSON.stringify(ready.body));
+  roomVersion = String(ready.body.room.recordVersion);
   const inbox = await invoke('GET', '/install/inbox', { token: crew });
   assert.equal(inbox.body.rooms.length, 1);
-  const noList = await invoke('POST', `/rooms/${roomId}/close`, { token: crew, body: {} });
-  assert.equal(noList.status, 409);
-  await invoke('POST', `/rooms/${roomId}/checklist`, {
+  const crewDeals = await invoke('GET', '/deals', { token: crew });
+  assert.equal(crewDeals.body.deals.length, 1);
+  assert.equal(crewDeals.body.deals[0].rooms[0].id, roomId);
+  for (const field of ['outcome', 'lossReason', 'lossComment', 'stageAtOutcome', 'acceptedAmount', 'roomAssent']) {
+    assert.equal(Object.hasOwn(crewDeals.body.deals[0], field), false, field);
+  }
+  const noHeader = await invoke('POST', `/rooms/${roomId}/close`, { token: crew, body: {} });
+  assert.equal(noHeader.status, 428);
+  const noList = await invoke('POST', `/rooms/${roomId}/close`, {
     token: crew,
+    headers: { 'If-Match': roomVersion },
+    body: {},
+  });
+  assert.equal(noList.status, 409);
+  const checklist = await invoke('POST', `/rooms/${roomId}/checklist`, {
+    token: crew,
+    headers: { 'If-Match': roomVersion },
     body: { items: [{ id: 'c1', title: 'Крепёж', state: 'done' }] },
   });
-  await invoke('POST', `/rooms/${roomId}/blockers`, { token: crew, body: { text: 'нет доступа' } });
-  const blocked = await invoke('POST', `/rooms/${roomId}/close`, { token: crew, body: {} });
+  roomVersion = String(checklist.body.room.recordVersion);
+  const firstBlock = await invoke('POST', `/rooms/${roomId}/blockers`, {
+    token: crew,
+    headers: { 'If-Match': roomVersion },
+    body: { text: 'нет доступа' },
+  });
+  roomVersion = String(firstBlock.body.room.recordVersion);
+  const blocked = await invoke('POST', `/rooms/${roomId}/close`, {
+    token: crew,
+    headers: { 'If-Match': roomVersion },
+    body: {},
+  });
   assert.equal(blocked.status, 409);
-  const blockerId = blocked.status === 409 ? null : null;
-  const room = await invoke('POST', `/rooms/${roomId}/blockers`, { token: crew, body: { text: 'щит' } });
+  const room = await invoke('POST', `/rooms/${roomId}/blockers`, {
+    token: crew,
+    headers: { 'If-Match': roomVersion },
+    body: { text: 'щит' },
+  });
+  roomVersion = String(room.body.room.recordVersion);
   const opened = room.body.blocker.id;
   const waive = await invoke('POST', `/rooms/${roomId}/waive`, { token: sales, body: { reason: 'нет' } });
   assert.equal(waive.status, 404);
-  await invoke('POST', `/rooms/${roomId}/blockers/${opened}/resolve`, { token: sales, body: {} });
+  const resolved = await invoke('POST', `/rooms/${roomId}/blockers/${opened}/resolve`, {
+    token: sales,
+    headers: { 'If-Match': roomVersion },
+    body: {},
+  });
+  roomVersion = String(resolved.body.room.recordVersion);
   const firstBlocker = room.body.room.blockers.find((item) => item.text === 'нет доступа');
-  await invoke('POST', `/rooms/${roomId}/blockers/${firstBlocker.id}/resolve`, { token: sales, body: {} });
-  const closed = await invoke('POST', `/rooms/${roomId}/close`, { token: crew, body: {} });
+  const resolvedFirst = await invoke('POST', `/rooms/${roomId}/blockers/${firstBlocker.id}/resolve`, {
+    token: sales,
+    headers: { 'If-Match': roomVersion },
+    body: {},
+  });
+  roomVersion = String(resolvedFirst.body.room.recordVersion);
+  const closed = await invoke('POST', `/rooms/${roomId}/close`, {
+    token: crew,
+    headers: { 'If-Match': roomVersion },
+    body: {},
+  });
   assert.equal(closed.status, 200, JSON.stringify(closed.body));
   assert.equal(closed.body.dealClosed, false);
   const still = await invoke('GET', `/deals/${dealId}`, { token: sales });
   assert.equal(still.body.deal.outcome, 'accepted');
   assert.equal(still.body.deal.closedAt, null);
   const owner = await login('partner1', 'demo1234');
-  const done = await invoke('POST', `/deals/${dealId}/close`, { token: owner, body: {} });
+  const ownerView = await invoke('GET', `/deals/${dealId}`, { token: owner });
+  const done = await invoke('POST', `/deals/${dealId}/close`, {
+    token: owner,
+    headers: matchOf(ownerView, 'deal'),
+    body: {},
+  });
   assert.equal(done.status, 200, JSON.stringify(done.body));
   assert.ok(done.body.deal.closedAt);
   assert.equal(done.body.deal.outcome, 'accepted');
   const crewMoney = await invoke('GET', `/deals/${dealId}`, { token: crew });
-  assert.equal(crewMoney.body.deal.acceptedAmount, null);
-  assert.equal(blockerId, null);
+  assert.equal(crewMoney.status, 200, JSON.stringify(crewMoney.body));
+  assert.equal(Object.hasOwn(crewMoney.body.deal, 'acceptedAmount'), false);
+  assert.equal(Object.hasOwn(crewMoney.body.deal, 'outcome'), false);
+  assert.equal(Object.hasOwn(crewMoney.body.deal, 'lossReason'), false);
 });
 
 test('облачный бакет без YDB не подменяет коммерческое хранилище файлом', async () => {

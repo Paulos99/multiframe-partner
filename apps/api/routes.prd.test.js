@@ -14,8 +14,8 @@ function decode(res) {
   return { status: res.statusCode, body };
 }
 
-async function invoke(method, path, { token, body } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+async function invoke(method, path, { token, body, headers: extra } = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(extra || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await handler({
     httpMethod: method,
@@ -86,13 +86,18 @@ test('quotes: copy не меняет lifecycle; confirm-sent меняет', asyn
   const id = created.body.quote.id;
   assert.equal(created.body.quote.lifecycle, 'quote_created');
 
-  const copied = await invoke('POST', `/quotes/${id}/copy`, { token, body: {} });
+  const copied = await invoke('POST', `/quotes/${id}/copy`, {
+    token,
+    headers: { 'If-Match': String(created.body.quote.recordVersion) },
+    body: {},
+  });
   assert.equal(copied.status, 200);
   assert.equal(copied.body.lifecycleUnchanged, true);
   assert.equal(copied.body.quote.lifecycle, 'quote_created');
 
   const confirmed = await invoke('POST', `/quotes/${id}/confirm-sent`, {
     token,
+    headers: { 'If-Match': String(created.body.quote.recordVersion) },
     body: { comment: 'отправил в WhatsApp' },
   });
   assert.equal(confirmed.status, 200);

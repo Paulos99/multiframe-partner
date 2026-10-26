@@ -87,25 +87,25 @@ export function createYdbRepository({ withSession, database, typed, readRows }) 
     return {
       get,
       async list(filter) {
-        if (!filter.orgId) {
-          const keys = extractRows(
-            await exec(sql.listKeysByKind, { $kind: filter.kind }),
-            readRows,
-          );
-          const full = [];
-          for (const key of keys) {
-            const row = await get(key.orgId, key.kind, key.id);
-            if (row) full.push(row);
-          }
-          return full;
+        if (!filter.orgId || !filter.kind) throw httpError(400, 'Список требует orgId и kind');
+        if (filter.projectId) {
+          return extractRows(await exec(sql.listByProject, {
+            $org_id: filter.orgId,
+            $project_id: filter.projectId,
+            $kind: filter.kind,
+          }), readRows);
         }
-        let rows = extractRows(
-          await exec(sql.listByOrgKind, { $org_id: filter.orgId, $kind: filter.kind }),
-          readRows,
-        );
-        if (filter.projectId) rows = rows.filter((row) => row.projectId === filter.projectId);
-        if (filter.parentId) rows = rows.filter((row) => row.parentId === filter.parentId);
-        return rows;
+        if (filter.parentId) {
+          return extractRows(await exec(sql.listByParent, {
+            $org_id: filter.orgId,
+            $parent_id: filter.parentId,
+            $kind: filter.kind,
+          }), readRows);
+        }
+        return extractRows(await exec(sql.listByOrgKind, {
+          $org_id: filter.orgId,
+          $kind: filter.kind,
+        }), readRows);
       },
       async insert(row) {
         await exec(sql.insert, {

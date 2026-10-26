@@ -38,7 +38,7 @@ function idemId(scope, key) {
   return `${scope}:${raw.slice(0, 200)}`;
 }
 
-export function createCommercialService(repo, { uid, now }) {
+export function createCommercialService(repo, { uid, now, orgIds = [] }) {
   const at = () => now();
 
   async function replay(tx, orgId, scope, key) {
@@ -68,8 +68,12 @@ export function createCommercialService(repo, { uid, now }) {
     return row;
   }
 
+  function requireMatch(expected) {
+    if (expected == null || expected === '') throw httpError(428, 'Нужен заголовок If-Match');
+  }
+
   function guardVersion(row, expected) {
-    if (expected == null || expected === '') return;
+    requireMatch(expected);
     if (Number(expected) !== Number(row.version)) {
       throw httpError(409, 'Конфликт версии', { recordVersion: row.version });
     }
@@ -99,10 +103,6 @@ export function createCommercialService(repo, { uid, now }) {
     const orgHint = user.role === 'admin' ? legacy?.orgId || user.orgId : user.orgId;
     if (!orgHint) throw httpError(400, 'Нет организации');
     let row = await tx.get(orgHint, 'project', wanted);
-    if (!row && user.role === 'admin') {
-      const found = await tx.list({ kind: 'project' });
-      row = found.find((item) => item.id === wanted) || null;
-    }
     if (!row && legacy && legacy.id === wanted) {
       assertSameOrg(user, legacy.orgId);
       const stamp = at();
@@ -139,13 +139,50 @@ export function createCommercialService(repo, { uid, now }) {
   }
 
   async function dealsOf(tx, user) {
-    if (user.role === 'admin') {
-      const rows = await tx.list({ kind: 'deal' });
-      return rows.map(entity);
+    const orgs = user.role === 'admin' ? orgIds : [user.orgId].filter(Boolean);
+    const all = [];
+    for (const orgId of orgs) {
+      const rows = await tx.list({ orgId, kind: 'deal' });
+      all.push(...rows.map(entity));
     }
-    if (!user.orgId) return [];
-    const rows = await tx.list({ orgId: user.orgId, kind: 'deal' });
-    return rows.map(entity);
+    return all;
+  }
+
+  async function crewInstallDeals(tx, user) {
+    const deals = (await tx.list({ orgId: user.orgId, kind: 'deal' })).map(entity);
+    const visible = [];
+    for (const deal of deals) {
+      if (deal.outcome !== 'accepted') continue;
+      const rooms = (await tx.list({ orgId: deal.orgId, kind: 'room', projectId: deal.projectId })).map(entity);
+      const mine = rooms.filter((room) => room.crewUserId === user.id && (deal.roomAssent || {})[room.id] === 'ordered');
+      if (!mine.length) continue;
+      visible.push({
+        id: deal.id,
+        orgId: deal.orgId,
+        projectId: deal.projectId,
+        recordVersion: deal.recordVersion,
+        installRooms: mine.map((room) => ({
+          id: room.id,
+          roomName: room.roomName || '',
+          workStatus: room.workStatus || null,
+        })),
+      });
+    }
+    return visible;
+  }
+
+  async function rowById(tx, user, kind, id, missing) {
+    if (user.role === 'admin') {
+      for (const orgId of orgIds) {
+        const row = await tx.get(orgId, kind, id);
+        if (row) return row;
+      }
+      throw httpError(404, missing);
+    }
+    if (!user.orgId) throw httpError(404, missing);
+    const row = await tx.get(user.orgId, kind, id);
+    if (!row) throw httpError(404, missing);
+    return row;
   }
 
   async function calcsFor(tx, orgId, roomId) {
@@ -177,17 +214,20 @@ export function createCommercialService(repo, { uid, now }) {
   return {
     async listDeals(user) {
       assertRole(user, 'read');
-      return repo.transaction(async (tx) => dealsOf(tx, user));
+      return repo.transaction(async (tx) => (
+        user.role === 'crew' ? crewInstallDeals(tx, user) : dealsOf(tx, user)
+      ));
     },
 
     async getDeal(user, id) {
       assertRole(user, 'read');
       return repo.transaction(async (tx) => {
-        const rows = user.role === 'admin'
-          ? await tx.list({ kind: 'deal' })
-          : await tx.list({ orgId: user.orgId, kind: 'deal' });
-        const row = rows.find((item) => item.id === id);
-        if (!row) throw httpError(404, 'Сделка не найдена');
+        if (user.role === 'crew') {
+          const deal = (await crewInstallDeals(tx, user)).find((item) => item.id === id);
+          if (!deal) throw httpError(404, 'Сделка не найдена');
+          return deal;
+        }
+        const row = await rowById(tx, user, 'deal', id, 'Сделка не найдена');
         assertSameOrg(user, row.orgId);
         return entity(row);
       });
@@ -336,10 +376,9 @@ export function createCommercialService(repo, { uid, now }) {
         patch: 'deal.write',
       };
       assertRole(user, writers[action]);
+      requireMatch(expected);
       return repo.transaction(async (tx) => {
-        const rows = await tx.list({ orgId: user.orgId, kind: 'deal' });
-        const row = rows.find((item) => item.id === id);
-        if (!row) throw httpError(404, 'Сделка не найдена');
+        const row = await rowById(tx, user, 'deal', id, 'Сделка не найдена');
         assertSameOrg(user, row.orgId);
         const deal = entity(row);
         const stamp = at();
@@ -397,11 +436,15 @@ export function createCommercialService(repo, { uid, now }) {
     async listQuotes(user, dealId) {
       assertRole(user, 'read');
       return repo.transaction(async (tx) => {
-        const orgId = user.role === 'admin' ? null : user.orgId;
-        const rows = orgId
-          ? await tx.list({ orgId, kind: 'quote', ...(dealId ? { parentId: dealId } : {}) })
-          : (await tx.list({ kind: 'quote' })).filter((row) => !dealId || row.parentId === dealId);
-        return rows.map(entity).filter((quote) => user.role === 'admin' || quote.orgId === user.orgId);
+        const orgs = user.role === 'admin' ? orgIds : [user.orgId].filter(Boolean);
+        const rows = [];
+        for (const orgId of orgs) {
+          const part = dealId
+            ? await tx.list({ orgId, kind: 'quote', parentId: dealId })
+            : await tx.list({ orgId, kind: 'quote' });
+          rows.push(...part);
+        }
+        return rows.map(entity);
       });
     },
 
@@ -478,7 +521,7 @@ export function createCommercialService(repo, { uid, now }) {
           payload: quote,
         }));
         deal = advanceAuto(deal, 'quote_created', stamp);
-        await write(tx, dealRow, deal, null);
+        await write(tx, dealRow, deal, dealRow.version);
         const out = { quote: saved };
         await remember(tx, project.orgId, 'quote', body.idempotencyKey, { status: 200, body: out });
         return out;
@@ -489,10 +532,9 @@ export function createCommercialService(repo, { uid, now }) {
       assertWorkContext(body, null);
       if (action === 'confirm_sent') assertRole(user, 'quote.confirm');
       else assertRole(user, 'quote.write');
+      requireMatch(expected);
       return repo.transaction(async (tx) => {
-        const rows = await tx.list({ orgId: user.orgId, kind: 'quote' });
-        const row = rows.find((item) => item.id === id);
-        if (!row) throw httpError(404, 'КП не найдено');
+        const row = await rowById(tx, user, 'quote', id, 'КП не найдено');
         const quote = entity(row);
         assertSameOrg(user, quote.orgId);
         const stamp = at();
@@ -515,7 +557,7 @@ export function createCommercialService(repo, { uid, now }) {
         }
         if (action === 'share') deal = advanceAuto(deal, 'quote_shared', stamp);
         if (action === 'confirm_sent') deal = advanceAuto(deal, 'quote_sent_confirmed', stamp);
-        if (deal !== entity(dealRow) && deal.updatedAt === stamp) await write(tx, dealRow, deal, null);
+        if (deal !== entity(dealRow) && deal.updatedAt === stamp) await write(tx, dealRow, deal, dealRow.version);
         return { quote: next, lifecycleUnchanged: action === 'copy_text' || action === 'generate_pdf' };
       });
     },
@@ -526,9 +568,7 @@ export function createCommercialService(repo, { uid, now }) {
       return repo.transaction(async (tx) => {
         const cached = await replay(tx, user.orgId, 'calc', idempotencyKey);
         if (cached) return cached;
-        const rooms = await tx.list({ orgId: user.orgId, kind: 'room' });
-        const roomRow = rooms.find((item) => item.id === roomId);
-        if (!roomRow) throw httpError(404, 'Комната не найдена');
+        const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
         const existing = await calcsFor(tx, roomRow.orgId, roomId);
         const plan = planCalculation(existing, {
           calcType: body.type || body.calcType,
@@ -559,7 +599,7 @@ export function createCommercialService(repo, { uid, now }) {
         if (active.length === 1) {
           const dealRow = await load(tx, roomRow.orgId, 'deal', active[0].id);
           const deal = advanceAuto(entity(dealRow), 'calculated', stamp);
-          if (deal.updatedAt === stamp) await write(tx, dealRow, deal, null);
+          if (deal.updatedAt === stamp) await write(tx, dealRow, deal, dealRow.version);
         }
         const contribution = roomContribution([...existing, saved]);
         const result = plan.conflict
@@ -581,10 +621,9 @@ export function createCommercialService(repo, { uid, now }) {
     async saveProfile(user, roomId, body, expected) {
       assertRole(user, 'calc.write');
       assertWorkContext(body, null);
+      requireMatch(expected);
       return repo.transaction(async (tx) => {
-        const rooms = await tx.list({ orgId: user.orgId, kind: 'room' });
-        const roomRow = rooms.find((item) => item.id === roomId);
-        if (!roomRow) throw httpError(404, 'Комната не найдена');
+        const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
         const stamp = at();
         const room = {
           ...entity(roomRow),
@@ -597,7 +636,7 @@ export function createCommercialService(repo, { uid, now }) {
           if (active.length === 1) {
             const dealRow = await load(tx, roomRow.orgId, 'deal', active[0].id);
             const deal = advanceAuto(entity(dealRow), 'assessed', stamp);
-            if (deal.updatedAt === stamp) await write(tx, dealRow, deal, null);
+            if (deal.updatedAt === stamp) await write(tx, dealRow, deal, dealRow.version);
           }
         }
         return { room: saved };
@@ -606,10 +645,9 @@ export function createCommercialService(repo, { uid, now }) {
 
     async setReadiness(user, roomId, body, expected) {
       assertRole(user, 'readiness');
+      requireMatch(expected);
       return repo.transaction(async (tx) => {
-        const rooms = await tx.list({ orgId: user.orgId, kind: 'room' });
-        const roomRow = rooms.find((item) => item.id === roomId);
-        if (!roomRow) throw httpError(404, 'Комната не найдена');
+        const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
         const stamp = at();
         const room = {
           ...entity(roomRow),
@@ -625,12 +663,11 @@ export function createCommercialService(repo, { uid, now }) {
 
     async setChecklist(user, roomId, body, expected) {
       assertRole(user, 'checklist.write');
+      requireMatch(expected);
       const items = Array.isArray(body.items) ? body.items : null;
       if (!items) throw httpError(400, 'Укажите пункты чек-листа');
       return repo.transaction(async (tx) => {
-        const rooms = await tx.list({ orgId: user.orgId, kind: 'room' });
-        const roomRow = rooms.find((item) => item.id === roomId);
-        if (!roomRow) throw httpError(404, 'Комната не найдена');
+        const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
         const room = {
           ...entity(roomRow),
           checklist: items.map((item) => ({
@@ -647,12 +684,11 @@ export function createCommercialService(repo, { uid, now }) {
 
     async openBlocker(user, roomId, body, expected) {
       assertRole(user, 'blocker.open');
+      requireMatch(expected);
       const text = String(body.text || '').trim();
       if (!text) throw httpError(400, 'Опишите препятствие');
       return repo.transaction(async (tx) => {
-        const rooms = await tx.list({ orgId: user.orgId, kind: 'room' });
-        const roomRow = rooms.find((item) => item.id === roomId);
-        if (!roomRow) throw httpError(404, 'Комната не найдена');
+        const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
         const room = entity(roomRow);
         const blocker = { id: uid('blk'), status: 'open', text: text.slice(0, 500), openedAt: at(), openedBy: user.id };
         room.blockers = [...(room.blockers || []), blocker];
@@ -664,10 +700,9 @@ export function createCommercialService(repo, { uid, now }) {
 
     async resolveBlocker(user, roomId, blockerId, expected) {
       assertRole(user, 'blocker.resolve');
+      requireMatch(expected);
       return repo.transaction(async (tx) => {
-        const rooms = await tx.list({ orgId: user.orgId, kind: 'room' });
-        const roomRow = rooms.find((item) => item.id === roomId);
-        if (!roomRow) throw httpError(404, 'Комната не найдена');
+        const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
         const room = entity(roomRow);
         const blocker = (room.blockers || []).find((item) => item.id === blockerId);
         if (!blocker) throw httpError(404, 'Препятствие не найдено');
@@ -685,10 +720,9 @@ export function createCommercialService(repo, { uid, now }) {
 
     async closeRoom(user, roomId, expected) {
       assertRole(user, 'room.close');
+      requireMatch(expected);
       return repo.transaction(async (tx) => {
-        const rooms = await tx.list({ orgId: user.orgId, kind: 'room' });
-        const roomRow = rooms.find((item) => item.id === roomId);
-        if (!roomRow) throw httpError(404, 'Комната не найдена');
+        const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
         const room = entity(roomRow);
         if (user.role === 'crew' && room.crewUserId !== user.id) throw httpError(403, 'Недостаточно прав');
         const deals = (await tx.list({ orgId: room.orgId, kind: 'deal', projectId: room.projectId })).map(entity);
@@ -711,8 +745,7 @@ export function createCommercialService(repo, { uid, now }) {
       assertRole(user, 'read');
       if (user.role === 'measurer') throw httpError(403, 'Недостаточно прав');
       return repo.transaction(async (tx) => {
-        const orgFilter = user.role === 'admin' ? {} : { orgId: user.orgId };
-        const deals = (await tx.list({ ...orgFilter, kind: 'deal' })).map(entity).filter((deal) => deal.outcome === 'accepted');
+        const deals = (await dealsOf(tx, user)).filter((deal) => deal.outcome === 'accepted');
         const rooms = [];
         for (const deal of deals) {
           const list = (await tx.list({ orgId: deal.orgId, kind: 'room', projectId: deal.projectId })).map(entity);

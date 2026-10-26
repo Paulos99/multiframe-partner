@@ -12,6 +12,15 @@ function ifMatch(raw) {
 }
 
 function publicDeal(deal, role) {
+  if (role === 'crew') {
+    return {
+      id: deal.id,
+      orgId: deal.orgId,
+      projectId: deal.projectId,
+      rooms: deal.installRooms || [],
+      recordVersion: deal.recordVersion ?? 1,
+    };
+  }
   return {
     id: deal.id,
     orgId: deal.orgId,
@@ -25,7 +34,7 @@ function publicDeal(deal, role) {
     lossComment: deal.lossComment ?? null,
     stageAtOutcome: deal.stageAtOutcome ?? null,
     roomAssent: deal.roomAssent || {},
-    acceptedAmount: role === 'crew' ? null : deal.acceptedAmount ?? null,
+    acceptedAmount: deal.acceptedAmount ?? null,
     closedAt: deal.closedAt ?? null,
     active: !deal.closedAt,
     recordVersion: deal.recordVersion ?? 1,
@@ -76,7 +85,11 @@ export async function handleCommercial(ctx) {
 
   const { platform, user } = await ctx.requireAuth();
   const repo = await getCommercialRepository();
-  const service = createCommercialService(repo, { uid: ctx.uid, now: () => new Date().toISOString() });
+  const service = createCommercialService(repo, {
+    uid: ctx.uid,
+    now: () => new Date().toISOString(),
+    orgIds: (platform.orgs || []).map((item) => item.id).filter(Boolean),
+  });
   const body = ctx.getBody() || {};
   const contextHeader = ctx.getHeader?.('x-data-context');
   if (!body.context && contextHeader) body.context = contextHeader;

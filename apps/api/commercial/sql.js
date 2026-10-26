@@ -27,11 +27,21 @@ export function commercialSql(ref) {
       FROM ${ref}
       WHERE org_id = $org_id AND kind = $kind;
     `,
-    listKeysByKind: `
+    listByProject: `
+      DECLARE $org_id AS Utf8;
+      DECLARE $project_id AS Utf8;
       DECLARE $kind AS Utf8;
-      SELECT org_id AS orgId, kind AS kind, id AS id
-      FROM ${ref} VIEW commercial_by_kind
-      WHERE kind = $kind;
+      SELECT ${row}
+      FROM ${ref} VIEW commercial_by_project
+      WHERE org_id = $org_id AND project_id = $project_id AND kind = $kind;
+    `,
+    listByParent: `
+      DECLARE $org_id AS Utf8;
+      DECLARE $parent_id AS Utf8;
+      DECLARE $kind AS Utf8;
+      SELECT ${row}
+      FROM ${ref} VIEW commercial_by_parent
+      WHERE org_id = $org_id AND parent_id = $parent_id AND kind = $kind;
     `,
     insert: `
       DECLARE $org_id AS Utf8;

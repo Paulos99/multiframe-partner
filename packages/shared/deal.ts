@@ -97,6 +97,8 @@ export const DEAL_OUTCOME_LABELS: Record<Exclude<DealOutcome, null>, string> = {
   postponed: 'Отложил',
   no_response: 'Ответа пока нет',
   unknown: 'Результат неизвестен',
+  early_declined: 'Отказ до КП',
+  early_paused: 'Пауза',
 };
 
 /**

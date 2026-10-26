@@ -16,8 +16,19 @@ test('обновление строки требует прежнюю version', 
   assert.doesNotMatch(sql.update, /If-Match/);
 });
 
+test('списки проекта и сделки идут в свои индексы, не в индекс по kind', () => {
+  const sql = commercialSql(tableRef('/ru/test/db'));
+  assert.match(sql.listByProject, /VIEW commercial_by_project/);
+  assert.match(sql.listByProject, /project_id = \$project_id/);
+  assert.match(sql.listByParent, /VIEW commercial_by_parent/);
+  assert.match(sql.listByParent, /parent_id = \$parent_id/);
+  assert.equal(sql.listKeysByKind, undefined);
+  assert.doesNotMatch(JSON.stringify(sql), /commercial_by_kind/);
+});
+
 test('репозиторий YDB отклоняет чужую version и откатывает транзакцию', async () => {
   const rows = [];
+  const texts = [];
   let rollbacks = 0;
   const typed = {
     uint64: (n) => ({ n: Number(n) }),
@@ -40,6 +51,7 @@ test('репозиторий YDB отклоняет чужую version и отк
           rows.splice(0, rows.length, ...snapshot);
         },
         async executeQuery(text, params) {
+          texts.push(text);
           const p = Object.fromEntries(Object.entries(params).map(([key, value]) => [key, unwrap(value)]));
           if (text.includes('INSERT INTO')) {
             rows.push({
@@ -69,6 +81,8 @@ test('репозиторий YDB отклоняет чужую version и отк
             if (p.$id && item.id !== p.$id) return false;
             if (p.$org_id && item.orgId !== p.$org_id) return false;
             if (p.$kind && item.kind !== p.$kind) return false;
+            if (p.$project_id && item.projectId !== p.$project_id) return false;
+            if (p.$parent_id && item.parentId !== p.$parent_id) return false;
             return true;
           });
           return { rows: found };
@@ -107,4 +121,25 @@ test('репозиторий YDB отклоняет чужую version и отк
   const left = await repo.transaction(async (tx) => tx.get('o', 'deal', 'd'));
   assert.equal(left.version, 1);
   assert.equal(left.payload.name, 'a');
+
+  await repo.transaction(async (tx) => {
+    await tx.insert({
+      orgId: 'o',
+      kind: 'deal',
+      id: 'd2',
+      projectId: 'other',
+      parentId: 'other',
+      payload: { name: 'c' },
+      updatedAt: 't',
+    });
+  });
+  const listed = await repo.transaction(async (tx) => tx.list({ orgId: 'o', kind: 'deal', projectId: 'p' }));
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].id, 'd');
+  assert.ok(texts.some((text) => text.includes('VIEW commercial_by_project') && text.includes('project_id = $project_id')));
+  assert.equal(texts.some((text) => text.includes('commercial_by_kind')), false);
+  await assert.rejects(
+    () => repo.transaction(async (tx) => tx.list({ kind: 'deal' })),
+    (error) => error.status === 400,
+  );
 });
