@@ -77,6 +77,22 @@ function salesActions(objects: JobObject[], deals: Deal[]): NextAction[] {
         priority: 2,
       });
     }
+    if (
+      (deal.stage === 'contact' ||
+        deal.stage === 'offered' ||
+        deal.stage === 'assessed' ||
+        deal.stage === 'calculated') &&
+      !deal.outcome
+    ) {
+      push({
+        id: `build-${deal.id}`,
+        title: 'Собрать предложение',
+        detail: `${where}. Сделка без подтверждённой отправки`,
+        projectId: deal.projectId,
+        dealId: deal.id,
+        priority: 14,
+      });
+    }
     if ((deal.stage === 'quote_created' || deal.stage === 'quote_shared') && !deal.outcome) {
       push({
         id: `confirm-${deal.id}`,

@@ -54,19 +54,31 @@ function calcSlot(row) {
   return { revisionSeq: Number(row.revisionSeq) || 0, amount: Number(row.amount) };
 }
 
-function finiteOrNull(value) {
+function positiveOrNull(value, asInteger) {
+  if (value == null || value === '') return null;
   const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return asInteger ? Math.round(number) : Math.round(number * 10) / 10;
 }
 
-/** Состав для бригады: площадь и количество, без сумм. */
+/** Только картинка чертежа. PDF со сметой сюда не кладём: в нём есть цены. */
+function schemeImageOf(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  const ok = text.startsWith('data:image/png;base64,') || text.startsWith('data:image/jpeg;base64,');
+  if (!ok || text.length > 700000) return null;
+  return text;
+}
+
+/** Состав для бригады: чертёж, площадь и количество, без сумм. */
 function compositionOf(row) {
   if (!row) return null;
+  const schemeImage = schemeImageOf(row.schemeImage);
   return {
-    areaM2: finiteOrNull(row.areaM2),
-    panels: finiteOrNull(row.panels) == null ? null : Math.max(0, Math.round(Number(row.panels))),
-    dowels: finiteOrNull(row.dowels) == null ? null : Math.max(0, Math.round(Number(row.dowels))),
-    hasScheme: Boolean(row.hasScheme),
+    areaM2: positiveOrNull(row.areaM2, false),
+    panels: positiveOrNull(row.panels, true),
+    dowels: positiveOrNull(row.dowels, true),
+    hasScheme: Boolean(row.hasScheme) || Boolean(schemeImage),
+    schemeImage,
   };
 }
 

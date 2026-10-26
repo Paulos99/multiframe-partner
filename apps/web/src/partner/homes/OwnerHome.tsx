@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { isDemoModeEnabled } from '../DemoSwitcher';
 import {
   OFFICIAL_PANEL_PRICE_RUB,
   OFFICIAL_PRICE_PER_M2,
@@ -18,7 +19,10 @@ import { EntryPoints } from '../commercial/EntryPoints';
 import { WorkToday } from '../commercial/WorkToday';
 import { SupportRequestButton } from '../SupportRequestButton';
 import { nextActionsForRole } from '../commercial/nextActions';
-import { CommercialPanel } from '../commercial/CommercialPanel';
+import { DealIndex } from '../commercial/DealIndex';
+import { DealScreen } from '../commercial/DealScreen';
+import { projectsOf, roomsOf } from '../commercial/commercialPort';
+import { sessionBook } from '../commercial/demoBook';
 import { useCommercialDeals } from '../commercial/useCommercialDeals';
 
 import {
@@ -45,12 +49,27 @@ export function OwnerHome({
   const api = usePartner();
   const user = api.user!;
   const [tab, setTab] = useState<OwnerTab>(() => (consumeReturnToTools() ? 'tools' : 'objects'));
-  const [openedProjectId, setOpenedProjectId] = useState<string | null>(null);
-  const { deals, loading: dealsLoading, refresh } = useCommercialDeals({
+  const { deals, refresh } = useCommercialDeals({
     user,
     objects: api.objects,
     projects: api.projects,
   });
+  const demo = isDemoModeEnabled();
+  const catalog = useMemo(
+    () =>
+      demo
+        ? { projects: sessionBook().listProjects(), rooms: [] }
+        : { projects: projectsOf(api.projects), rooms: roomsOf(api.objects) },
+    [demo, api.projects, api.objects],
+  );
+  const [trail, setTrail] = useState<Array<{ kind: 'index' } | { kind: 'deal'; projectId: string }>>([]);
+  const top = trail[trail.length - 1];
+  function back() {
+    setTrail((items) => items.slice(0, -1));
+  }
+  function openDeal(projectId: string) {
+    setTrail((items) => [...items, { kind: 'deal', projectId }]);
+  }
   const actions = useMemo(
     () => nextActionsForRole('owner', api.objects, deals),
     [api.objects, deals],
@@ -125,42 +144,45 @@ export function OwnerHome({
       profile={profileOf(user, api.logout)}
     >
       <FrameBody>
-      {tab === 'objects' ? (
+      {tab === 'objects' && top?.kind === 'deal' ? (
+        <DealScreen
+          projectId={top.projectId}
+          catalog={catalog}
+          demo={demo}
+          role={user.role}
+          onBack={back}
+          onChanged={refresh}
+        />
+      ) : null}
+      {tab === 'objects' && top?.kind === 'index' ? (
+        <TabPanel>
+          <Button type="button" variant="ghost" onClick={back}>← Назад</Button>
+          <DealIndex projects={catalog.projects} deals={deals} onOpen={openDeal} />
+        </TabPanel>
+      ) : null}
+      {tab === 'objects' && !top ? (
         <TabPanel>
           {/* Kanban first: objects tab must keep the board in the first viewport
               (drag/delete e2e and day-to-day use). Commercial blocks follow. */}
           <WorkToday
             actions={actions}
             onOpen={(action) => {
-              if (action.objectId) api.openObject(action.objectId);
+              const projectId = action.projectId || deals.find((deal) => deal.id === action.dealId)?.projectId;
+              if (projectId) setTrail([{ kind: 'deal', projectId }]);
+              else if (action.objectId) api.openObject(action.objectId);
             }}
           />
           <SupportRequestButton module="owner_home" />
-          <RoleWorkspace
-            onCreate={() => onNavigate('problemomer')}
-            onOpened={(selection) => setOpenedProjectId(selection.projectId)}
-          />
+          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
           <EntryPoints
             onSelect={(_id, route) => {
               if (route === 'calculator') onOpenCalc();
               else onNavigate('problemomer');
             }}
           />
-          <CommercialPanel
-            projectId={openedProjectId}
-            dealId={
-              deals.find((deal) => deal.projectId === openedProjectId && !deal.outcome)?.id ||
-              deals.find((deal) => deal.projectId === openedProjectId)?.id ||
-              null
-            }
-            staff={staff.map((s) => ({
-              id: s.id,
-              label: s.displayName || s.login,
-              role: s.role,
-            }))}
-            onDealChanged={refresh}
-            dealsLoading={dealsLoading}
-          />
+          <Button type="button" variant="secondary" onClick={() => setTrail([{ kind: 'index' }])}>
+            Сделки и предложения
+          </Button>
         </TabPanel>
       ) : null}
 

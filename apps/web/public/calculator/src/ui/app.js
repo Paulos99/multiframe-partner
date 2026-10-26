@@ -2148,6 +2148,7 @@ async function publishCalcToCabinet() {
         panelsCost,
         filename: priced.filename,
         pdfBase64,
+        schemeImage: input.ceilingImage || input.planImage || null,
       },
       window.location.origin,
     );

@@ -13,6 +13,8 @@ export type CabinetCalcMessage = {
   panelsCost?: number | null;
   filename?: string;
   pdfBase64?: string;
+  /** Чертёж раскладки без цен. Смета с ценами остаётся в pdfBase64. */
+  schemeImage?: string | null;
   /** Старый калькулятор слал ещё PDF без цен. Больше не используется. */
   specFilename?: string;
   specPdfBase64?: string;

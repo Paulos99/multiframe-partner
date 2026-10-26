@@ -3,7 +3,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: var(--touch-min);
   padding: 4px 10px 4px 4px;
   border: 1px solid var(--cab-border);
   border-radius: var(--cab-radius-pill);
@@ -89,11 +89,11 @@
   }
 }
 
-/* Телефон: переключатель в верхнем ряду шапки рядом с логотипами — 40 px, как остальные кнопки ряда. */
+/* Телефон: переключатель в верхнем ряду шапки. Высота та же, что у соседних кнопок. */
 @media (max-width: 640px) {
   .toggle,
   .toggleOn {
-    min-height: 40px;
+    min-height: var(--touch-min);
     box-shadow: none;
   }
 }

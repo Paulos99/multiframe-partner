@@ -133,6 +133,15 @@
   border-color: var(--cab-border-strong);
 }
 
+.scheme {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  border-radius: 12px;
+}
+
 .checkMark {
   width: 22px;
   height: 22px;
