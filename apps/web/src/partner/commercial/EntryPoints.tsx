@@ -9,24 +9,14 @@ export function EntryPoints({
   return (
     <section className={styles.hintCard} aria-label="Начать работу">
       <h2>С чего начать</h2>
-      <p className={styles.lead}>Три равноправных входа — не обязательно с жалобы на шум.</p>
-      <div className={styles.toolsGrid || undefined} style={{ display: 'grid', gap: 12 }}>
+      <p className={styles.lead}>Проблемомер и калькулятор открываются отдельно.</p>
+      <div className={styles.salesCtas}>
         {WORK_ENTRIES.map((entry) => (
           <button
             key={entry.id}
             type="button"
-            className={styles.primaryBtn || styles.ghostBtn}
-            style={{
-              textAlign: 'left',
-              padding: '12px 14px',
-              borderRadius: 12,
-              border: '1px solid var(--border, #d8d8d8)',
-              background: 'var(--surface, #fff)',
-              cursor: 'pointer',
-            }}
-            onClick={() =>
-              onSelect(entry.id, entry.route === 'calculator' ? 'calculator' : 'problemomer')
-            }
+            className={`${styles.ghost} ${styles.entryBtn}`}
+            onClick={() => onSelect(entry.id, entry.route)}
           >
             <strong style={{ display: 'block', marginBottom: 4 }}>{entry.title}</strong>
             <span className={styles.lead}>{entry.description}</span>

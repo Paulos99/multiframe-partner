@@ -51,10 +51,14 @@ import {
 import {
   calcMessageHasScheme,
   objectPatchFromCalc,
+  preliminaryRoomPatch,
   readablePdfName,
   type CabinetCalcMessage,
 } from './cabinetCalc';
+import type { ConsultSnapshot } from './commercial/saveDestination';
 import { withDemoDocuments } from './demoDocuments';
+import { isDemoModeEnabled } from './demoMode';
+import { overlayDemoSalesRooms } from './commercial/demoQueue';
 import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
 import {
   bootstrapHistoryReset,
@@ -189,10 +193,10 @@ type PartnerApi = {
   projectsError: string | null;
   projectsUnavailable: boolean;
   refreshProjects: () => Promise<void>;
-  createProject: (input: ProjectInput) => Promise<Project>;
+  createProject: (input: ProjectInput, idempotencyKey?: string) => Promise<Project>;
   updateProject: (id: string, input: ProjectInput) => Promise<Project>;
   attachRoomToProject: (roomId: string, projectId: string) => Promise<void>;
-  saveObject: (input: Partial<JobObject> & { id?: string }) => Promise<JobObject>;
+  saveObject: (input: Partial<JobObject> & { id?: string }, idempotencyKey?: string) => Promise<JobObject>;
   deleteObject: (id: string) => Promise<void>;
   flushObjectQueue: () => Promise<void>;
   /** Открыть калькулятор. objectId — обновить эту карточку, null — новый объект на первом расчёте. */
@@ -203,7 +207,16 @@ type PartnerApi = {
   diagnosisRequest: { objectId: string; nonce: number } | null;
   openObject: (id: string) => void;
   openedObjectId: string | null;
-  attachCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
+  /** Куда вернуться на главную продаж: в комнату или к задачам дня. */
+  cabinetEntry: 'today' | 'room';
+  enterToday: () => void;
+  attachCalculation: (
+    message: CabinetCalcMessage,
+    objectId: string | null,
+    known?: JobObject | null,
+  ) => Promise<JobObject | null>;
+  unsavedConsult: ConsultSnapshot | null;
+  rememberConsult: (snapshot: ConsultSnapshot | null) => void;
   /** «Профиль» — PDF проблемомера в карточку объекта. */
   attachProfile: (saved: JobObject, pdfBase64: string) => Promise<JobObject | null>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
@@ -237,6 +250,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [projectsUnavailable, setProjectsUnavailable] = useState(false);
   const [diagnosisRequest, setDiagnosisRequest] = useState<{ objectId: string; nonce: number } | null>(null);
   const [openedObjectId, setOpenedObjectId] = useState<string | null>(null);
+  const [cabinetEntry, setCabinetEntry] = useState<'today' | 'room'>('today');
+  const [unsavedConsult, setUnsavedConsult] = useState<ConsultSnapshot | null>(null);
+  const rememberConsult = useCallback((snapshot: ConsultSnapshot | null) => {
+    setUnsavedConsult(snapshot);
+  }, []);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const [calculations, setCalculations] = useState<CachedCalculation[]>([]);
@@ -271,10 +289,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     const stamp = objectsEpoch.current;
     if (!silent) setObjectsLoading(true);
     try {
-      const list = withDemoDocuments(await loadVisibleObjects(session, remote));
+      const live = withDemoDocuments(await loadVisibleObjects(session, remote));
       if (stamp !== objectsEpoch.current) return;
+      cacheObjects(live);
+      const list = overlayDemoSalesRooms(live, session, isDemoModeEnabled());
       setObjects(list);
-      cacheObjects(list);
       const queuedDocs = peekObjectDocumentQueue().length;
       setPendingSyncCount(
         (await countMyOutbox(session.id).catch(() => peekObjectQueue().length)) + queuedDocs,
@@ -723,9 +742,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   },[user,remote,tick]);
 
   const saveObject = useCallback(
-    async (input: Partial<JobObject> & { id?: string }) => {
+    async (input: Partial<JobObject> & { id?: string }, idempotencyKey?: string) => {
       if (!user) throw new Error('Нет сессии');
-      const obj = await saveObjectSynced(user, remote, stripObjectDocuments(input));
+      const obj = await saveObjectSynced(user, remote, stripObjectDocuments(input), idempotencyKey);
       await refreshObjects();
       await refreshProjects();
       return obj;
@@ -734,9 +753,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   );
 
   const createProject = useCallback(
-    async (input: ProjectInput) => {
+    async (input: ProjectInput, idempotencyKey?: string) => {
       if (!user) throw new Error('Нет сессии');
-      const project = await saveProjectSynced(user, remote, input);
+      const project = await saveProjectSynced(user, remote, input, undefined, idempotencyKey);
       await refreshProjects();
       return project;
     },
@@ -777,7 +796,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   const clearDiagnosis = useCallback(() => setDiagnosisRequest(null), []);
 
-  const openObject = useCallback((id: string) => setOpenedObjectId(id), []);
+  const openObject = useCallback((id: string) => {
+    setOpenedObjectId(id);
+    setCabinetEntry('room');
+  }, []);
+  const enterToday = useCallback(() => setCabinetEntry('today'), []);
 
   const requestCalculator = useCallback((objectId: string | null, areaM2?: number | null) => {
     const area = areaM2 !== undefined
@@ -839,12 +862,22 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   );
 
   const attachCalculation = useCallback(
-    async (message: CabinetCalcMessage, objectId: string | null) => {
+    async (message: CabinetCalcMessage, objectId: string | null, known?: JobObject | null) => {
       if (!user || !canCreateObjects(user.role)) return null;
-      if (!calcMessageHasScheme(message)) return null;
-      const existing = objectId ? objects.find((o) => o.id === objectId) : undefined;
-      const patch = objectPatchFromCalc(message, existing, user.org, objectId);
-      const saved = await saveObject(patch);
+      const id = known?.id || objectId;
+      if (!id) return null;
+      const existing = known?.id === id ? known : objects.find((item) => item.id === id);
+      if (!existing?.id) return null;
+      const areaOnly = Boolean(
+        message.areaEstimate || message.inputMode === 'area' || !calcMessageHasScheme(message),
+      );
+      if (areaOnly) {
+        const patch = preliminaryRoomPatch(message, existing, user.org);
+        if (!patch) return null;
+        return saveObject({ ...existing, ...patch, id: existing.id });
+      }
+      const patch = objectPatchFromCalc(message, existing, user.org, existing.id);
+      const saved = await saveObject({ ...existing, ...patch, id: existing.id });
       const namedAt = new Date().toISOString();
       // Одна «Смета»: цены, количество и схема раскладки. PDF без цен больше не делаем.
       return attachDocuments(saved, [
@@ -959,7 +992,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       diagnosisRequest,
       openObject,
       openedObjectId,
+      cabinetEntry,
+      enterToday,
       attachCalculation,
+      unsavedConsult,
+      rememberConsult,
       attachProfile,
       noteTool,
       refresh,
@@ -1009,7 +1046,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       diagnosisRequest,
       openObject,
       openedObjectId,
+      cabinetEntry,
+      enterToday,
       attachCalculation,
+      unsavedConsult,
+      rememberConsult,
       attachProfile,
       noteTool,
       refresh,

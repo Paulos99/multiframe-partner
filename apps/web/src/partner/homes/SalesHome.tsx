@@ -9,15 +9,16 @@ import { InstallAppButton } from '../../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../../app-shell/CabinetChrome';
 import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
-import { EntryPoints } from '../commercial/EntryPoints';
 import { WorkToday } from '../commercial/WorkToday';
-import { nextActionsForRole } from '../commercial/nextActions';
+import { nextActionsForRole, type NextAction } from '../commercial/nextActions';
 import { DealIndex } from '../commercial/DealIndex';
 import { DealScreen } from '../commercial/DealScreen';
 import { projectsOf, roomsOf } from '../commercial/commercialPort';
 import { sessionBook } from '../commercial/demoBook';
 import { SupportRequestButton } from '../SupportRequestButton';
 import { useCommercialDeals } from '../commercial/useCommercialDeals';
+import { FadeRise } from '../motionBits';
+import { SyncStatus } from '../SyncStatus';
 
 import {
   roleHeading,
@@ -28,6 +29,7 @@ import {
   profileOf,
   type CabinetRoute,
 } from './cabinetShared';
+import styles from '../partner.module.css';
 
 type Route = CabinetRoute;
 export function SalesHome({
@@ -43,12 +45,18 @@ export function SalesHome({
   const [tab, setTab] = useState<'deals' | 'staff' | 'analytics' | 'help' | 'tools'>(() =>
     consumeReturnToTools() ? 'tools' : 'deals',
   );
-  const { deals, refresh } = useCommercialDeals({
+  const [openedProject, setOpenedProject] = useState<string | null>(null);
+  const [indexOpen, setIndexOpen] = useState(false);
+  const [roomOpen, setRoomOpen] = useState(() => api.cabinetEntry === 'room' && Boolean(api.openedObjectId));
+  const [focusProjectId, setFocusProjectId] = useState<string | null>(null);
+  const [focusRoomId, setFocusRoomId] = useState<string | null>(() =>
+    api.cabinetEntry === 'room' ? api.openedObjectId : null,
+  );
+  const { deals, loading: dealsLoading, refresh } = useCommercialDeals({
     user,
     objects: api.objects,
     projects: api.projects,
   });
-  const [openedProject, setOpenedProject] = useState<string | null>(null);
   const demo = isDemoModeEnabled();
   const catalog = useMemo(
     () =>
@@ -62,13 +70,42 @@ export function SalesHome({
     () => nextActionsForRole('sales', api.objects, deals),
     [api.objects, deals],
   );
+  const queueLoading = Boolean(api.objectsLoading || dealsLoading);
 
-  const openDeals = deals.filter((d) => !d.outcome).length;
+  function knownProject(projectId: string | null): string | null {
+    if (!projectId) return null;
+    if (!demo || catalog.projects.some((project) => project.id === projectId)) return projectId;
+    return catalog.projects.find((project) => project.id === 'prj_before')?.id || catalog.projects[0]?.id || null;
+  }
+
+  function openDeal(projectId: string) {
+    setRoomOpen(false);
+    setIndexOpen(false);
+    setOpenedProject(projectId);
+  }
+
+  function openAction(action: NextAction) {
+    const fromDeal = action.dealId ? deals.find((deal) => deal.id === action.dealId)?.projectId : null;
+    const fromRoom = action.objectId ? api.objects.find((obj) => obj.id === action.objectId)?.projectId : null;
+    const projectId = knownProject(action.projectId || fromDeal || fromRoom || null);
+    if (projectId) {
+      openDeal(projectId);
+      return;
+    }
+    if (action.objectId) {
+      setFocusProjectId(null);
+      setFocusRoomId(action.objectId);
+      api.openObject(action.objectId);
+      setOpenedProject(null);
+      setIndexOpen(false);
+      setRoomOpen(true);
+    }
+  }
 
   const salesNav: SideItem[] = [
     {
       id: 'deals',
-      label: `Сделки · ${openDeals || api.objects.length}`,
+      label: queueLoading ? 'Сегодня' : actions.length ? `Сегодня · ${actions.length}` : 'Сегодня',
       active: tab === 'deals',
       onSelect: () => setTab('deals'),
     },
@@ -80,7 +117,7 @@ export function SalesHome({
   return (
     <CabinetChrome
       title={roleHeading('sales', user)}
-      lead="Сегодня в работе · сделки и КП"
+      lead="Сегодня · Продажи"
       items={withToolsItem(salesNav, tab === 'tools', () => setTab('tools'))}
       extra={
         <>
@@ -91,7 +128,26 @@ export function SalesHome({
       profile={profileOf(user, api.logout)}
     >
       <FrameBody>
-      {tab === 'deals' && openedProject ? (
+      {tab === 'deals' && roomOpen ? (
+        <div className={styles.salesHome}>
+          <button
+            type="button"
+            className={styles.salesLink}
+            onClick={() => {
+              api.enterToday();
+              setRoomOpen(false);
+            }}
+          >
+            К сегодняшним задачам
+          </button>
+          <RoleWorkspace
+            focusProjectId={focusProjectId}
+            focusRoomId={focusRoomId}
+            onCreate={() => onNavigate('problemomer')}
+          />
+        </div>
+      ) : null}
+      {tab === 'deals' && !roomOpen && openedProject ? (
         <DealScreen
           projectId={openedProject}
           catalog={catalog}
@@ -101,24 +157,64 @@ export function SalesHome({
           onChanged={refresh}
         />
       ) : null}
-      {tab === 'deals' && !openedProject ? (
+      {tab === 'deals' && !roomOpen && !openedProject ? (
         <TabPanel>
-          <WorkToday
-            actions={actions}
-            onOpen={(action) => {
-              const projectId = action.projectId || deals.find((deal) => deal.id === action.dealId)?.projectId;
-              if (projectId) setOpenedProject(projectId);
-            }}
-          />
-          <DealIndex projects={catalog.projects} deals={deals} onOpen={setOpenedProject} />
-          <SupportRequestButton module="sales_home" />
-          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
-          <EntryPoints
-            onSelect={(_id, route) => {
-              if (route === 'calculator') onOpenCalc();
-              else onNavigate('problemomer');
-            }}
-          />
+          <FadeRise key={indexOpen ? 'index' : 'today'}>
+            <div className={styles.salesHome}>
+              {indexOpen ? (
+                <>
+                  <button type="button" className={styles.salesLink} onClick={() => setIndexOpen(false)}>
+                    К сегодняшним задачам
+                  </button>
+                  <DealIndex projects={catalog.projects} deals={deals} onOpen={openDeal} />
+                </>
+              ) : (
+                <>
+                  <div className={styles.salesSync}>
+                    <SyncStatus />
+                  </div>
+                  <WorkToday
+                    title="Сегодня · Продажи"
+                    actions={actions}
+                    loading={queueLoading}
+                    empty="Нет срочных задач — можно начать новую консультацию"
+                    onOpen={openAction}
+                  />
+                  {!api.online ? (
+                    <p className={styles.flash} role="status">
+                      Нет сети. Показаны задачи, сохранённые на устройстве. Они могут быть неполными.
+                    </p>
+                  ) : null}
+                  <div className={styles.salesDock}>
+                    <button
+                      type="button"
+                      className={styles.primary}
+                      onClick={() => {
+                        api.enterToday();
+                        onNavigate('problemomer');
+                      }}
+                    >
+                      Проблемомер
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.primary}
+                      onClick={() => {
+                        api.enterToday();
+                        onOpenCalc();
+                      }}
+                    >
+                      Калькулятор
+                    </button>
+                  </div>
+                  <button type="button" className={styles.salesLink} onClick={() => setIndexOpen(true)}>
+                    Все проекты
+                  </button>
+                  <SupportRequestButton module="sales_home" />
+                </>
+              )}
+            </div>
+          </FadeRise>
         </TabPanel>
       ) : null}
       {tab === 'staff' ? (
@@ -134,8 +230,14 @@ export function SalesHome({
       {tab === 'tools' ? (
         <TabPanel>
           <ToolsPanel
-            onProblemomer={() => onNavigate('problemomer')}
-            onCalculator={onOpenCalc}
+            onProblemomer={() => {
+              api.enterToday();
+              onNavigate('problemomer');
+            }}
+            onCalculator={() => {
+              api.enterToday();
+              onOpenCalc();
+            }}
           />
         </TabPanel>
       ) : null}

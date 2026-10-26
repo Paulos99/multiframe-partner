@@ -1,4 +1,5 @@
 import type { JobObject, JobObjectEstimate, OrgSettings } from '../../../../packages/shared/partner';
+import { buildEstimateFromOrg } from './estimate';
 
 export type CabinetCalcMessage = {
   type: 'mf-cabinet-calc';
@@ -73,6 +74,43 @@ export function estimateFromCalc(
     installCost,
     dowelsCost,
     totalCost: parts.length ? parts.reduce((s, n) => s + n, 0) : null,
+  };
+}
+
+/**
+ * Предварительный расчёт по площади — только в уже существующую комнату.
+ * Без комнаты ничего не создаём: место выбирает человек.
+ */
+export function preliminaryRoomPatch(
+  msg: CabinetCalcMessage,
+  existing: JobObject | undefined,
+  org: OrgSettings | null | undefined,
+): (Partial<JobObject> & { id: string }) | null {
+  if (!existing?.id) return null;
+  const areaRaw = num(msg.areaM2);
+  const area = areaRaw != null && areaRaw > 0 ? Math.round(areaRaw * 10) / 10 : null;
+  if (area == null) return null;
+  const patch = objectPatchFromCalc({ ...msg, areaM2: area }, existing, org, existing.id);
+  if (!existing.clientSummary) {
+    patch.clientSummary = `Предварительный расчёт · ${area} м² · без схемы`;
+  }
+  return { ...patch, id: existing.id };
+}
+
+/** Сумма заново считается по площади комнаты, если человек оставил её. */
+export function withAreaChoice(
+  msg: CabinetCalcMessage,
+  areaM2: number,
+  org: OrgSettings | null | undefined,
+): CabinetCalcMessage {
+  const estimate = buildEstimateFromOrg(areaM2, org);
+  if (!estimate) return { ...msg, areaM2 };
+  return {
+    ...msg,
+    areaM2,
+    panels: estimate.panels,
+    dowels: estimate.dowels,
+    panelsCost: estimate.panelsCost,
   };
 }
 

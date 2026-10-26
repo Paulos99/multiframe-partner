@@ -85,9 +85,11 @@ async function expectFullResult(page: Page, withSave: boolean) {
     expect(op, name).toBe(1);
   }
   if (!withSave) return;
-  // Смета для КП и «Сохранить объект» остаются у ролей, которые создают объекты.
+  // Смета для КП и явное «Сохранить» остаются у ролей, которые создают объекты.
   await expect(page.getByRole('heading', { name: 'Смета для КП' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Сохранить объект', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Куда сохранить' }).getByRole('button', { name: 'Сохранить', exact: true }),
+  ).toBeVisible();
 }
 
 for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {

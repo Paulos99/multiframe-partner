@@ -169,6 +169,7 @@ export function OwnerHome({
             onOpen={(action) => {
               const projectId = action.projectId || deals.find((deal) => deal.id === action.dealId)?.projectId;
               if (projectId) setTrail([{ kind: 'deal', projectId }]);
+              else if (action.objectId) api.openObject(action.objectId);
             }}
           />
           <SupportRequestButton module="owner_home" />

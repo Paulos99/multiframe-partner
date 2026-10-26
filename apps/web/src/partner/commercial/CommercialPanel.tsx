@@ -1,19 +1,25 @@
-import { useEffect, useState } from 'react';
-import { EMPTY_ASSIGNMENTS, type ObjectAssignments } from '../../../../../packages/shared/deal';
+import { useEffect, useRef, useState } from 'react';
+import { DEAL_OUTCOME_LABELS, EMPTY_ASSIGNMENTS, type ObjectAssignments } from '../../../../../packages/shared/deal';
 import type { QuoteRevision } from '../../../../../packages/shared/quote';
 import {
   hasRemoteApi,
   apiConfirmQuoteSent,
   apiCopyQuote,
+  apiCreateDeal,
   apiCreateQuote,
   apiPatchDeal,
 } from '../apiClient';
+import { dealGapCopy } from './dealHint';
+import { creationIdempotencyKey } from '../idempotency';
+import { usePartner } from '../PartnerContext';
 import { AssignmentsEditor, type StaffOption } from './AssignmentsEditor';
 import { DealOutcomeForm } from './DealOutcomeForm';
 import { QuoteActions } from './QuoteActions';
 import {
   applyLocalQuoteAction,
+  createLocalDeal,
   createLocalQuote,
+  listLocalDeals,
   listLocalQuotes,
   patchLocalDeal,
 } from './localDeals';
@@ -30,6 +36,7 @@ export function CommercialPanel({
   initialAssignments,
   onAssignmentsChange,
   onDealChanged,
+  dealsLoading = false,
 }: {
   projectId: string | null;
   dealId: string | null;
@@ -37,13 +44,40 @@ export function CommercialPanel({
   initialAssignments?: ObjectAssignments;
   onAssignmentsChange?: (next: ObjectAssignments) => void;
   onDealChanged?: () => void;
+  dealsLoading?: boolean;
 }) {
+  const partner = usePartner();
+  const hasRooms = Boolean(projectId && partner.objects.some((obj) => obj.projectId === projectId));
+  const ensuredDeal = useRef<string | null>(null);
+  const [dealFailed, setDealFailed] = useState(false);
   const [assignments, setAssignments] = useState<ObjectAssignments>(
     initialAssignments || { ...EMPTY_ASSIGNMENTS },
   );
   const [quote, setQuote] = useState<QuoteRevision | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (dealsLoading || !projectId || !hasRooms || dealId) return;
+    if (ensuredDeal.current === projectId) return;
+    ensuredDeal.current = projectId;
+    if (hasRemoteApi()) {
+      const key = creationIdempotencyKey(`deal:${projectId}`);
+      void apiCreateDeal({ projectId, stage: 'contact' }, { idempotencyKey: key })
+        .then(() => onDealChanged?.())
+        .catch(() => {
+          ensuredDeal.current = null;
+          setDealFailed(true);
+        });
+      return;
+    }
+    const orgId = partner.user?.orgId;
+    if (!orgId) return;
+    if (!listLocalDeals(orgId).some((deal) => deal.projectId === projectId)) {
+      createLocalDeal({ orgId, projectId, ownerUserId: partner.user?.id || null });
+    }
+    onDealChanged?.();
+  }, [dealsLoading, projectId, hasRooms, dealId, onDealChanged, partner.user]);
 
   useEffect(() => {
     if (!projectId || hasRemoteApi()) return;
@@ -117,7 +151,7 @@ export function CommercialPanel({
           Копирование текста не считает КП отправленным. Нужна кнопка «Подтвердить отправку».
         </p>
         {!projectId ? (
-          <p className={styles.lead}>Нет проекта — сохраните объект с адресом, появится сделка.</p>
+          <p className={styles.lead}>Откройте проект — предложение относится к нему.</p>
         ) : null}
         {!quote ? (
           <button
@@ -135,7 +169,7 @@ export function CommercialPanel({
             onCopyText={async () => {
               const current = await ensureQuote();
               if (!current) return;
-              const text = `КП v${current.version} · проект ${current.projectId}`;
+              const text = `Коммерческое предложение, версия ${current.version}`;
               try {
                 await navigator.clipboard.writeText(text);
               } catch {
@@ -191,7 +225,7 @@ export function CommercialPanel({
               } else {
                 patchLocalDeal(dealId, { outcome, lossReason, lossComment });
               }
-              setMsg(`Итог сохранён: ${outcome}`);
+              setMsg(`Итог сохранён: ${DEAL_OUTCOME_LABELS[outcome]}`);
               onDealChanged?.();
             } catch (e) {
               setMsg(e instanceof Error ? e.message : 'Ошибка сохранения итога');
@@ -201,7 +235,14 @@ export function CommercialPanel({
           }}
         />
       ) : (
-        <p className={styles.lead}>Сделка появится после сохранения объекта в проект.</p>
+        <p className={styles.lead}>
+          {dealGapCopy({
+            projectOpen: Boolean(projectId),
+            hasRooms,
+            loading: dealsLoading,
+            failed: dealFailed,
+          })}
+        </p>
       )}
 
       {msg ? (

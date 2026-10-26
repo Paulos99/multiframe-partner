@@ -35,6 +35,7 @@ export function useCommercialDeals(input: {
 }) {
   const { user, objects, projects } = input;
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
   const refresh = useCallback(() => setTick((n) => n + 1), []);
@@ -44,23 +45,29 @@ export function useCommercialDeals(input: {
     const orgId = user?.orgId || null;
     if (!user || !orgId) {
       setDeals([]);
+      setLoading(false);
       return;
     }
 
     if (isDemoModeEnabled()) {
       setDeals(sessionBook().listDeals().filter((deal) => !orgId || deal.orgId === orgId));
+      setLoading(false);
       return () => {
         live = false;
       };
     }
 
     if (hasRemoteApi()) {
+      setLoading(true);
       void apiListDeals()
         .then((rows) => {
           if (live) setDeals(rows.map(asDeal));
         })
         .catch(() => {
           if (live) setDeals([]);
+        })
+        .finally(() => {
+          if (live) setLoading(false);
         });
       return () => {
         live = false;
@@ -68,6 +75,7 @@ export function useCommercialDeals(input: {
     }
 
     setDeals([]);
+    setLoading(false);
     return () => {
       live = false;
     };
@@ -92,5 +100,5 @@ export function useCommercialDeals(input: {
     refresh();
   }, [refresh]);
 
-  return { deals, projectId, activeDealId, refresh: reloadLocal };
+  return { deals, loading, projectId, activeDealId, refresh: reloadLocal };
 }

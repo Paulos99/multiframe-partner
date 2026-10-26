@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 const ROLES = [
   { login: 'admin', password: 'admin1234', home: /Партнёрская сеть|Аналитика/ },
   { login: 'partner1', password: 'demo1234', home: /Сегодня в работе|С чего начать/ },
-  { login: 'sales1', password: 'exec1234', home: /Сегодня в работе|С чего начать/ },
+  { login: 'sales1', password: 'exec1234', home: /Сегодня · Продажи/ },
   { login: 'exec1', password: 'exec1234', home: /Мои замеры|С чего начать/ },
   { login: 'crew1', password: 'exec1234', home: /Мои задания|Задания на монтаж/ },
 ] as const;

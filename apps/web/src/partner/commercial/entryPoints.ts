@@ -1,36 +1,28 @@
-/** Три равноправные точки входа в работу (PRD §3.1). */
+/** Входы в инструменты. Проблемомер — один, калькулятор — отдельно. */
 
-export type WorkEntryId = 'consultation' | 'quick_calc' | 'acoustic';
+export type WorkEntryId = 'consultation' | 'quick_calc';
 
 export type WorkEntry = {
   id: WorkEntryId;
   title: string;
   description: string;
-  /** Куда ведёт UI. */
-  route: 'problemomer' | 'calculator' | 'cabinet';
+  route: 'problemomer' | 'calculator';
   startMode: 'consultation' | 'calculator' | 'problemomer';
 };
 
 export const WORK_ENTRIES: WorkEntry[] = [
   {
     id: 'consultation',
-    title: 'Новый клиент / консультация',
-    description: 'Короткая карточка и вопросы о помещении — предложить MultiFrame.',
+    title: 'Проблемомер',
+    description: 'Покажет клиенту акустический комфорт и зачем нужно решение. Результат остаётся в текущей комнате или дожидается выбора места.',
     route: 'problemomer',
-    startMode: 'consultation',
+    startMode: 'problemomer',
   },
   {
     id: 'quick_calc',
-    title: 'Быстрый расчёт',
-    description: 'Сразу калькулятор. Потом можно привязать к проекту.',
+    title: 'Калькулятор',
+    description: 'Предварительная цена по площади или расчёт со схемой. Результат остаётся в текущей комнате или дожидается выбора места.',
     route: 'calculator',
     startMode: 'calculator',
-  },
-  {
-    id: 'acoustic',
-    title: 'Оценить акустический комфорт',
-    description: 'Проблемомер для диагностики и демонстрации.',
-    route: 'problemomer',
-    startMode: 'problemomer',
   },
 ];

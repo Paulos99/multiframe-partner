@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { canCreateObjects, type JobObject } from '../../../../packages/shared/partner';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { useSession } from '../state/SessionContext';
@@ -7,7 +7,9 @@ import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
 import { usePartner } from './PartnerContext';
-import listStyles from './ProjectList.module.css';
+import { SaveDestination } from './commercial/SaveDestination';
+import { chosenArea, type SaveDraftView, type SaveIntent } from './commercial/saveDestination';
+import { claimSave, creationIdempotencyKey, releaseSave } from './idempotency';
 import styles from './partner.module.css';
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -20,25 +22,26 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 export function SaveObjectCard() {
-  const { user, saveObject, createProject, partner, diagnosisRequest, objects, projects, attachProfile } = usePartner();
+  const {
+    user,
+    saveObject,
+    createProject,
+    partner,
+    diagnosisRequest,
+    objects,
+    projects,
+    attachProfile,
+    rememberConsult,
+  } = usePartner();
   const { session, patchRoom, setCeilingArea } = useSession();
-  const [clientName, setClientName] = useState('');
-  const [clientPhone, setClientPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState(user?.org?.city || '');
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
-  const [sentFlash, setSentFlash] = useState(false);
-  /** Keep one card: save / send update the same object instead of creating clones. */
   const [objectId, setObjectId] = useState<string | null>(null);
-  const [projectChoice, setProjectChoice] = useState('new');
-  const [roomName, setRoomName] = useState('');
   const appliedDiagnosis = useRef<number | null>(null);
-  /** Последний приложенный «Профиль»: объект + ответы. Повторное сохранение без правок не плодит файлы. */
   const attachedProfile = useRef<string | null>(null);
+  const saveLock = useRef(false);
   const [profileNote, setProfileNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,41 +50,47 @@ export function SaveObjectCard() {
     if (!obj) return;
     appliedDiagnosis.current = diagnosisRequest.nonce;
     setObjectId(obj.id);
-    setClientName(obj.clientName || '');
-    setClientPhone(obj.clientPhone || '');
-    setAddress(obj.address || '');
-    setCity(obj.city || user?.org?.city || '');
-    setProjectChoice(obj.projectId || 'new');
-    setRoomName(obj.roomName || '');
     const answers = obj.room?.answers;
     if (answers && typeof answers === 'object') patchRoom(answers as Partial<RoomAnswers>);
     if (typeof obj.room?.areaM2 === 'number') setCeilingArea(obj.room.areaM2);
-  }, [diagnosisRequest, objects, patchRoom, setCeilingArea, user?.org?.city]);
+  }, [diagnosisRequest, objects, patchRoom, setCeilingArea]);
 
   useEffect(() => {
-    if (!savedFlash && !sentFlash) return;
-    const t = window.setTimeout(() => {
-      setSavedFlash(false);
-      setSentFlash(false);
-    }, 1600);
-    return () => window.clearTimeout(t);
-  }, [savedFlash, sentFlash]);
+    if (!user || !canCreateObjects(user.role)) return;
+    const areaM2 = session.answers.room.ceilingAreaM2 ?? null;
+    const nextEstimate = partner && areaM2 ? buildEstimateFromOrg(areaM2, partner) : null;
+    rememberConsult({
+      areaM2,
+      summary: buildClientSummary(session),
+      totalCost: nextEstimate?.totalCost ?? null,
+      panels: nextEstimate?.panels ?? null,
+    });
+  }, [user, session, partner, rememberConsult]);
 
   if (!user || !canCreateObjects(user.role)) return null;
+  const sessionUser = user;
 
   const room = session.answers.room;
   const area = room.ceilingAreaM2 ?? null;
   const summary = buildClientSummary(session);
   const est = partner && area ? buildEstimateFromOrg(area, partner) : null;
-
-
   const sim = session.derived?.simulation;
+  const bound = objectId ? objects.find((item) => item.id === objectId) || null : null;
 
-  function roomPayload() {
+  const draft: SaveDraftView = {
+    tool: 'problemomer',
+    areaM2: area,
+    totalCost: est?.totalCost ?? null,
+    hasProfile: Boolean(sim),
+    preliminary: Boolean(est),
+    hasScheme: false,
+  };
+
+  function roomPayload(areaM2: number | null) {
     return {
       roomType: room.roomType,
       roomTypeCustom: room.roomTypeCustom || null,
-      areaM2: area,
+      areaM2,
       houseType: room.houseType,
       objectStage: room.objectStage,
       classBefore: sim ? `Rw ${sim.before.Rw} / Lnw ${sim.before.Lnw}` : null,
@@ -90,226 +99,162 @@ export function SaveObjectCard() {
     };
   }
 
-  function estimatePayload() {
-    if (!est) return null;
+  function estimateFor(areaM2: number | null) {
+    const next = partner && areaM2 ? buildEstimateFromOrg(areaM2, partner) : est;
+    if (!next) return null;
     return {
-      panels: est.panels,
-      dowels: est.dowels,
-      panelsCost: est.panelsCost,
-      installCost: est.installCost,
-      dowelsCost: est.dowelsCost,
-      totalCost: est.totalCost,
+      panels: next.panels,
+      dowels: next.dowels,
+      panelsCost: next.panelsCost,
+      installCost: next.installCost,
+      dowelsCost: next.dowelsCost,
+      totalCost: next.totalCost,
     };
   }
 
-  function objectFields(status: 'measured' | 'quote_sent', projectId?: string) {
-    const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
-    const chosen = projectId || (projectChoice !== 'new' ? projectChoice : existing?.projectId || undefined);
-    const roomLabel = roomName.trim() || existing?.roomName || room.roomTypeCustom || '';
-    return {
-      ...(objectId ? { id: objectId } : {}),
-      ...(chosen ? { projectId: chosen } : {}),
-      ...(roomLabel ? { roomName: roomLabel } : {}),
-      status,
-      clientName,
-      clientPhone,
-      address,
-      city: city || user?.org?.city || '',
-      clientSummary: summary,
-      room: roomPayload(),
-      estimate: estimatePayload(),
-    };
-  }
-
-  async function projectForSave(): Promise<string | undefined> {
-    if (projectChoice !== 'new') return projectChoice;
-    const existing = objectId ? objects.find((item) => item.id === objectId) : undefined;
-    if (!existing?.projectId) return undefined;
-    if (user?.role !== 'owner' && user?.role !== 'sales') return existing.projectId;
-    const project = await createProject({
-      name: clientName.trim() || address.trim() || roomName.trim() || 'Проект',
-      clientName,
-      clientPhone,
-      address,
-      city: city || user?.org?.city || '',
-    });
-    setProjectChoice(project.id);
-    return project.id;
-  }
-
-  /** «Профиль» — PDF проблемомера — уходит в карточку объекта рядом со сметой. */
   async function attachProfileTo(obj: JobObject) {
     const sig = `${obj.id}:${JSON.stringify(session.answers)}`;
     if (attachedProfile.current === sig) return;
     attachedProfile.current = sig;
-    setProfileNote('Прикладываем «Профиль» к объекту…');
+    setProfileNote('Прикладываем профиль к комнате…');
     try {
       const { blob } = await renderAcousticProfilePdf(session, { compact: true });
       const saved = await attachProfile(obj, await blobToBase64(blob));
-      setProfileNote(saved ? '«Профиль» приложен к объекту' : null);
+      setProfileNote(saved ? 'Профиль приложен к комнате' : null);
     } catch {
       attachedProfile.current = null;
-      setProfileNote('Не удалось приложить «Профиль». Сохраните объект ещё раз.');
+      setProfileNote('Не удалось приложить профиль. Сохраните ещё раз.');
     }
   }
 
-  async function onSave(e: FormEvent) {
-    e.preventDefault();
+  async function onConfirm(intent: SaveIntent) {
+    if (!claimSave(saveLock)) return;
+    const key = creationIdempotencyKey(
+      JSON.stringify({
+        area,
+        summary,
+        mode: intent.mode,
+        roomId: intent.roomId,
+        projectName: intent.projectName.trim(),
+        roomName: intent.roomName.trim(),
+        phone: intent.phone.trim(),
+        address: intent.address.trim(),
+      }),
+    );
     setBusy(true);
     setMsg(null);
     setErr(null);
     try {
-      const updating = Boolean(objectId);
-      const linked = await projectForSave();
-      const obj = await saveObject(objectFields('measured', linked));
-      if (obj.projectId) setProjectChoice(obj.projectId);
-      setObjectId(obj.id);
-      void attachProfileTo(obj);
-      setSavedFlash(true);
-      setMsg(
-        obj.pendingSync
-          ? 'Объект сохранён на устройстве — отправится при сети'
-          : updating
-            ? 'Объект обновлён'
-            : 'Объект сохранён',
-      );
-    } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : 'Не удалось сохранить');
+      const areaM2 = chosenArea(intent, area);
+      let saved: JobObject;
+      if (intent.mode === 'new' && !bound) {
+        const project = await createProject(
+          {
+            name: intent.projectName.trim(),
+            clientName: intent.projectName.trim(),
+            clientPhone: intent.phone.trim(),
+            address: intent.address.trim(),
+            city: sessionUser.org?.city || '',
+          },
+          key,
+        );
+        saved = await saveObject({
+          projectId: project.id,
+          roomName: intent.roomName.trim(),
+          status: 'measured',
+          clientName: intent.projectName.trim(),
+          clientPhone: intent.phone.trim(),
+          address: intent.address.trim(),
+          city: sessionUser.org?.city || '',
+          clientSummary: summary,
+          room: roomPayload(areaM2),
+          estimate: estimateFor(areaM2),
+        }, `${key}:room`);
+      } else {
+        const targetId = bound?.id || intent.roomId;
+        if (!targetId) throw new Error('Выберите комнату');
+        const existing = objects.find((item) => item.id === targetId);
+        saved = await saveObject({
+          ...(existing || {}),
+          id: targetId,
+          status: 'measured',
+          clientSummary: summary,
+          room: roomPayload(areaM2),
+          estimate: estimateFor(areaM2),
+        });
+      }
+      setObjectId(saved.id);
+      rememberConsult(null);
+      void attachProfileTo(saved);
+      setMsg(saved.pendingSync ? 'Комната сохранена на устройстве и уйдёт на сервер при сети' : `Сохранено в комнату «${saved.roomName || saved.clientName || 'Комната'}»`);
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Не удалось сохранить');
     } finally {
+      releaseSave(saveLock);
       setBusy(false);
     }
   }
 
   async function onSendClient() {
+    if (!objectId) {
+      setErr('Сначала сохраните результат в комнату');
+      return;
+    }
     setErr(null);
     setSending(true);
-    setSentFlash(false);
     try {
       const text = [
         summary,
-        address ? `\nАдрес: ${address}` : '',
-        clientName ? `\nКлиент: ${clientName}` : '',
-        est ? `\nОриентир КП: ${est.totalCost.toLocaleString('ru-RU')} ₽` : '',
+        est ? `\nОриентир: ${est.totalCost.toLocaleString('ru-RU')} ₽` : '',
       ]
         .filter(Boolean)
         .join('');
       const canShare = typeof navigator.share === 'function';
-      if (canShare) {
-        await navigator.share({ title: 'MultiFrame · сводка', text });
-      } else {
-        await navigator.clipboard.writeText(text);
+      if (canShare) await navigator.share({ title: 'MultiFrame · сводка', text });
+      else await navigator.clipboard.writeText(text);
+      const existing = objects.find((item) => item.id === objectId);
+      if (existing) {
+        await saveObject({ ...existing, id: objectId, status: 'quote_sent' });
       }
-      const linked = await projectForSave();
-      const obj = await saveObject(objectFields('quote_sent', linked));
-      if (obj.projectId) setProjectChoice(obj.projectId);
-      setObjectId(obj.id);
-      void attachProfileTo(obj);
-      setSentFlash(true);
-      setMsg(
-        canShare
-          ? 'Отправлено клиенту · статус «КП отправлено»'
-          : 'Сводка скопирована · статус «КП отправлено»',
-      );
-    } catch (ex) {
-      if ((ex as Error)?.name === 'AbortError') return;
-      setErr(ex instanceof Error ? ex.message : 'Не удалось отправить');
+      setMsg(canShare ? 'Отправлено клиенту · статус «КП отправлено»' : 'Сводка скопирована · статус «КП отправлено»');
+    } catch (error) {
+      if ((error as Error)?.name === 'AbortError') return;
+      setErr(error instanceof Error ? error.message : 'Не удалось отправить');
     } finally {
       setSending(false);
     }
   }
 
   return (
-    <section className={styles.card} style={{ width: '100%', marginTop: 8 }} aria-label="Объект">
-      <h2>Сохранить объект</h2>
-      <p className={styles.lead}>
-        Замер появится у менеджера. Монтажник увидит объект, когда его назначат. Без сети сохранится на телефоне.
-      </p>
-      <form onSubmit={(e) => void onSave(e)}>
-        <div className={listStyles.picker}>
-          <label className={styles.field}>
-            Проект
-            <select aria-label="Проект" value={projectChoice} onChange={(event) => setProjectChoice(event.target.value)}>
-              <option value="new">Новый проект</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                  {project.address ? ` · ${project.address}` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.field}>
-            Комната
-            <input
-              aria-label="Комната"
-              value={roomName}
-              placeholder="Кухня"
-              onChange={(event) => setRoomName(event.target.value)}
-            />
-          </label>
-        </div>
-        <div className={styles.grid2}>
-          <label className={styles.field}>
-            Клиент
-            <input
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              placeholder="Имя"
-            />
-          </label>
-          <label className={styles.field}>
-            Телефон
-            <input
-              value={clientPhone}
-              onChange={(e) => setClientPhone(e.target.value)}
-              placeholder="+7…"
-              inputMode="tel"
-            />
-          </label>
-          <label className={styles.field}>
-            Адрес
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Улица, дом, квартира"
-            />
-          </label>
-          <label className={styles.field}>
-            Город
-            <input value={city} onChange={(e) => setCity(e.target.value)} />
-          </label>
-        </div>
-        {msg ? (
-          <p className={styles.flash} role="status">
-            {msg}
-          </p>
-        ) : null}
-        {profileNote ? (
-          <p className={styles.hint} role="status" data-testid="profile-attach-note">
-            {profileNote}
-          </p>
-        ) : null}
-        {err ? (
-          <p className={styles.error} role="alert">
-            {err}
-          </p>
-        ) : null}
-        <div className={styles.actionRow}>
-          <Button type="submit" loading={busy} success={savedFlash} disabled={busy || sending}>
-            {busy ? 'Сохраняем…' : 'Сохранить объект'}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            loading={sending}
-            success={sentFlash}
-            disabled={busy || sending}
-            onClick={() => void onSendClient()}
-          >
-            {sending ? 'Отправляем…' : 'Отправить КП'}
-          </Button>
-        </div>
-      </form>
+    <section className={styles.card} style={{ width: '100%', marginTop: 8 }} aria-label="Куда сохранить">
+      <SaveDestination
+        draft={draft}
+        projects={projects}
+        rooms={objects}
+        boundRoom={bound}
+        busy={busy}
+        notice={msg}
+        onCancel={() => {
+          setErr(null);
+          setMsg('Результат остаётся на этом экране. Комната не создана.');
+        }}
+        onConfirm={onConfirm}
+      />
+      {profileNote ? (
+        <p className={styles.hint} role="status" data-testid="profile-attach-note">
+          {profileNote}
+        </p>
+      ) : null}
+      {err ? (
+        <p className={styles.error} role="alert">
+          {err}
+        </p>
+      ) : null}
+      <div className={styles.actionRow}>
+        <Button type="button" variant="secondary" loading={sending} disabled={busy || sending} onClick={() => void onSendClient()}>
+          {sending ? 'Отправляем…' : 'Отправить КП'}
+        </Button>
+      </div>
     </section>
   );
 }

@@ -2168,11 +2168,43 @@ async function publishCalcToCabinet() {
   }
 }
 
+function publishAreaNumbersToCabinet() {
+  if (window.parent === window || !isAreaEstimateMode()) return;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('partner') !== '1') return;
+  const areaM2 = (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0) || state.areaValue || null;
+  if (!(Number(areaM2) > 0)) return;
+  const panels = state.bom?.total?.panelsWithReserve ?? null;
+  const dowels = state.bom?.total?.dowelsWithReserve ?? null;
+  const panelsCost = state.bom?.total?.totalCost ?? null;
+  const sig = `area|${areaM2}|${panels}|${panelsCost}`;
+  if (sig === lastPublishedSig) return;
+  lastPublishedSig = sig;
+  window.parent.postMessage(
+    {
+      type: 'mf-cabinet-calc',
+      objectId: params.get('objectId') || null,
+      inputMode: 'area',
+      areaEstimate: true,
+      hasScheme: false,
+      panels,
+      dowels,
+      areaM2,
+      panelsCost,
+    },
+    window.location.origin,
+  );
+}
+
 function scheduleCabinetPublish(options = {}) {
   if (options.skipCabinet || onboardingDemoActive) return;
   if (window.parent === window) return;
-  // «По площади» не строит раскладку — объект и PDF не создаём.
-  if (isAreaEstimateMode()) return;
+  // «По площади» не создаёт проект: только сообщение родителю, запись — по кнопке сохранения.
+  if (isAreaEstimateMode()) {
+    clearTimeout(publishTimer);
+    publishTimer = setTimeout(() => publishAreaNumbersToCabinet(), 400);
+    return;
+  }
   clearTimeout(publishTimer);
   if (options.silent) {
     publishTimer = setTimeout(() => {

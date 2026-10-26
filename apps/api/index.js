@@ -20,6 +20,7 @@ import {
   saveStoredDocument,
 } from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
+import { idempotencyKeyFrom, rememberIdempotent, replayIdempotent } from './idempotency.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { derivedAssignedTo } from '../../packages/shared/deal.js';
 import { assertEventPayloadSafe } from '../../packages/shared/events.js';
@@ -929,6 +930,7 @@ export async function handler(event = {}, context) {
       uid,
       objectVisibleTo,
       pushActivity,
+      idempotencyKey: idempotencyKeyFrom(event.headers),
     });
     if (projectsResponse) return projectsResponse;
 
@@ -1458,6 +1460,9 @@ export async function handler(event = {}, context) {
 
     if (method === 'POST' && path.endsWith('/objects')) {
       const { platform, user } = await requireAuth(event);
+      const createKey = idempotencyKeyFrom(event.headers);
+      const replayed = replayIdempotent(user.id, createKey);
+      if (replayed) return replayed;
       if (!['owner', 'sales', 'measurer'].includes(user.role)) {
         return json(403, { message: 'Недостаточно прав' });
       }
@@ -1548,7 +1553,9 @@ export async function handler(event = {}, context) {
         });
       }
       await savePlatform(platform);
-      return json(200, { object: publicObject(obj, user.role) });
+      const created = json(200, { object: publicObject(obj, user.role) });
+      if (!existing) rememberIdempotent(user.id, createKey, created);
+      return created;
     }
 
     if (method === 'PATCH' && /\/objects\/[^/]+$/.test(path)) {

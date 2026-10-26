@@ -20,6 +20,11 @@ test('sales: демо-сделка, копирование не подтверж
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible({ timeout: 30_000 });
 
+  await expect(page.getByRole('heading', { name: 'Сегодня · Продажи' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Проблемомер', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Калькулятор', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Все проекты', exact: true }).click();
   await page.getByRole('button', { name: /Сорокина · до предложения/ }).click();
   await page.getByRole('button', { name: 'Собрать предложение' }).click();
   await page.getByRole('checkbox', { name: /Кухня/ }).check();
