@@ -259,7 +259,7 @@ function buildReportDocument(session: SessionState, assets: ReportAssets): strin
   })
     .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
     .join('');
-  const about = productAbout(room, noiseType);
+  const about = productAbout(room, noiseType, { airDb: sim.delta.Rw, impactDb: sim.delta.Lnw });
   const productHtml = about.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('');
   const airSeries = buildAirSpectrum(session.answers);
   const impactSeries = buildImpactSpectrum(session.answers);

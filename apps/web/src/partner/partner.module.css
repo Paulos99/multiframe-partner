@@ -2006,12 +2006,14 @@
 
 .actionRow {
   display: flex;
-  flex-wrap: wrap;
+  align-items: stretch;
   gap: 10px;
 }
 
 .actionRow > * {
-  flex: 1 1 180px;
+  flex: 1 1 0;
+  min-height: 48px;
+  height: auto;
 }
 
 .hintCard summary {

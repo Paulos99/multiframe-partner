@@ -301,12 +301,13 @@ export function SaveObjectCard() {
           </p>
         ) : null}
         <div className={styles.actionRow}>
-          <Button type="submit" loading={busy} success={savedFlash} disabled={busy || sending}>
+          <Button type="submit" fullWidth loading={busy} success={savedFlash} disabled={busy || sending}>
             {busy ? 'Сохраняем…' : 'Сохранить комнату'}
           </Button>
           {canMove ? (
           <Button
             type="button"
+            fullWidth
             variant="secondary"
             loading={sending}
             success={sentFlash}

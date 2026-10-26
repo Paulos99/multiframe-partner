@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { JobObject } from '../../../../packages/shared/partner';
-import { sortRooms, moveRoomOrder, orderAt, canMoveRoom, rankMovedColumn, roomCountLabel } from './kanban';
+import { sortRooms, moveRoomOrder, orderAt, canMoveRoom, rankMovedColumn, roomCountLabel, roomDisplayName } from './kanban';
 const room = (id: string, stageOrder?: number) =>
   ({
     id,
@@ -70,4 +70,10 @@ test('room counts use Russian plural forms', () => {
   assert.equal(roomCountLabel(3), '3 комнаты');
   assert.equal(roomCountLabel(11), '11 комнат');
   assert.equal(roomCountLabel(22), '22 комнаты');
+});
+
+test('a card without its own room name uses the client', () => {
+  assert.equal(roomDisplayName({ roomName: '', clientName: 'Никитин И.' }), 'Никитин И.');
+  assert.equal(roomDisplayName({ roomName: 'Комната', clientName: 'Никитин И.' }), 'Никитин И.');
+  assert.equal(roomDisplayName({ roomName: 'Спальня', clientName: 'Никитин И.' }), 'Спальня');
 });

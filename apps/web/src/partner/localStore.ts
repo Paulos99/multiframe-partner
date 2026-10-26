@@ -45,8 +45,8 @@ import {
 } from './demoSeed';
 
 /** Bumped to force leadership demo seed (two companies + objects). */
-const DB_KEY = 'mf_partner_db_v4';
-const DB_KEY_LEGACY = 'mf_partner_db_v3';
+const DB_KEY = 'mf_partner_db_v5';
+const DB_KEY_LEGACY = 'mf_partner_db_v4';
 const SESSION_KEY = 'mf_partner_session_v2';
 const TOKEN_KEY = 'mf_partner_token_v1';
 const ANALYTICS_KEY = 'mf_partner_analytics_v1';
@@ -56,7 +56,7 @@ const OBJECTS_QUEUE_KEY = 'mf_partner_objects_queue_v1';
 const PROJECTS_CACHE_KEY = 'mf_partner_projects_v1';
 const PROJECTS_READY_KEY = 'mf_partner_projects_ready_v1';
 const HISTORY_RESET_KEY = 'mf_partner_history_reset_v2';
-const DEMO_ANALYTICS_SEED_KEY = 'mf_partner_demo_analytics_seed_v1';
+const DEMO_ANALYTICS_SEED_KEY = 'mf_partner_demo_analytics_seed_v2';
 const ANALYTICS_CAP = 2000;
 
 export type StoredUser = {
@@ -194,9 +194,10 @@ export function loadDb(): PartnerDb {
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (!raw) {
-      // Fresh v4 seed (two demo companies). Drop prior local DBs.
+      // Fresh seed. Drop prior local DBs so старые демо-часы не остаются.
       try {
         localStorage.removeItem(DB_KEY_LEGACY);
+        localStorage.removeItem('mf_partner_db_v3');
         localStorage.removeItem('mf_partner_db_v2');
       } catch {
         /* ignore */

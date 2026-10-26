@@ -5,59 +5,31 @@
  */
 import type { JobObject, JobObjectDocument } from '../../../../packages/shared/partner';
 import { visibleDocuments } from '../../../../packages/shared/partner';
-import { readablePdfName } from './cabinetCalc';
-import { isDemoModeEnabled } from './DemoSwitcher';
+import { isDemoModeEnabled } from './demoMode';
 import { openFilePreview } from '../ui/filePreview/previewStore';
 
-const DEMO_IDS = ['obj_a01', 'obj_a03', 'obj_a04', 'obj_a05', 'obj_b01', 'obj_b03'];
-
-function demoDocs(obj: JobObject): JobObjectDocument[] {
-  const versions = obj.id === 'obj_a03' || obj.id === 'obj_b03' ? 2 : 1;
-  const now = Date.now();
-  const areaM2 = obj.room.areaM2 ?? null;
-  const docs: JobObjectDocument[] = [];
-  for (let v = 0; v < versions; v += 1) {
-    const createdAt = new Date(now - (versions - 1 - v) * 36 * 60 * 60 * 1000).toISOString();
-    const versionId = `demo_${obj.id}_v${v + 1}`;
-    const common = {
-      versionId,
-      createdAt,
-      createdBy: 'demo',
-      hasScheme: true,
-      panels: null,
-      areaM2,
-      demo: true as const,
-    };
-    docs.push({
-      ...common,
-      id: `${versionId}_estimate`,
-      kind: 'estimate',
-      filename: readablePdfName(obj.clientName, 'estimate', createdAt),
-    });
-  }
-  return docs;
+/**
+ * Документ появляется только после явного «Сохранить».
+ * Раньше демо само прикладывало смету (у Сидоровой — «Последняя версия» с часами загрузки страницы).
+ */
+/** Черновик, который калькулятор создавал сам при открытии: «Потолок 68.6 м²» без телефона. */
+function autoCalcDraft(obj: JobObject): boolean {
+  return (
+    obj.status === 'draft' &&
+    !String(obj.clientPhone || '').trim() &&
+    /^Потолок [\d.,]+ м²$/u.test(String(obj.clientName || '').trim())
+  );
 }
 
-/** Подмешивает демо-документы, не затирая уже приложенные файлы. */
 export function withDemoDocuments(objects: JobObject[]): JobObject[] {
   if (!isDemoModeEnabled()) return objects;
-  const known = new Set(DEMO_IDS);
-  let hits = 0;
-  const mapped = objects.map((obj) => {
-    const real = (obj.documents || []).filter((d) => !d.demo);
-    if (real.length) return { ...obj, documents: visibleDocuments(real) };
-    if (!known.has(obj.id)) return obj;
-    hits += 1;
-    return { ...obj, documents: visibleDocuments(demoDocs(obj)) };
-  });
-  if (hits > 0) return mapped;
-  let extra = 0;
-  return mapped.map((obj) => {
-    if (extra >= 4 || obj.status === 'draft') return obj;
-    if ((obj.documents || []).length) return obj;
-    extra += 1;
-    return { ...obj, documents: visibleDocuments(demoDocs(obj)) };
-  });
+  return objects
+    .filter((obj) => !autoCalcDraft(obj))
+    .map((obj) => ({
+      ...obj,
+      documents: visibleDocuments((obj.documents || []).filter((doc) => !doc.demo)),
+      pendingSync: false,
+    }));
 }
 
 /** Размеры комнаты под площадь объекта: как расчёт «по размерам». */
@@ -143,7 +115,11 @@ function loadCalculator(): Promise<CalcModules> {
 const demoPdfCache = new Map<string, Blob>();
 
 /** PDF калькулятора для демо-комнаты: план и раскладка панелей, «Смета» с ценами. */
-export async function buildDemoPdfBlob(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+export async function buildDemoPdfBlob(
+  obj: JobObject,
+  doc: JobObjectDocument,
+  opts?: { hidePrices?: boolean },
+): Promise<Blob> {
   const cached = demoPdfCache.get(doc.id);
   if (cached) return cached;
   const calc = await loadCalculator();
@@ -183,7 +159,7 @@ export async function buildDemoPdfBlob(obj: JobObject, doc: JobObjectDocument): 
     wallSurfaces: images.wallSurfaces,
     planImage: images.planImage,
     areaEstimate: false,
-    hidePrices: false,
+    hidePrices: opts?.hidePrices === true,
     download: false,
     fileLabel: obj.clientName || 'Комната',
     fileDate: doc.createdAt,

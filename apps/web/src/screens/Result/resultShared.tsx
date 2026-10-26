@@ -236,7 +236,10 @@ export function useResultProfile() {
     perceivedAirPct: sim.perceivedAirPct,
     perceivedImpactPct: sim.perceivedImpactPct,
   });
-  const about = productAbout(room, noiseType);
+  const about = productAbout(room, noiseType, {
+    airDb: sim.delta.Rw,
+    impactDb: sim.delta.Lnw,
+  });
   const slabContext =
     room.slabThickness === 'unknown' || !room.slabThickness
       ? room.slabType === 'unknown'

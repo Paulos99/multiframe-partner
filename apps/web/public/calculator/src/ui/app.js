@@ -10,6 +10,7 @@ import {
   getPartnerPricing,
 } from '../core/constants.js';
 import { createRectangleVertices } from '../core/polygon-geometry.js';
+import { panelsForCeilingArea } from '../core/ceiling-quote.js';
 import { buildEdgeDimensionsFromVertices } from '../editor/sketch-constraints.js';
 import { CeilingVisualizer } from '../visualizers/ceiling-visualizer.js';
 import { WallVisualizer } from '../visualizers/wall-visualizer.js';
@@ -503,8 +504,12 @@ function updateStatCards() {
     return;
   }
 
-  const panels = bom.total.panelsWithReserve ?? 0;
-  const area = (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
+  const panels = partnerCeilingOnly()
+    ? (bom.ceiling?.stats?.withReserve ?? bom.ceiling?.stats?.panelsToPurchase ?? 0)
+    : (bom.total.panelsWithReserve ?? 0);
+  const area = partnerCeilingOnly()
+    ? (bom.ceiling?.area ?? 0)
+    : (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
   const cost = bom.total.totalCost ?? 0;
   animateStatValue($('totalPanels'), panels, formatStatPanels);
   animateStatValue($('coverageArea'), area, formatStatArea);
@@ -771,7 +776,13 @@ function showValidationErrors(errors) {
   box.innerHTML = errors.map((e) => `<div>${e}</div>`).join('');
 }
 
+function partnerCeilingOnly() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('partner') === '1' || params.get('walls') === '0' || params.get('surfaces') === 'ceiling';
+}
+
 function readSelectedWallIds() {
+  if (partnerCeilingOnly()) return [];
   if (state.inputMode === 'area') {
     return state.areaWalls.filter((w) => w.enabled && w.area > 0).map((w) => w.id);
   }
@@ -837,9 +848,11 @@ function refreshWallSurfaceCheckboxes() {
   if (!list) return;
 
   const prev = new Set(
-    state.options.selectedWallIds?.length
-      ? state.options.selectedWallIds
-      : state.room.walls.map((w) => w.id)
+    partnerCeilingOnly()
+      ? []
+      : state.options.selectedWallIds?.length
+        ? state.options.selectedWallIds
+        : state.room.walls.map((w) => w.id),
   );
 
   list.innerHTML = state.room.walls
@@ -1533,7 +1546,7 @@ function flashCalcReadyStatus() {
 }
 
 function runQuickAreaCalc(area) {
-  const panels = Math.ceil(area / PANEL_COVERAGE_AREA);
+  const panels = panelsForCeilingArea(area);
   const withReserve = Math.ceil(panels * (1 + RESERVES.panels));
   const dowels = Math.ceil(panels * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels));
   const cost = withReserve * PANEL.priceRub;
@@ -1590,6 +1603,10 @@ async function runCalculation(options = {}) {
   if (!silent) showValidationErrors([]);
 
   const f = els.form;
+  if (partnerCeilingOnly()) {
+    state.areaWalls = [];
+    state.wallResult = null;
+  }
   if (state.inputMode === 'area') {
     const ceilingArea = parseFloat(f.areaOnlyInput?.value) || 0;
     const wallIds = state.areaWalls.filter((w) => w.enabled && w.area > 0).map((w) => w.id);
@@ -1603,12 +1620,19 @@ async function runCalculation(options = {}) {
     };
   } else {
     state.options = {
-      calcCeiling: f.calcCeiling.checked,
+      calcCeiling: partnerCeilingOnly() ? true : f.calcCeiling.checked,
       selectedWallIds: readSelectedWallIds(),
       calcWalls: readSelectedWallIds().length > 0,
-      ceilingMounting: f.ceilingMounting.value,
+      ceilingMounting: partnerCeilingOnly() ? 'ceiling_frameless' : f.ceilingMounting.value,
       wallMounting: f.wallMounting.value,
     };
+  }
+  if (partnerCeilingOnly()) {
+    state.options.selectedWallIds = [];
+    state.options.calcWalls = false;
+    state.options.calcCeiling = true;
+    state.options.ceilingMounting = 'ceiling_frameless';
+    state.wallResult = null;
   }
 
   let calcRoom = state.room;
@@ -1676,7 +1700,7 @@ async function runCalculation(options = {}) {
     lastCeilingLayoutKey = null;
 
     const area = state.areaValue || parseFloat(f.areaOnlyInput?.value) || 0;
-    const panels = Math.ceil(area / PANEL_COVERAGE_AREA);
+    const panels = panelsForCeilingArea(area);
     const withReserve = Math.ceil(panels * (1 + RESERVES.panels));
     state.ceilingResult = {
       name: 'По площади',
@@ -1756,6 +1780,8 @@ async function runCalculation(options = {}) {
       }),
       stats: buildAreaWallStats(walls),
     };
+  } else {
+    state.wallResult = null;
   }
 
   state.bom = buildBOM({
@@ -2101,70 +2127,9 @@ function triggerPdfDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-/** Смета (цены, количество и схема раскладки) уходит в кабинет (родительское окно). */
+/** Комната создаётся только кнопкой «Сохранить» в проблемомере, не расчётом калькулятора. */
 async function publishCalcToCabinet() {
-  if (window.parent === window) return;
-  if (!state.bom) return;
-  if (onboardingDemoActive) return;
-  if (isAreaEstimateMode()) return;
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('partner') !== '1') return;
-  const sig = calcSignature();
-  if (sig === lastPublishedSig || publishLock) return;
-  publishLock = true;
-  const statusEl = $('schemeStatus');
-  if (statusEl) {
-    statusEl.hidden = false;
-    statusEl.textContent = 'Сохраняем смету в объект…';
-  }
-  try {
-    const input = await collectPdfInput();
-    if (calcSignature() !== sig) return;
-    if (input.areaEstimate || !input.hasScheme) return;
-    const { exportCalculationPDF } = await import('../export/pdf-export.js');
-    const fileLabel = params.get('client') || '';
-    const priced = await exportCalculationPDF({
-      ...input,
-      hidePrices: false,
-      download: false,
-      fileLabel,
-    });
-    const pdfBase64 = await blobToBase64(priced.blob);
-    const panels = state.bom?.total?.panelsWithReserve ?? null;
-    const dowels = state.bom?.total?.dowelsWithReserve ?? null;
-    const areaM2 =
-      (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0) || state.areaValue || null;
-    const panelsCost = state.bom?.total?.totalCost ?? null;
-    window.parent.postMessage(
-      {
-        type: 'mf-cabinet-calc',
-        objectId: params.get('objectId') || null,
-        inputMode: state.inputMode,
-        areaEstimate: input.areaEstimate,
-        hasScheme: input.hasScheme,
-        panels,
-        dowels,
-        areaM2,
-        panelsCost,
-        filename: priced.filename,
-        pdfBase64,
-      },
-      window.location.origin,
-    );
-    lastPublishedSig = sig;
-    if (statusEl) statusEl.textContent = 'Смета отправлена в кабинет';
-  } catch (err) {
-    console.warn('[cabinet-pdf]', err);
-    if (statusEl) statusEl.textContent = 'Не удалось приложить PDF';
-  } finally {
-    publishLock = false;
-    if (statusEl) {
-      clearTimeout(publishCalcToCabinet._t);
-      publishCalcToCabinet._t = setTimeout(() => {
-        statusEl.hidden = true;
-      }, 2400);
-    }
-  }
+  return;
 }
 
 function scheduleCabinetPublish(options = {}) {
@@ -2340,20 +2305,22 @@ function applyQueryHandoff() {
 
 /** Кабинет считает только бескаркасный потолок MultiFrame: стены и каркас скрыты. */
 function lockPartnerCeiling() {
-  const params = new URLSearchParams(window.location.search);
-  const lock =
-    params.get('partner') === '1' || params.get('walls') === '0' || params.get('surfaces') === 'ceiling';
-  if (!lock) return;
+  if (!partnerCeilingOnly()) return;
   document.body.classList.add('ceiling-only');
   state.areaWalls = [];
+  state.wallResult = null;
   renderAreaWallsList();
+  setAllWallSurfaces(false);
   if (els.form.calcCeiling) els.form.calcCeiling.checked = true;
   if (els.form.ceilingMounting) els.form.ceilingMounting.value = 'ceiling_frameless';
   state.options = {
     ...state.options,
     ceilingMounting: 'ceiling_frameless',
     calcCeiling: true,
+    calcWalls: false,
+    selectedWallIds: [],
   };
+  document.title = 'Калькулятор MultiFrame · потолок';
   document.querySelectorAll('[data-segment-for="ceilingMounting"] .segmented__btn').forEach((btn) => {
     btn.classList.toggle('is-active', btn.dataset.value === 'ceiling_frameless');
   });

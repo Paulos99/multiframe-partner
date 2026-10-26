@@ -21,8 +21,12 @@ equal(historyAuthor({ ...base, userId: null, login: '' }, people), 'Сотруд
 if (!formatHistoryTime('2026-10-18T07:00:00.000Z', 'Europe/Moscow').includes('10:00')) {
   throw new Error(formatHistoryTime('2026-10-18T07:00:00.000Z', 'Europe/Moscow'));
 }
-if (!formatHistoryTime('2026-10-18T00:00:00', 'Asia/Vladivostok').includes('10:00')) {
-  throw new Error(formatHistoryTime('2026-10-18T00:00:00', 'Asia/Vladivostok'));
+const local = new Date();
+const localStamp = formatHistoryTime(local.toISOString());
+const hh = String(local.getHours()).padStart(2, '0');
+const mm = String(local.getMinutes()).padStart(2, '0');
+if (!localStamp.includes(`${hh}:${mm}`)) {
+  throw new Error(localStamp);
 }
 const input = [{ ...base, at: 'invalid' }, base, { ...base, at: '2026-10-19T09:00:00Z' }];
 equal(sortedHistory(input).map(entry => entry.at), ['2026-10-19T09:00:00Z', base.at, 'invalid']);

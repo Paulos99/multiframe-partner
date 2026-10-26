@@ -6,20 +6,9 @@ import { ShakeBox } from './motionBits';
 import { usePartner } from './PartnerContext';
 import styles from './DemoSwitcher.module.css';
 import { CloseIcon } from '../icons';
+import { isDemoModeEnabled } from './demoMode';
 
-export function isDemoModeEnabled(): boolean {
-  try {
-    if (import.meta.env.VITE_DEMO_MODE === 'true') return true;
-    if (typeof window !== 'undefined') {
-      const q = new URLSearchParams(window.location.search);
-      if (q.get('demo') === '1') return true;
-      if (localStorage.getItem('mf_demo_mode') === '1') return true;
-    }
-  } catch {
-    /* ignore */
-  }
-  return false;
-}
+export { isDemoModeEnabled };
 
 export type DemoGroup = {
   id: 'stp' | 'capital' | 'north';
@@ -193,7 +182,7 @@ export function DemoLoginPicker() {
   );
 }
 
-export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
+export function DemoSwitcherFab({ inline = false, menu = false }: { inline?: boolean; menu?: boolean }) {
   const reduce=usePrefersReducedMotion();
   const { user, login, loading } = usePartner();
   const [open, setOpen] = useState(false);
@@ -216,7 +205,7 @@ export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
   }
 
   return (
-    <div className={inline ? styles.inlineWrap : styles.fabWrap}>
+    <div className={menu ? styles.menuOnly : inline ? styles.inlineWrap : styles.fabWrap}>
       {open ? (
         <m.div className={styles.panel} role="dialog" initial={reduce?false:motionPresets.modal.initial} animate={motionPresets.modal.animate} aria-label="Сменить роль">
           <div className={styles.panelHead}>
@@ -247,12 +236,12 @@ export function DemoSwitcherFab({ inline = false }: { inline?: boolean }) {
       ) : null}
       <button
         type="button"
-        className={inline ? styles.inlineBtn : styles.fab}
+        className={menu ? styles.menuBtn : inline ? styles.inlineBtn : styles.fab}
         onClick={() => setOpen((value) => !value)}
         title="Сменить роль"
         aria-expanded={open}
       >
-        Демо
+        {menu ? 'Сменить роль' : 'Демо'}
       </button>
     </div>
   );

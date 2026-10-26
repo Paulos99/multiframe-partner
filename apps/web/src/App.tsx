@@ -1,13 +1,12 @@
 import { PageTransition } from './partner/motionBits';
 import { Skeleton } from './partner/Skeleton';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { SessionProvider } from './state/SessionContext';
 import { AppShell } from './app-shell/AppShell';
 import { InstallPromptHost } from './app-shell/InstallAppButton';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
-import { canCreateObjects, type SessionUser } from '../../../packages/shared/partner';
-import { isCabinetCalcMessage } from './partner/cabinetCalc';
+import { type SessionUser } from '../../../packages/shared/partner';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { CabinetScreen } from './partner/CabinetScreen';
@@ -105,6 +104,7 @@ function ToolChrome({
             <p className={styles.toolMenuCompany}>{company}</p>
             <p className={styles.toolMenuCaption}>{caption}</p>
             {notice ? <p className={styles.toolMenuNotice}>{notice}</p> : null}
+            <DemoSwitcherFab menu />
             <button type="button" className={styles.logoutBtn} onClick={onLogout}>
               Выйти
             </button>
@@ -119,15 +119,13 @@ function ToolChrome({
 }
 
 function PartnerShell() {
-  const { user, ready, noteTool, logout, objects, calcRequest, attachCalculation, requestCalculator, diagnosisRequest, clearDiagnosis } = usePartner();
+  const { user, ready, noteTool, logout, objects, calcRequest, requestCalculator, diagnosisRequest, clearDiagnosis } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
-  const linkedObjectId = useRef<string | null>(null);
 
   const userId = user?.id ?? '';
   useEffect(() => {
-    linkedObjectId.current = null;
     setCalcObjectId(null);
     setCalcNotice(null);
     setRoute('cabinet');
@@ -135,7 +133,6 @@ function PartnerShell() {
 
   useEffect(() => {
     if (!calcRequest || !user) return;
-    linkedObjectId.current = calcRequest.objectId;
     setCalcObjectId(calcRequest.objectId);
     setCalcNotice(null);
     if (user) noteTool('calculator');
@@ -147,27 +144,6 @@ function PartnerShell() {
     noteTool('problemomer');
     setRoute('problemomer');
   }, [diagnosisRequest, noteTool, user]);
-
-  useEffect(() => {
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return;
-      if (!isCabinetCalcMessage(event.data)) return;
-      if (!user) return;
-      const target = linkedObjectId.current || event.data.objectId || null;
-      const allowed = canCreateObjects(user.role) || (user.role === 'measurer' && !!target);
-      if (!allowed) return;
-      if (event.data.areaEstimate || event.data.inputMode === 'area' || event.data.hasScheme === false) return;
-      setCalcNotice('Сохраняем комнату и PDF…');
-      void attachCalculation(event.data, target)
-        .then((obj) => {
-          if (obj) linkedObjectId.current = obj.id;
-          setCalcNotice(obj ? 'Комната обновлена, PDF приложен' : 'Не удалось сохранить');
-        })
-        .catch(() => setCalcNotice('Не удалось сохранить комнату'));
-    }
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [user, attachCalculation]);
 
   useEffect(() => {
     applyStoredTheme();

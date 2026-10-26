@@ -189,13 +189,24 @@ export interface ProductAbout {
 }
 
 /** Product explanation for the Result «Что такое MultiFrame» block. */
-export function productAbout(_room: RoomAnswers, _noiseType: NoiseType): ProductAbout {
+export function productAbout(
+  _room: RoomAnswers,
+  _noiseType: NoiseType,
+  deltas?: { airDb?: number | null; impactDb?: number | null },
+): ProductAbout {
+  const air = deltas?.airDb != null && Number.isFinite(deltas.airDb) ? Math.abs(Math.round(deltas.airDb)) : null;
+  const impact =
+    deltas?.impactDb != null && Number.isFinite(deltas.impactDb) ? Math.abs(Math.round(deltas.impactDb)) : null;
+  const effect =
+    air != null && impact != null
+      ? `В вашем случае расчёт даёт около ${air} дБ по воздуху и ${impact} дБ по удару — это эффект этой комнаты.`
+      : 'Эффект считается для вашей комнаты, а не как лабораторный максимум системы.';
   return {
     claim: '',
     paragraphs: [
-      'StP MultiFrame — это модульная звукоизоляционная панель, которая делает дом тише и комфортнее за счёт двойного эффекта: она блокирует ударный и воздушный шум от соседей (до 17 дБ) и одновременно поглощает эхо внутри помещения, улучшая акустику.',
+      `StP MultiFrame — модульная панель на потолок: она снижает шум сверху и поглощает эхо в комнате. ${effect}`,
       'Панели изготовлены из экологичных, негорючих и гипоаллергенных материалов, безопасны для здоровья всей семьи.',
-      'Это продуманное решение для тех, кто ценит тишину, здоровье и качество жизни.',
+      'Это решение для тех, кто хочет тише именно в своей комнате.',
     ],
   };
 }

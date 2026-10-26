@@ -13,6 +13,7 @@ export function PartnerEstimateCard({ areaM2 }: { areaM2: number | null }) {
   return (
     <section className={styles.card} style={{ width: '100%', marginTop: 8 }} aria-label="Смета партнёра">
       <h2>Смета для КП</h2>
+      <p className={styles.hint}>По площади потолка: число панелей = площадь / 0,4125 м², без подрезки раскладки.</p>
       {partner.companyName ? <p className={styles.lead}>Подготовлено: {partner.companyName}</p> : null}
       <div className={styles.grid2}>
         <div className={styles.field}>

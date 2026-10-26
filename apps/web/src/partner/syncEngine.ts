@@ -18,6 +18,7 @@ import {
   isApiError,
   stripObjectDocuments,
 } from './apiClient';
+import { isDemoModeEnabled } from './demoMode';
 import {
   appendLocalObjectDocuments,
   cacheObjects,
@@ -88,6 +89,12 @@ export async function loadVisibleObjects(user: SessionUser, remote: boolean): Pr
   } else {
     base = await loadAllObjects();
     if (!base.length) base = loadCachedObjects();
+  }
+  if (isDemoModeEnabled()) {
+    return base
+      .map((obj) => presentCachedObject(user, obj))
+      .filter((obj): obj is JobObject => obj != null)
+      .map((obj) => ({ ...obj, pendingSync: false }));
   }
   const pendingIds = new Set([
     ...outbox.map((op) => op.id),
@@ -191,6 +198,7 @@ export async function saveObjectSynced(
       }
     }
   }
+  if (isDemoModeEnabled()) return upsertLocalObject({ ...draft, pendingSync: false }, user);
   return queueUpsert(user, draft);
 }
 

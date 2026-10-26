@@ -77,7 +77,7 @@ export function RoomScreen() {
     <Screen
       stickyHead
       eyebrow={factorLabel}
-      lead={`Вопрос ${Math.max(idx, 0) + 1} из ${total} · ${factorLabel}`}
+      lead={`Вопрос ${Math.max(idx, 0) + 1} из ${total}`}
       title={SUBSTEP_TITLE[sub]}
     >
       {SUBSTEP_LEAD[sub] ? <p className={styles.subLead}>{SUBSTEP_LEAD[sub]}</p> : null}

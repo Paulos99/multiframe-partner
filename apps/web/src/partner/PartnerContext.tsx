@@ -56,6 +56,7 @@ import {
   type CabinetCalcMessage,
 } from './cabinetCalc';
 import { withDemoDocuments } from './demoDocuments';
+import { isDemoModeEnabled } from './demoMode';
 import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
 import {
   bootstrapHistoryReset,
@@ -281,10 +282,14 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       if (stamp !== objectsEpoch.current) return;
       setObjects(list);
       cacheObjects(list);
-      const queuedDocs = peekObjectDocumentQueue().length;
-      setPendingSyncCount(
-        (await countMyOutbox(session.id).catch(() => peekObjectQueue().length)) + queuedDocs,
-      );
+      if (isDemoModeEnabled()) {
+        setPendingSyncCount(0);
+      } else {
+        const queuedDocs = peekObjectDocumentQueue().length;
+        setPendingSyncCount(
+          (await countMyOutbox(session.id).catch(() => peekObjectQueue().length)) + queuedDocs,
+        );
+      }
     } catch {
       if (!silent && stamp === objectsEpoch.current) setObjects(loadCachedObjects());
     } finally {

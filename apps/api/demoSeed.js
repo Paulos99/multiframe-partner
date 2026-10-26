@@ -74,17 +74,9 @@ export const DEMO_ACCOUNTS = [
   },
 ];
 
-/** Час — по Москве, в базе лежит UTC. Клиент показывает пояс зрителя. */
-function daysAgo(n, hour = 10, minute = 0) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Europe/Moscow',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const pick = (type) => Number(parts.find((part) => part.type === type)?.value);
-  const utc = Date.UTC(pick('year'), pick('month') - 1, pick('day') - n, hour, minute, 0);
-  return new Date(utc - 3 * 60 * 60 * 1000).toISOString();
+/** Реальное «сейчас» минус n суток. Час — из Date.now(), без сдвига пояса. */
+function daysAgo(n, _hour, _minute) {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 }
 
 const DEMO_PEOPLE = {

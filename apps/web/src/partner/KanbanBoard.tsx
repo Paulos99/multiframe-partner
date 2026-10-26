@@ -40,6 +40,7 @@ import {
 import {
   canMoveRoom,
   roomCountLabel,
+  roomDisplayName,
   KANBAN_STAGES,
   sortRooms,
   rankMovedColumn,
@@ -118,7 +119,7 @@ function Card({
         aria-roledescription="карточка"
         aria-disabled={disabled || undefined}
         className={`${styles.card} ${related ? styles.related : ''} ${isDragging ? styles.source : ''}`}
-        aria-label={`${room.roomName || 'Комната'} · ${room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[room.status]}`}
+        aria-label={`${roomDisplayName(room)} · ${room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[room.status]}`}
         onPointerDown={(e) => {
           if (e.pointerType !== 'touch') listeners?.onPointerDown?.(e);
         }}
@@ -150,7 +151,7 @@ function Card({
         <button
           type="button"
           className={styles.cardMenu}
-          aria-label={`Действия с комнатой «${room.roomName || room.clientName || 'Комната'}»`}
+          aria-label={`Действия с комнатой «${roomDisplayName(room)}»`}
           aria-haspopup="menu"
           // Keep the dnd-kit sensors (pointer, long-press touch, keyboard) off this button.
           onPointerDown={(e) => e.stopPropagation()}
@@ -355,7 +356,7 @@ export function KanbanBoard({
       <>
         <strong>
           {project?.clientName || room.clientName || 'Клиент'} ·{' '}
-          {room.roomName || 'Комната'}
+          {roomDisplayName(room)}
         </strong>
         <small>
           {(project?.address || room.address || '').trim() || 'Добавить адрес'}

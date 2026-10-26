@@ -4,6 +4,7 @@ import {
   type JobObject,
   type UserRole,
 } from '../../../../packages/shared/partner';
+import { roomDisplayName } from './kanban';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
@@ -23,7 +24,7 @@ function greeting(name: string): string {
 }
 
 function roomTitle(room: JobObject): string {
-  return room.roomName || room.clientName || 'Комната';
+  return roomDisplayName(room);
 }
 
 function roomMeta(room: JobObject): string {

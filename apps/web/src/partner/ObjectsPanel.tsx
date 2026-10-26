@@ -24,6 +24,7 @@ import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
 import { StatusSwap } from './motionBits';
 import { usePartner } from './PartnerContext';
+import { formatDocStamp } from './historyFormatting';
 import { ObjectHistory } from './ObjectHistory';
 import listStyles from './ProjectList.module.css';
 import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
@@ -36,9 +37,7 @@ function telHref(phone: string): string {
 }
 
 function formatDocWhen(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return formatDocStamp(iso);
 }
 
 function ObjectDocuments({
@@ -274,8 +273,9 @@ export function ObjectsPanel({
     setErr(null);
     try {
       let blob: Blob;
-      if (doc.demo) {
-        blob = await buildDemoPdfBlob(obj, doc);
+      const crewEstimate = user.role === 'crew' && documentDisplayKind(doc.kind) === 'estimate';
+      if (doc.demo || crewEstimate) {
+        blob = await buildDemoPdfBlob(obj, doc, { hidePrices: crewEstimate });
       } else {
         const local = doc.dataBase64 || loadLocalDocBytes(doc.id);
         if (local) {
@@ -320,7 +320,7 @@ export function ObjectsPanel({
     if (!canCreate) return;
     setSaving(true);
     setErr(null);
-    const roomLabel = draft.roomName.trim() || 'Комната';
+    const roomLabel = draft.roomName.trim();
     const fields = {
       status: 'draft' as const,
       clientName: draft.clientName.trim(),

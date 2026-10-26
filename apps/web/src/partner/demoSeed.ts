@@ -106,18 +106,9 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
   },
 ];
 
-/** Час — по Москве, мгновение хранится в UTC. На экране оно показывается в поясе зрителя. */
-function daysAgo(n: number, hour = 10, minute = 0): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Europe/Moscow',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const pick = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((part) => part.type === type)?.value);
-  const utc = Date.UTC(pick('year'), pick('month') - 1, pick('day') - n, hour, minute, 0);
-  return new Date(utc - 3 * 60 * 60 * 1000).toISOString();
+/** Реальное «сейчас» минус n суток. Час берётся из Date.now(), не из выдуманных демо-часов. */
+function daysAgo(n: number, _hour?: number, _minute?: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 }
 
 const DEMO_PEOPLE: Record<string, { login: string; name: string }> = {
