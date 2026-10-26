@@ -13,12 +13,19 @@ import {
 } from './commercialPort';
 import type { CommercialProject, CommercialRoom } from './demoBook';
 import {
+  AFTER_ACCEPT_NEXT,
   assentComplete,
+  canAdvanceWizard,
   hasDeferredRooms,
   latestQuote,
   nextDealStep,
   orderedAmount,
   sentQuote,
+  showDeclineAction,
+  showFollowUpAction,
+  showNewVersionAction,
+  showPauseAction,
+  wizardSnapshotReady,
 } from './dealSteps';
 import { ASSENT_LABELS, assentLabel, calcLabel, isSent, outcomeLabel, quoteStatusLabel, REASONS, stageLabel } from './labels';
 import { beginWrite, endWrite } from './writeGuard';
@@ -158,6 +165,7 @@ export function DealScreen({
   const focus = active || history[0] || null;
   const latest = active ? latestQuote(quotes, active.id) : null;
   const sent = active ? sentQuote(quotes, active.id) : null;
+  const snapshotReady = wizardSnapshotReady(latest, picked);
   const stepInfo = nextDealStep(active, quotes, hasDeferredRooms(deals));
   const busy = pending !== null;
   const nameOf = (id: string) => rooms.find((room) => room.id === id)?.name || 'Комната';
@@ -290,6 +298,7 @@ export function DealScreen({
               Сумма заказа <strong>{money(focus.acceptedAmount)}</strong>. В неё входят только комнаты «Заказано».
             </p>
           ) : null}
+          {active?.outcome === 'accepted' ? <p>{AFTER_ACCEPT_NEXT}</p> : null}
           {focus?.roomAssent && Object.keys(focus.roomAssent).length ? (
             <ul className={styles.lines}>
               {Object.entries(focus.roomAssent).map(([id, value]) => (
@@ -360,22 +369,22 @@ export function DealScreen({
                   Зафиксировать решение
                 </button>
               ) : null}
-              {active && active.outcome !== 'accepted' ? (
+              {active && showPauseAction(active.outcome) ? (
                 <button type="button" className={project.secondary} disabled={busy} onClick={() => setSheet('pause')}>
                   Пауза
                 </button>
               ) : null}
-              {active && active.outcome !== 'accepted' ? (
+              {active && showDeclineAction(active.outcome) ? (
                 <button type="button" className={project.secondary} disabled={busy} onClick={() => setSheet('decline')}>
                   Отказ
                 </button>
               ) : null}
-              {active && sent ? (
+              {active && showFollowUpAction(active.outcome, Boolean(sent)) ? (
                 <button type="button" className={project.secondary} disabled={busy} onClick={() => setSheet('follow')}>
                   Следующий контакт
                 </button>
               ) : null}
-              {active && sent && active.outcome !== 'accepted' ? (
+              {active && showNewVersionAction(Boolean(sent)) && active.outcome !== 'accepted' ? (
                 <button type="button" className={project.secondary} disabled={busy} onClick={() => openWizard(5)}>
                   Новая версия
                 </button>
@@ -570,9 +579,13 @@ export function DealScreen({
               <p className={project.muted}>
                 Отправленную версию нельзя пересохранить. Изменение цен, состава или геометрии — только новая версия на этой же сделке.
               </p>
-              <button type="button" className={project.primary} onClick={() => setStep(1)}>
-                Собрать новую версию
-              </button>
+              {showNewVersionAction(Boolean(sent)) ? (
+                <button type="button" className={project.primary} onClick={() => setStep(1)}>
+                  Собрать новую версию
+                </button>
+              ) : (
+                <p className={project.muted}>Новая версия собирается после подтверждённой отправки.</p>
+              )}
             </>
           ) : null}
 
@@ -603,7 +616,7 @@ export function DealScreen({
               <button
                 type="button"
                 className={project.secondary}
-                disabled={step === 1 && !picked.length}
+                disabled={!canAdvanceWizard(step, picked.length, snapshotReady)}
                 onClick={() => setStep((value) => value + 1)}
               >
                 Дальше
@@ -625,7 +638,7 @@ export function DealScreen({
                 {nameOf(line.roomId)}
                 {money(line.amount) ? ` · ${money(line.amount)}` : ''}
               </legend>
-              <div className={styles.row}>
+              <div className={`${styles.row} ${styles.clearFab}`}>
                 {(Object.keys(ASSENT_LABELS) as Array<keyof typeof ASSENT_LABELS>).map((value) => (
                   <button
                     key={value}
@@ -724,6 +737,7 @@ export function DealScreen({
             <label className={cab.field}>
               Следующий контакт
               <input type="date" value={when} onChange={(event) => setWhen(event.target.value)} />
+              <span className={project.muted}>Срок указывают, когда он известен.</span>
             </label>
           ) : null}
           <button type="submit" className={project.primary} disabled={busy || !canWrite}>

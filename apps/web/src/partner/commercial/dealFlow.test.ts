@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { buildCommercialHeaders } from './commercialHeaders.ts';
 import { createDemoBook } from './demoBook.ts';
-import { nextDealStep, orderedAmount } from './dealSteps.ts';
+import {
+  canAdvanceWizard,
+  nextDealStep,
+  orderedAmount,
+  showDeclineAction,
+  showFollowUpAction,
+  showNewVersionAction,
+  showPauseAction,
+  wizardSnapshotReady,
+} from './dealSteps.ts';
 import { beginWrite, endWrite } from './writeGuard.ts';
 
 const book = createDemoBook();
@@ -139,3 +148,25 @@ assert.equal(headers['X-Data-Context'], 'work');
 const demoHeaders = buildCommercialHeaders({ context: 'demo', mutation: false });
 assert.equal(demoHeaders['X-Data-Context'], 'demo');
 assert.equal('If-Match' in demoHeaders, false);
+
+const heldBook = createDemoBook();
+const held = heldBook.pause('deal_before', 1, { reason: 'postponed_repair' });
+assert.equal(held.nextActionAt, null);
+assert.equal(held.outcome, 'early_paused');
+const closedFromPause = heldBook.decline('deal_before', held.recordVersion ?? null, { reason: 'expensive' });
+assert.equal(closedFromPause.outcome, 'early_declined');
+assert.ok(closedFromPause.closedAt);
+
+assert.equal(canAdvanceWizard(1, 0, false), false);
+assert.equal(canAdvanceWizard(1, 2, false), true);
+assert.equal(canAdvanceWizard(2, 2, false), false);
+assert.equal(canAdvanceWizard(2, 2, true), true);
+assert.equal(wizardSnapshotReady(reply.quotes[0] ?? null, reply.quotes[0]?.roomObjectIds || []), false);
+assert.equal(showNewVersionAction(false), false);
+assert.equal(showNewVersionAction(true), true);
+assert.equal(showPauseAction('early_paused'), false);
+assert.equal(showPauseAction(null), true);
+assert.equal(showDeclineAction('early_paused'), true);
+assert.equal(showDeclineAction('accepted'), false);
+assert.equal(showFollowUpAction('accepted', true), false);
+assert.equal(showFollowUpAction(null, true), true);

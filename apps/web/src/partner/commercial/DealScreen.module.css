@@ -97,6 +97,12 @@ fieldset.block {
   min-width: 0;
 }
 
+@media (min-width: 900px) {
+  .clearFab {
+    padding-right: 120px;
+  }
+}
+
 @media (max-width: 420px) {
   .row > button {
     flex-basis: 100%;

@@ -68,3 +68,35 @@ export function assentComplete(quote: QuoteRevision, assent: Record<string, stri
     return value === 'ordered' || value === 'deferred' || value === 'out_of_scope';
   });
 }
+
+export function wizardSnapshotReady(quote: QuoteRevision | null, picked: string[]): boolean {
+  if (!quote || isSent(quote) || !picked.length) return false;
+  const ids = quote.roomObjectIds || [];
+  if (ids.length !== picked.length) return false;
+  return [...ids].sort().join() === [...picked].sort().join();
+}
+
+export function canAdvanceWizard(step: number, pickedCount: number, snapshotReady: boolean): boolean {
+  if (step === 1) return pickedCount > 0;
+  if (step === 2) return snapshotReady;
+  return step > 2 && step < 6;
+}
+
+export function showNewVersionAction(confirmedSent: boolean): boolean {
+  return confirmedSent;
+}
+
+export function showPauseAction(outcome: string | null | undefined): boolean {
+  return outcome !== 'accepted' && outcome !== 'early_paused';
+}
+
+export function showDeclineAction(outcome: string | null | undefined): boolean {
+  return outcome !== 'accepted';
+}
+
+export function showFollowUpAction(outcome: string | null | undefined, confirmedSent: boolean): boolean {
+  return confirmedSent && outcome !== 'accepted';
+}
+
+export const AFTER_ACCEPT_NEXT =
+  'Дальше — техническая готовность заказанных комнат: схема по замеру, материалы и ответственный, затем назначение бригады.';
