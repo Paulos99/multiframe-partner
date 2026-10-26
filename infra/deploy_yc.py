@@ -69,6 +69,17 @@ GATEWAY_PATHS = (
     "/materials/{materialId}/content",
     "/materials/{materialId}/preview",
     "/materials/{materialId}/thumbnail",
+    "/drafts",
+    "/inquiries",
+    "/deals",
+    "/deals/{dealId}",
+    "/deals/{dealId}/{dealAction}",
+    "/quotes",
+    "/quotes/{quoteId}",
+    "/quotes/{quoteId}/{quoteAction}",
+    "/rooms/{roomId}/{roomAction}",
+    "/rooms/{roomId}/blockers/{blockerId}/resolve",
+    "/install/inbox",
 )
 
 

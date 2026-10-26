@@ -28,6 +28,19 @@ export type QuoteRevision = {
   sentConfirmedAt: string | null;
   sentComment: string | null;
   lifecycle: QuoteLifecycle;
+  /** Замороженный состав и цены. После sentConfirmedAt не пересчитывается. */
+  snapshot?: {
+    lines: Array<{
+      roomId: string;
+      calcType: 'preliminary' | 'detailed' | 'unspecified';
+      calculationId: string | null;
+      revisionSeq: number | null;
+      amount: number | null;
+    }>;
+    legacyTotal?: boolean;
+  } | null;
+  /** Оптимистичная версия строки. Номер КП — поле version. */
+  recordVersion?: number;
 };
 
 export type QuoteUserAction =

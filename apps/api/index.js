@@ -32,8 +32,8 @@ import {
   putObject,
 } from './objectStore.js';
 import { migratePlatform } from './platformMigrate.js';
-import { handleDeals } from './routes/deals.js';
-import { handleQuotes } from './routes/quotes.js';
+import { handleCommercial } from './routes/commercial.js';
+import { resetCommercialRepositoryForTests } from './commercial/repository.js';
 import { handleAcademy } from './routes/academy.js';
 import { handleSupport } from './routes/support.js';
 import { mergeAssignments, objectVisibleWithAssignments } from './routes/objects.js';
@@ -87,7 +87,7 @@ const DEFAULT_DOWEL = 25;
 const CORS = {
   'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || 'https://paulos99.github.io',
   'Access-Control-Allow-Headers':
-    'Content-Type, Authorization, Idempotency-Key, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
+    'Content-Type, Authorization, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login, Idempotency-Key, If-Match, X-Data-Context',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
 };
 
@@ -273,6 +273,7 @@ function platformFilePath() {
 
 export function resetPlatformMemoryForTests() {
   resetStoredDocumentsForTests();
+  resetCommercialRepositoryForTests();
 }
 
 function platformDocumentSpec() {
@@ -747,13 +748,14 @@ export function aggregateAnalyticsDashboard(allEvents, opts) {
   };
 }
 
-function json(statusCode, body) {
+function json(statusCode, body, extraHeaders) {
   return {
     statusCode,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
       ...CORS,
+      ...(extraHeaders || {}),
     },
     body: JSON.stringify(body),
   };
@@ -922,10 +924,12 @@ export async function handler(event = {}) {
       savePlatform,
       uid,
     };
-    const dealsResponse = await handleDeals(routeCtx);
-    if (dealsResponse) return dealsResponse;
-    const quotesResponse = await handleQuotes(routeCtx);
-    if (quotesResponse) return quotesResponse;
+    const commercialResponse = await handleCommercial({
+      ...routeCtx,
+      getHeader: (name) => header(event, name),
+      getQuery: () => getQuery(event),
+    });
+    if (commercialResponse) return commercialResponse;
     const academyResponse = await handleAcademy(routeCtx);
     if (academyResponse) return academyResponse;
     const supportResponse = await handleSupport(routeCtx);
@@ -1789,6 +1793,10 @@ export async function handler(event = {}) {
     return json(404, { message: `Not found: ${method} ${path}` });
   } catch (e) {
     const status = e.status || 500;
-    return json(status, { message: e.message || 'Server error' });
+    const recordVersion = e.recordVersion ?? e.current?.version;
+    return json(status, {
+      message: e.message || 'Server error',
+      ...(recordVersion != null ? { recordVersion } : {}),
+    });
   }
 }
