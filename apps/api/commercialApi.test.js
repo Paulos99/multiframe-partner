@@ -338,6 +338,11 @@ test('монтаж и закрытие: чек-лист, препятствие,
   roomVersion = String(ready.body.room.recordVersion);
   const inbox = await invoke('GET', '/install/inbox', { token: crew });
   assert.equal(inbox.body.rooms.length, 1);
+  assert.ok(inbox.body.rooms[0].recordVersion >= 1);
+  assert.ok(Array.isArray(inbox.body.rooms[0].checklist));
+  assert.ok(Array.isArray(inbox.body.rooms[0].blockers));
+  assert.equal(Object.hasOwn(inbox.body.rooms[0], 'amount'), false);
+  assert.equal(JSON.stringify(inbox.body.rooms[0]).includes('acceptedAmount'), false);
   const crewDeals = await invoke('GET', '/deals', { token: crew });
   assert.equal(crewDeals.body.deals.length, 1);
   assert.equal(crewDeals.body.deals[0].rooms[0].id, roomId);
@@ -417,6 +422,54 @@ test('монтаж и закрытие: чек-лист, препятствие,
   assert.equal(Object.hasOwn(crewMoney.body.deal, 'acceptedAmount'), false);
   assert.equal(Object.hasOwn(crewMoney.body.deal, 'outcome'), false);
   assert.equal(Object.hasOwn(crewMoney.body.deal, 'lossReason'), false);
+});
+
+test('замерщик видит оба расчёта и один вклад комнаты', async () => {
+  const salesLogin = await invoke('POST', '/auth/login', { body: { login: 'sales1', password: 'exec1234' } });
+  const sales = salesLogin.body.token;
+  const measurerLogin = await invoke('POST', '/auth/login', { body: { login: 'exec1', password: 'exec1234' } });
+  const measurer = measurerLogin.body.token;
+  const measurerId = measurerLogin.body.user.id;
+  const created = await invoke('POST', '/inquiries', {
+    token: sales,
+    headers: { 'Idempotency-Key': 'meas-1', 'X-Data-Context': 'work' },
+    body: { name: 'Сорокина', roomName: 'Спальня', address: 'Москва, тихий двор' },
+  });
+  const roomId = created.body.room.id;
+  const dealId = created.body.deal.id;
+  const assigned = await invoke('PATCH', `/deals/${dealId}`, {
+    token: sales,
+    headers: matchOf(created, 'deal'),
+    body: { assignments: { measurerUserId: measurerId } },
+  });
+  assert.equal(assigned.status, 200, JSON.stringify(assigned.body));
+  await invoke('POST', `/rooms/${roomId}/calculations`, {
+    token: measurer,
+    headers: { 'Idempotency-Key': 'meas-prelim', 'X-Data-Context': 'work' },
+    body: { type: 'preliminary', amount: 100, expectedRevision: 0 },
+  });
+  await invoke('POST', `/rooms/${roomId}/calculations`, {
+    token: measurer,
+    headers: { 'Idempotency-Key': 'meas-detailed', 'X-Data-Context': 'work' },
+    body: { type: 'detailed', amount: 250, expectedRevision: 0 },
+  });
+  const work = await invoke('GET', '/deals', { token: measurer });
+  assert.equal(work.status, 200, JSON.stringify(work.body));
+  assert.equal(work.body.deals.length, 1);
+  const room = work.body.deals[0].rooms[0];
+  assert.equal(room.roomName, 'Спальня');
+  assert.equal(room.preliminary.amount, 100);
+  assert.equal(room.detailed.amount, 250);
+  assert.equal(room.contribution.calcType, 'detailed');
+  assert.equal(room.contribution.amount, 250);
+  assert.equal(room.contribution.amount === room.preliminary.amount + room.detailed.amount, false);
+  assert.equal(Object.hasOwn(work.body.deals[0], 'acceptedAmount'), false);
+  const stranger = await invoke('GET', '/deals', { token: measurer });
+  assert.equal(stranger.body.deals.length, 1);
+  const crew = await login('crew1', 'exec1234');
+  const denied = await invoke('GET', '/install/inbox', { token: measurer });
+  assert.equal(denied.status, 403);
+  assert.equal((await invoke('GET', '/install/inbox', { token: crew })).body.rooms.length, 0);
 });
 
 test('облачный бакет без YDB не подменяет коммерческое хранилище файлом', async () => {

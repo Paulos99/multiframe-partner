@@ -32,6 +32,28 @@ function entity(row) {
   return { ...row.payload, id: row.id, orgId: row.orgId, recordVersion: row.version };
 }
 
+function publicChecklist(items) {
+  return (items || []).map((item) => ({
+    id: String(item.id),
+    title: String(item.title || ''),
+    state: item.state === 'done' || item.state === 'na' ? item.state : 'pending',
+    reason: item.reason || null,
+  }));
+}
+
+function publicBlockers(items) {
+  return (items || []).map((item) => ({
+    id: String(item.id),
+    status: item.status === 'resolved' ? 'resolved' : 'open',
+    text: String(item.text || ''),
+  }));
+}
+
+function calcSlot(row) {
+  if (!row) return null;
+  return { revisionSeq: Number(row.revisionSeq) || 0, amount: Number(row.amount) };
+}
+
 function idemId(scope, key) {
   const raw = String(key || '').trim();
   if (!raw) return '';
@@ -741,6 +763,46 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
       });
     },
 
+    async measurerWork(user) {
+      assertRole(user, 'read');
+      if (user.role !== 'measurer') throw httpError(403, 'Недостаточно прав');
+      return repo.transaction(async (tx) => {
+        const deals = (await dealsOf(tx, user)).filter((deal) => deal.assignments?.measurerUserId === user.id);
+        const out = [];
+        for (const deal of deals) {
+          const project = entity(await tx.get(deal.orgId, 'project', deal.projectId));
+          const quotes = (await tx.list({ orgId: deal.orgId, kind: 'quote', parentId: deal.id })).map(entity);
+          const quoteSent = quotes.some((quote) => quote.sentConfirmedAt || quote.lifecycle === 'quote_sent_confirmed');
+          const rooms = (await tx.list({ orgId: deal.orgId, kind: 'room', projectId: deal.projectId })).map(entity);
+          const cards = [];
+          for (const room of rooms) {
+            if (room.workStatus === 'closed') continue;
+            const calcs = await calcsFor(tx, room.orgId, room.id);
+            cards.push({
+              id: room.id,
+              roomName: room.roomName || '',
+              projectId: room.projectId,
+              projectName: project?.name || '',
+              place: project?.address || '',
+              recordVersion: room.recordVersion ?? 1,
+              workStatus: room.workStatus || 'draft',
+              profileUsable: Boolean(room.profileUsable),
+              materialsComplete: Boolean(room.materialsComplete),
+              crewUserId: room.crewUserId || null,
+              preliminary: calcSlot(currentRevision(calcs, 'preliminary')),
+              detailed: calcSlot(currentRevision(calcs, 'detailed')),
+              contribution: roomContribution(calcs),
+              techReady: isTechReady(room, calcs),
+              quoteSent,
+              blockers: publicBlockers(room.blockers),
+            });
+          }
+          out.push({ id: deal.id, projectId: deal.projectId, rooms: cards });
+        }
+        return out;
+      });
+    },
+
     async installInbox(user) {
       assertRole(user, 'read');
       if (user.role === 'measurer') throw httpError(403, 'Недостаточно прав');
@@ -748,6 +810,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
         const deals = (await dealsOf(tx, user)).filter((deal) => deal.outcome === 'accepted');
         const rooms = [];
         for (const deal of deals) {
+          const project = entity(await tx.get(deal.orgId, 'project', deal.projectId));
           const list = (await tx.list({ orgId: deal.orgId, kind: 'room', projectId: deal.projectId })).map(entity);
           for (const room of list) {
             if (room.workStatus === 'closed') continue;
@@ -759,8 +822,14 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
               projectId: room.projectId,
               dealId: deal.id,
               roomName: room.roomName,
+              projectName: project?.name || '',
+              place: project?.address || '',
               workStatus: room.workStatus,
               crewUserId: room.crewUserId,
+              recordVersion: room.recordVersion ?? 1,
+              materialsComplete: Boolean(room.materialsComplete),
+              checklist: publicChecklist(room.checklist),
+              blockers: publicBlockers(room.blockers),
             });
           }
         }

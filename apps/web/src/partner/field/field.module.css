@@ -1,0 +1,139 @@
+.stack {
+  display: grid;
+  gap: var(--cab-space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.card {
+  min-width: 0;
+  max-width: 100%;
+  background: var(--cab-card);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-md);
+  box-shadow: var(--cab-shadow-sm);
+  padding: var(--cab-space-4);
+  overflow-wrap: anywhere;
+}
+
+.card h2,
+.card h3 {
+  margin: 0 0 8px;
+  color: var(--cab-ink);
+}
+
+.muted {
+  margin: 0;
+  color: var(--cab-muted);
+  line-height: 1.45;
+}
+
+.status {
+  margin: 0;
+  color: var(--cab-ink-soft);
+}
+
+.warn {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--cab-radius-sm);
+  background: var(--cab-warn-soft);
+  color: var(--cab-warn);
+}
+
+.ok {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--cab-radius-sm);
+  background: var(--cab-ok-soft);
+  color: var(--cab-ok);
+}
+
+.slots {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.slot {
+  min-width: 0;
+  padding: 12px;
+  border-radius: var(--cab-radius-sm);
+  background: var(--cab-subtle);
+  border: 1px solid var(--cab-border);
+}
+
+.slot strong,
+.slot span {
+  display: block;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.actions > * {
+  min-height: var(--touch-min);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--cab-ink-soft);
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--touch-min);
+  box-sizing: border-box;
+  font: inherit;
+  color: var(--cab-ink);
+  background: var(--cab-field);
+  border: 1px solid var(--cab-border-strong);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--touch-min);
+}
+
+.item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--cab-border);
+}
+
+@media (min-width: 880px) {
+  .slots {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .actions,
+  .slot {
+    transition: none;
+    animation: none;
+  }
+}

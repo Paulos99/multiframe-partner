@@ -196,7 +196,7 @@ type PartnerApi = {
   deleteObject: (id: string) => Promise<void>;
   flushObjectQueue: () => Promise<void>;
   /** Открыть калькулятор. objectId — обновить эту карточку, null — новый объект на первом расчёте. */
-  requestCalculator: (objectId: string | null) => void;
+  requestCalculator: (objectId: string | null, areaM2?: number | null) => void;
   calcRequest: { objectId: string | null; nonce: number; areaM2?: number | null } | null;
   requestDiagnosis: (objectId: string) => void;
   clearDiagnosis: () => void;
@@ -779,10 +779,14 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   const openObject = useCallback((id: string) => setOpenedObjectId(id), []);
 
-  const requestCalculator = useCallback((objectId: string | null) => {
-    const areaM2 = objectId ? objects.find(obj => obj.id === objectId)?.room.areaM2 : null;
+  const requestCalculator = useCallback((objectId: string | null, areaM2?: number | null) => {
+    const area = areaM2 !== undefined
+      ? areaM2
+      : objectId
+        ? objects.find(obj => obj.id === objectId)?.room.areaM2 ?? null
+        : null;
     // Capture once on opening: saving a new result must not reload the active iframe.
-    setCalcRequest({ objectId, nonce: Date.now(), areaM2 });
+    setCalcRequest({ objectId, nonce: Date.now(), areaM2: area });
   }, [objects]);
 
   /** Прикладывает PDF к объекту: сразу в облако или в очередь, если сети нет. */

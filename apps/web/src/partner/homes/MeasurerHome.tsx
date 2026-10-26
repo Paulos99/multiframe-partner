@@ -1,19 +1,13 @@
-import { useMemo, useState } from 'react';
-import {
-  OFFICIAL_PANEL_PRICE_RUB,
-  OFFICIAL_PRICE_PER_M2,
-} from '../../../../../packages/shared/partner';
+import { useState } from 'react';
 import { HelpTrainingPanel } from '../HelpTrainingPanel';
-import { RoleWorkspace } from '../RoleOverview';
 import { usePartner } from '../PartnerContext';
 import { InstallAppButton } from '../../app-shell/InstallAppButton';
 import { CabinetChrome } from '../../app-shell/CabinetChrome';
 import { ToolsPanel } from '../ToolsPanel';
 import { consumeReturnToTools } from '../toolsReturn';
-import { EntryPoints } from '../commercial/EntryPoints';
-import { WorkToday } from '../commercial/WorkToday';
 import { SupportRequestButton } from '../SupportRequestButton';
-import { nextActionsForRole } from '../commercial/nextActions';
+import { MeasurerDesk } from '../field/MeasurerDesk';
+import { disarmFieldCalc } from '../field/fieldCalcGate';
 
 import {
   roleHeading,
@@ -37,17 +31,16 @@ export function MeasurerHome({
   const [view, setView] = useState<'home' | 'tools' | 'help'>(() =>
     consumeReturnToTools() ? 'tools' : 'home',
   );
-  const actions = useMemo(() => nextActionsForRole('measurer', api.objects, []), [api.objects]);
 
   return (
     <CabinetChrome
       title={roleHeading('measurer', user)}
-      lead="Мои замеры · продолжить черновик"
+      lead="Мои замеры · назначенные комнаты"
       mode="buttons"
       items={[
-        { id: 'objects', label: 'Объекты', active: view === 'home', onSelect: () => setView('home') },
-        { id: 'tools', label: 'Инструменты', active: view === 'tools', onSelect: () => setView('tools') },
-        { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => setView('help') },
+        { id: 'objects', label: 'Замеры', active: view === 'home', onSelect: () => setView('home') },
+        { id: 'tools', label: 'Инструменты', active: view === 'tools', onSelect: () => { disarmFieldCalc(); setView('tools'); } },
+        { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => { disarmFieldCalc(); setView('help'); } },
       ]}
       extra={
         <>
@@ -67,20 +60,8 @@ export function MeasurerHome({
         <HelpTrainingPanel role="measurer" />
       ) : (
         <>
-          <p className={styles.metaLine}>
-            РРЦ панели {user.org?.panelPriceRub ?? OFFICIAL_PANEL_PRICE_RUB} ₽ ·{' '}
-            {user.org?.pricePerM2 ?? OFFICIAL_PRICE_PER_M2} ₽/м² · монтаж{' '}
-            {user.org?.installPricePerM2 != null ? `${user.org.installPricePerM2} ₽/м²` : 'не задан'}
-          </p>
-          <WorkToday title="Мои замеры" actions={actions} />
+          <MeasurerDesk onOpenScheme={onOpenCalc} />
           <SupportRequestButton module="measurer_home" />
-          <EntryPoints
-            onSelect={(_id, route) => {
-              if (route === 'calculator') onOpenCalc();
-              else onNavigate('problemomer');
-            }}
-          />
-          <RoleWorkspace compact onCreate={() => onNavigate('problemomer')} />
           <details className={styles.hintCard}>
             <summary>Офлайн на телефоне</summary>
             <p className={styles.lead}>

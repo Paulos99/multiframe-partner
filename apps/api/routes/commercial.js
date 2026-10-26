@@ -117,6 +117,10 @@ export async function handleCommercial(ctx) {
   }
 
   if (method === 'GET' && path.endsWith('/deals')) {
+    if (role === 'measurer') {
+      const deals = await service.measurerWork(user);
+      return ctx.json(200, { deals });
+    }
     const deals = await service.listDeals(user);
     return ctx.json(200, { deals: deals.map((deal) => publicDeal(deal, role)) });
   }
