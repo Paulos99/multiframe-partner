@@ -39,7 +39,6 @@ const measurerLogin = await call('POST', '/auth/login', {
   body: { login: 'exec1', password: 'exec1234' },
 });
 assert(measurerLogin.status === 200, 'measurer login');
-const measurerToken = measurerLogin.data.token;
 
 const foreign = await call('POST', '/org/staff/reset-password', {
   token: ownerToken,
@@ -95,8 +94,9 @@ const newer = new Date(Date.now() - 1000).toISOString();
 const older = '2020-01-01T00:00:00.000Z';
 const newest = new Date().toISOString();
 
+const salesToken = salesLogin.data.token;
 const created = await call('POST', '/objects', {
-  token: measurerToken,
+  token: salesToken,
   body: {
     id,
     updatedAt: newer,
@@ -110,7 +110,7 @@ assert(created.status === 200, `create ${created.status} ${created.data.message 
 assert(created.data.object.clientName === 'Новый замер', 'created name');
 
 const stale = await call('POST', '/objects', {
-  token: measurerToken,
+  token: salesToken,
   body: {
     id,
     updatedAt: older,
@@ -128,18 +128,18 @@ assert(
 );
 
 const fresh = await call('PATCH', `/objects/${id}`, {
-  token: measurerToken,
+  token: salesToken,
   body: { id, updatedAt: newest, clientName: 'Свежий замер', status: 'measured' },
 });
 assert(fresh.status === 200, `fresh patch ${fresh.status}`);
 assert(fresh.data.object.clientName === 'Свежий замер', 'newer write wins');
 
 const again = await call('POST', '/objects', {
-  token: measurerToken,
+  token: salesToken,
   body: { id, updatedAt: newest, clientName: 'Свежий замер', status: 'measured' },
 });
 assert(again.status === 200, 'idempotent retry');
-const list = await call('GET', '/objects', { token: measurerToken });
+const list = await call('GET', '/objects', { token: salesToken });
 const copies = (list.data.objects || []).filter((o) => o.id === id);
 assert(copies.length === 1, `expected 1 object, got ${copies.length}`);
 

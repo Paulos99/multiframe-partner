@@ -4,8 +4,37 @@
  */
 
 /**
+ * Карточки ведут владелец и менеджер своей компании.
+ * Администратор сети чужие комнаты не заводит. Замерщик и монтажник тоже.
+ */
+export function canCreateCompanyObjects(role) {
+  return role === 'owner' || role === 'sales';
+}
+
+/**
+ * Правка, смена шага, порядок и привязка к проекту — только своя компания.
+ * Администратор сети чужие карточки не двигает (концепция 5.5).
+ */
+export function canManageCompanyObjects(role) {
+  return role === 'owner' || role === 'sales';
+}
+
+/** Удаление комнат своей компании. Администратор сети, замерщик и бригада не удаляют. */
+export function canDeleteCompanyObjects(role) {
+  return role === 'owner' || role === 'sales';
+}
+
+/** Замерщику можно писать расчёт только в назначенную ему комнату. */
+export function measurerMaySaveCalculation(user, obj) {
+  if (!user || user.role !== 'measurer' || !obj) return false;
+  const assigned = obj.assignments || {};
+  return obj.createdBy === user.id || obj.assignedTo === user.id || assigned.measurerUserId === user.id;
+}
+
+/**
  * Видимость с учётом assignments (PRD MF-05).
  * Старое assignedTo остаётся запасным ключом.
+ * Владелец и менеджер видят все объекты своей компании. Чужая компания закрыта.
  */
 export function objectVisibleWithAssignments(user, obj) {
   if (user.role === 'admin') return true;

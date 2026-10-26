@@ -23,6 +23,7 @@ import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } f
 import { idempotencyKeyFrom, rememberIdempotent, replayIdempotent } from './idempotency.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { derivedAssignedTo } from '../../packages/shared/deal.js';
+import { describeRoomRemovalBlock, measurerCalculationRefusal } from '../../packages/shared/commercialRules.js';
 import { assertEventPayloadSafe } from '../../packages/shared/events.js';
 import {
   deleteObject,
@@ -33,11 +34,19 @@ import {
 } from './objectStore.js';
 import { migratePlatform } from './platformMigrate.js';
 import { handleCommercial } from './routes/commercial.js';
+import { getCommercialRepository } from './commercial/repository.js';
 import { noteInvocationIamToken } from './commercial/ydbAuth.js';
 import { resetCommercialRepositoryForTests } from './commercial/repository.js';
 import { handleAcademy } from './routes/academy.js';
 import { handleSupport } from './routes/support.js';
-import { mergeAssignments, objectVisibleWithAssignments } from './routes/objects.js';
+import {
+  canCreateCompanyObjects,
+  canDeleteCompanyObjects,
+  canManageCompanyObjects,
+  measurerMaySaveCalculation,
+  mergeAssignments,
+  objectVisibleWithAssignments,
+} from './routes/objects.js';
 import { eventsForDashboard, prepareIncomingAnalyticsEvents } from './routes/analytics.js';
 
 const EVENT_PII_KEYS = [
@@ -484,6 +493,68 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     documents: Array.isArray(existing?.documents) ? existing.documents : [],
     ...link,
   };
+}
+
+function denial(role, action) {
+  if (action === 'create') {
+    if (role === 'measurer') {
+      return 'Замерщик не создаёт комнаты. Сохраните расчёт в комнате, которую назначил менеджер.';
+    }
+    if (role === 'crew') {
+      return 'Бригада не создаёт комнаты. Новую комнату добавляет менеджер или владелец.';
+    }
+    if (role === 'admin') {
+      return 'Администратор сети не создаёт комнаты компаний. Это делает владелец или менеджер.';
+    }
+    return 'Создавать комнаты может владелец или менеджер своей компании.';
+  }
+  if (action === 'delete') {
+    if (role === 'admin') {
+      return 'Удалять комнаты компании может её владелец или менеджер. Администратор сети комнаты не удаляет.';
+    }
+    if (role === 'crew') {
+      return 'Бригада не удаляет комнаты. Если карточка лишняя, попросите менеджера.';
+    }
+    if (role === 'measurer') {
+      return 'Замерщик не удаляет комнаты. Сохраните расчёт в назначенной комнате или попросите менеджера.';
+    }
+    return 'Удалять комнаты может владелец или менеджер своей компании.';
+  }
+  if (role === 'admin') {
+    return 'Менять комнаты компании может её владелец или менеджер. Администратор сети карточки не двигает.';
+  }
+  if (role === 'crew') {
+    return 'Бригада не меняет карточки. Можно только закрыть свой монтаж.';
+  }
+  return 'Менять комнаты может владелец или менеджер своей компании.';
+}
+
+async function removalHoldFor(object) {
+  let repo;
+  try {
+    repo = await getCommercialRepository();
+  } catch {
+    return 'Сейчас нельзя проверить историю предложения. Удаление отменено, карточка осталась на доске. Повторите позже.';
+  }
+  try {
+    const pack = await repo.transaction(async (tx) => {
+      const quotes = (await tx.list({ orgId: object.orgId, kind: 'quote' })).map((row) => ({
+        ...(row.payload || {}),
+        id: row.id,
+        dealId: row.payload?.dealId || row.parentId,
+        projectId: row.payload?.projectId || row.projectId,
+      }));
+      const deals = (await tx.list({ orgId: object.orgId, kind: 'deal' })).map((row) => ({
+        ...(row.payload || {}),
+        id: row.id,
+        projectId: row.payload?.projectId || row.projectId,
+      }));
+      return { quotes, deals };
+    });
+    return describeRoomRemovalBlock(object, pack);
+  } catch {
+    return 'Сейчас нельзя проверить историю предложения. Удаление отменено, карточка осталась на доске. Повторите позже.';
+  }
 }
 
 /* —— analytics aggregate (subset, city-aware) —— */
@@ -1463,8 +1534,8 @@ export async function handler(event = {}, context) {
       const createKey = idempotencyKeyFrom(event.headers);
       const replayed = replayIdempotent(user.id, createKey);
       if (replayed) return replayed;
-      if (!['owner', 'sales', 'measurer'].includes(user.role)) {
-        return json(403, { message: 'Недостаточно прав' });
+      if (!canCreateCompanyObjects(user.role)) {
+        return json(403, { message: denial(user.role, 'create') });
       }
       if (!user.orgId) return json(400, { message: 'Нет организации' });
       const org = findOrg(platform, user.orgId);
@@ -1565,10 +1636,37 @@ export async function handler(event = {}, context) {
       if (idx < 0) return json(404, { message: 'Объект не найден' });
       const existing = platform.objects[idx];
       if (!objectVisibleTo(user, existing)) {
-        return json(403, { message: 'Недостаточно прав' });
+        if (user.role === 'measurer' && user.orgId && existing.orgId === user.orgId) {
+          return json(403, {
+            message: 'Эта комната вам не назначена. Попросите менеджера открыть её для замера.',
+          });
+        }
+        return json(403, { message: 'Менять можно только комнаты своей компании.' });
       }
       if (user.role === 'crew') {
         const body = getBody(event);
+        if (body.stageOrder !== undefined && body.stageOrder !== existing.stageOrder) {
+          return json(403, { message: 'Бригада не переставляет карточки. Можно только закрыть свой монтаж.' });
+        }
+        if (
+          body.projectId !== undefined &&
+          String(body.projectId || '') !== String(existing.projectId || '')
+        ) {
+          return json(403, { message: 'Бригада не переносит комнаты. Можно только закрыть свой монтаж.' });
+        }
+        for (const key of ['clientName', 'clientPhone', 'address', 'city', 'roomName', 'clientSummary']) {
+          if (body[key] !== undefined && String(body[key] ?? '').trim() !== String(existing[key] ?? '').trim()) {
+            return json(403, { message: 'Бригада не меняет карточку клиента. Можно только закрыть свой монтаж.' });
+          }
+        }
+        if (
+          body.room !== undefined ||
+          body.estimate !== undefined ||
+          body.assignedTo !== undefined ||
+          body.assignments !== undefined
+        ) {
+          return json(403, { message: 'Бригада не меняет расчёт и цены. Можно только закрыть свой монтаж.' });
+        }
         if (!incomingWins(body, existing)) {
           const kept = { ...existing, history: skippedHistory(existing, body, user) };
           platform.objects[idx] = kept;
@@ -1598,6 +1696,47 @@ export async function handler(event = {}, context) {
         platform.objects[idx] = next;
         await savePlatform(platform);
         return json(200, { object: publicObject(next, user.role) });
+      }
+      if (user.role === 'measurer') {
+        if (!measurerMaySaveCalculation(user, existing)) {
+          return json(403, {
+            message: 'Эта комната вам не назначена. Попросите менеджера открыть её для замера.',
+          });
+        }
+        const body = getBody(event);
+        const refusal = measurerCalculationRefusal(body, existing);
+        if (refusal) return json(403, { message: refusal });
+        if (!incomingWins(body, existing)) {
+          const kept = { ...existing, history: skippedHistory(existing, body, user) };
+          platform.objects[idx] = kept;
+          await savePlatform(platform);
+          return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
+        }
+        const next = {
+          ...existing,
+          estimate: body.estimate !== undefined ? body.estimate : existing.estimate ?? null,
+          room: body.room !== undefined ? body.room : existing.room || {},
+          clientSummary:
+            body.clientSummary !== undefined ? String(body.clientSummary) : existing.clientSummary || '',
+          status: body.status === 'measured' ? 'measured' : existing.status,
+          updatedAt: clampClientTime(body.updatedAt),
+          history: [
+            {
+              at: new Date().toISOString(),
+              userId: user.id,
+              login: user.login,
+              action: 'update',
+              detail: 'расчёт',
+            },
+            ...(existing.history || []),
+          ].slice(0, 50),
+        };
+        platform.objects[idx] = next;
+        await savePlatform(platform);
+        return json(200, { object: publicObject(next, user.role) });
+      }
+      if (!canManageCompanyObjects(user.role)) {
+        return json(403, { message: denial(user.role, 'edit') });
       }
       const org = findOrg(platform, existing.orgId);
       const body = getBody(event);
@@ -1675,17 +1814,18 @@ export async function handler(event = {}, context) {
 
     if (method === 'DELETE' && /\/objects\/[^/]+$/.test(path)) {
       const { platform, user } = await requireAuth(event);
-      // Only admin and the company owner delete objects; sales, measurer and crew get 403.
-      if (!['admin', 'owner'].includes(user.role)) {
-        return json(403, { message: 'Недостаточно прав' });
+      if (!canDeleteCompanyObjects(user.role)) {
+        return json(403, { message: denial(user.role, 'delete') });
       }
       const objectId = path.split('/').pop();
       const idx = (platform.objects || []).findIndex((o) => o.id === objectId);
-      if (idx < 0) return json(404, { message: 'Объект не найден' });
+      if (idx < 0) return json(404, { message: 'Комната не найдена' });
       const existing = platform.objects[idx];
-      if (!objectVisibleTo(user, existing)) {
-        return json(403, { message: 'Недостаточно прав' });
+      if (!objectVisibleTo(user, existing) || existing.orgId !== user.orgId) {
+        return json(403, { message: 'Удалять можно только комнаты своей компании.' });
       }
+      const hold = await removalHoldFor(existing);
+      if (hold) return json(409, { message: hold });
       const body = getBody(event);
       const query = getQuery(event);
       const deleteBody = { updatedAt: body.updatedAt || query.updatedAt || null };

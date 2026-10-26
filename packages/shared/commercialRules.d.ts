@@ -45,3 +45,11 @@ export function roomContribution(calcs: Array<{
   divergent?: boolean;
 }>): { calcType: 'preliminary' | 'detailed'; amount: number; calculationId: string } | null;
 export function checklistComplete(items: Array<{ state?: string; reason?: string | null }>): boolean;
+export function describeRoomRemovalBlock(
+  room: { id?: string; status?: string } | null | undefined,
+  history?: { quotes?: QuoteRevision[]; deals?: Array<Pick<Deal, 'id' | 'closedAt' | 'roomAssent'> & { parentId?: string }> },
+): string;
+export function measurerCalculationRefusal(
+  body: Record<string, unknown> | null | undefined,
+  existing: Record<string, unknown> | null | undefined,
+): string;

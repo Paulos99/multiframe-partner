@@ -8,7 +8,9 @@ import {
   closeFulfilledDeal,
   declineDeal,
   inInstallPool,
+  describeRoomRemovalBlock,
   installPoolFromMigration,
+  measurerCalculationRefusal,
   isTechReady,
   migrateLegacyCommercial,
   pauseDeal,
@@ -237,4 +239,37 @@ test('частичная сумма берёт только ordered', () => {
     snapshot: { lines: [{ roomId: 'a', amount: 5 }, { roomId: 'b', amount: 7 }] },
   };
   assert.equal(sumOrdered(quote, { a: 'ordered', b: 'deferred' }), 5);
+});
+
+test('удаление комнаты бережёт отправленное предложение и сделку', () => {
+  assert.equal(describeRoomRemovalBlock({ id: 'r', status: 'draft' }, { quotes: [], deals: [] }), '');
+  assert.match(
+    describeRoomRemovalBlock({ id: 'r', status: 'quote_sent' }, {}),
+    /предложение клиенту уже отправлено/,
+  );
+  assert.match(
+    describeRoomRemovalBlock(
+      { id: 'r', status: 'draft' },
+      { quotes: [], deals: [{ id: 'd', closedAt: null, roomAssent: { r: 'ordered' } }] },
+    ),
+    /ещё идёт сделка/,
+  );
+  assert.match(
+    describeRoomRemovalBlock(
+      { id: 'r', status: 'measured' },
+      {
+        quotes: [{ id: 'q', dealId: 'd', roomObjectIds: ['r'], lifecycle: 'quote_sent_confirmed', sentConfirmedAt: at }],
+        deals: [{ id: 'd', closedAt: at, roomAssent: { r: 'ordered' } }],
+      },
+    ),
+    /предложение клиенту уже отправлено/,
+  );
+  assert.equal(
+    measurerCalculationRefusal({ estimate: { totalCost: 10 }, status: 'measured' }, { status: 'draft', stageOrder: 1 }),
+    '',
+  );
+  assert.match(
+    measurerCalculationRefusal({ status: 'quote_sent' }, { status: 'measured' }),
+    /фиксирует менеджер/,
+  );
 });

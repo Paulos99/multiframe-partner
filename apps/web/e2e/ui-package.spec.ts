@@ -99,7 +99,7 @@ test('kanban drag persists stage after reload, opens existing room editor', asyn
   ).toHaveCount(0);
   releasePatch();
   await expect(
-    page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
+    page.getByRole('status').filter({ hasText: 'Карточка переставлена' }),
   ).toBeVisible();
   await page.reload();
   await expect(target.locator('[data-room-id]').first()).toHaveAttribute(
@@ -124,7 +124,7 @@ test('reorder within a column persists after reload', async ({ page }) => {
   await card.focus();
   await card.press('Alt+ArrowRight');
   await expect(
-    page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
+    page.getByRole('status').filter({ hasText: 'Карточка переставлена' }),
   ).toBeVisible();
   await expect(card).toHaveCount(1);
   const column = page.locator('[data-kanban-stage="measured"]');
@@ -145,7 +145,7 @@ test('reorder within a column persists after reload', async ({ page }) => {
     'ui_measured',
   );
   await expect(
-    page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
+    page.getByRole('status').filter({ hasText: 'Карточка переставлена' }),
   ).toBeVisible();
   await page.reload();
   await expect(column.locator('[data-room-id]').first()).toHaveAttribute(

@@ -48,6 +48,7 @@ export function SalesHome({
   const [openedProject, setOpenedProject] = useState<string | null>(null);
   const [indexOpen, setIndexOpen] = useState(false);
   const [roomOpen, setRoomOpen] = useState(() => api.cabinetEntry === 'room' && Boolean(api.openedObjectId));
+  const [boardOpen, setBoardOpen] = useState(false);
   const [focusProjectId, setFocusProjectId] = useState<string | null>(null);
   const [focusRoomId, setFocusRoomId] = useState<string | null>(() =>
     api.cabinetEntry === 'room' ? api.openedObjectId : null,
@@ -157,7 +158,15 @@ export function SalesHome({
           onChanged={refresh}
         />
       ) : null}
-      {tab === 'deals' && !roomOpen && !openedProject ? (
+      {tab === 'deals' && !roomOpen && !openedProject && boardOpen ? (
+        <div className={styles.salesHome}>
+          <button type="button" className={styles.salesLink} onClick={() => setBoardOpen(false)}>
+            К сегодняшним задачам
+          </button>
+          <RoleWorkspace onCreate={() => onNavigate('problemomer')} />
+        </div>
+      ) : null}
+      {tab === 'deals' && !roomOpen && !openedProject && !boardOpen ? (
         <TabPanel>
           <FadeRise key={indexOpen ? 'index' : 'today'}>
             <div className={styles.salesHome}>
@@ -207,6 +216,16 @@ export function SalesHome({
                       Калькулятор
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    className={styles.salesLink}
+                    onClick={() => {
+                      setIndexOpen(false);
+                      setBoardOpen(true);
+                    }}
+                  >
+                    Доска объектов
+                  </button>
                   <button type="button" className={styles.salesLink} onClick={() => setIndexOpen(true)}>
                     Все проекты
                   </button>

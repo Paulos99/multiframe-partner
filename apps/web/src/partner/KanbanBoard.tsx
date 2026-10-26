@@ -74,6 +74,7 @@ function Card({
   related,
   onStep,
   onMenu,
+  stepLabels,
 }: {
   room: JobObject;
   disabled: boolean;
@@ -84,6 +85,9 @@ function Card({
   onStep: (direction: number) => void;
   /** Opens the card actions menu at viewport coordinates; omitted when the role has no actions. */
   onMenu?: (x: number, y: number) => void;
+  /** One tap to the neighbouring column. Shown on the phone, where a drag across columns misses. */
+  stepLabels?: { prev: string; next: string };
+  onQuickDelete?: () => void;
 }) {
   const reduce = usePrefersReducedMotion();
   const {
@@ -157,6 +161,40 @@ function Card({
           <MoreIcon size={18} />
         </button>
       ) : null}
+      {(stepLabels?.prev || stepLabels?.next || onQuickDelete) && !isDragging ? (
+        <div className={styles.steps}>
+          {stepLabels?.prev ? (
+            <button
+              type="button"
+              className={styles.step}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => onStep(-1)}
+            >
+              {stepLabels.prev}
+            </button>
+          ) : null}
+          {stepLabels?.next ? (
+            <button
+              type="button"
+              className={styles.stepNext}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => onStep(1)}
+            >
+              {stepLabels.next}
+            </button>
+          ) : null}
+          {onQuickDelete ? (
+            <button
+              type="button"
+              className={styles.cardDelete}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={onQuickDelete}
+            >
+              Удалить
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -188,7 +226,7 @@ export function KanbanBoard({
   onCreate?: (status: JobObjectStatus) => void;
   loading?: boolean;
   staff: { id: string; displayName: string }[];
-  /** Present only for roles that may delete objects (admin, owner). */
+  /** Только у ролей, которым можно удалять объекты: админ, владелец, менеджер. */
   onDelete?: (room: JobObject) => void;
 }) {
   const reduce = usePrefersReducedMotion();
@@ -439,9 +477,9 @@ export function KanbanBoard({
       </div>
       {/* Visible hint removed at Pavel's request; the instructions stay for screen readers. */}
       <p className={styles.srOnly} id="kanban-help">
-        Перетащите карточку в стадию или измените порядок. Alt + ←/→ — стадия,
-        Пробел — поднять, стрелки — переместить, Escape — отменить. На телефоне
-        удерживайте карточку.
+        На компьютере перетащите карточку в другой столбец или выше и ниже.
+        На телефоне нажмите на карточке название следующего шага.
+        Удаление — кнопка на карточке, затем подтверждение.
       </p>
       <div className={styles.tabs} aria-label="Стадии">
         {KANBAN_STAGES.map((s) => (
@@ -571,7 +609,7 @@ export function KanbanBoard({
                   {onCreate && (
                     <button
                       type="button"
-                      aria-label={`Новый объект: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
+                      aria-label={`Добавить комнату: ${JOB_OBJECT_STATUS_LABELS[stage]}`}
                       onClick={() => onCreate(stage)}
                     >
                       +
@@ -628,6 +666,17 @@ export function KanbanBoard({
                                 }
                                 onHover={setHover}
                                 onOpen={() => onOpen(room)}
+                                stepLabels={(() => {
+                                  const index = KANBAN_STAGES.indexOf(room.status);
+                                  const prev = KANBAN_STAGES[index - 1];
+                                  const next = KANBAN_STAGES[index + 1];
+                                  if (!canMoveRoom(role, room.status)) return undefined;
+                                  return {
+                                    prev: prev && canMoveRoom(role, prev) ? JOB_OBJECT_STATUS_LABELS[prev] : '',
+                                    next: next && canMoveRoom(role, next) ? JOB_OBJECT_STATUS_LABELS[next] : '',
+                                  };
+                                })()}
+                                onQuickDelete={onDelete ? () => onDelete(room) : undefined}
                                 onStep={(direction) => {
                                   const stage =
                                     KANBAN_STAGES[

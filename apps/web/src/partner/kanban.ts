@@ -12,10 +12,9 @@ export const KANBAN_STAGES: JobObjectStatus[] = [
   'closed',
 ];
 export function canMoveRoom(role: UserRole, target: JobObjectStatus) {
-  return (
-    KANBAN_STAGES.includes(target) &&
-    (role !== 'crew' || target === 'install' || target === 'closed')
-  );
+  if (!KANBAN_STAGES.includes(target)) return false;
+  if (role === 'crew') return target === 'install' || target === 'closed';
+  return role === 'owner' || role === 'sales';
 }
 export type BoardSort = 'manual' | 'updatedAt' | 'createdAt' | 'client';
 export function sortRooms(

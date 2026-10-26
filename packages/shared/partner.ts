@@ -68,13 +68,29 @@ export function canManagePartners(role: UserRole): boolean {
   return role === 'admin';
 }
 
+/**
+ * Карточки объектов заводят владелец и менеджер своей компании.
+ * Замерщик и монтажник не создают объекты. То же правило на сервере.
+ */
 export function canCreateObjects(role: UserRole): boolean {
-  return role === 'owner' || role === 'sales' || role === 'measurer';
+  return role === 'owner' || role === 'sales';
 }
 
-/** Only the platform admin and the company owner may delete objects (enforced by the API too). */
+/**
+ * Удаление комнат своей компании: владелец и менеджер.
+ * Администратор сети чужие комнаты не удаляет. Замерщик и монтажник тоже.
+ * Сервер снова проверяет роль, компанию и историю предложения.
+ */
 export function canDeleteObjects(role: UserRole): boolean {
-  return role === 'admin' || role === 'owner';
+  return role === 'owner' || role === 'sales';
+}
+
+/**
+ * Смена шага, порядок на доске и перенос в другой проект своей компании.
+ * Замерщик, монтажник и администратор сети доску компании не переставляют.
+ */
+export function canRearrangeObjects(role: UserRole): boolean {
+  return role === 'owner' || role === 'sales';
 }
 
 export function canAssignObjects(role: UserRole): boolean {
