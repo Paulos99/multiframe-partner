@@ -73,9 +73,14 @@ test('quotes: copy не меняет lifecycle; confirm-sent меняет', asyn
   const projectId = project.body.project.id;
 
   const token = await login('sales1', 'exec1234');
+  const deal = await invoke('POST', '/deals', {
+    token,
+    body: { projectId, stage: 'contact' },
+  });
+  assert.equal(deal.status, 200, JSON.stringify(deal.body));
   const created = await invoke('POST', '/quotes', {
     token,
-    body: { projectId, roomObjectIds: [], amount: 10000 },
+    body: { projectId, dealId: deal.body.deal.id, roomObjectIds: [], amount: 10000 },
   });
   assert.equal(created.status, 200, JSON.stringify(created.body));
   const id = created.body.quote.id;
@@ -93,6 +98,10 @@ test('quotes: copy не меняет lifecycle; confirm-sent меняет', asyn
   assert.equal(confirmed.status, 200);
   assert.equal(confirmed.body.quote.lifecycle, 'quote_sent_confirmed');
   assert.ok(confirmed.body.quote.sentConfirmed);
+  const dealAfter = await invoke('GET', `/deals/${deal.body.deal.id}`, { token });
+  assert.equal(dealAfter.status, 200);
+  assert.equal(dealAfter.body.deal.stage, 'quote_sent_confirmed');
+  assert.equal(dealAfter.body.deal.outcome, null);
 });
 
 test('academy: попытка всегда training и не ломает KPI-фильтр', async () => {
