@@ -29,7 +29,8 @@ const statements = text
   .map((part) => part.trim())
   .filter(Boolean);
 
-const sdk = await import('ydb-sdk');
+const sdkModule = await import('ydb-sdk');
+const sdk = sdkModule.default ?? sdkModule;
 const driver = new sdk.Driver({
   connectionString: endpoint.replace(/\/$/, '') + (database.startsWith('/') ? database : `/${database}`),
   authService: process.env.YDB_ACCESS_TOKEN_CREDENTIALS

@@ -176,7 +176,8 @@ export async function openYdbRepository(env = process.env) {
   if (!endpoint || !database) {
     throw httpError(503, 'Коммерческое хранилище YDB не настроено');
   }
-  const sdk = await import('ydb-sdk');
+  const sdkModule = await import('ydb-sdk');
+  const sdk = sdkModule.default ?? sdkModule;
   const driver = new sdk.Driver({
     connectionString: connectionString(endpoint, database),
     authService: authService(sdk, env),
