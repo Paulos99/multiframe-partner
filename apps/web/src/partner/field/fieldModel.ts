@@ -54,7 +54,14 @@ export type RoomComposition = {
   panels: number | null;
   dowels: number | null;
   hasScheme: boolean;
+  schemeImage?: string | null;
 };
+
+/** Пустое или нулевое значение состава — прочерк, не «0». */
+export function compositionFigure(value: number | null | undefined, unit?: string): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return '—';
+  return unit ? `${value} ${unit}` : String(value);
+}
 
 export type CrewRoom = {
   id: string;

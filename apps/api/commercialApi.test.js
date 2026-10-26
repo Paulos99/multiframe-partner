@@ -527,6 +527,89 @@ test('замерщик видит оба расчёта и один вклад �
   }
 });
 
+test('состав бригады: чертёж без цен, пустые числа — прочерк на сервере', async () => {
+  const sales = await login('sales1', 'exec1234');
+  const created = await invoke('POST', '/inquiries', {
+    token: sales,
+    headers: { 'Idempotency-Key': 'scheme-1' },
+    body: { name: 'Чертёж', roomName: 'Гостиная' },
+  });
+  const roomId = created.body.room.id;
+  const dealId = created.body.deal.id;
+  const projectId = created.body.project.id;
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const saved = await invoke('POST', `/rooms/${roomId}/calculations`, {
+    token: sales,
+    body: {
+      type: 'detailed',
+      amount: 80,
+      expectedRevision: 0,
+      areaM2: 0,
+      panels: 0,
+      dowels: null,
+      hasScheme: true,
+      schemeImage: png,
+      pdfBase64: 'data:application/pdf;base64,JVBERi0x',
+      totalCost: 999,
+    },
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  let roomVersion = '1';
+  const profile = await invoke('POST', `/rooms/${roomId}/profile`, {
+    token: sales,
+    headers: { 'If-Match': roomVersion },
+    body: { usable: true },
+  });
+  roomVersion = String(profile.body.room.recordVersion);
+  const quote = await invoke('POST', '/quotes', {
+    token: sales,
+    body: { projectId, dealId, roomObjectIds: [roomId] },
+  });
+  await invoke('POST', `/quotes/${quote.body.quote.id}/confirm-sent`, {
+    token: sales,
+    headers: matchOf(quote, 'quote'),
+    body: {},
+  });
+  const beforeAccept = await invoke('GET', `/deals/${dealId}`, { token: sales });
+  await invoke('POST', `/deals/${dealId}/accept`, {
+    token: sales,
+    headers: matchOf(beforeAccept, 'deal'),
+    body: { roomAssent: { [roomId]: 'ordered' } },
+  });
+  await invoke('POST', `/rooms/${roomId}/readiness`, {
+    token: sales,
+    headers: { 'If-Match': roomVersion },
+    body: { materialsComplete: true, crewUserId: 'u_crew1' },
+  });
+  const crew = await login('crew1', 'exec1234');
+  const inbox = await invoke('GET', '/install/inbox', { token: crew });
+  const composition = inbox.body.rooms[0].composition;
+  assert.equal(composition.areaM2, null);
+  assert.equal(composition.panels, null);
+  assert.equal(composition.dowels, null);
+  assert.equal(composition.schemeImage, png);
+  assert.equal(composition.hasScheme, true);
+  const dumped = JSON.stringify(composition);
+  assert.equal(dumped.includes('pdfBase64'), false);
+  assert.equal(dumped.includes('totalCost'), false);
+  assert.equal(dumped.includes('999'), false);
+  assert.equal(dumped.includes('amount'), false);
+
+  const dropped = await invoke('POST', `/rooms/${roomId}/calculations`, {
+    token: sales,
+    body: {
+      type: 'detailed',
+      amount: 81,
+      expectedRevision: 1,
+      schemeImage: 'data:application/pdf;base64,JVBERi0x',
+    },
+  });
+  assert.equal(dropped.status, 200, JSON.stringify(dropped.body));
+  const again = await invoke('GET', '/install/inbox', { token: crew });
+  assert.equal(again.body.rooms[0].composition.schemeImage, null);
+  assert.equal(again.body.rooms[0].composition.areaM2, null);
+});
+
 test('облачный бакет без YDB не подменяет коммерческое хранилище файлом', async () => {
   clearCommercialRepositoryForTests();
   process.env.PARTNERS_BUCKET = 'unit-bucket';

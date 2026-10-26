@@ -96,6 +96,36 @@ export function offerFieldCalc(
   return true;
 }
 
+/** Чертёж сжимается до jpeg, чтобы в комнату не ушёл тяжёлый холст и PDF со сметой. */
+function compactScheme(dataUrl: string | null | undefined): Promise<string | null> {
+  if (!dataUrl || !dataUrl.startsWith('data:image/')) return Promise.resolve(null);
+  if (typeof Image === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve(dataUrl.length > 700_000 ? null : dataUrl);
+  }
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const maxW = 960;
+      const scale = image.width > maxW ? maxW / image.width : 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const jpeg = canvas.toDataURL('image/jpeg', 0.72);
+      resolve(jpeg.startsWith('data:image/jpeg') && jpeg.length <= 700_000 ? jpeg : null);
+    };
+    image.onerror = () => resolve(null);
+    image.src = dataUrl;
+  });
+}
+
 function conflictText(body: {
   saved: { amount: number };
   current: { amount: number };
@@ -127,10 +157,11 @@ async function settle(
       type: 'detailed',
       amount: estimate.totalCost,
       expectedRevision: arm.expectedRevision,
-      areaM2: data.areaM2 ?? null,
-      panels: estimate.panels,
-      dowels: estimate.dowels,
+      areaM2: data.areaM2 && data.areaM2 > 0 ? data.areaM2 : null,
+      panels: estimate.panels > 0 ? estimate.panels : null,
+      dowels: estimate.dowels > 0 ? estimate.dowels : null,
       hasScheme: true,
+      schemeImage: await compactScheme(data.schemeImage),
     },
     { idempotencyKey: arm.idempotencyKey, roomId: arm.roomId },
   );
