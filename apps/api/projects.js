@@ -5,8 +5,6 @@
  * Чтение отсутствующего ключа platform.projects — пустой список.
  */
 
-import { rememberIdempotent, replayIdempotent } from './idempotency.js';
-
 const NAME_MAX = 250;
 const TEXT_MAX = 250;
 const PHONE_MAX = 80;
@@ -174,8 +172,6 @@ export async function handleProjects(ctx) {
   if (!user.orgId) return ctx.json(400, { message: 'Нет организации' });
 
   if (method === 'POST' && listRoute) {
-    const replayed = replayIdempotent(user.id, ctx.idempotencyKey);
-    if (replayed) return replayed;
     const body = ctx.getBody() || {};
     const requested = clientProjectId(body.id);
     const found = requested ? rows.find((project) => project.id === requested) : null;
@@ -200,9 +196,7 @@ export async function handleProjects(ctx) {
       });
     }
     await ctx.savePlatform(platform);
-    const created = ctx.json(200, { project: publicProject(project) });
-    if (!found) rememberIdempotent(user.id, ctx.idempotencyKey, created);
-    return created;
+    return ctx.json(200, { project: publicProject(project) });
   }
 
   const projectId = decodeURIComponent(path.split('/').pop() || '');

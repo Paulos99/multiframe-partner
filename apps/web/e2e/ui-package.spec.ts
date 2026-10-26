@@ -127,19 +127,15 @@ test('reorder within a column persists after reload', async ({ page }) => {
     page.getByRole('status').filter({ hasText: 'Стадия сохранена' }),
   ).toBeVisible();
   await expect(card).toHaveCount(1);
-  const column = page.locator('[data-kanban-stage="measured"]');
   const target = page.locator('[data-room-id="ui_measured"]');
-  await expect(column.locator('[data-room-id="ui_room"]')).toBeVisible();
-  await expect(target).toBeVisible();
-  await card.scrollIntoViewIfNeeded();
-  await target.scrollIntoViewIfNeeded();
-  const from = await card.boundingBox();
-  const to = await target.boundingBox();
+  const from = await card.boundingBox(),
+    to = await target.boundingBox();
   if (!from || !to) throw new Error('Missing card geometry');
-  await page.mouse.move(from.x + from.width / 2, from.y + 40);
+  await page.mouse.move(from.x + 30, from.y + 30);
   await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 25 });
+  await page.mouse.move(to.x + 30, to.y + to.height - 15, { steps: 20 });
   await page.mouse.up();
+  const column = page.locator('[data-kanban-stage="measured"]');
   await expect(column.locator('[data-room-id]').first()).toHaveAttribute(
     'data-room-id',
     'ui_measured',
@@ -154,11 +150,22 @@ test('reorder within a column persists after reload', async ({ page }) => {
   );
 });
 
-test('crew has no object board to drag', async ({ page }) => {
+test('crew cannot drag a room into a forbidden stage', async ({ page }) => {
   await enter(page, 'crew');
-  await expect(page.getByRole('heading', { name: 'Мои задания' })).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(0);
-  await expect(page.locator('[data-room-id]')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Вид объектов' })).toHaveCount(
+    0,
+  );
+
+  const card = page.locator('[data-room-id="ui_crew_room"]');
+  await card.focus();
+  await card.press('Alt+ArrowLeft');
+  await expect(
+    page.locator('[data-kanban-stage="install"] [data-room-id="ui_crew_room"]'),
+  ).toBeVisible();
+  await card.press('Alt+ArrowRight');
+  await expect(
+    page.locator('[data-kanban-stage="closed"] [data-room-id="ui_crew_room"]'),
+  ).toBeVisible();
 });
 // Профиль: см. e2e/profile.spec.ts.
 test('mobile and reduced motion: profile and board stay within viewport', async ({
@@ -224,7 +231,7 @@ test('admin uses the same board and editor in projects', async ({ page }) => {
 test('diagnostic and calculator open without runtime regressions', async ({page}) => {
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await enter(page);
  await page.getByRole('tab',{name:'Инструменты',exact:true}).click();await page.getByRole('button',{name:'Открыть Проблемомер',exact:true}).click();await expect(page.getByRole('button',{name:'Начать',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Назад',exact:true}).first().click();await page.getByRole('button',{name:'Открыть Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
+ await page.getByRole('button',{name:'Кабинет',exact:true}).click();await page.getByRole('button',{name:'Открыть Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
 });
 
 for (const role of ['admin', 'owner'] as const) {

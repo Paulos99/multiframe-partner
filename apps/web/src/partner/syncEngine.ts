@@ -4,7 +4,6 @@
  * in server history and does not erase the fresher record. A 401 leaves the outbox.
  */
 import type { JobObject, JobObjectDocument, Project, ProjectInput, SessionUser } from '../../../../packages/shared/partner';
-import { dedupeByKey } from './idempotency';
 import {
   ApiError,
   apiBase,
@@ -156,14 +155,7 @@ export async function saveObjectSynced(
   user: SessionUser,
   remote: boolean,
   input: Partial<JobObject> & { id?: string },
-  idempotencyKey?: string,
 ): Promise<JobObject> {
-  // Повторный вход с тем же ключом не шлёт второй POST. Метка не уходит в заголовок.
-  const passthrough = idempotencyKey?.startsWith('__send__:') ?? false;
-  const wireKey = passthrough ? idempotencyKey!.slice('__send__:'.length) : idempotencyKey;
-  if (!input.id && wireKey && !passthrough) {
-    return dedupeByKey(wireKey, () => saveObjectSynced(user, remote, input, `__send__:${wireKey}`));
-  }
   const id = input.id || newObjectId();
   const updatedAt = new Date().toISOString();
   const draft = stripObjectDocuments({ ...input, id, updatedAt });
@@ -176,11 +168,11 @@ export async function saveObjectSynced(
         try {
           obj = await apiPatchObject(id, draft);
         } catch (err) {
-          if (isApiError(err) && err.status === 404) obj = await apiCreateObject(draft, { idempotencyKey: wireKey });
+          if (isApiError(err) && err.status === 404) obj = await apiCreateObject(draft);
           else throw err;
         }
       } else {
-        obj = await apiCreateObject(draft, { idempotencyKey: wireKey });
+        obj = await apiCreateObject(draft);
       }
       await putObject({ ...obj, pendingSync: false });
       await removeOutbox(id);
@@ -454,20 +446,12 @@ export async function saveProjectSynced(
   remote: boolean,
   input: ProjectInput,
   id?: string,
-  idempotencyKey?: string,
 ): Promise<Project> {
-  const passthrough = idempotencyKey?.startsWith('__send__:') ?? false;
-  const wireKey = passthrough ? idempotencyKey!.slice('__send__:'.length) : idempotencyKey;
-  if (!id && wireKey && !passthrough) {
-    return dedupeByKey(wireKey, () => saveProjectSynced(user, remote, input, id, `__send__:${wireKey}`));
-  }
   if (!remote) return upsertLocalProject(id ? { ...input, id } : input, user);
   const draft: ProjectInput = id ? { ...input, id } : input;
   if (loadToken() && (typeof navigator === 'undefined' || navigator.onLine)) {
     try {
-      const project = id
-        ? await apiUpdateProject(id, draft)
-        : await apiCreateProject(draft, { idempotencyKey: wireKey });
+      const project = id ? await apiUpdateProject(id, draft) : await apiCreateProject(draft);
       markProjectsApiReady(true);
       await putProject(project);
       if (project.id) await removeProjectOutbox(project.id);

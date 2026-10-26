@@ -32,19 +32,7 @@ const rootCache = new Map();
 /** @type {WeakMap<object, { base: any, etag: string | null }>} */
 const origins = new WeakMap();
 
-const ID_LISTS = new Set([
-  'users',
-  'orgs',
-  'objects',
-  'projects',
-  'materials',
-  'deals',
-  'quoteRevisions',
-  'learningScenarios',
-  'learningAttempts',
-  'supportCases',
-  'interventions',
-]);
+const ID_LISTS = new Set(['users', 'orgs', 'objects', 'projects', 'materials']);
 const LIST_CAPS = { history: 50, documents: 40 };
 
 function cacheMap() {

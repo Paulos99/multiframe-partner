@@ -127,15 +127,9 @@ const emptyDraft = (city = ''): RoomDraft => ({
 export function ObjectsPanel({
   compact,
   onCreate,
-  focusProjectId = null,
-  focusRoomId = null,
-  onOpened,
 }: {
   compact?: boolean;
   onCreate?: () => void;
-  focusProjectId?: string | null;
-  focusRoomId?: string | null;
-  onOpened?: (selection: { projectId: string | null; roomId: string | null }) => void;
 }) {
   const api = usePartner();
   const user = api.user!;
@@ -176,22 +170,6 @@ export function ObjectsPanel({
     setSelectedId(room.id);
   }, [api.openedObjectId, api.objects]);
 
-  const appliedFocus = useRef('');
-  useEffect(() => {
-    const stamp = `${focusProjectId || ''}|${focusRoomId || ''}`;
-    if (stamp === '|' || appliedFocus.current === stamp) return;
-    if (focusRoomId) {
-      const room = api.objects.find((obj) => obj.id === focusRoomId);
-      if (!room) return;
-      appliedFocus.current = stamp;
-      setSelectedKey(room.projectId || `room:${room.id}`);
-      setSelectedId(room.id);
-      return;
-    }
-    appliedFocus.current = stamp;
-    if (focusProjectId) setSelectedKey(focusProjectId);
-  }, [focusProjectId, focusRoomId, api.objects]);
-
   const counts = useMemo(() => {
     const map = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<JobObjectStatus, number>;
     for (const obj of api.objects) map[obj.status] += 1;
@@ -215,17 +193,6 @@ export function ObjectsPanel({
     [api.objects, selectedId],
   );
   const summary = useMemo(() => preliminaryRoomTotal(selectedRooms), [selectedRooms]);
-  const onOpenedRef = useRef(onOpened);
-  onOpenedRef.current = onOpened;
-
-  useEffect(() => {
-    if (!onOpenedRef.current) return;
-    const projectId =
-      selectedCard?.project?.id ||
-      selected?.projectId ||
-      (selectedCard && !selectedCard.loose && !selectedCard.key.startsWith('room:') ? selectedCard.key : null);
-    onOpenedRef.current({ projectId: projectId || null, roomId: selected?.id || null });
-  }, [selectedCard, selected]);
 
   useEffect(() => {
     if (!selectedId || !detailRef.current) return;

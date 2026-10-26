@@ -1,29 +1,29 @@
 import { useState } from 'react';
 import { usePartner } from './PartnerContext';
-import { resolveSyncUi } from './commercial/syncLabels';
 import styles from './partner.module.css';
+
+function syncCopy(status: string, pending: number, authHold: boolean) {
+  let label = 'Синхронизировано';
+  if (status === 'offline') {
+    label = pending > 0 ? `Офлайн · Не выгружено ${pending}` : 'Офлайн';
+  } else if (status === 'pending' || pending > 0) {
+    label = `Не выгружено ${pending}`;
+  }
+  const hint = authHold
+    ? 'Сессия истекла. Очередь на устройстве сохранена и уйдёт на сервер после входа.'
+    : status === 'offline'
+      ? 'Нет сети. Замеры и расчёты на этом устройстве.'
+      : 'Очередь выгружается сама, когда появляется сеть.';
+  const dot =
+    status === 'offline' ? styles.syncDotOff : status === 'pending' || pending > 0 ? styles.syncDotWait : styles.syncDotOk;
+  const tone = status === 'offline' ? styles.syncOff : status === 'pending' || pending > 0 ? styles.syncWait : styles.syncOk;
+  return { label, hint, dot, tone };
+}
 
 export function SyncStatus({ compact = false }: { compact?: boolean }) {
   const api = usePartner();
   const [open, setOpen] = useState(false);
-  const { label, hint, kind } = resolveSyncUi({
-    online: api.online,
-    pending: api.pendingSyncCount,
-    authHold: api.authHold,
-  });
-  const dot =
-    kind === 'offline' || kind === 'saved_local'
-      ? styles.syncDotOff
-      : kind === 'uploading' || kind === 'retry'
-        ? styles.syncDotWait
-        : styles.syncDotOk;
-  const tone =
-    kind === 'offline' || kind === 'saved_local'
-      ? styles.syncOff
-      : kind === 'uploading' || kind === 'retry'
-        ? styles.syncWait
-        : styles.syncOk;
-
+  const { label, hint, dot, tone } = syncCopy(api.syncStatus, api.pendingSyncCount, api.authHold);
   if (compact) {
     return (
       <span className={styles.syncDotWrap}>

@@ -350,8 +350,9 @@ describe('projects', { concurrency: false }, () => {
         (obj) => obj.projectId === project.id,
       );
       assert.deepEqual(crewRooms.map((obj) => obj.roomName), ['Спальня']);
-      assert.equal(Object.hasOwn(crewRooms[0].estimate, 'totalCost'), false);
-      assert.equal(Object.hasOwn(crewRooms[0].estimate, 'panelsCost'), false);
+      // Цены видят все роли, монтажник тоже.
+      assert.equal(crewRooms[0].estimate.totalCost, 96000);
+      assert.ok(crewRooms[0].estimate.panelsCost > 0);
       assert.equal(crewRooms[0].estimate.panels, 16);
       const hidden = await api('GET', `/objects/${saved[0].id}`, { token: crew });
       assert.equal(hidden.status, 404);

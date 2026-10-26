@@ -20,10 +20,7 @@ import {
   saveStoredDocument,
 } from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
-import { idempotencyKeyFrom, rememberIdempotent, replayIdempotent } from './idempotency.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
-import { derivedAssignedTo } from '../../packages/shared/deal.js';
-import { assertEventPayloadSafe } from '../../packages/shared/events.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -31,38 +28,6 @@ import {
   partnerBucket,
   putObject,
 } from './objectStore.js';
-import { migratePlatform } from './platformMigrate.js';
-import { handleCommercial } from './routes/commercial.js';
-import { noteInvocationIamToken } from './commercial/ydbAuth.js';
-import { resetCommercialRepositoryForTests } from './commercial/repository.js';
-import { handleAcademy } from './routes/academy.js';
-import { handleSupport } from './routes/support.js';
-import { mergeAssignments, objectVisibleWithAssignments } from './routes/objects.js';
-import { eventsForDashboard, prepareIncomingAnalyticsEvents } from './routes/analytics.js';
-
-const EVENT_PII_KEYS = [
-  'clientName',
-  'clientPhone',
-  'phone',
-  'fio',
-  'fullName',
-  'address',
-  'message',
-  'comment',
-  'pdf',
-  'pdfBase64',
-  'dataBase64',
-  'transcript',
-];
-
-function scrubAnalyticsObject(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  const out = { ...raw };
-  for (const key of EVENT_PII_KEYS) {
-    if (key in out) delete out[key];
-  }
-  return out;
-}
 
 ensureIndexFromTsv(ruCitiesTsv);
 
@@ -88,7 +53,7 @@ const DEFAULT_DOWEL = 25;
 const CORS = {
   'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || 'https://paulos99.github.io',
   'Access-Control-Allow-Headers':
-    'Content-Type, Authorization, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login, Idempotency-Key, If-Match, X-Data-Context',
+    'Content-Type, Authorization, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
 };
 
@@ -147,23 +112,16 @@ function normalizeOrgSettings(partial = {}) {
   };
 }
 
-function publicOrgSettings(org, role) {
-  if (!org) return null;
-  const settings = normalizeOrgSettings(org.settings);
-  if (normalizeRole(role) !== 'crew') return settings;
-  const { panelPriceRub, pricePerM2, installPricePerM2, dowelPriceRub, ...rest } = settings;
-  return rest;
-}
-
 function publicUser(user, org) {
   const role = normalizeRole(user.role);
+  let settings = org ? normalizeOrgSettings(org.settings) : null;
   return {
     id: user.id,
     login: user.login,
     role,
     displayName: user.displayName,
     orgId: user.orgId || null,
-    org: publicOrgSettings(org, role),
+    org: settings,
     avatarUrl: null,
   };
 }
@@ -185,7 +143,7 @@ function defaultPlatform() {
     ...o,
     settings: normalizeOrgSettings(o.settings),
   }));
-  return migratePlatform(platform);
+  return platform;
 }
 
 function migrateLegacyPartners(list) {
@@ -281,7 +239,6 @@ function platformFilePath() {
 
 export function resetPlatformMemoryForTests() {
   resetStoredDocumentsForTests();
-  resetCommercialRepositoryForTests();
 }
 
 function platformDocumentSpec() {
@@ -326,8 +283,7 @@ async function loadPlatformFallback() {
 }
 
 async function loadPlatform() {
-  const platform = await loadStoredDocument(platformDocumentSpec());
-  return migratePlatform(platform);
+  return loadStoredDocument(platformDocumentSpec());
 }
 
 async function savePlatform(platform) {
@@ -386,22 +342,26 @@ function assertRole(user, roles) {
 }
 
 function objectVisibleTo(user, obj) {
-  return objectVisibleWithAssignments(user, obj);
+  if (user.role === 'admin') return true;
+  if (!user.orgId || obj.orgId !== user.orgId) return false;
+  if (user.role === 'owner') return true;
+  if (user.role === 'sales') {
+    // Менеджер видит воронку всей компании (как владелец по объектам).
+    return true;
+  }
+  if (user.role === 'measurer') {
+    return obj.createdBy === user.id || obj.assignedTo === user.id;
+  }
+  if (user.role === 'crew') {
+    // Задание видно только тому монтажнику, на кого его назначили.
+    return obj.assignedTo === user.id;
+  }
+  return false;
 }
 
-const CREW_PRICE_KEYS = ['panelsCost', 'installCost', 'dowelsCost', 'totalCost', 'pricePerM2', 'panelPriceRub', 'installPricePerM2', 'dowelPriceRub'];
-
-/** Бригада видит количество и документы. Суммы и прайс организации ей не отдаются. */
-function publicObject(obj, role) {
-  const next = { ...obj, history: obj.history || [], documents: visibleDocuments(obj.documents) };
-  if (role !== 'crew') return next;
-  if (next.estimate) {
-    const estimate = { ...next.estimate };
-    for (const key of CREW_PRICE_KEYS) delete estimate[key];
-    next.estimate = estimate;
-  }
-  for (const key of CREW_PRICE_KEYS) delete next[key];
-  return next;
+/** Цены видят все роли: смета объекта отдаётся целиком. */
+function publicObject(obj) {
+  return { ...obj, history: obj.history || [], documents: visibleDocuments(obj.documents) };
 }
 
 /** Client clock, clamped so a far-future stamp cannot lock the row. */
@@ -458,18 +418,13 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     platform,
     existing?.orgId || actor.orgId,
   );
-  const assignments = mergeAssignments(body, existing);
-  const assignedToExplicit =
-    body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null;
-  const assignedTo = assignedToExplicit || derivedAssignedTo(assignments);
   return {
     id: existing?.id || body.id || uid('obj'),
     orgId: existing?.orgId || actor.orgId,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     createdBy: existing?.createdBy || actor.id,
-    assignments,
-    assignedTo,
+    assignedTo: body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null,
     status: allowed.includes(status) ? status : 'draft',
     stageOrder: stageOrderInput(body, existing),
     clientName: String(body.clientName ?? existing?.clientName ?? '').trim(),
@@ -766,14 +721,13 @@ export function aggregateAnalyticsDashboard(allEvents, opts) {
   };
 }
 
-function json(statusCode, body, extraHeaders) {
+function json(statusCode, body) {
   return {
     statusCode,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
       ...CORS,
-      ...(extraHeaders || {}),
     },
     body: JSON.stringify(body),
   };
@@ -844,40 +798,26 @@ function normalizeIncomingEvent(raw) {
   const action = String(raw.action || '');
   const tool = String(raw.tool || '');
   if (!action || !tool) return null;
-  const context =
-    raw.context === 'training' || raw.context === 'demo' || raw.context === 'work'
-      ? raw.context
-      : 'work';
-  const object = scrubAnalyticsObject(raw.object);
-  const candidate = {
+  return {
     id: String(raw.id || uid('ae')),
-    eventId: String(raw.eventId || raw.id || uid('ae')),
     at: String(raw.at || new Date().toISOString()),
     orgId: raw.orgId ?? null,
     userId: raw.userId ?? null,
     login: String(raw.login || 'unknown'),
     role: String(raw.role || 'owner'),
     companyName: String(raw.companyName || ''),
-    city: String(raw.city || object?.city || ''),
+    city: String(raw.city || raw.object?.city || ''),
     tool,
     action,
-    context,
-    dealId: raw.dealId ? String(raw.dealId) : null,
     sessionId:
       raw.sessionId == null || String(raw.sessionId).trim() === ''
         ? null
         : String(raw.sessionId).trim().slice(0, 80),
-    object,
+    object: raw.object || null,
   };
-  // top-level PII must not sneak in via unexpected fields
-  if (assertEventPayloadSafe(raw).length) {
-    /* drop forbidden keys by rebuilding from whitelist only */
-  }
-  return candidate;
 }
 
-export async function handler(event = {}, context) {
-  noteInvocationIamToken(context);
+export async function handler(event = {}) {
   if (getMethod(event) === 'OPTIONS') {
     return { statusCode: 204, headers: CORS, body: '' };
   }
@@ -930,29 +870,8 @@ export async function handler(event = {}, context) {
       uid,
       objectVisibleTo,
       pushActivity,
-      idempotencyKey: idempotencyKeyFrom(event.headers),
     });
     if (projectsResponse) return projectsResponse;
-
-    const routeCtx = {
-      path,
-      method,
-      requireAuth: () => requireAuth(event),
-      json,
-      getBody: () => getBody(event),
-      savePlatform,
-      uid,
-    };
-    const commercialResponse = await handleCommercial({
-      ...routeCtx,
-      getHeader: (name) => header(event, name),
-      getQuery: () => getQuery(event),
-    });
-    if (commercialResponse) return commercialResponse;
-    const academyResponse = await handleAcademy(routeCtx);
-    if (academyResponse) return academyResponse;
-    const supportResponse = await handleSupport(routeCtx);
-    if (supportResponse) return supportResponse;
 
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
@@ -1460,9 +1379,6 @@ export async function handler(event = {}, context) {
 
     if (method === 'POST' && path.endsWith('/objects')) {
       const { platform, user } = await requireAuth(event);
-      const createKey = idempotencyKeyFrom(event.headers);
-      const replayed = replayIdempotent(user.id, createKey);
-      if (replayed) return replayed;
       if (!['owner', 'sales', 'measurer'].includes(user.role)) {
         return json(403, { message: 'Недостаточно прав' });
       }
@@ -1553,9 +1469,7 @@ export async function handler(event = {}, context) {
         });
       }
       await savePlatform(platform);
-      const created = json(200, { object: publicObject(obj, user.role) });
-      if (!existing) rememberIdempotent(user.id, createKey, created);
-      return created;
+      return json(200, { object: publicObject(obj, user.role) });
     }
 
     if (method === 'PATCH' && /\/objects\/[^/]+$/.test(path)) {
@@ -1609,22 +1523,6 @@ export async function handler(event = {}, context) {
       }
       if (body.assignedTo !== undefined && !['owner', 'sales'].includes(user.role)) {
         return json(403, { message: 'Назначать объекты может владелец или менеджер' });
-      }
-      if (body.assignments !== undefined && !['owner', 'sales'].includes(user.role)) {
-        return json(403, { message: 'Назначать ответственных может владелец или менеджер' });
-      }
-      if (body.assignments && typeof body.assignments === 'object') {
-        const ids = [
-          body.assignments.salesUserId,
-          body.assignments.measurerUserId,
-          body.assignments.crewUserId,
-        ].filter(Boolean);
-        for (const id of ids) {
-          const member = findUser(platform, id);
-          if (!member || (member.orgId && member.orgId !== existing.orgId)) {
-            return json(400, { message: 'Исполнитель должен быть из той же компании' });
-          }
-        }
       }
       const next = normalizeObjectInput(body, existing, user, org, platform);
       if (body.status && body.status !== existing.status) {
@@ -1715,14 +1613,14 @@ export async function handler(event = {}, context) {
     if (method === 'POST' && path.endsWith('/analytics/events')) {
       const body = getBody(event);
       const incoming = Array.isArray(body.events) ? body.events : body.event ? [body.event] : [];
-      const normalized = prepareIncomingAnalyticsEvents(incoming, normalizeIncomingEvent);
+      const normalized = incoming.map(normalizeIncomingEvent).filter(Boolean);
       if (!normalized.length) return json(400, { message: 'No events' });
       const existing = await loadEvents();
-      const ids = new Set(existing.map((e) => e.eventId || e.id));
-      const merged = [
-        ...normalized.filter((e) => !ids.has(e.eventId || e.id)),
-        ...existing,
-      ].slice(0, ANALYTICS_CAP);
+      const ids = new Set(existing.map((e) => e.id));
+      const merged = [...normalized.filter((e) => !ids.has(e.id)), ...existing].slice(
+        0,
+        ANALYTICS_CAP,
+      );
       await saveEvents(merged, existing);
       return json(200, { ok: true, accepted: normalized.length });
     }
@@ -1753,7 +1651,7 @@ export async function handler(event = {}, context) {
           }
         }
         const platform = auth.platform;
-        const events = eventsForDashboard(await loadEvents());
+        const events = await loadEvents();
         const staffDir = platform.users
           .filter((u) => STAFF_ROLES.includes(normalizeRole(u.role)))
           .map((u) => ({
@@ -1782,7 +1680,7 @@ export async function handler(event = {}, context) {
           if (key !== ANALYTICS_ADMIN_KEY()) {
             return json(403, { message: 'Admin key required' });
           }
-          const events = eventsForDashboard(await loadEvents());
+          const events = await loadEvents();
           const dash = aggregateAnalyticsDashboard(events, {
             source: 'api',
             from: query.from || null,
@@ -1793,7 +1691,7 @@ export async function handler(event = {}, context) {
           return json(200, dash);
         }
         if (!orgId) return json(400, { message: 'orgId required' });
-        const events = eventsForDashboard(await loadEvents());
+        const events = await loadEvents();
         const dash = aggregateAnalyticsDashboard(events, {
           source: 'api',
           from: query.from || null,
@@ -1812,10 +1710,6 @@ export async function handler(event = {}, context) {
     return json(404, { message: `Not found: ${method} ${path}` });
   } catch (e) {
     const status = e.status || 500;
-    const recordVersion = e.recordVersion ?? e.current?.version;
-    return json(status, {
-      message: e.message || 'Server error',
-      ...(recordVersion != null ? { recordVersion } : {}),
-    });
+    return json(status, { message: e.message || 'Server error' });
   }
 }

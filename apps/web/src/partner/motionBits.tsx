@@ -39,7 +39,7 @@ export const motionPresets = {
     animate: { opacity: 1, scale: 1, y: 0 },
     exit: { opacity: 0, scale: 0.98 },
   },
-  transition: { duration: 0.2, ease: EASE },
+  transition: { duration: 0.38, ease: EASE },
   layout: { type: 'spring' as const, stiffness: 280, damping: 32 },
 };
 export function MotionProvider({ children }: { children: ReactNode }) {
@@ -109,7 +109,7 @@ export function FadeRise({
       }
       animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
       transition={{
-        duration: reduce ? 0 : 0.18,
+        duration: reduce ? 0 : 0.42,
         delay: reduce ? 0 : delay,
         ease: EASE,
       }}

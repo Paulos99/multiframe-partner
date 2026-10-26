@@ -1,18 +1,13 @@
 /**
  * Remote API client for partner platform (Yandex Cloud Function).
  */
-import { isSupportPayloadSafe } from '../../../../packages/shared/support';
-import { buildCommercialHeaders, type DataContext } from './commercial/commercialHeaders';
 import type {
-  Intervention,
   JobObject,
   JobObjectDocument,
   OrgSettings,
   Project,
   ProjectInput,
   SessionUser,
-  SupportCase,
-  SupportCategory,
   UserRole,
 } from '../../../../packages/shared/partner';
 import { loadToken, saveToken } from './localStore';
@@ -195,19 +190,12 @@ export async function apiListObjects(): Promise<JobObject[]> {
   return data.objects;
 }
 
-function idempotencyHeaders(key?: string): Record<string, string> | undefined {
-  if (!key) return undefined;
-  return { 'Idempotency-Key': key };
-}
-
 export async function apiCreateObject(
   input: Partial<JobObject>,
-  init?: { idempotencyKey?: string },
 ): Promise<JobObject> {
   const data = await request<{ object: JobObject }>('/objects', {
     method: 'POST',
     body: JSON.stringify(input),
-    headers: idempotencyHeaders(init?.idempotencyKey),
   });
   return data.object;
 }
@@ -228,14 +216,10 @@ export async function apiListProjects(): Promise<Project[]> {
   return data.projects;
 }
 
-export async function apiCreateProject(
-  input: ProjectInput,
-  init?: { idempotencyKey?: string },
-): Promise<Project> {
+export async function apiCreateProject(input: ProjectInput): Promise<Project> {
   const data = await request<{ project: Project }>('/projects', {
     method: 'POST',
     body: JSON.stringify(input),
-    headers: idempotencyHeaders(init?.idempotencyKey),
   });
   return data.project;
 }
@@ -525,182 +509,4 @@ export async function apiChangePassword(currentPassword:string,newPassword:strin
 }
 export async function apiUploadAvatar(base64:string) {
   return (await request<{user:SessionUser}>('/me/avatar',{method:'PUT',body:JSON.stringify({base64,mime:'image/webp'})})).user;
-}
-
-/* —— PRD commercial: deals & quotes —— */
-
-export type ApiDeal = {
-  id: string;
-  orgId: string;
-  projectId: string;
-  stage: string;
-  ownerUserId: string | null;
-  assignments: {
-    salesUserId: string | null;
-    measurerUserId: string | null;
-    crewUserId: string | null;
-  };
-  nextActionAt: string | null;
-  outcome: string | null;
-  lossReason: string | null;
-  lossComment?: string | null;
-  stageAtOutcome?: string | null;
-  roomAssent?: Record<string, string>;
-  acceptedAmount?: number | null;
-  closedAt?: string | null;
-  recordVersion?: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ApiQuote = {
-  id: string;
-  projectId: string;
-  dealId: string | null;
-  version: number;
-  lifecycle: string;
-  sentConfirmed: boolean;
-  amount: number | null;
-  roomObjectIds: string[];
-  snapshot?: {
-    lines: Array<{
-      roomId: string;
-      calcType: 'preliminary' | 'detailed' | 'unspecified';
-      calculationId: string | null;
-      revisionSeq: number | null;
-      amount: number | null;
-    }>;
-    legacyTotal?: boolean;
-  } | null;
-  sharedAt: string | null;
-  sentConfirmedAt: string | null;
-  sentComment: string | null;
-  recordVersion?: number;
-  createdAt?: string;
-};
-
-export async function apiCommercial<T>(
-  path: string,
-  init: {
-    method: 'GET' | 'POST' | 'PATCH';
-    body?: unknown;
-    mutation: boolean;
-    ifMatch?: number | null;
-    idempotencyKey?: string | null;
-    context: DataContext;
-  },
-): Promise<T> {
-  const headers = buildCommercialHeaders(init);
-  return request<T>(path, {
-    method: init.method,
-    headers,
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
-}
-
-export async function apiListDeals(): Promise<ApiDeal[]> {
-  const data = await request<{ deals: ApiDeal[] }>('/deals');
-  return data.deals || [];
-}
-
-export async function apiCreateDeal(
-  input: {
-    projectId: string;
-    stage?: string;
-    assignments?: ApiDeal['assignments'];
-  },
-  init?: { idempotencyKey?: string },
-): Promise<ApiDeal> {
-  const data = await request<{ deal: ApiDeal }>('/deals', {
-    method: 'POST',
-    body: JSON.stringify(input),
-    headers: idempotencyHeaders(init?.idempotencyKey),
-  });
-  return data.deal;
-}
-
-export async function apiPatchDeal(
-  id: string,
-  patch: Partial<ApiDeal> & { outcome?: string; lossReason?: string | null; lossComment?: string | null },
-): Promise<ApiDeal> {
-  const data = await request<{ deal: ApiDeal }>(`/deals/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(patch),
-  });
-  return data.deal;
-}
-
-export async function apiCreateQuote(input: {
-  projectId: string;
-  dealId?: string | null;
-  amount?: number | null;
-  roomObjectIds?: string[];
-}): Promise<ApiQuote> {
-  const data = await request<{ quote: ApiQuote }>('/quotes', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
-  return data.quote;
-}
-
-/** Копирование не меняет lifecycle на сервере. */
-export async function apiCopyQuote(id: string): Promise<ApiQuote> {
-  const data = await request<{ quote: ApiQuote; lifecycleUnchanged?: boolean }>(
-    `/quotes/${encodeURIComponent(id)}/copy`,
-    { method: 'POST', body: '{}' },
-  );
-  return data.quote;
-}
-
-export async function apiConfirmQuoteSent(id: string, comment?: string): Promise<ApiQuote> {
-  const data = await request<{ quote: ApiQuote }>(
-    `/quotes/${encodeURIComponent(id)}/confirm-sent`,
-    { method: 'POST', body: JSON.stringify({ comment: comment || null }) },
-  );
-  return data.quote;
-}
-
-/* —— PRD support: cases & interventions —— */
-
-export async function apiListSupportCases(): Promise<SupportCase[]> {
-  const data = await request<{ cases: SupportCase[] }>('/support/cases');
-  return data.cases || [];
-}
-
-/** Тело заявки без персональных данных клиента: проверяется до отправки. */
-export async function apiCreateSupportCase(input: {
-  category: SupportCategory;
-  module?: string | null;
-  orgId?: string | null;
-}): Promise<SupportCase> {
-  if (!isSupportPayloadSafe(input as Record<string, unknown>)) {
-    throw new Error('Нельзя прикладывать персональные данные клиента');
-  }
-  const data = await request<{ case: SupportCase }>('/support/cases', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
-  return data.case;
-}
-
-export async function apiListInterventions(): Promise<Intervention[]> {
-  const data = await request<{ interventions: Intervention[] }>('/interventions');
-  return data.interventions || [];
-}
-
-export async function apiCreateIntervention(input: {
-  orgId: string;
-  problemType: string;
-  actionType: string;
-  supportCaseId?: string | null;
-  signalId?: string | null;
-  reviewAt?: string | null;
-  beforeCount?: number;
-  afterCount?: number;
-}): Promise<Intervention> {
-  const data = await request<{ intervention: Intervention }>('/interventions', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
-  return data.intervention;
 }

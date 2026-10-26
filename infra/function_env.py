@@ -26,10 +26,6 @@ def version_environment(token, function_id, request, storage_env, compromised=()
     environment.setdefault("PLATFORM_KEY", "platform-v2.json")
     environment.update(storage_env)
     environment["CORS_ORIGIN"] = os.environ.get("CORS_ORIGIN") or "https://paulos99.github.io"
-    # Адрес YDB не секрет: берём из GitHub vars, пустое значение сохраняет текущее.
-    for name in ("YDB_ENDPOINT", "YDB_DATABASE"):
-        if os.environ.get(name):
-            environment[name] = os.environ[name].strip()
     for name in SECRET_NAMES:
         value = os.environ.get(name)
         if value:

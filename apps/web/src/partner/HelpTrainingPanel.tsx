@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
-import { AcademyScreen } from '../academy/AcademyScreen';
 import { MaterialsPanel } from './MaterialsPanel';
 import styles from './HelpTrainingPanel.module.css';
 
@@ -147,22 +146,10 @@ function SectionBlock({ section, highlight }: { section: HelpSection; highlight?
 export function HelpTrainingPanel({ role }: { role: UserRole }) {
   const personal = useMemo(() => BY_ROLE[role], [role]);
   const [section, setSection] = useState<'materials' | 'cabinet'>('materials');
-  const [showAcademy, setShowAcademy] = useState(false);
 
   return (
     <div className={styles.panel}>
-      <div className={styles.sectionHead}>
-        <h2>Обучение</h2>
-        <button
-          type="button"
-          className={showAcademy ? styles.tabOn : styles.tab}
-          aria-expanded={showAcademy}
-          onClick={() => setShowAcademy((prev) => !prev)}
-        >
-          Открыть Академию / Тренажёры
-        </button>
-      </div>
-      {showAcademy ? <AcademyScreen onClose={() => setShowAcademy(false)} /> : null}
+      <h2>Обучение</h2>
       <div className={styles.tabs} role="tablist" aria-label="Разделы обучения">
         <button
           type="button"

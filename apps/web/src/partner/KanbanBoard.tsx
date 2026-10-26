@@ -210,18 +210,13 @@ export function KanbanBoard({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
     };
-    // Close on intentional user scroll (wheel/touch), not on programmatic
-    // scrollIntoView / Lenis settling — those fire `scroll` and would dismiss
-    // the menu the moment Playwright (or the browser) brings the card into view.
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', close);
-    window.addEventListener('wheel', close, { passive: true, capture: true });
-    window.addEventListener('touchmove', close, { passive: true, capture: true });
+    window.addEventListener('scroll', close, true);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', close);
-      window.removeEventListener('wheel', close, true);
-      window.removeEventListener('touchmove', close, true);
+      window.removeEventListener('scroll', close, true);
     };
   }, [menu]);
   const snapshot = useRef<JobObject[]>([]);
@@ -277,77 +272,52 @@ export function KanbanBoard({
       setLocal(null);
     }
   }
-  const columnOrder = (list: JobObject[], status: JobObjectStatus) =>
-    list
-      .filter((r) => r.status === status)
-      .map((r) => r.id)
-      .join('|');
-  function over({ active: drag, over: overT }: DragOverEvent) {
-    if (!overT) return;
+  function over({ active: drag, over }: DragOverEvent) {
+    if (!over) return;
     const current = draft.current;
     const room = current.find((r) => r.id === drag.id);
-    if (!room) return;
-    const overIsStage = KANBAN_STAGES.includes(overT.id as JobObjectStatus);
-    const overRoom = overIsStage ? null : current.find((r) => r.id === overT.id);
-    const stage = overIsStage
-      ? (overT.id as JobObjectStatus)
-      : overRoom?.status;
-    if (!stage || !canMoveRoom(role, stage)) return;
-    // Same column: live-reorder so a final drop on column chrome cannot prepend and undo.
-    if (room.status === stage) {
-      if (!overRoom || overRoom.id === room.id) return;
-      const from = current.findIndex((r) => r.id === room.id);
-      const to = current.findIndex((r) => r.id === overRoom.id);
-      if (from < 0 || to < 0 || from === to) return;
-      preview(arrayMove(current, from, to));
+    const stage = KANBAN_STAGES.includes(over.id as JobObjectStatus)
+      ? (over.id as JobObjectStatus)
+      : current.find((r) => r.id === over.id)?.status;
+    if (!room || !stage || room.status === stage || !canMoveRoom(role, stage))
       return;
-    }
     const next = current.filter((r) => r.id !== room.id);
-    const index = next.findIndex((r) => r.id === overT.id);
+    const index = next.findIndex((r) => r.id === over.id);
     next.splice(index < 0 ? 0 : index, 0, { ...room, status: stage });
     preview(next);
   }
-  function end({ active: drag, over: overT }: DragEndEvent) {
+  function end({ active: drag, over }: DragEndEvent) {
     setActive(null);
-    if (!overT) {
+    if (!over) {
       setLocal(null);
       return;
     }
     let next = draft.current;
     const room = next.find((r) => r.id === drag.id);
-    if (!room || !canMoveRoom(role, room.status)) {
-      setLocal(null);
-      return;
-    }
-    const overIsStage = KANBAN_STAGES.includes(overT.id as JobObjectStatus);
-    const target = overIsStage ? null : next.find((r) => r.id === overT.id);
-    const destination = (target?.status ??
-      (overIsStage ? overT.id : room.status)) as JobObjectStatus;
+    const target = next.find((r) => r.id === over.id);
+    const destination = target?.status ?? (over.id as JobObjectStatus);
     if (!canMoveRoom(role, destination)) {
       setLocal(null);
       return;
     }
-    // Dropping on column chrome of another stage → prepend into that stage.
-    // Same-stage column chrome must NOT prepend: that undoes in-column reorder.
-    // Same-column card drops are already applied in over(); do not arrayMove again.
-    if (overIsStage && room.status !== destination) {
-      next = [
-        { ...room, status: destination },
-        ...next.filter((r) => r.id !== room.id),
-      ];
-    } else if (
-      target &&
-      target.status === room.status &&
-      target.id !== room.id &&
-      columnOrder(next, room.status) === columnOrder(snapshot.current, room.status)
-    ) {
-      // over() missed (fast flick): apply final sibling order once.
-      next = arrayMove(next, next.indexOf(room), next.indexOf(target));
+    if (KANBAN_STAGES.includes(over.id as JobObjectStatus) && room) {
+      next = [room, ...next.filter((r) => r.id !== room.id)];
     }
+    if (!room || !canMoveRoom(role, room.status)) {
+      setLocal(null);
+      return;
+    }
+    if (target && target.status === room.status && target.id !== room.id)
+      next = arrayMove(next, next.indexOf(room), next.indexOf(target));
+    const column = (list: JobObject[]) =>
+      list
+        .filter((r) => r.status === room.status)
+        .map((r) => r.id)
+        .join('|');
     const original = snapshot.current.find((r) => r.id === room.id);
     if (
       original?.status === room.status &&
-      columnOrder(next, room.status) === columnOrder(snapshot.current, room.status)
+      column(next) === column(snapshot.current)
     ) {
       // Dropped back in place: nothing to save.
       setLocal(null);
