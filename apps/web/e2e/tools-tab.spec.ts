@@ -26,9 +26,14 @@ function toolsItem(page: Page, role: string) {
 for (const role of roles) {
   test(`${role}: вкладка «Инструменты» с двумя карточками, старых кнопок нет`, async ({ page }) => {
     await enter(page, role);
-    // Старые кнопки в шапке и меню убраны.
-    await expect(page.getByRole('button', { name: 'Проблемомер', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Калькулятор', exact: true })).toHaveCount(0);
+    // В шапке и меню этих кнопок нет. На главной менеджера они стоят отдельной парой.
+    if (role === 'sales') {
+      await expect(page.getByRole('button', { name: 'Проблемомер', exact: true })).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Калькулятор', exact: true })).toHaveCount(1);
+    } else {
+      await expect(page.getByRole('button', { name: 'Проблемомер', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Калькулятор', exact: true })).toHaveCount(0);
+    }
 
     await toolsItem(page, role).click();
     const panel = page.getByRole('region', { name: 'Инструменты' });
@@ -58,7 +63,7 @@ test('карточки открывают нужный инструмент, «�
   // Переключателя инструментов внутри больше нет.
   await expect(page.getByRole('tablist', { name: 'Инструмент' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Кабинет', exact: true }).click();
+  await page.getByRole('button', { name: 'Назад', exact: true }).first().click();
   await expect(toolsItem(page, 'owner')).toHaveAttribute('aria-selected', 'true');
 
   await page.getByRole('button', { name: 'Открыть Калькулятор', exact: true }).click();

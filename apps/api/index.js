@@ -20,6 +20,7 @@ import {
   saveStoredDocument,
 } from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
+import { idempotencyKeyFrom, rememberIdempotent, replayIdempotent } from './idempotency.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { derivedAssignedTo } from '../../packages/shared/deal.js';
 import { assertEventPayloadSafe } from '../../packages/shared/events.js';
@@ -86,7 +87,7 @@ const DEFAULT_DOWEL = 25;
 const CORS = {
   'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || 'https://paulos99.github.io',
   'Access-Control-Allow-Headers':
-    'Content-Type, Authorization, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
+    'Content-Type, Authorization, Idempotency-Key, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
 };
 
@@ -908,6 +909,7 @@ export async function handler(event = {}) {
       uid,
       objectVisibleTo,
       pushActivity,
+      idempotencyKey: idempotencyKeyFrom(event.headers),
     });
     if (projectsResponse) return projectsResponse;
 
@@ -1435,6 +1437,9 @@ export async function handler(event = {}) {
 
     if (method === 'POST' && path.endsWith('/objects')) {
       const { platform, user } = await requireAuth(event);
+      const createKey = idempotencyKeyFrom(event.headers);
+      const replayed = replayIdempotent(user.id, createKey);
+      if (replayed) return replayed;
       if (!['owner', 'sales', 'measurer'].includes(user.role)) {
         return json(403, { message: 'Недостаточно прав' });
       }
@@ -1525,7 +1530,9 @@ export async function handler(event = {}) {
         });
       }
       await savePlatform(platform);
-      return json(200, { object: publicObject(obj, user.role) });
+      const created = json(200, { object: publicObject(obj, user.role) });
+      if (!existing) rememberIdempotent(user.id, createKey, created);
+      return created;
     }
 
     if (method === 'PATCH' && /\/objects\/[^/]+$/.test(path)) {

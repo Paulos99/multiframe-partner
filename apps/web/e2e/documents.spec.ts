@@ -103,11 +103,14 @@ test('проблемомер: «Сохранить объект» приклад
   await expect(page.getByRole('button', { name: 'Мой профиль', exact: true })).toBeVisible();
   await page.getByRole('complementary', { name: 'Разделы кабинета' }).getByRole('tab', { name: 'Инструменты', exact: true }).click();
   await page.getByRole('button', { name: 'Открыть Проблемомер', exact: true }).click();
-  const save = page.getByRole('region', { name: 'Объект', exact: true });
+  const save = page.getByRole('region', { name: 'Куда сохранить' });
   await expect(save).toBeVisible({ timeout: 30000 });
-  await save.getByPlaceholder('Имя').fill('Профиль Тест');
-  await save.getByRole('button', { name: 'Сохранить объект', exact: true }).click();
-  await expect(page.getByTestId('profile-attach-note')).toHaveText('«Профиль» приложен к объекту', { timeout: 60000 });
+  const asNew = save.getByRole('button', { name: 'Новый проект', exact: true });
+  if (await asNew.isVisible().catch(() => false)) await asNew.click();
+  await save.getByLabel('Название проекта').fill('Профиль Тест');
+  await save.getByLabel('Название комнаты').fill('Спальня');
+  await save.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect(page.getByTestId('profile-attach-note')).toHaveText('Профиль приложен к комнате', { timeout: 60000 });
 
   const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.owner', password } });
   const { token: auth } = await login.json();
@@ -124,7 +127,7 @@ test('проблемомер: «Сохранить объект» приклад
   expect(pdf.length).toBeLessThan(2_000_000);
 
   // Повторное сохранение без правок не плодит второй профиль.
-  await page.getByRole('region', { name: 'Объект', exact: true }).getByRole('button', { name: 'Сохранить объект', exact: true }).click();
+  await page.getByRole('region', { name: 'Куда сохранить' }).getByRole('button', { name: 'Сохранить', exact: true }).click();
   await page.waitForTimeout(1500);
   const again = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${auth}` } });
   const after = (await again.json()).objects.find((o: { id: string }) => o.id === saved.id);

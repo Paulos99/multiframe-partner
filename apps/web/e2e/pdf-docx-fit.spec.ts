@@ -197,6 +197,13 @@ for (const width of [360, 390, 430]) {
     await page.getByRole('button', { name: /Гайд по оценке/ }).click();
     const dialog = page.getByRole('dialog', { name: `Просмотр: ${file.name}` });
     await expect(dialog.getByText('Гайд по оценке звукоизоляции')).toBeVisible({ timeout: 20000 });
+    await expect
+      .poll(
+        () =>
+          page.getByTestId('word-preview').evaluate((host) => Boolean(host.shadowRoot?.querySelector('img'))),
+        { timeout: 20000 },
+      )
+      .toBe(true);
     const m = await page.getByTestId('word-preview').evaluate((host) => {
       const root = host.shadowRoot!;
       const scroll = root.querySelector('.mf-scroll') as HTMLElement;
