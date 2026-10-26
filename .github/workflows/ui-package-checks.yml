@@ -12,6 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
+          # Node 22: funnel.test.js вызывает module.stripTypeScriptTypes. На Node 20 этого API нет.
           node-version: '22'
           cache: npm
           cache-dependency-path: |

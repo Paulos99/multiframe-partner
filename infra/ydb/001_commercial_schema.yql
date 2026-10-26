@@ -1,0 +1,24 @@
+-- Схема коммерческих записей MultiFrame Партнёр.
+-- База: multiframe-partner-db (serverless).
+-- Подключение только через YDB_ENDPOINT и YDB_DATABASE в окружении.
+-- Этот файл сам ничего не применяет и не создаёт базу.
+-- Павел применяет его вручную после приёмки. Агент схему на прод не выполнял.
+--
+-- Ключ строки: организация, вид записи, id. Списки по kind без организации нет.
+-- Индекс проекта: сделки и комнаты проекта.
+-- Индекс родителя: КП сделки (parent = deal) и расчёты комнаты (parent = room).
+-- Индекса только по kind нет: у kind мало значений, это была бы горячая партиция.
+
+CREATE TABLE commercial_records (
+    org_id Utf8 NOT NULL,
+    kind Utf8 NOT NULL,
+    id Utf8 NOT NULL,
+    project_id Utf8 NOT NULL,
+    parent_id Utf8 NOT NULL,
+    version Uint64 NOT NULL,
+    payload Utf8 NOT NULL,
+    updated_at Utf8 NOT NULL,
+    PRIMARY KEY (org_id, kind, id),
+    INDEX commercial_by_project GLOBAL SYNC ON (org_id, project_id, kind),
+    INDEX commercial_by_parent GLOBAL SYNC ON (org_id, parent_id, kind)
+);

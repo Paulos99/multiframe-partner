@@ -1,6 +1,8 @@
 /**
  * Коммерческий процесс (сделка) — единица воронки продаж.
  * Не заменяет JobObject/Project: Deal привязан к projectId.
+ * Правила стадий, паузы, согласия и закрытия — packages/shared/commercialRules.js.
+ * applyDealOutcome оставлен для прежних исходов accepted/declined/postponed.
  */
 
 export type DealStage =
@@ -23,7 +25,12 @@ export type DealOutcome =
   | 'postponed'
   | 'no_response'
   | 'unknown'
+  | 'early_declined'
+  | 'early_paused'
   | null;
+
+/** Согласие по комнате внутри сделки. unknown/needs_review — только миграция. */
+export type RoomAssent = 'ordered' | 'deferred' | 'out_of_scope' | 'unknown' | 'needs_review';
 
 export type LossReason =
   | 'expensive'
@@ -54,6 +61,15 @@ export type Deal = {
   outcome: DealOutcome;
   lossReason: LossReason;
   lossComment?: string | null;
+  /** Этап, на котором человек поставил паузу или отказ. */
+  stageAtOutcome?: string | null;
+  roomAssent?: Record<string, RoomAssent>;
+  /** Сумма только заказанных комнат. Не конверсия. */
+  acceptedAmount?: number | null;
+  /** Пусто, пока сделка активна. Пауза closedAt не ставит. */
+  closedAt?: string | null;
+  /** Оптимистичная версия строки в YDB. If-Match. */
+  recordVersion?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -81,6 +97,8 @@ export const DEAL_OUTCOME_LABELS: Record<Exclude<DealOutcome, null>, string> = {
   postponed: 'Отложил',
   no_response: 'Ответа пока нет',
   unknown: 'Результат неизвестен',
+  early_declined: 'Отказ до КП',
+  early_paused: 'Пауза',
 };
 
 /**
