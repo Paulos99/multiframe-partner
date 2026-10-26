@@ -6,6 +6,7 @@
 
 import { httpError } from '../../../packages/shared/commercialRules.js';
 import { commercialSql, tableRef } from './sql.js';
+import { createYdbAuthService } from './ydbAuth.js';
 
 function asNumber(value) {
   if (value == null) return 0;
@@ -143,16 +144,6 @@ export function createYdbRepository({ withSession, database, typed, readRows }) 
   return { transaction, kind: 'ydb' };
 }
 
-function authService(sdk, env) {
-  if (env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS) {
-    return new sdk.IamAuthService(sdk.getSACredentialsFromJson(env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS));
-  }
-  if (env.YDB_ACCESS_TOKEN_CREDENTIALS) {
-    return new sdk.TokenAuthService(env.YDB_ACCESS_TOKEN_CREDENTIALS);
-  }
-  return new sdk.MetadataAuthService();
-}
-
 function connectionString(endpoint, database) {
   const base = String(endpoint || '').replace(/\/$/, '');
   const path = String(database || '');
@@ -180,7 +171,7 @@ export async function openYdbRepository(env = process.env) {
   const sdk = sdkModule.default ?? sdkModule;
   const driver = new sdk.Driver({
     connectionString: connectionString(endpoint, database),
-    authService: authService(sdk, env),
+    authService: createYdbAuthService(sdk, env),
     logger: silentLogger,
   });
   const ready = await driver.ready(10000);
