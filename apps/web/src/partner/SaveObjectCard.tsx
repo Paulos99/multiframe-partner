@@ -20,7 +20,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 export function SaveObjectCard() {
-  const { user, saveObject, createProject, partner, diagnosisRequest, objects, projects, attachProfile } = usePartner();
+  const { user, saveObject, createProject, partner, diagnosisRequest, objects, projects, attachProfile, leaveToCabinet } = usePartner();
   const { session } = useSession();
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -39,7 +39,15 @@ export function SaveObjectCard() {
   const appliedDiagnosis = useRef<number | null>(null);
   /** Последний приложенный «Профиль»: объект + ответы. Повторное сохранение без правок не плодит файлы. */
   const attachedProfile = useRef<string | null>(null);
+  const alive = useRef(true);
   const [profileNote, setProfileNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!diagnosisRequest || appliedDiagnosis.current === diagnosisRequest.nonce) return;
@@ -142,14 +150,17 @@ export function SaveObjectCard() {
     const sig = `${obj.id}:${JSON.stringify(session.answers)}`;
     if (attachedProfile.current === sig) return;
     attachedProfile.current = sig;
-    setProfileNote('Прикладываем «Профиль» к комнате…');
+    if (alive.current) setProfileNote('Прикладываем «Профиль» к комнате…');
     try {
-      const { blob } = await renderAcousticProfilePdf(session, { compact: true });
+      const { blob } = await renderAcousticProfilePdf(session, {
+        compact: true,
+        hidePrices: user?.role === 'crew',
+      });
       const saved = await attachProfile(obj, await blobToBase64(blob));
-      setProfileNote(saved ? '«Профиль» приложен к комнате' : null);
+      if (alive.current) setProfileNote(saved ? '«Профиль» приложен к комнате' : null);
     } catch {
       attachedProfile.current = null;
-      setProfileNote('Не удалось приложить «Профиль». Сохраните комнату ещё раз.');
+      if (alive.current) setProfileNote('Не удалось приложить «Профиль». Сохраните комнату ещё раз.');
     }
   }
 
@@ -163,8 +174,13 @@ export function SaveObjectCard() {
       const obj = await saveObject(objectFields('keep', linked));
       if (obj.projectId) setProjectChoice(obj.projectId);
       setObjectId(obj.id);
-      void attachProfileTo(obj);
       setSavedFlash(true);
+      if (diagnosisRequest?.objectId) {
+        void attachProfileTo(obj);
+        leaveToCabinet(obj.id);
+        return;
+      }
+      void attachProfileTo(obj);
       setMsg(
         obj.pendingSync
           ? 'Комната сохранена на устройстве — отправится при сети'

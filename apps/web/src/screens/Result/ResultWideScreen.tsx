@@ -148,7 +148,7 @@ function useScrollDrift() {
 }
 
 export function ResultWideScreen() {
-  const { diagnosisRequest } = usePartner();
+  const { diagnosisRequest, leaveToCabinet } = usePartner();
   const linkedRoom = Boolean(diagnosisRequest?.objectId);
   const { goBack } = useSession();
   const p = useResultProfile();
@@ -442,6 +442,24 @@ export function ResultWideScreen() {
               : 'Сохраните комнату. Остальные шаги — по желанию.'}
           </p>
           <SaveObjectCard />
+          {linkedRoom ? (
+            <details className={styles.moreActions}>
+              <summary>Другие действия</summary>
+              <div className={styles.moreLinks}>
+                <button type="button" onClick={p.openCalc}>Рассчитать количество</button>
+                <button type="button" onClick={p.openConsultation}>Консультация</button>
+                <button type="button" disabled={p.pdfBusy} onClick={() => void p.onDownloadProfile()}>
+                  {p.pdfBusy ? 'Готовим PDF…' : 'PDF'}
+                </button>
+                <button type="button" onClick={() => void p.onShare()}>{p.shareLabel}</button>
+              </div>
+              {p.pdfError ? (
+                <p className={styles.pdfError} role="alert">
+                  Не удалось скачать. Разрешите всплывающие окна и нажмите ещё раз.
+                </p>
+              ) : null}
+            </details>
+          ) : (
           <div className={styles.nextActions}>
             <Button variant="ghost" fullWidth onClick={p.openCalc}>
               Рассчитать количество MultiFrame
@@ -467,11 +485,22 @@ export function ResultWideScreen() {
               </p>
             ) : null}
           </div>
+          )}
         </section>
       </div>
 
       <nav className={styles.footerActions} aria-label="Действия после расчёта">
-        <button type="button" className={styles.footerBtn} onClick={goBack}>
+        <button
+          type="button"
+          className={styles.footerBtn}
+          onClick={() => {
+            if (linkedRoom && diagnosisRequest?.objectId) {
+              leaveToCabinet(diagnosisRequest.objectId);
+              return;
+            }
+            goBack();
+          }}
+        >
           <span className={styles.footerBtnIcon} aria-hidden>
             ←
           </span>

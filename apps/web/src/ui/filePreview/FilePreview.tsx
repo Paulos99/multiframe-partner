@@ -55,6 +55,7 @@ type Resolved =
   | {
       status: 'ready';
       url?: string;
+      blob?: Blob;
       mime?: string | null;
       size?: number | null;
       node?: ReactNode;
@@ -115,6 +116,7 @@ function useResolvedSources(items: PreviewItem[]) {
         return {
           status: 'ready',
           url,
+          blob: src.blob,
           mime: src.mime || src.blob.type || item.mime,
           size: src.blob.size,
           pdfCopyUrl: copyUrl(src.pdfCopy),
@@ -455,7 +457,7 @@ function PreviewBody({
     return (
       <ViewerBoundary fallback={<FileCard item={item} kind={kind} url={url} error="Просмотр PDF не загрузился без сети" />}>
         <Suspense fallback={<PreviewSkeleton kind="pdf" />}>
-          <PdfView name={item.name} url={url} onFail={onError} />
+          <PdfView name={item.name} url={url} file={resolved.blob} onFail={onError} />
         </Suspense>
       </ViewerBoundary>
     );

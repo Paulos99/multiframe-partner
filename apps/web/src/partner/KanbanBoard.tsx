@@ -388,7 +388,7 @@ export function KanbanBoard({
             })}
           </span>
           <span title="Документы">{documentKindsSummary(room.documents) || 'Без PDF'}</span>
-          <span>{room.room.areaM2 ?? '—'} м²</span>
+          <span>{room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'площадь не указана'}</span>
         </div>
         {room.pendingSync && <small>↻ Ожидает синхронизации</small>}
       </>

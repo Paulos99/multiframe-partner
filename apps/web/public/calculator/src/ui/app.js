@@ -529,9 +529,11 @@ function updateStatCards() {
   const cost = bom.total.totalCost ?? 0;
   paintStat($('totalPanels'), panels, formatStatPanels);
   paintStat($('coverageArea'), area, formatStatArea);
-  paintStat($('totalCost'), cost, formatStatCost);
-  const grand = partnerGrandTotal(bom, area, cost);
-  if (grand != null) paintStat($('partnerTotalCost'), grand, formatStatCost);
+  if (!getPartnerPricing().hidePrices) {
+    paintStat($('totalCost'), cost, formatStatCost);
+    const grand = partnerGrandTotal(bom, area, cost);
+    if (grand != null) paintStat($('partnerTotalCost'), grand, formatStatCost);
+  }
   updateMobileSummary();
 }
 
@@ -1330,7 +1332,9 @@ function updatePreviewStatsFromCeiling(ceilingResult) {
   const cost = panels * PANEL.priceRub;
   $('totalPanels').textContent = `${panels} шт.`;
   $('coverageArea').textContent = `${area.toFixed(2)} м²`;
-  $('totalCost').textContent = `${cost.toLocaleString('ru-RU')} ₽`;
+  if (!getPartnerPricing().hidePrices) {
+    $('totalCost').textContent = `${cost.toLocaleString('ru-RU')} ₽`;
+  }
   const grand = partnerGrandTotal(
     {
       total: {
@@ -1342,7 +1346,7 @@ function updatePreviewStatsFromCeiling(ceilingResult) {
     area,
     cost,
   );
-  if (grand != null && $('partnerTotalCost')) {
+  if (!getPartnerPricing().hidePrices && grand != null && $('partnerTotalCost')) {
     $('partnerTotalCost').textContent = `${Math.round(grand).toLocaleString('ru-RU')} ₽`;
     $('partnerTotalCost').dataset.raw = String(grand);
   }
@@ -2190,7 +2194,7 @@ async function publishCalcToCabinet(options = {}) {
       const input = await collectPdfInput();
       const file = await exportCalculationPDF({
         ...input,
-        hidePrices: false,
+        hidePrices: getPartnerPricing().hidePrices,
         download: false,
         fileLabel: params.get('client') || '',
       });
@@ -2229,7 +2233,7 @@ async function handlePDF() {
   trackPartnerCalcEvent('pdf');
   const file = await exportCalculationPDF({
     ...input,
-    hidePrices: false,
+    hidePrices: getPartnerPricing().hidePrices,
     download: false,
     fileLabel: new URLSearchParams(window.location.search).get('client') || '',
   });
@@ -2431,8 +2435,17 @@ function initTheme() {
   }
 }
 
+function lockHiddenPrices() {
+  if (!getPartnerPricing().hidePrices) return;
+  document.body.classList.add('hide-prices');
+  document.querySelector('[data-stat="cost"]')?.remove();
+  document.querySelector('.workspace-section--panel-info')?.remove();
+  document.getElementById('partnerCalcBanner')?.remove();
+  document.getElementById('partnerTotalCard')?.remove();
+}
+
 function mountPartnerBanner() {
-  if (!PARTNER_PRICING.enabled) return;
+  if (!PARTNER_PRICING.enabled || getPartnerPricing().hidePrices) return;
   if (document.getElementById('partnerCalcBanner')) return;
   const banner = document.createElement('div');
   banner.id = 'partnerCalcBanner';
@@ -2449,7 +2462,7 @@ function mountPartnerBanner() {
 
 /** Replace store CTA with green «Итого» card — one grand total; breakdown lives in results. */
 function mountPartnerTotalCard() {
-  if (!PARTNER_PRICING.enabled) return;
+  if (!PARTNER_PRICING.enabled || getPartnerPricing().hidePrices) return;
   if (document.getElementById('partnerTotalCard')) return;
   const buy = document.getElementById('buyMultiframeBtn');
   if (!buy) return;
@@ -2467,6 +2480,7 @@ function mountPartnerTotalCard() {
 }
 
 function init() {
+  lockHiddenPrices();
   mountPartnerBanner();
   mountPartnerTotalCard();
   cacheElements();

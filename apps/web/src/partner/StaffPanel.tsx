@@ -1,6 +1,6 @@
 import { Skeleton } from './Skeleton';
 import { m, AnimatePresence, motionPresets, usePrefersReducedMotion } from './motionBits';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   canManageStaff,
@@ -27,6 +27,16 @@ export function StaffPanel() {
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const staff = api.partnerListStaff();
+
+  useEffect(() => {
+    if (!openId) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      setOpenId(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openId]);
 
   if (!user || !canManageStaff(user.role)) return null;
 

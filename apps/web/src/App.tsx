@@ -152,13 +152,32 @@ function ToolChrome({
 }
 
 function PartnerShell() {
-  const { user, ready, noteTool, logout, objects, calcRequest, requestCalculator, diagnosisRequest, clearDiagnosis, applyCalculation } =
-    usePartner();
+  const {
+    user,
+    ready,
+    noteTool,
+    logout,
+    objects,
+    calcRequest,
+    requestCalculator,
+    diagnosisRequest,
+    clearDiagnosis,
+    applyCalculation,
+    openObject,
+    cabinetLeaveNonce,
+  } = usePartner();
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
 
   const userId = user?.id ?? '';
+  const seenLeave = useRef(0);
+  useEffect(() => {
+    if (cabinetLeaveNonce === seenLeave.current) return;
+    seenLeave.current = cabinetLeaveNonce;
+    setRoute('cabinet');
+  }, [cabinetLeaveNonce]);
+
   useEffect(() => {
     setCalcObjectId(null);
     setCalcNotice(null);
@@ -233,6 +252,7 @@ function PartnerShell() {
       objectId: calcObjectId,
       clientName: calcClientName,
       areaM2: calcRequest?.objectId === calcObjectId ? calcRequest?.areaM2 : null,
+      hidePrices: user.role === 'crew',
     });
   }, [
     user,
@@ -282,7 +302,12 @@ function PartnerShell() {
         company={user.org?.companyName || user.displayName}
         caption={toolCaption(user)}
         notice={route === 'calculator' ? calcNotice : null}
-        onCabinet={() => setRoute('cabinet')}
+        onCabinet={() => {
+          const roomId = route === 'calculator' ? calcObjectId : diagnosisRequest?.objectId || null;
+          openObject(roomId);
+          clearDiagnosis();
+          setRoute('cabinet');
+        }}
         onLogout={logout}
       />
     );

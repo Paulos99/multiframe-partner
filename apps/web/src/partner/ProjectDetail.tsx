@@ -71,7 +71,7 @@ export function ProjectDetail({ project, rooms, ungrouped, role, onBack, onOpenR
       <p className={styles.muted}>Расчёт, документы и история сохранятся в исходной карточке.</p>
       <div className={styles.actions}><select aria-label="Помещение без проекта" value={roomId} disabled={busy || !eligible.length} onChange={event => setRoomId(event.target.value)}>
         <option value="">{eligible.length ? 'Выберите помещение' : 'Нет помещений без проекта'}</option>
-        {eligible.map(room => <option value={room.id} key={room.id}>{room.roomName || room.clientName || 'Помещение'} · {room.room.areaM2 ?? '—'} м²</option>)}
+        {eligible.map(room => <option value={room.id} key={room.id}>{room.roomName || room.clientName || 'Помещение'} · {room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'площадь не указана'}</option>)}
       </select><button className={styles.primary} disabled={busy || !roomId} onClick={() => void attach()}>{busy ? 'Сохраняем…' : 'Добавить в проект'}</button></div>
       {error ? <p role="alert" className={styles.error}>{error}</p> : null}
     </div> : null}

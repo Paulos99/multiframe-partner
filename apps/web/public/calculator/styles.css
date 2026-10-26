@@ -8242,3 +8242,11 @@ body.ceiling-only .form-group:has(#quickHeight),
 body.ceiling-only .form-group:has(#drawHeight) {
   display: none !important;
 }
+
+body.hide-prices [data-stat='cost'],
+body.hide-prices .workspace-section--panel-info,
+body.hide-prices #partnerCalcBanner,
+body.hide-prices #partnerTotalCard,
+body.hide-prices .rb-block:has(.rb-kv--total) {
+  display: none !important;
+}

@@ -53,16 +53,25 @@ export function persistPartnerCalcParams(params: PartnerCalcParams): void {
 export function calcUrlFromOrg(
   org: OrgSettings | null | undefined,
   companyName?: string,
-  opts?: { objectId?: string | null; clientName?: string | null; areaM2?: number | null },
+  opts?: {
+    objectId?: string | null;
+    clientName?: string | null;
+    areaM2?: number | null;
+    hidePrices?: boolean;
+  },
 ): string {
   const params = partnerCalcParamsFromOrg(org, companyName);
   persistPartnerCalcParams(params);
   const q = new URLSearchParams();
-  q.set('panelPrice', String(params.panelPrice));
-  q.set('pricePerM2', String(params.pricePerM2));
-  q.set('installPerM2', String(params.installPerM2 ?? DEFAULT_INSTALL_PRICE_PER_M2));
-  q.set('dowelPrice', String(params.dowelPrice ?? DEFAULT_DOWEL_PRICE_RUB));
-  q.set('dowelsPerPanel', String(params.dowelsPerPanel));
+  if (opts?.hidePrices) {
+    q.set('hidePrices', '1');
+  } else {
+    q.set('panelPrice', String(params.panelPrice));
+    q.set('pricePerM2', String(params.pricePerM2));
+    q.set('installPerM2', String(params.installPerM2 ?? DEFAULT_INSTALL_PRICE_PER_M2));
+    q.set('dowelPrice', String(params.dowelPrice ?? DEFAULT_DOWEL_PRICE_RUB));
+    q.set('dowelsPerPanel', String(params.dowelsPerPanel));
+  }
   if (params.company) q.set('company', params.company);
   if (opts?.objectId) q.set('objectId', opts.objectId);
   if (opts?.clientName) q.set('client', opts.clientName);

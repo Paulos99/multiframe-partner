@@ -393,7 +393,7 @@ function OwnerCabinet({
   const user = api.user!;
   const [tab, setTab] = useState<OwnerTab>(() => {
     consumeReturnToTools();
-    return 'today';
+    return api.openedObjectId ? 'projects' : 'today';
   });
   const [createToken, setCreateToken] = useState(0);
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
@@ -627,7 +627,7 @@ function SalesCabinet({
   const [createToken, setCreateToken] = useState(0);
   const [tab, setTab] = useState<'today' | 'projects' | 'analytics' | 'help'>(() => {
     consumeReturnToTools();
-    return 'today';
+    return api.openedObjectId ? 'projects' : 'today';
   });
 
   const salesNav: SideItem[] = [
@@ -703,7 +703,7 @@ function FieldCabinet({
   const user = api.user!;
   const [view, setView] = useState<'today' | 'projects' | 'help'>(() => {
     consumeReturnToTools();
-    return 'today';
+    return api.openedObjectId ? 'projects' : 'today';
   });
 
   return (
