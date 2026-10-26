@@ -49,6 +49,13 @@ export type MeasureRoom = {
   blockers: Blocker[];
 };
 
+export type RoomComposition = {
+  areaM2: number | null;
+  panels: number | null;
+  dowels: number | null;
+  hasScheme: boolean;
+};
+
 export type CrewRoom = {
   id: string;
   projectId: string;
@@ -61,6 +68,7 @@ export type CrewRoom = {
   materialsComplete: boolean;
   checklist: CheckItem[];
   blockers: Blocker[];
+  composition?: RoomComposition | null;
 };
 
 export const INSTALL_CHECKS: Array<Pick<CheckItem, 'id' | 'title'>> = [
@@ -127,6 +135,22 @@ export function workStatusLabel(status: string | null | undefined): string {
   if (status === 'blocked') return 'Есть препятствие';
   if (status === 'closed') return 'Монтаж завершён';
   if (status === 'measured') return 'Замер сохранён';
+  return 'Нужен замер';
+}
+
+/** Комната с расчётом по замеру больше не числится как «Нужен замер». */
+export function measurementStatusLabel(room: {
+  workStatus?: string | null;
+  detailed?: CalcSlot;
+  techReady?: boolean;
+  blockers?: Array<{ status: string }>;
+}): string {
+  if (room.workStatus === 'closed') return 'Монтаж завершён';
+  if (room.workStatus === 'blocked' || room.blockers?.some((item) => item.status === 'open')) {
+    return 'Есть препятствие';
+  }
+  if (room.techReady || room.workStatus === 'tech_ready') return 'Технически готово';
+  if (room.detailed || room.workStatus === 'measured') return 'Замер сохранён';
   return 'Нужен замер';
 }
 

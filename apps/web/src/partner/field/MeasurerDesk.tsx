@@ -29,7 +29,7 @@ import {
   isCalcConflict,
   readinessGaps,
   sortMeasurements,
-  workStatusLabel,
+  measurementStatusLabel,
   type Blocker,
   type MeasureRoom,
 } from './fieldModel';
@@ -159,6 +159,7 @@ export function MeasurerDesk({ onOpenScheme }: { onOpenScheme: () => void }) {
 
   if (!room) {
     return (
+      <FadeRise>
       <div className={styles.stack}>
         <section className={styles.card}>
           <h2>Мои замеры</h2>
@@ -174,7 +175,7 @@ export function MeasurerDesk({ onOpenScheme }: { onOpenScheme: () => void }) {
                   <strong>{item.roomName || 'Комната'}</strong>
                   <span className={styles.muted}>{[item.projectName, item.place].filter(Boolean).join(' · ') || 'Адрес не указан'}</span>
                   <span>{item.detailed ? 'Есть расчёт по замеру' : 'Нет расчёта по замеру'}</span>
-                  <span className={styles.muted}>{workStatusLabel(item.workStatus)}</span>
+                  <span className={styles.muted}>{measurementStatusLabel(item)}</span>
                   <div className={styles.actions}>
                     <Button onClick={() => {
                       setNotice(null);
@@ -190,6 +191,7 @@ export function MeasurerDesk({ onOpenScheme }: { onOpenScheme: () => void }) {
           )}
         </section>
       </div>
+      </FadeRise>
     );
   }
 

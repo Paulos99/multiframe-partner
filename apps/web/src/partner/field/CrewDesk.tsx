@@ -43,6 +43,7 @@ export function CrewDesk() {
   const [checks, setChecks] = useState<CheckItem[]>([]);
   const [preset, setPreset] = useState<string>(BLOCKER_PRESETS[0]);
   const [note, setNote] = useState('');
+  const [schemeOpen, setSchemeOpen] = useState(false);
 
   const ordered = useMemo(() => sortTasks(rooms), [rooms]);
   const room = ordered.find((item) => item.id === roomId) || null;
@@ -80,6 +81,10 @@ export function CrewDesk() {
     if (!room) return;
     setChecks(checklistOrTemplate(room.checklist).items);
   }, [room]);
+
+  useEffect(() => {
+    setSchemeOpen(false);
+  }, [roomId]);
 
   async function run(key: string, task: () => Promise<void>) {
     if (busy) return;
@@ -121,6 +126,7 @@ export function CrewDesk() {
 
   if (!room) {
     return (
+      <FadeRise>
       <div className={styles.stack}>
         <section className={styles.card}>
           <h2>Мои задания</h2>
@@ -153,6 +159,7 @@ export function CrewDesk() {
           )}
         </section>
       </div>
+      </FadeRise>
     );
   }
 
@@ -174,23 +181,48 @@ export function CrewDesk() {
           <h2>{room.roomName || 'Комната'}</h2>
           <p className={styles.muted}>{[room.projectName, room.place].filter(Boolean).join(' · ') || 'Адрес не указан'}</p>
           <p className={styles.status} role="status">{sync.label}. {sync.hint}</p>
-          <p className={styles.muted}>Схема и состав есть в расчёте по замеру. Суммы и коммерческое предложение здесь не показываются.</p>
+          <p className={styles.muted}>Суммы и коммерческое предложение здесь не показываются.</p>
           {notice ? <p className={notice.startsWith('Комната закрыта') ? styles.ok : styles.warn} role="status">{notice}</p> : null}
+          <div className={styles.actions}>
+            <Button variant="secondary" aria-expanded={schemeOpen} onClick={() => setSchemeOpen((open) => !open)}>
+              Схема и состав
+            </Button>
+          </div>
+          {schemeOpen ? (
+            <div className={styles.slot}>
+              {room.composition ? (
+                <>
+                  <strong>{room.composition.hasScheme ? 'Схема есть в расчёте по замеру' : 'Схемы в расчёте нет'}</strong>
+                  <span>Площадь: {room.composition.areaM2 == null ? '—' : `${room.composition.areaM2} м²`}</span>
+                  <span>Панели: {room.composition.panels ?? '—'}</span>
+                  <span>Дюбели: {room.composition.dowels ?? '—'}</span>
+                </>
+              ) : (
+                <span>В расчёте по замеру нет состава. Попросите замерщика сохранить схему ещё раз.</span>
+              )}
+            </div>
+          ) : null}
         </section>
         <section className={styles.card}>
           <h3>Список проверки</h3>
           {checks.map((item) => (
             <div key={item.id} className={styles.item}>
-              <strong>{item.title}</strong>
+              <button
+                type="button"
+                className={styles.checkRow}
+                aria-pressed={item.state === 'done'}
+                onClick={() => patchCheck(item.id, item.state === 'done'
+                  ? { state: 'pending', reason: null }
+                  : { state: 'done', reason: null })}
+              >
+                <span className={styles.checkMark} aria-hidden="true">
+                  {item.state === 'done' ? '✓' : ''}
+                </span>
+                <span>{item.title}</span>
+              </button>
               <div className={styles.actions}>
-                <Button variant={item.state === 'done' ? 'primary' : 'secondary'} onClick={() => patchCheck(item.id, { state: 'done', reason: null })}>
-                  Выполнено
-                </Button>
-                <Button variant={item.state === 'na' ? 'primary' : 'secondary'} onClick={() => patchCheck(item.id, { state: 'na' })}>
+                <Button variant={item.state === 'na' ? 'primary' : 'secondary'} onClick={() => patchCheck(item.id, { state: item.state === 'na' ? 'pending' : 'na', reason: item.state === 'na' ? null : item.reason })}>
                   Не применимо
-                </Button>
-                <Button variant={item.state === 'pending' ? 'primary' : 'ghost'} onClick={() => patchCheck(item.id, { state: 'pending', reason: null })}>
-                  Ещё нет
                 </Button>
               </div>
               {item.state === 'na' ? (
@@ -259,20 +291,7 @@ export function CrewDesk() {
           {openBlockers.map((item) => (
             <div key={item.id} className={styles.item}>
               <p className={styles.muted}>{item.text}</p>
-              <div className={styles.actions}>
-                <Button
-                  variant="secondary"
-                  loading={busy === item.id}
-                  onClick={() => void post(
-                    `/rooms/${encodeURIComponent(room.id)}/blockers/${encodeURIComponent(item.id)}/resolve`,
-                    {},
-                    item.id,
-                    'Препятствие снято.',
-                  )}
-                >
-                  Снять препятствие
-                </Button>
-              </div>
+              <p className={styles.muted}>Снять препятствие может замерщик, менеджер или владелец.</p>
             </div>
           ))}
         </section>

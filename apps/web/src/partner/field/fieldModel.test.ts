@@ -11,6 +11,7 @@ import {
   fieldErrorText,
   fieldHeaders,
   fieldSync,
+  measurementStatusLabel,
   nextCrewAction,
   sortMeasurements,
   sortTasks,
@@ -97,6 +98,19 @@ test('задания бригады: сначала текущие, потом �
   assert.equal(nextCrewAction(rooms[1]!), 'Есть препятствие');
   assert.equal(nextCrewAction(rooms[2]!), 'Заполнить список проверки');
   assert.equal(containsMoney(rooms), false);
+});
+
+test('расчёт по замеру не оставляет статус «Нужен замер»', () => {
+  assert.equal(measurementStatusLabel({ workStatus: 'draft', detailed: null }), 'Нужен замер');
+  assert.equal(
+    measurementStatusLabel({ workStatus: 'draft', detailed: { revisionSeq: 1, amount: 156646 } }),
+    'Замер сохранён',
+  );
+  assert.equal(measurementStatusLabel({ workStatus: 'tech_ready', detailed: { revisionSeq: 1, amount: 1 }, techReady: true }), 'Технически готово');
+  assert.equal(
+    measurementStatusLabel({ workStatus: 'draft', detailed: { revisionSeq: 1, amount: 1 }, blockers: [{ status: 'open' }] }),
+    'Есть препятствие',
+  );
 });
 
 test('очередь замеров ставит комнату без расчёта по замеру выше готовой', () => {

@@ -152,7 +152,7 @@ function PartnerShell() {
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       if (!isCabinetCalcMessage(event.data)) return;
-      if (offerFieldCalc(event.data, user?.role, user?.org)) {
+      if (offerFieldCalc(event.data, user?.role, user?.org, (message) => setCalcNotice(message))) {
         setCalcNotice('Расчёт по замеру отправляется в комнату');
         return;
       }
@@ -256,6 +256,7 @@ function PartnerShell() {
       route === 'calculator' ? (
         <div className={styles.toolHost}>
           {chrome}
+          {calcNotice ? <p className={styles.toolNotice} role="status">{calcNotice}</p> : null}
           <div className={styles.toolBody}>
             {calcSrc ? (
               <iframe

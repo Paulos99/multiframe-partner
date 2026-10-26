@@ -295,7 +295,7 @@ test('монтаж и закрытие: чек-лист, препятствие,
   const projectId = created.body.project.id;
   await invoke('POST', `/rooms/${roomId}/calculations`, {
     token: sales,
-    body: { type: 'detailed', amount: 80, expectedRevision: 0 },
+    body: { type: 'detailed', amount: 80, expectedRevision: 0, panels: 12, dowels: 24, areaM2: 9.5, hasScheme: true },
   });
   let roomVersion = '1';
   const profile = await invoke('POST', `/rooms/${roomId}/profile`, {
@@ -343,6 +343,10 @@ test('монтаж и закрытие: чек-лист, препятствие,
   assert.ok(Array.isArray(inbox.body.rooms[0].blockers));
   assert.equal(Object.hasOwn(inbox.body.rooms[0], 'amount'), false);
   assert.equal(JSON.stringify(inbox.body.rooms[0]).includes('acceptedAmount'), false);
+  assert.equal(inbox.body.rooms[0].composition.panels, 12);
+  assert.equal(inbox.body.rooms[0].composition.hasScheme, true);
+  assert.equal(Object.hasOwn(inbox.body.rooms[0].composition, 'amount'), false);
+  assert.equal(JSON.stringify(inbox.body.rooms[0].composition).includes('Cost'), false);
   const crewDeals = await invoke('GET', '/deals', { token: crew });
   assert.equal(crewDeals.body.deals.length, 1);
   assert.equal(crewDeals.body.deals[0].rooms[0].id, roomId);
@@ -470,6 +474,57 @@ test('замерщик видит оба расчёта и один вклад �
   const denied = await invoke('GET', '/install/inbox', { token: measurer });
   assert.equal(denied.status, 403);
   assert.equal((await invoke('GET', '/install/inbox', { token: crew })).body.rooms.length, 0);
+
+  const own = await invoke('GET', `/deals/${dealId}`, { token: measurer });
+  assert.equal(own.status, 200, JSON.stringify(own.body));
+  for (const field of ['outcome', 'lossReason', 'lossComment', 'stageAtOutcome', 'roomAssent', 'acceptedAmount']) {
+    assert.equal(Object.hasOwn(own.body.deal, field), false, field);
+  }
+  assert.equal(own.body.deal.rooms.length, 1);
+  assert.equal(own.body.deal.rooms[0].id, roomId);
+
+  const foreign = await invoke('POST', '/inquiries', {
+    token: sales,
+    headers: { 'Idempotency-Key': 'meas-foreign', 'X-Data-Context': 'work' },
+    body: { name: 'Чужой адрес', roomName: 'Кухня' },
+  });
+  const foreignDeal = foreign.body.deal.id;
+  const foreignRoom = foreign.body.room.id;
+  const hiddenDeal = await invoke('GET', `/deals/${foreignDeal}`, { token: measurer });
+  assert.equal(hiddenDeal.status, 404);
+  assert.equal(JSON.stringify(hiddenDeal.body).includes('Кухня'), false);
+
+  const writes = [
+    [`/rooms/${foreignRoom}/calculations`, { type: 'detailed', amount: 10, expectedRevision: 0 }, {}],
+    [`/rooms/${foreignRoom}/profile`, { usable: true }, { 'If-Match': '1' }],
+    [`/rooms/${foreignRoom}/readiness`, { materialsComplete: true }, { 'If-Match': '1' }],
+    [`/rooms/${foreignRoom}/checklist`, { items: [{ id: 'c', title: 'Крепёж', state: 'done' }] }, { 'If-Match': '1' }],
+    [`/rooms/${foreignRoom}/blockers`, { text: 'нет доступа' }, { 'If-Match': '1' }],
+    [`/rooms/${foreignRoom}/blockers/missing/resolve`, {}, { 'If-Match': '1' }],
+  ];
+  for (const [path, body, headers] of writes) {
+    const response = await invoke('POST', path, { token: measurer, body, headers });
+    assert.equal(response.status, 404, `${path} ${JSON.stringify(response.body)}`);
+  }
+  const closeForeign = await invoke('POST', `/rooms/${foreignRoom}/close`, {
+    token: measurer,
+    headers: { 'If-Match': '1' },
+    body: {},
+  });
+  assert.equal(closeForeign.status, 403);
+
+  const crewLogin = await invoke('POST', '/auth/login', { body: { login: 'crew1', password: 'exec1234' } });
+  const org = crewLogin.body.user.org;
+  for (const field of ['pricePerM2', 'panelPriceRub', 'installPricePerM2', 'dowelPriceRub']) {
+    assert.equal(Object.hasOwn(org, field), false, field);
+  }
+  assert.equal(typeof org.companyName, 'string');
+  const objects = await invoke('GET', '/objects', { token: crewLogin.body.token });
+  assert.equal(objects.status, 200);
+  const listed = JSON.stringify(objects.body);
+  for (const field of ['totalCost', 'panelsCost', 'installCost', 'dowelsCost', 'pricePerM2', 'panelPriceRub', 'installPricePerM2']) {
+    assert.equal(listed.includes(`"${field}"`), false, field);
+  }
 });
 
 test('облачный бакет без YDB не подменяет коммерческое хранилище файлом', async () => {

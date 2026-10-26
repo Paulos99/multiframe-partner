@@ -54,6 +54,26 @@ function calcSlot(row) {
   return { revisionSeq: Number(row.revisionSeq) || 0, amount: Number(row.amount) };
 }
 
+function finiteOrNull(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+/** Состав для бригады: площадь и количество, без сумм. */
+function compositionOf(row) {
+  if (!row) return null;
+  return {
+    areaM2: finiteOrNull(row.areaM2),
+    panels: finiteOrNull(row.panels) == null ? null : Math.max(0, Math.round(Number(row.panels))),
+    dowels: finiteOrNull(row.dowels) == null ? null : Math.max(0, Math.round(Number(row.dowels))),
+    hasScheme: Boolean(row.hasScheme),
+  };
+}
+
+function compositionFrom(body) {
+  return compositionOf(body || {});
+}
+
 function idemId(scope, key) {
   const raw = String(key || '').trim();
   if (!raw) return '';
@@ -233,6 +253,55 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
     };
   }
 
+  async function assertMeasurerRoom(tx, user, room) {
+    if (user.role !== 'measurer') return;
+    const deals = (await tx.list({ orgId: room.orgId, kind: 'deal', projectId: room.projectId })).map(entity);
+    const assigned = deals.some((deal) => deal.assignments?.measurerUserId === user.id);
+    if (!assigned) throw httpError(404, 'Комната не найдена');
+  }
+
+  async function measurerCards(tx, user) {
+    const deals = (await dealsOf(tx, user)).filter((deal) => deal.assignments?.measurerUserId === user.id);
+    const out = [];
+    for (const deal of deals) {
+      const project = entity(await tx.get(deal.orgId, 'project', deal.projectId));
+      const quotes = (await tx.list({ orgId: deal.orgId, kind: 'quote', parentId: deal.id })).map(entity);
+      const quoteSent = quotes.some((quote) => quote.sentConfirmedAt || quote.lifecycle === 'quote_sent_confirmed');
+      const rooms = (await tx.list({ orgId: deal.orgId, kind: 'room', projectId: deal.projectId })).map(entity);
+      const cards = [];
+      for (const room of rooms) {
+        if (room.workStatus === 'closed') continue;
+        const calcs = await calcsFor(tx, room.orgId, room.id);
+        cards.push({
+          id: room.id,
+          roomName: room.roomName || '',
+          projectId: room.projectId,
+          projectName: project?.name || '',
+          place: project?.address || '',
+          recordVersion: room.recordVersion ?? 1,
+          workStatus: room.workStatus || 'draft',
+          profileUsable: Boolean(room.profileUsable),
+          materialsComplete: Boolean(room.materialsComplete),
+          crewUserId: room.crewUserId || null,
+          preliminary: calcSlot(currentRevision(calcs, 'preliminary')),
+          detailed: calcSlot(currentRevision(calcs, 'detailed')),
+          contribution: roomContribution(calcs),
+          techReady: isTechReady(room, calcs),
+          quoteSent,
+          blockers: publicBlockers(room.blockers),
+        });
+      }
+      out.push({
+        id: deal.id,
+        orgId: deal.orgId,
+        projectId: deal.projectId,
+        recordVersion: deal.recordVersion ?? 1,
+        rooms: cards,
+      });
+    }
+    return out;
+  }
+
   return {
     async listDeals(user) {
       assertRole(user, 'read');
@@ -246,6 +315,11 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
       return repo.transaction(async (tx) => {
         if (user.role === 'crew') {
           const deal = (await crewInstallDeals(tx, user)).find((item) => item.id === id);
+          if (!deal) throw httpError(404, 'Сделка не найдена');
+          return deal;
+        }
+        if (user.role === 'measurer') {
+          const deal = (await measurerCards(tx, user)).find((item) => item.id === id);
           if (!deal) throw httpError(404, 'Сделка не найдена');
           return deal;
         }
@@ -588,9 +662,10 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
       assertRole(user, 'calc.write');
       assertWorkContext(body, null);
       return repo.transaction(async (tx) => {
+        const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
+        await assertMeasurerRoom(tx, user, entity(roomRow));
         const cached = await replay(tx, user.orgId, 'calc', idempotencyKey);
         if (cached) return cached;
-        const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
         const existing = await calcsFor(tx, roomRow.orgId, roomId);
         const plan = planCalculation(existing, {
           calcType: body.type || body.calcType,
@@ -603,6 +678,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
         const stamp = plan.saved.savedAt;
         const saved = {
           ...plan.saved,
+          ...compositionFrom(body),
           id: uid('calc'),
           orgId: roomRow.orgId,
           roomId,
@@ -646,6 +722,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
       requireMatch(expected);
       return repo.transaction(async (tx) => {
         const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
+        await assertMeasurerRoom(tx, user, entity(roomRow));
         const stamp = at();
         const room = {
           ...entity(roomRow),
@@ -670,6 +747,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
       requireMatch(expected);
       return repo.transaction(async (tx) => {
         const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
+        await assertMeasurerRoom(tx, user, entity(roomRow));
         const stamp = at();
         const room = {
           ...entity(roomRow),
@@ -690,6 +768,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
       if (!items) throw httpError(400, 'Укажите пункты чек-листа');
       return repo.transaction(async (tx) => {
         const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
+        await assertMeasurerRoom(tx, user, entity(roomRow));
         const room = {
           ...entity(roomRow),
           checklist: items.map((item) => ({
@@ -711,6 +790,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
       if (!text) throw httpError(400, 'Опишите препятствие');
       return repo.transaction(async (tx) => {
         const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
+        await assertMeasurerRoom(tx, user, entity(roomRow));
         const room = entity(roomRow);
         const blocker = { id: uid('blk'), status: 'open', text: text.slice(0, 500), openedAt: at(), openedBy: user.id };
         room.blockers = [...(room.blockers || []), blocker];
@@ -725,6 +805,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
       requireMatch(expected);
       return repo.transaction(async (tx) => {
         const roomRow = await rowById(tx, user, 'room', roomId, 'Комната не найдена');
+        await assertMeasurerRoom(tx, user, entity(roomRow));
         const room = entity(roomRow);
         const blocker = (room.blockers || []).find((item) => item.id === blockerId);
         if (!blocker) throw httpError(404, 'Препятствие не найдено');
@@ -766,41 +847,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
     async measurerWork(user) {
       assertRole(user, 'read');
       if (user.role !== 'measurer') throw httpError(403, 'Недостаточно прав');
-      return repo.transaction(async (tx) => {
-        const deals = (await dealsOf(tx, user)).filter((deal) => deal.assignments?.measurerUserId === user.id);
-        const out = [];
-        for (const deal of deals) {
-          const project = entity(await tx.get(deal.orgId, 'project', deal.projectId));
-          const quotes = (await tx.list({ orgId: deal.orgId, kind: 'quote', parentId: deal.id })).map(entity);
-          const quoteSent = quotes.some((quote) => quote.sentConfirmedAt || quote.lifecycle === 'quote_sent_confirmed');
-          const rooms = (await tx.list({ orgId: deal.orgId, kind: 'room', projectId: deal.projectId })).map(entity);
-          const cards = [];
-          for (const room of rooms) {
-            if (room.workStatus === 'closed') continue;
-            const calcs = await calcsFor(tx, room.orgId, room.id);
-            cards.push({
-              id: room.id,
-              roomName: room.roomName || '',
-              projectId: room.projectId,
-              projectName: project?.name || '',
-              place: project?.address || '',
-              recordVersion: room.recordVersion ?? 1,
-              workStatus: room.workStatus || 'draft',
-              profileUsable: Boolean(room.profileUsable),
-              materialsComplete: Boolean(room.materialsComplete),
-              crewUserId: room.crewUserId || null,
-              preliminary: calcSlot(currentRevision(calcs, 'preliminary')),
-              detailed: calcSlot(currentRevision(calcs, 'detailed')),
-              contribution: roomContribution(calcs),
-              techReady: isTechReady(room, calcs),
-              quoteSent,
-              blockers: publicBlockers(room.blockers),
-            });
-          }
-          out.push({ id: deal.id, projectId: deal.projectId, rooms: cards });
-        }
-        return out;
-      });
+      return repo.transaction(async (tx) => measurerCards(tx, user));
     },
 
     async installInbox(user) {
@@ -817,6 +864,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
             if (user.role === 'crew' && room.crewUserId !== user.id) continue;
             const calcs = await calcsFor(tx, room.orgId, room.id);
             if (!inInstallPool(deal, room, calcs)) continue;
+            const detailed = currentRevision(calcs, 'detailed');
             rooms.push({
               id: room.id,
               projectId: room.projectId,
@@ -830,6 +878,7 @@ export function createCommercialService(repo, { uid, now, orgIds = [] }) {
               materialsComplete: Boolean(room.materialsComplete),
               checklist: publicChecklist(room.checklist),
               blockers: publicBlockers(room.blockers),
+              composition: compositionOf(detailed),
             });
           }
         }

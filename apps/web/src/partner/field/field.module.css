@@ -108,6 +108,43 @@
   min-height: var(--touch-min);
 }
 
+.checkRow {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--touch-min);
+  margin: 0;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  text-align: left;
+  font: inherit;
+  font-weight: 650;
+  color: var(--cab-ink);
+  background: var(--cab-subtle);
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-sm);
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.checkRow:hover {
+  border-color: var(--cab-border-strong);
+}
+
+.checkMark {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 1px solid var(--cab-border-strong);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
 .item {
   display: grid;
   gap: 8px;
@@ -132,7 +169,8 @@
 @media (prefers-reduced-motion: reduce) {
   .card,
   .actions,
-  .slot {
+  .slot,
+  .checkRow {
     transition: none;
     animation: none;
   }

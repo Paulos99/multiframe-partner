@@ -6,7 +6,7 @@
 import type { OrgSettings } from '../../../../../packages/shared/partner';
 import { calcMessageHasScheme, estimateFromCalc, isCabinetCalcMessage } from '../cabinetCalc';
 import { fieldPost } from './fieldClient';
-import { createIdempotencyKey, fieldErrorText, isCalcConflict } from './fieldModel';
+import { createIdempotencyKey, fieldErrorText, formatRub, isCalcConflict } from './fieldModel';
 
 const ARM = 'mf-field-arm';
 const OUTCOME = 'mf-field-calc-outcome';
@@ -78,6 +78,7 @@ export function offerFieldCalc(
   data: unknown,
   role: string | null | undefined,
   org: OrgSettings | null | undefined,
+  report?: (message: string) => void,
 ): boolean {
   if (role !== 'measurer') return false;
   const raw = memory()?.getItem(ARM);
@@ -89,50 +90,66 @@ export function offerFieldCalc(
     return false;
   }
   if (!arm.roomId) return false;
-  void settle(arm, data, org);
+  void settle(arm, data, org).then((message) => {
+    if (message) report?.(message);
+  });
   return true;
 }
 
-async function settle(arm: FieldArm, data: Parameters<typeof estimateFromCalc>[0], org: OrgSettings | null | undefined) {
+function conflictText(body: {
+  saved: { amount: number };
+  current: { amount: number };
+  contribution: { amount?: number | null; calcType?: string | null } | null;
+}): string {
+  const counted = body.contribution?.amount;
+  const countedText = counted == null ? 'итог ещё не выбран' : `в итоге ${formatRub(counted)}`;
+  return `Конфликт версии. На сервере ${formatRub(body.current.amount)}, ваша версия ${formatRub(body.saved.amount)}, ${countedText}. Обе версии сохранены — выберите в комнате.`;
+}
+
+async function settle(
+  arm: FieldArm,
+  data: Parameters<typeof estimateFromCalc>[0],
+  org: OrgSettings | null | undefined,
+): Promise<string | null> {
   if (!calcMessageHasScheme(data)) {
     writeOutcome({ kind: 'needs-scheme', roomId: arm.roomId });
-    return;
+    return 'Без схемы это не расчёт по замеру. Предварительный ориентир не заменяет схему.';
   }
   const estimate = estimateFromCalc(data, org);
   if (estimate.totalCost == null) {
-    writeOutcome({
-      kind: 'error',
-      roomId: arm.roomId,
-      message: 'Калькулятор не вернул сумму. Черновик на экране калькулятора сохранён, в комнату он не ушёл.',
-    });
-    return;
+    const message = 'Калькулятор не вернул сумму. Черновик на экране калькулятора сохранён, в комнату он не ушёл.';
+    writeOutcome({ kind: 'error', roomId: arm.roomId, message });
+    return message;
   }
   const result = await fieldPost(
     `/rooms/${encodeURIComponent(arm.roomId)}/calculations`,
-    { type: 'detailed', amount: estimate.totalCost, expectedRevision: arm.expectedRevision },
+    {
+      type: 'detailed',
+      amount: estimate.totalCost,
+      expectedRevision: arm.expectedRevision,
+      areaM2: data.areaM2 ?? null,
+      panels: estimate.panels,
+      dowels: estimate.dowels,
+      hasScheme: true,
+    },
     { idempotencyKey: arm.idempotencyKey, roomId: arm.roomId },
   );
   if (result.queued) {
-    writeOutcome({
-      kind: 'queued',
-      roomId: arm.roomId,
-      message: 'Сохранено на устройстве. На сервере ещё нет.',
-    });
-    return;
+    const message = 'Сохранено на устройстве. На сервере ещё нет.';
+    writeOutcome({ kind: 'queued', roomId: arm.roomId, message });
+    return message;
   }
   if (isCalcConflict(result.body)) {
     memory()?.removeItem(ARM);
     writeOutcome({ kind: 'conflict', roomId: arm.roomId, body: result.body });
-    return;
+    return conflictText(result.body);
   }
   if (!result.ok) {
-    writeOutcome({
-      kind: 'error',
-      roomId: arm.roomId,
-      message: fieldErrorText(result.status, String(result.body.message || '')),
-    });
-    return;
+    const message = fieldErrorText(result.status, String(result.body.message || ''));
+    writeOutcome({ kind: 'error', roomId: arm.roomId, message });
+    return message;
   }
   memory()?.removeItem(ARM);
   writeOutcome({ kind: 'saved', roomId: arm.roomId });
+  return 'Расчёт по замеру сохранён в комнату.';
 }
