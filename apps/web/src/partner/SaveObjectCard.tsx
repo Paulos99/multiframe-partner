@@ -208,7 +208,11 @@ export function SaveObjectCard() {
       const canShare = typeof navigator.share === 'function';
       if (canShare) await navigator.share({ title: 'MultiFrame · сводка', text });
       else await navigator.clipboard.writeText(text);
-      setMsg(canShare ? 'Сводка передана клиенту' : 'Сводка скопирована');
+      const existing = objects.find((item) => item.id === objectId);
+      if (existing) {
+        await saveObject({ ...existing, id: objectId, status: 'quote_sent' });
+      }
+      setMsg(canShare ? 'Отправлено клиенту · статус «КП отправлено»' : 'Сводка скопирована · статус «КП отправлено»');
     } catch (error) {
       if ((error as Error)?.name === 'AbortError') return;
       setErr(error instanceof Error ? error.message : 'Не удалось отправить');
@@ -244,7 +248,7 @@ export function SaveObjectCard() {
       ) : null}
       <div className={styles.actionRow}>
         <Button type="button" variant="secondary" loading={sending} disabled={busy || sending} onClick={() => void onSendClient()}>
-          {sending ? 'Отправляем…' : 'Передать сводку клиенту'}
+          {sending ? 'Отправляем…' : 'Отправить КП'}
         </Button>
       </div>
     </section>
