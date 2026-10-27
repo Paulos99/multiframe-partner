@@ -24,6 +24,7 @@ import {
   loadSharedAnalyticsEvents,
   probeAnalyticsDashboard,
   roomsForCabinet,
+  shownTileNumbers,
   type AnalyticsTileModel,
   formatPeriodLabel,
   getAnalyticsFocusOrg,
@@ -417,16 +418,17 @@ export function AnalyticsDashboard({
         orgId,
         mode,
       });
+      const shown = shownTileNumbers(localComposed);
       const local: AnalyticsTileModel = {
-        events,
-        objects,
-        projects,
-        users,
-        kpi: { panels: localComposed.dash.kpi.panels, areaM2: localComposed.dash.kpi.areaM2 },
+        events: events.slice(),
+        objects: objects.slice(),
+        projects: projects.slice(),
+        users: users.slice(),
+        kpi: shown,
         source: 'local',
         from,
         to,
-        dash: localComposed.dash,
+        dash: { ...localComposed.dash, kpi: { ...localComposed.dash.kpi, panels: shown.panels, areaM2: shown.areaM2 } },
       };
       const preferLocal = isDemoModeEnabled() || orgId === 'org_demo' || orgId === 'org_demo_spb';
       const probe = await probeAnalyticsDashboard({ mode, orgId, partnerLogin: user.login });
@@ -502,6 +504,8 @@ export function AnalyticsDashboard({
   }
 
   const dash = data!;
+  const tilePanels = dash.kpi.panels;
+  const tileArea = dash.kpi.areaM2;
   const showDelta = Boolean(dash.kpiPrev);
   const prev: AnalyticsKpi | null = dash.kpiPrev;
 
@@ -586,8 +590,8 @@ export function AnalyticsDashboard({
                 { id: 'problemomer', label: 'Проблемомер', value: dash.kpi.problemomerResults, prev: prev?.problemomerResults, showDelta },
                 { id: 'calculator', label: 'Калькулятор', value: dash.kpi.calculatorDone, prev: prev?.calculatorDone, showDelta },
                 { id: 'pdf', label: 'PDF', value: dash.kpi.pdf, prev: prev?.pdf, showDelta },
-                { id: 'area', label: 'Площадь, м²', value: dash.kpi.areaM2, prev: prev?.areaM2, showDelta },
-                { id: 'panels', label: 'Панели', value: dash.kpi.panels, prev: prev?.panels, showDelta },
+                { id: 'area', label: 'Площадь, м²', value: tileArea, prev: prev?.areaM2, showDelta },
+                { id: 'panels', label: 'Панели', value: tilePanels, prev: prev?.panels, showDelta },
                 { id: 'avg', label: 'Средняя м²', value: dash.volume.areaM2Avg, prev: null, showDelta: false },
                 { id: 'done', label: 'Готовых расчётов', value: dash.volume.completedCount, prev: null, showDelta: false },
               ] as Array<{ id: string; label: string; value: number; prev?: number | null; showDelta: boolean }>
@@ -791,6 +795,8 @@ export function AnalyticsDashboard({
           onPeriodChange={setPanelPeriod}
           onOpenRoom={onOpenRoom}
           model={model}
+          tilePanels={tilePanels}
+          tileArea={tileArea}
           onClose={() => setOpenMetric(null)}
         >
           {(() => {

@@ -265,6 +265,16 @@ export function analyticsSourceLabel(source: AnalyticsTileSource): string {
   return source === 'server' ? 'сервер' : 'локально';
 }
 
+/** Числа, которые рисует плитка. Абзац и рейтинг читают их, а не вторую копию. */
+export function shownTileNumbers(model: Pick<AnalyticsTileModel, 'dash'>): { panels: number; areaM2: number } {
+  const panels = Number(model.dash?.kpi?.panels);
+  const areaM2 = Number(model.dash?.kpi?.areaM2);
+  return {
+    panels: Number.isFinite(panels) ? panels : 0,
+    areaM2: Number.isFinite(areaM2) ? areaM2 : 0,
+  };
+}
+
 /** Комнаты доски. Пустой хук не затирает кэш и mf_partner_db_v5. */
 export function roomsForCabinet(hookRooms?: Array<Record<string, unknown>> | null): Array<Record<string, unknown>> {
   if (hookRooms?.length) return hookRooms;

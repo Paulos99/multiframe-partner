@@ -8,9 +8,8 @@ import type {
   DrillRoleId,
   StaffDrillResult,
 } from '../../../../packages/shared/staffDrill.js';
-import { analyticsSourceLabel, composeCabinetAnalytics, presetRange, rangeFromYmd, type AnalyticsTileModel } from './analytics';
+import { analyticsSourceLabel, composeCabinetAnalytics, presetRange, rangeFromYmd, roomsForCabinet, type AnalyticsTileModel } from './analytics';
 import { isDemoModeEnabled } from './demoMode';
-import { Skeleton } from './Skeleton';
 import styles from './partner.module.css';
 
 const METRIC_LABELS: Record<string, string> = {
@@ -94,6 +93,8 @@ export function StaffDrillDrawer({
   onClose,
   onOpenRoom,
   model,
+  tilePanels,
+  tileArea,
   children,
 }: {
   metric: string;
@@ -106,14 +107,14 @@ export function StaffDrillDrawer({
   onOpenRoom?: (roomId: string) => void;
   /** Тот же объект, из которого нарисованы плитки. Второй запрос сюда не ходит. */
   model: AnalyticsTileModel;
+  /** Те же числа, что стоят на плитках в этом кадре. */
+  tilePanels: number;
+  tileArea: number;
   children?: ReactNode;
 }) {
   const [period, setPeriod] = useState<DrillPeriod | null>(null);
   const [roleId, setRoleId] = useState<DrillRoleId | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [data, setData] = useState<StaffDrillResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const explainZeros = import.meta.env.DEV || isDemoModeEnabled();
   const title = METRIC_LABELS[metric] || 'Рейтинг';
 
@@ -133,40 +134,28 @@ export function StaffDrillDrawer({
   const preset = period ? presetRange(period) : null;
   const activeRange = preset
     ? rangeFromYmd(preset.fromYmd, preset.toYmd)
-    : { from: from ?? model.from, to: to ?? model.to };
+    : { from: model.from ?? from ?? null, to: model.to ?? to ?? null };
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    try {
-      const { drill } = composeCabinetAnalytics({
-        events: model.events,
-        objects: model.objects,
-        projects: model.projects,
-        users: model.users,
-        from: activeRange.from ?? (activeRange.to ? null : 'all'),
-        to: activeRange.to,
-        orgId,
-        metric,
-        period: period ?? 'month',
-        userId,
-        mode,
-        kpi: period ? undefined : model.kpi,
-      });
-      if (!cancelled) setData(drill);
-    } catch (reason: unknown) {
-      if (!cancelled) {
-        setData(null);
-        setError(reason instanceof Error ? reason.message : 'Не удалось открыть рейтинг');
-      }
-    } finally {
-      if (!cancelled) setLoading(false);
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to, model]);
+  let data: StaffDrillResult | null = null;
+  let error: string | null = null;
+  try {
+    data = composeCabinetAnalytics({
+      events: model.events,
+      objects: roomsForCabinet(model.objects),
+      projects: model.projects,
+      users: model.users,
+      from: activeRange.from ?? (activeRange.to ? null : 'all'),
+      to: activeRange.to,
+      orgId,
+      metric,
+      period: period ?? 'month',
+      userId,
+      mode,
+      kpi: period ? undefined : { panels: tilePanels, areaM2: tileArea },
+    }).drill;
+  } catch (reason: unknown) {
+    error = reason instanceof Error ? reason.message : 'Не удалось открыть рейтинг';
+  }
 
   const roles = visibleRoles(data);
   const activeRole = roles.find((role) => role.id === roleId) || roles[0] || null;
@@ -214,8 +203,7 @@ export function StaffDrillDrawer({
             {data.drops?.rooms ?? 0}. Событий {data.drops?.events ?? 0}.
             Отсечено: компания {data.drops?.company ?? 0}, период {data.drops?.period ?? 0}, исполнитель{' '}
             {data.drops?.assignee ?? 0}. Монтаж: {assignmentLine(data.drops?.installByUser)}. Закрыто:{' '}
-            {assignmentLine(data.drops?.closedByUser)}. Плитка панелей {data.drops?.tilePanels ?? 0}, площадь{' '}
-            {data.drops?.tileArea ?? 0}.
+            {assignmentLine(data.drops?.closedByUser)}. Плитка панелей {tilePanels}, площадь {tileArea}.
           </p>
         ) : null}
 
@@ -258,7 +246,6 @@ export function StaffDrillDrawer({
           </div>
         ) : null}
 
-        {loading && !data ? <Skeleton kind="rows" count={4} label="Загрузка рейтинга" /> : null}
         {error ? (
           <p className={styles.error} role="alert">
             {error}

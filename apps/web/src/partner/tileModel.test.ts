@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   acceptServerEvents,
   applyDashboardProbe,
+  shownTileNumbers,
   type AnalyticsTileModel,
   type DashboardProbe,
 } from './analytics';
@@ -47,6 +48,16 @@ test('демо-режим оставляет локальный объект, д
   });
   assert.equal(acceptServerEvents(probe, true), false);
   assert.equal(applyDashboardProbe(local, probe, { preferLocal: true, orgId: 'org_demo', mode: 'partner' }), local);
+});
+
+test('число плитки читается из dash, даже если отдельная копия kpi нулевая', () => {
+  const split = {
+    ...local,
+    kpi: { panels: 0, areaM2: 0 },
+    dash: { kpi: { panels: 5206, areaM2: 2403 } },
+  } as unknown as AnalyticsTileModel;
+  assert.deepEqual(shownTileNumbers(split), { panels: 5206, areaM2: 2403 });
+  assert.deepEqual(shownTileNumbers(local), { panels: 5206, areaM2: 2403 });
 });
 
 test('непустые события сервера становятся единственным входом', () => {
