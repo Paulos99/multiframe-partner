@@ -634,3 +634,40 @@
     grid-template-columns: repeat(5, minmax(200px, 78vw));
   }
 }
+
+.addRoom {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.addRoom .error {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  .addRoom {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dangerZone {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--cab-border);
+}
+
+.danger {
+  justify-self: start;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--cab-danger, #9b2c2c);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--cab-danger, #9b2c2c);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

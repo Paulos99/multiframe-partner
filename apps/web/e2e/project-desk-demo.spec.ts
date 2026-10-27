@@ -56,7 +56,7 @@ test('демо ?demo=1 группирует комнаты и открывает
   }
 
   await card.getByRole('tab', { name: 'Команда', exact: true }).click();
-  await expect(card.getByText('Павел Орлов')).toBeVisible();
+  await expect(card.getByText('Павел Орлов').first()).toBeVisible();
   await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
   await card.getByRole('button', { name: /Гостиная/ }).click();
   const room = page.getByRole('region', { name: 'Комната' });

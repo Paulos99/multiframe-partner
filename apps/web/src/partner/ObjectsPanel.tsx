@@ -200,8 +200,6 @@ export function ObjectsPanel({
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<RoomDraft>(() => emptyDraft(user.org?.city || ''));
   const [saving, setSaving] = useState(false);
-  const [roomName, setRoomName] = useState('');
-  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const sync = () => setRoute(parseProjectHash(window.location.hash));
@@ -281,12 +279,31 @@ export function ObjectsPanel({
     setPendingId(obj.id);
     try {
       const saved = await api.saveObject({ ...obj, ...next, id: obj.id });
-      if (saved.projectId) navigateProject({ kind: 'room', projectId: saved.projectId, roomId: saved.id });
+      if (saved.projectId && saved.projectId !== obj.projectId) {
+        navigateProject({ kind: 'room', projectId: saved.projectId, roomId: saved.id }, 'replace');
+      }
+      if (next.assignedTo) await fillProjectAssignee(saved, next.assignedTo);
       setMsg('Сохранено');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Ошибка');
     } finally {
       setPendingId(null);
+    }
+  }
+
+  /** Исполнитель комнаты становится исполнителем проекта, если поле проекта пустое. */
+  async function fillProjectAssignee(room: JobObject, personId: string) {
+    const project = api.projects.find((item) => item.id === room.projectId);
+    const person = staff.find((item) => item.id === personId);
+    if (!project || !person) return;
+    try {
+      if (person.role === 'measurer' && !project.measurerUserId) {
+        await api.updateProject(project.id, { measurerUserId: person.id });
+      } else if (person.role === 'crew' && !project.crewUserId) {
+        await api.updateProject(project.id, { crewUserId: person.id });
+      }
+    } catch {
+      /* комната уже сохранена; поле проекта подтянется из назначений комнат */
     }
   }
 
@@ -402,13 +419,11 @@ export function ObjectsPanel({
     }
   }
 
-  async function addRoom() {
-    if (!selectedCard?.project) return;
-    const label = roomName.trim();
-    if (!label) return;
-    setAdding(true);
+  async function addRoom(projectId: string, name: string) {
+    const label = name.trim();
+    const project = api.projects.find((item) => item.id === projectId);
+    if (!project || !label) return;
     setErr(null);
-    const project = selectedCard.project;
     try {
       const saved = await api.saveObject({
         status: 'draft',
@@ -420,13 +435,10 @@ export function ObjectsPanel({
         city: project.city || '',
         room: roomStubFromLabel(label),
       });
-      setRoomName('');
       navigateProject({ kind: 'room', projectId: project.id, roomId: saved.id });
       setMsg('Комната добавлена');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Не удалось добавить комнату');
-    } finally {
-      setAdding(false);
+      throw e instanceof Error ? e : new Error('Не удалось добавить комнату');
     }
   }
 
@@ -526,13 +538,15 @@ export function ObjectsPanel({
         onDesk={() => navigateProject({ kind: 'desk' }, 'replace')}
         onTab={(tab) => {
           if (route.kind !== 'project') return;
-          navigateProject({ kind: 'project', projectId: route.projectId, tab });
+          navigateProject({ kind: 'project', projectId: route.projectId, tab }, 'replace');
         }}
         onSave={(id, input) => api.updateProject(id, input)}
         onOpenRoom={(room) => {
           const projectId = room.projectId || (route.kind === 'project' ? route.projectId : '');
           if (projectId) navigateProject({ kind: 'room', projectId, roomId: room.id });
         }}
+        onAddRoom={canCreate ? addRoom : undefined}
+        onDeleteProject={canDelete ? (project) => setProjectToDelete({ id: project.id, name: project.name }) : undefined}
       />
       )}
 
@@ -637,7 +651,7 @@ export function ObjectsPanel({
                   type="button"
                   className={`${listStyles.room} ${selectedId === room.id ? listStyles.roomOn : ''}`}
                   onClick={() => {
-                    if (room.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: room.id });
+                    if (room.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: room.id }, 'replace');
                   }}
                 >
                   <span>
@@ -650,17 +664,6 @@ export function ObjectsPanel({
                 </button>
               ))}
             </div>
-            ) : null}
-            {canCreate && selectedCard.project ? (
-              <div className={listStyles.add}>
-                <label className={styles.field}>
-                  Новая комната
-                  <input value={roomName} placeholder="Спальня" onChange={(event) => setRoomName(event.target.value)} />
-                </label>
-                <button type="button" className={styles.primary} disabled={adding || !roomName.trim()} onClick={() => void addRoom()}>
-                  {adding ? 'Сохраняем…' : 'Добавить комнату'}
-                </button>
-              </div>
             ) : null}
 
             {selectedRooms.length > 1 ? (
@@ -822,17 +825,6 @@ export function ObjectsPanel({
                 <button type="button" className={styles.danger} onClick={() => setToDelete(selected)}>
                   Удалить комнату
                 </button>
-                {selectedCard.project ? (
-                  <button
-                    type="button"
-                    className={styles.danger}
-                    onClick={() =>
-                      setProjectToDelete({ id: selectedCard.project!.id, name: selectedCard.project!.name })
-                    }
-                  >
-                    Удалить проект
-                  </button>
-                ) : null}
               </div>
             ) : null}
         </section>

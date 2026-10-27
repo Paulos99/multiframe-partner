@@ -5,6 +5,7 @@ import {
   type Project,
   type ProjectStatus,
 } from '../../../../packages/shared/partner';
+import { comfortTransitionLabel } from '../state/simulation';
 
 const VIEW_KEY = 'mf-project-desk-view';
 
@@ -139,7 +140,10 @@ export function nextSteps(rooms: JobObject[]): NextStep[] {
 export function problemomerLine(room: JobObject): string {
   const before = room.room?.classBefore;
   const after = room.room?.classAfter;
-  if (before || after) return `Класс ${before || '—'} → ${after || '—'}`;
+  if (before || after) {
+    const label = comfortTransitionLabel(before, after);
+    if (label) return label;
+  }
   if (room.room?.areaM2 != null) return 'Площадь есть, профиль не сохранён';
   return 'Проблемомер ещё не заполнен';
 }
@@ -149,6 +153,28 @@ export function formatProjectDay(day: string | null | undefined): string {
   const parsed = new Date(`${day.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return day;
   return parsed.toLocaleDateString('ru-RU');
+}
+
+export type ProjectAssigneeRole = 'measurer' | 'crew' | 'manager';
+
+/** Кто назначен на проект: поле проекта или, если оно пусто, исполнитель его комнат. */
+export function projectAssigneeId(
+  project: Project,
+  rooms: ReadonlyArray<JobObject>,
+  staff: ReadonlyArray<{ id: string; role: string }>,
+  kind: ProjectAssigneeRole,
+): string | null {
+  const own =
+    kind === 'measurer' ? project.measurerUserId : kind === 'crew' ? project.crewUserId : project.managerUserId;
+  if (own) return own;
+  const match = (role: string) =>
+    kind === 'measurer' ? role === 'measurer' : kind === 'crew' ? role === 'crew' : role === 'owner' || role === 'sales';
+  for (const room of rooms) {
+    if (!room.assignedTo) continue;
+    const person = staff.find((item) => item.id === room.assignedTo);
+    if (person && match(person.role)) return person.id;
+  }
+  return null;
 }
 
 export function personName(

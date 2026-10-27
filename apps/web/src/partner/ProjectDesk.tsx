@@ -23,6 +23,7 @@ import {
   nextSteps,
   personName,
   problemomerLine,
+  projectAssigneeId,
   projectMatches,
   projectRooms,
   panelLabel,
@@ -72,6 +73,8 @@ export function ProjectDesk({
   onTab,
   onSave,
   onOpenRoom,
+  onAddRoom,
+  onDeleteProject,
 }: {
   projects: Project[];
   rooms: JobObject[];
@@ -85,6 +88,8 @@ export function ProjectDesk({
   onTab: (tab: ProjectTab) => void;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
   onOpenRoom: (room: JobObject) => void;
+  onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
+  onDeleteProject?: (project: Project) => void;
 }) {
   const [view, setView] = useState<ProjectDeskView>(() =>
     readProjectView(typeof localStorage === 'undefined' ? null : localStorage),
@@ -154,6 +159,8 @@ export function ProjectDesk({
         onDesk={onDesk}
         onSave={onSave}
         onOpenRoom={onOpenRoom}
+        onAddRoom={onAddRoom}
+        onDeleteProject={onDeleteProject}
       />
     );
   }
@@ -400,6 +407,8 @@ function ProjectPage({
   onDesk,
   onSave,
   onOpenRoom,
+  onAddRoom,
+  onDeleteProject,
 }: {
   row: Row;
   staff: Person[];
@@ -411,6 +420,8 @@ function ProjectPage({
   onDesk: () => void;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
   onOpenRoom: (room: JobObject) => void;
+  onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
+  onDeleteProject?: (project: Project) => void;
 }) {
   const people = actor && !staff.some((person) => person.id === actor.id) ? [actor, ...staff] : staff;
   const { project, rooms, status } = row;
@@ -472,13 +483,20 @@ function ProjectPage({
             onSettings={() => onTab('settings')}
           />
         ) : null}
-        {tab === 'work' ? <Work rooms={rooms} seesMoney={seesMoney} onOpenRoom={onOpenRoom} /> : null}
+        {tab === 'work' ? (
+          <Work
+            rooms={rooms}
+            seesMoney={seesMoney}
+            onOpenRoom={onOpenRoom}
+            onAddRoom={canEdit && onAddRoom ? (name) => onAddRoom(project.id, name) : undefined}
+          />
+        ) : null}
         {tab === 'team' ? <Team project={project} rooms={rooms} staff={people} /> : null}
         {tab === 'tasks' ? <Tasks steps={steps} rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
         {tab === 'reports' ? <Reports rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
         {tab === 'documents' ? <Documents rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
         {tab === 'settings' ? (
-          <Settings project={project} status={status} staff={people} actor={actor} canEdit={canEdit} onSave={onSave} />
+          <Settings project={project} rooms={rooms} status={status} staff={people} actor={actor} canEdit={canEdit} onSave={onSave} onDelete={onDeleteProject} />
         ) : null}
       </div>
     </section>
@@ -576,17 +594,55 @@ function Overview({
   );
 }
 
+function AddRoomForm({ onAdd }: { onAdd: (roomName: string) => Promise<void> }) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const label = name.trim();
+    if (!label) return;
+    setBusy(true);
+    setError('');
+    try {
+      await onAdd(label);
+      setName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось добавить комнату');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className={`${styles.form} ${styles.addRoom}`} onSubmit={(event) => void submit(event)}>
+      <label>
+        Новая комната
+        <input value={name} placeholder="Спальня" maxLength={120} onChange={(event) => setName(event.target.value)} />
+      </label>
+      <button type="submit" className={styles.primary} disabled={busy || !name.trim()}>
+        {busy ? 'Сохраняем…' : 'Добавить комнату'}
+      </button>
+      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+    </form>
+  );
+}
+
 function Work({
   rooms,
   seesMoney,
   onOpenRoom,
+  onAddRoom,
 }: {
   rooms: JobObject[];
   seesMoney: boolean;
   onOpenRoom: (room: JobObject) => void;
+  onAddRoom?: (roomName: string) => Promise<void>;
 }) {
-  if (!rooms.length) return <p className={styles.lead}>В проекте пока нет доступных вам комнат.</p>;
+  if (!rooms.length && !onAddRoom) return <p className={styles.lead}>В проекте пока нет доступных вам комнат.</p>;
   return (
+    <>
+    {onAddRoom ? <AddRoomForm onAdd={onAddRoom} /> : null}
+    {!rooms.length ? <p className={styles.lead}>В проекте пока нет комнат.</p> : null}
     <div className={styles.rooms}>
       {rooms.map((room) => (
         <button key={room.id} type="button" className={styles.roomBtn} onClick={() => onOpenRoom(room)}>
@@ -613,6 +669,7 @@ function Work({
         </button>
       ))}
     </div>
+    </>
   );
 }
 
@@ -622,15 +679,15 @@ function Team({ project, rooms, staff }: { project: Project; rooms: JobObject[];
       <dl className={styles.team}>
         <div>
           <dt>Менеджер</dt>
-          <dd>{personName(staff, project.managerUserId)}</dd>
+          <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'manager'))}</dd>
         </div>
         <div>
           <dt>Замерщик</dt>
-          <dd>{personName(staff, project.measurerUserId)}</dd>
+          <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'measurer'))}</dd>
         </div>
         <div>
           <dt>Бригада</dt>
-          <dd>{personName(staff, project.crewUserId)}</dd>
+          <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'crew'))}</dd>
         </div>
       </dl>
       {rooms.some((room) => room.assignedTo) ? (
@@ -763,25 +820,29 @@ function Documents({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (roo
 
 function Settings({
   project,
+  rooms,
   status,
   staff,
   actor,
   canEdit,
   onSave,
+  onDelete,
 }: {
   project: Project;
+  rooms: JobObject[];
   status: ProjectStatus;
   staff: Person[];
   actor?: Person;
   canEdit: boolean;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
+  onDelete?: (project: Project) => void;
 }) {
-  const [form, setForm] = useState(() => draftFrom(project, status));
+  const [form, setForm] = useState(() => draftFrom(project, status, rooms, staff));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [savedTick, setSavedTick] = useState(0);
   useEffect(() => {
-    setForm(draftFrom(project, status));
+    setForm(draftFrom(project, status, rooms, staff));
   }, [project.id, project.updatedAt, status]);
   useEffect(() => {
     if (!savedTick) return;
@@ -816,15 +877,15 @@ function Settings({
           </div>
           <div>
             <dt>Менеджер</dt>
-            <dd>{personName(staff, project.managerUserId)}</dd>
+            <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'manager'))}</dd>
           </div>
           <div>
             <dt>Замерщик</dt>
-            <dd>{personName(staff, project.measurerUserId)}</dd>
+            <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'measurer'))}</dd>
           </div>
           <div>
             <dt>Бригада</dt>
-            <dd>{personName(staff, project.crewUserId)}</dd>
+            <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'crew'))}</dd>
           </div>
           <div>
             <dt>Начало</dt>
@@ -944,6 +1005,14 @@ function Settings({
         {busy ? 'Сохраняем…' : 'Сохранить'}
       </button>
     </form>
+    {onDelete ? (
+      <div className={styles.dangerZone}>
+        <p className={styles.lead}>Проект удаляется вместе со всеми его комнатами.</p>
+        <button type="button" className={styles.danger} onClick={() => onDelete(project)}>
+          Удалить проект
+        </button>
+      </div>
+    ) : null}
     {savedTick
       ? createPortal(
           <p className={styles.toast} role="status">
@@ -988,7 +1057,7 @@ function PeopleField({
   );
 }
 
-function draftFrom(project: Project, status: ProjectStatus) {
+function draftFrom(project: Project, status: ProjectStatus, rooms: JobObject[], staff: Person[]) {
   return {
     name: project.name,
     description: project.description || '',
@@ -997,9 +1066,9 @@ function draftFrom(project: Project, status: ProjectStatus) {
     address: project.address || '',
     city: project.city || '',
     status: project.status || status,
-    managerUserId: project.managerUserId || '',
-    measurerUserId: project.measurerUserId || '',
-    crewUserId: project.crewUserId || '',
+    managerUserId: projectAssigneeId(project, rooms, staff, 'manager') || '',
+    measurerUserId: projectAssigneeId(project, rooms, staff, 'measurer') || '',
+    crewUserId: projectAssigneeId(project, rooms, staff, 'crew') || '',
     startsAt: project.startsAt || '',
     dueAt: project.dueAt || '',
     archived: Boolean(project.archivedAt),
