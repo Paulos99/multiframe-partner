@@ -290,8 +290,10 @@ test('короткий архив остаётся в хранилище, а м�
   await page.getByRole('button', { name: /Панели/ }).first().click();
   const panels = page.getByRole('dialog', { name: 'Панели' });
   await panels.getByRole('tab', { name: 'Монтажники' }).click();
+  await panels.getByRole('button', { name: 'Месяц', exact: true }).click();
   const mounted = panels.getByRole('button').filter({ hasText: 'Смонтировано' });
   await expect.poll(async () => mounted.count()).toBeGreaterThan(1);
+  await expect.poll(async () => (await mounted.allInnerTexts()).join('\n')).not.toContain('Смонтировано 0');
   const ranked = (await mounted.allInnerTexts()).map((row) => {
     const value = rowNumber(row);
     const panelsInLine = Number(row.match(/панели\s+(\d+(?:[.,]\d+)?)/)?.[1]?.replace(',', '.') || '');
@@ -703,8 +705,10 @@ test('вход владельца через интерфейс: монтажн�
   await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
   await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
   await expect(drill.getByText(/проекты 0/)).toHaveCount(0);
-  await expect(drill.getByRole('button', { name: /Иванова А\./ })).toBeVisible();
+  await expect(drill.getByText('Проекты', { exact: true }).locator('xpath=..')).toContainText('11');
+  const project = drill.getByRole('button', { name: /Козлов Д\./ });
+  await expect(project).toBeVisible();
   await drill.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-manager-projects.png' });
-  await drill.getByRole('button', { name: /Иванова А\./ }).click();
-  await expect(page.getByRole('dialog', { name: 'Комната' }).getByRole('heading', { name: 'Иванова А.' })).toBeVisible();
+  await project.click();
+  await expect(page.getByRole('dialog', { name: 'Комната' }).getByRole('heading', { name: 'Козлов Д.' })).toBeVisible();
 });
