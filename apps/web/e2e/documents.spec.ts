@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openProjectRoom } from './open-room';
 
 const password = 'ui-fixture-password-only';
 const API = 'http://127.0.0.1:4181';
@@ -70,9 +71,7 @@ test('монтажник: PDF в комнате без цен, предпрос�
   await enter(page, 'crew');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
 
-  const card = page.locator('[data-room-id="ui_crew_room"]');
-  await expect(card).toContainText('Смета · Профиль');
-  await card.click();
+  await openProjectRoom(page, 'Гостиная');
 
   await page.locator('summary', { hasText: 'Документы' }).click();
   const rows = page.locator('[data-doc-kind]');
@@ -97,7 +96,7 @@ test('менеджер видит те же PDF в карточке комнат
   await uploadAsOwner(request);
   await enter(page, 'sales');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_crew_room"]').click();
+  await openProjectRoom(page, 'Гостиная');
   await page.locator('summary', { hasText: 'Документы' }).click();
   await expect(page.locator('[data-doc-kind="profile"]')).toHaveCount(1);
   await expect(page.locator('[data-doc-kind="estimate"]')).toHaveCount(2);

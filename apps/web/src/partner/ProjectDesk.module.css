@@ -244,12 +244,31 @@
   gap: 14px;
   width: min(720px, 100%);
   height: calc(100dvh - var(--cab-top, 72px));
-  overflow: auto;
+  overflow: clip;
   padding: 16px 20px calc(28px + env(safe-area-inset-bottom));
   background: var(--cab-card, #fff);
   border-left: 1px solid var(--cab-border);
   box-shadow: -16px 0 48px rgba(16, 40, 32, 0.12);
   color: var(--cab-ink);
+}
+
+.chrome {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--cab-card, #fff);
+}
+
+.body {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .head {
@@ -313,9 +332,8 @@
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 2px;
 }
 
 .tab {
@@ -484,6 +502,23 @@
   margin: 0;
   color: var(--cab-danger, #9b2c2c);
   font-weight: 700;
+}
+
+.toast {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 70;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--cab-accent, #01644f);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 750;
+  box-shadow: 0 10px 28px rgba(12, 51, 44, 0.28);
+  pointer-events: none;
 }
 
 .group h4 {

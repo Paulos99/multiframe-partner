@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openProjectRoom } from './open-room';
 
 const password = 'ui-fixture-password-only';
 
@@ -27,8 +28,7 @@ test('карточка сотрудника закрывается по Esc', as
 test('у новой комнаты написано, что площадь не указана', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_room"]').click();
-  const drawer = page.getByRole('dialog', { name: 'Комната' });
+  const { drawer } = await openProjectRoom(page, 'Спальня');
   await drawer.getByLabel('Новая комната').fill('Кладовая');
   await drawer.getByRole('button', { name: 'Добавить комнату', exact: true }).click();
   await expect(drawer.getByText('Кладовая')).toBeVisible();

@@ -34,6 +34,10 @@ test('демо ?demo=1 группирует комнаты и открывает
   await expect(desk.getByText('Пока нет проектов')).toHaveCount(0);
   await expect(desk.locator('[data-project-id]')).toHaveCount(11);
   await expect(page.getByText('Потолки Столицы').first()).toBeVisible();
+  await expect(page.getByText('Комнаты по стадиям')).toHaveCount(0);
+  await expect(page.locator('[aria-label="Доска проектов"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Фильтры' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Сортировка/ })).toHaveCount(0);
 
   await page.screenshot({ path: `${shots}/01-list.png` });
   await desk.getByRole('button', { name: 'Канбан', exact: true }).click();
@@ -65,10 +69,25 @@ test('демо ?demo=1 группирует комнаты и открывает
   await card.getByRole('button', { name: 'Настройки проекта', exact: true }).click();
   await expect(card.getByRole('tab', { name: 'Настройки', exact: true })).toHaveAttribute('aria-selected', 'true');
   await card.getByLabel('Описание', { exact: true }).fill('Демо: тихая квартира');
-  await card.getByRole('button', { name: 'Сохранить', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Сохранить', exact: true })).toBeEnabled();
+  const save = card.getByRole('button', { name: 'Сохранить', exact: true });
+  await save.evaluate((el) => el.scrollIntoView({ block: 'end', inline: 'nearest' }));
+  await save.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
   await card.screenshot({ path: `${shots}/05-settings.png` });
-  await card.getByRole('tab', { name: 'Обзор', exact: true }).click();
+  const overview = card.getByRole('tab', { name: 'Обзор', exact: true });
+  const box = await overview.boundingBox();
+  if (!box) throw new Error('вкладка Обзор не видна');
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await expect
+    .poll(() =>
+      page.evaluate(
+        ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="tab"]')?.textContent?.trim() ?? '',
+        point,
+      ),
+    )
+    .toBe('Обзор');
+  await page.mouse.click(point.x, point.y);
+  await expect(overview).toHaveAttribute('aria-selected', 'true');
   await expect(card.getByText('Демо: тихая квартира')).toBeVisible();
   await card.screenshot({ path: `${shots}/06-overview.png` });
 

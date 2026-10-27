@@ -20,7 +20,10 @@ test('список и канбан запоминаются, карточка о
   const view = page.getByRole('group', { name: 'Вид проектов' });
   await expect(view.getByRole('button', { name: 'Список', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('columnheader', { name: 'Сумма' })).toBeVisible();
-  await expect(page.locator('[data-room-id="ui_room"]')).toBeVisible();
+  await expect(page.getByText('Комнаты по стадиям')).toHaveCount(0);
+  await expect(page.locator('[aria-label="Доска проектов"]')).toHaveCount(0);
+  await expect(page.locator('[data-kanban-stage]')).toHaveCount(0);
+  await expect(page.locator('#kanban-help')).toHaveCount(0);
 
   await view.getByRole('button', { name: 'Канбан', exact: true }).click();
   await expect(page.locator('[data-project-stage="install"] [data-project-id="ui_project"]')).toBeVisible();
@@ -36,15 +39,38 @@ test('список и канбан запоминаются, карточка о
   const card = page.getByRole('dialog', { name: 'Карточка проекта' });
   await expect(card).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
+  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Спальня' })).toBeVisible();
+  await card.getByRole('button', { name: 'Спальня' }).click();
+  const room = page.getByRole('dialog', { name: 'Комната' });
+  await expect(room).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(room).toHaveCount(0);
+  await expect(card).toBeVisible();
   for (const name of ['Обзор', 'Рабочая информация', 'Команда', 'Задачи', 'Отчёты', 'Документы', 'Настройки']) {
     await card.getByRole('tab', { name, exact: true }).click();
     await expect(card.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true');
   }
 
-  await card.getByLabel('Описание').fill('Тихая квартира');
-  await card.getByRole('button', { name: 'Сохранить', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Сохранить', exact: true })).toBeEnabled();
-  await card.getByRole('tab', { name: 'Обзор', exact: true }).click();
+  await card.getByLabel('Описание', { exact: true }).fill('Тихая квартира');
+  const save = card.getByRole('button', { name: 'Сохранить', exact: true });
+  await save.evaluate((el) => el.scrollIntoView({ block: 'end', inline: 'nearest' }));
+  await save.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
+  const overview = card.getByRole('tab', { name: 'Обзор', exact: true });
+  const box = await overview.boundingBox();
+  if (!box) throw new Error('вкладка Обзор не видна');
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await expect
+    .poll(() =>
+      page.evaluate(
+        ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="tab"]')?.textContent?.trim() ?? '',
+        point,
+      ),
+    )
+    .toBe('Обзор');
+  await page.mouse.click(point.x, point.y);
+  await expect(overview).toHaveAttribute('aria-selected', 'true');
   await expect(card.getByText('Тихая квартира')).toBeVisible();
 });
 
@@ -77,5 +103,7 @@ test('замерщик читает описание, бригада не вид
   await expect(crewCard).toBeVisible();
   await expect(crewCard).not.toContainText('₽');
   await expect(crewCard.getByText('Сумма', { exact: true })).toHaveCount(0);
-  await expect(page.locator('[data-room-id="ui_crew_room"]')).toBeVisible();
+  await crewCard.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await expect(crewCard.getByRole('button', { name: 'Гостиная' })).toBeVisible();
+  await expect(page.locator('[aria-label="Доска проектов"]')).toHaveCount(0);
 });

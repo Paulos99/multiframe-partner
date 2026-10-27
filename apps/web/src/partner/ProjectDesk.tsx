@@ -130,7 +130,7 @@ export function ProjectDesk({
   return (
     <section className={styles.desk} aria-label="Список проектов">
       <div className={styles.bar}>
-        <p className={styles.lead}>Клиент, адрес и стадия. Карточка открывается рядом, комнаты остаются на доске.</p>
+        <p className={styles.lead}>Клиент, адрес и стадия. Комнаты открываются внутри карточки.</p>
         <div className={styles.tools}>
           <div className={styles.switch} role="group" aria-label="Вид проектов">
             <button type="button" aria-pressed={view === 'list'} onClick={() => choose('list')}>
@@ -317,42 +317,45 @@ function ProjectCard({
     <>
       <button type="button" className={styles.backdrop} aria-label="Закрыть карточку проекта" onClick={onClose} />
       <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label="Карточка проекта">
-        <div className={styles.head}>
-          <div>
-            <h3>{project.name}</h3>
-            <p className={styles.lead}>
-              {[project.clientName, project.address, project.city].filter(Boolean).join(' · ') || 'Контакт и адрес пока не заполнены'}
-            </p>
+        <div className={styles.chrome}>
+          <div className={styles.head}>
+            <div>
+              <h3>{project.name}</h3>
+              <p className={styles.lead}>
+                {[project.clientName, project.address, project.city].filter(Boolean).join(' · ') || 'Контакт и адрес пока не заполнены'}
+              </p>
+            </div>
+            <div className={styles.headActions}>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                aria-label="Настройки проекта"
+                aria-pressed={tab === 'settings'}
+                onClick={() => onTab('settings')}
+              >
+                <SettingsIcon size={22} />
+              </button>
+              <button type="button" className={styles.ghost} onClick={onClose}>
+                Закрыть
+              </button>
+            </div>
           </div>
-          <div className={styles.headActions}>
-            <button
-              type="button"
-              className={styles.iconBtn}
-              aria-label="Настройки проекта"
-              aria-pressed={tab === 'settings'}
-              onClick={() => onTab('settings')}
-            >
-              <SettingsIcon size={22} />
-            </button>
-            <button type="button" className={styles.ghost} onClick={onClose}>
-              Закрыть
-            </button>
+          <div className={styles.tabs} role="tablist" aria-label="Разделы карточки">
+            {TABS.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={styles.tab}
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => onTab(id)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
-        <div className={styles.tabs} role="tablist" aria-label="Разделы карточки">
-          {TABS.map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={styles.tab}
-              role="tab"
-              aria-selected={tab === id}
-              onClick={() => onTab(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <div className={styles.body}>
         {tab === 'overview' ? (
           <Overview
             project={project}
@@ -375,6 +378,7 @@ function ProjectCard({
         {tab === 'settings' ? (
           <Settings project={project} status={status} staff={people} actor={actor} canEdit={canEdit} onSave={onSave} />
         ) : null}
+        </div>
       </aside>
     </>,
     document.body,
@@ -675,9 +679,15 @@ function Settings({
   const [form, setForm] = useState(() => draftFrom(project, status));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [savedTick, setSavedTick] = useState(0);
   useEffect(() => {
     setForm(draftFrom(project, status));
   }, [project.id, project.updatedAt, status]);
+  useEffect(() => {
+    if (!savedTick) return;
+    const timer = window.setTimeout(() => setSavedTick(0), 3200);
+    return () => window.clearTimeout(timer);
+  }, [savedTick]);
 
   if (!canEdit) {
     return (
@@ -754,7 +764,9 @@ function Settings({
         dueAt: form.dueAt || null,
         archived: form.archived,
       });
+      setSavedTick((tick) => tick + 1);
     } catch (err) {
+      setSavedTick(0);
       setError(err instanceof Error ? err.message : 'Не удалось сохранить');
     } finally {
       setBusy(false);
@@ -766,6 +778,7 @@ function Settings({
   const crews = peopleByRole(staff, actor, (person) => person.role === 'crew');
 
   return (
+    <>
     <form className={styles.form} onSubmit={(event) => void submit(event)}>
       <label>
         Название
@@ -831,6 +844,15 @@ function Settings({
         {busy ? 'Сохраняем…' : 'Сохранить'}
       </button>
     </form>
+    {savedTick
+      ? createPortal(
+          <p className={styles.toast} role="status">
+            Сохранено
+          </p>,
+          document.body,
+        )
+      : null}
+    </>
   );
 }
 

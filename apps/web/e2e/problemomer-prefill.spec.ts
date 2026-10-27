@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openProjectRoom } from './open-room';
 
 const password = 'ui-fixture-password-only';
 
@@ -17,8 +18,7 @@ async function enter(page: Page) {
 test('из комнаты Проблемомер подставляет тип и площадь, «Далее» активно', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_room"]').click();
-  const drawer = page.getByRole('dialog', { name: 'Комната' });
+  const { drawer } = await openProjectRoom(page, 'Спальня');
   await expect(drawer.getByRole('button', { name: 'Проблемомер', exact: true })).toBeVisible();
   await drawer.getByRole('button', { name: 'Проблемомер', exact: true }).click();
   await page.locator('button[aria-label="Кабинет"]').click();
@@ -67,8 +67,8 @@ test('из комнаты Проблемомер подставляет тип �
 test('калькулятор из комнаты сразу показывает одну сумму в смете и внизу', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_room"]').click();
-  await page.getByRole('dialog', { name: 'Комната' }).getByRole('button', { name: 'Калькулятор', exact: true }).click();
+  const { drawer } = await openProjectRoom(page, 'Спальня');
+  await drawer.getByRole('button', { name: 'Калькулятор', exact: true }).click();
   const frame = page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]');
   await expect(frame.locator('#areaOnlyInput')).toHaveValue(/24/);
   const sideTotal = frame.locator('.rb-kv--total strong');
@@ -84,8 +84,7 @@ test('калькулятор из комнаты сразу показывает
 test('замерщик видит только назначенную комнату и её цену', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_crew_room"]').click();
-  const drawer = page.getByRole('dialog', { name: 'Комната' });
+  const { drawer } = await openProjectRoom(page, 'Гостиная');
   const saved = page.waitForResponse(
     (res) => res.request().method() === 'PATCH' && res.url().includes('/objects/ui_crew_room') && res.ok(),
   );
@@ -99,10 +98,13 @@ test('замерщик видит только назначенную комна
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await expect(page.locator('[data-room-id="ui_crew_room"]')).toBeVisible();
-  await expect(page.locator('[data-room-id="ui_room"]')).toHaveCount(0);
-  await expect(page.locator('[data-room-id="ui_measured"]')).toHaveCount(0);
-  await page.locator('[data-room-id="ui_crew_room"]').click();
+  await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
+  const card = page.getByRole('dialog', { name: 'Карточка проекта' });
+  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Гостиная' })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Спальня' })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Кухня' })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Гостиная' }).click();
   const room = page.getByRole('dialog', { name: 'Комната' });
   await expect(room.getByText('Итого комнаты')).toBeVisible();
   await expect(room.getByText(/75[\s\u00a0\u202f]*261/)).toBeVisible();
