@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type {
   AnalyticsBreakdownItem,
   AnalyticsDashboard as DashData,
+  AnalyticsEvent,
   AnalyticsFunnel,
   AnalyticsKpi,
   AnalyticsSeriesPoint,
@@ -19,8 +20,10 @@ import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulati
 import { funnelStopCounts, funnelStopPercents } from '../../../../packages/shared/funnel';
 import type { DrillPeriod } from '../../../../packages/shared/staffDrill.js';
 import {
+  composeCabinetAnalytics,
   fetchAnalyticsDashboard,
   formatPeriodLabel,
+  loadSharedAnalyticsEvents,
   getAnalyticsFocusOrg,
   getAnalyticsPeriod,
   monthLabel,
@@ -378,6 +381,7 @@ export function AnalyticsDashboard({
   const [panelPeriod, setPanelPeriod] = useState<DrillPeriod | null>(null);
   const [panelData, setPanelData] = useState<{ period: DrillPeriod; dash: DashData } | null>(null);
   const [data, setData] = useState<DashData | null>(null);
+  const [sourceEvents, setSourceEvents] = useState<AnalyticsEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   const partnersList = useMemo(
@@ -394,15 +398,30 @@ export function AnalyticsDashboard({
     setLoading(true);
     const { from, to } = rangeFromYmd(fromYmd, toYmd);
     const orgId = mode === 'partner' ? user.orgId : focusOrg || null;
-    void fetchAnalyticsDashboard({
-      mode,
-      from,
-      to,
-      orgId,
-      partnerLogin: user.login,
-      journal: section === 'objects',
-    }).then((dash) => {
+    void loadSharedAnalyticsEvents(orgId).then(async (events) => {
+      const local = composeCabinetAnalytics({
+        events,
+        objects: api.objects as unknown as Array<Record<string, unknown>>,
+        projects: (api.projects || []) as unknown as Array<Record<string, unknown>>,
+        from,
+        to,
+        orgId,
+        mode,
+      }).dash;
+      const demoOrg = orgId === 'org_demo' || orgId === 'org_demo_spb';
+      const remote = demoOrg
+        ? local
+        : await fetchAnalyticsDashboard({
+            mode,
+            from,
+            to,
+            orgId,
+            partnerLogin: user.login,
+            journal: section === 'objects',
+          }).catch(() => local);
+      const dash = remote.source === 'api' ? remote : local;
       if (!cancelled) {
+        setSourceEvents(dash.source === 'api' ? dash.events || events : events);
         setData(dash);
         setLoading(false);
       }
@@ -410,7 +429,7 @@ export function AnalyticsDashboard({
     return () => {
       cancelled = true;
     };
-  }, [mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section]);
+  }, [mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section, api.objects, api.projects]);
 
   useEffect(() => {
     if (openMetric) return;
@@ -424,19 +443,24 @@ export function AnalyticsDashboard({
     const bounds = presetRange(panelPeriod);
     const { from, to } = rangeFromYmd(bounds.fromYmd, bounds.toYmd);
     const orgId = mode === 'partner' ? user.orgId : focusOrg || null;
-    void fetchAnalyticsDashboard({
-      mode,
-      from,
-      to,
-      orgId,
-      partnerLogin: user.login,
-    }).then((next) => {
+    try {
+      const next = composeCabinetAnalytics({
+        events: sourceEvents,
+        objects: api.objects as unknown as Array<Record<string, unknown>>,
+        projects: (api.projects || []) as unknown as Array<Record<string, unknown>>,
+        from,
+        to,
+        orgId,
+        mode,
+      }).dash;
       if (!cancelled) setPanelData({ period: panelPeriod, dash: next });
-    });
+    } catch {
+      if (!cancelled) setPanelData(null);
+    }
     return () => {
       cancelled = true;
     };
-  }, [openMetric, panelPeriod, mode, user.orgId, user.login, focusOrg]);
+  }, [openMetric, panelPeriod, mode, user.orgId, focusOrg, sourceEvents, api.objects, api.projects]);
 
   const inactivePartners = useMemo(() => {
     if (mode !== 'admin' || !data) return [];
@@ -756,6 +780,7 @@ export function AnalyticsDashboard({
           onOpenRoom={onOpenRoom}
           objects={api.objects as unknown as Array<Record<string, unknown>>}
           projects={(api.projects || []) as unknown as Array<Record<string, unknown>>}
+          events={sourceEvents}
           onClose={() => setOpenMetric(null)}
         >
           {(() => {

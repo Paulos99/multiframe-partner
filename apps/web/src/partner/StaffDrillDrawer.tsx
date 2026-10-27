@@ -8,7 +8,8 @@ import type {
   DrillRoleId,
   StaffDrillResult,
 } from '../../../../packages/shared/staffDrill.js';
-import { fetchStaffDrill, presetRange, rangeFromYmd } from './analytics';
+import type { AnalyticsEvent } from '../../../../packages/shared/partner';
+import { composeCabinetAnalytics, presetRange, rangeFromYmd } from './analytics';
 import { isDemoModeEnabled } from './demoMode';
 import { Skeleton } from './Skeleton';
 import styles from './partner.module.css';
@@ -95,6 +96,7 @@ export function StaffDrillDrawer({
   onOpenRoom,
   objects,
   projects,
+  events,
   children,
 }: {
   metric: string;
@@ -107,6 +109,8 @@ export function StaffDrillDrawer({
   onOpenRoom?: (roomId: string) => void;
   objects?: Array<Record<string, unknown>>;
   projects?: Array<Record<string, unknown>>;
+  /** Тот же массив, из которого посчитаны плитки на экране. */
+  events?: AnalyticsEvent[];
   children?: ReactNode;
 }) {
   const [period, setPeriod] = useState<DrillPeriod | null>(null);
@@ -140,33 +144,32 @@ export function StaffDrillDrawer({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void fetchStaffDrill({
-      mode,
-      metric,
-      period: period ?? 'month',
-      userId,
-      orgId,
-      from: activeRange.from ?? (activeRange.to ? null : 'all'),
-      to: activeRange.to,
-      objects,
-      projects,
-    })
-      .then((next) => {
-        if (!cancelled) setData(next);
-      })
-      .catch((reason: unknown) => {
-        if (!cancelled) {
-          setData(null);
-          setError(reason instanceof Error ? reason.message : 'Не удалось открыть рейтинг');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+    try {
+      const { drill } = composeCabinetAnalytics({
+        events: events || [],
+        objects,
+        projects,
+        from: activeRange.from ?? (activeRange.to ? null : 'all'),
+        to: activeRange.to,
+        orgId,
+        metric,
+        period: period ?? 'month',
+        userId,
+        mode,
       });
+      if (!cancelled) setData(drill);
+    } catch (reason: unknown) {
+      if (!cancelled) {
+        setData(null);
+        setError(reason instanceof Error ? reason.message : 'Не удалось открыть рейтинг');
+      }
+    } finally {
+      if (!cancelled) setLoading(false);
+    }
     return () => {
       cancelled = true;
     };
-  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to, objects, projects]);
+  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to, objects, projects, events]);
 
   const roles = visibleRoles(data);
   const activeRole = roles.find((role) => role.id === roleId) || roles[0] || null;
@@ -210,10 +213,11 @@ export function StaffDrillDrawer({
 
         {explainZeros && data ? (
           <p className={styles.whyZeroReport} data-testid="why-zero">
-            чему 0. Хранилище mf_partner_db_v5. Комнат {data.drops?.rooms ?? 0}. Отсечено: компания{' '}
-            {data.drops?.company ?? 0}, период {data.drops?.period ?? 0}, исполнитель {data.drops?.assignee ?? 0}.
-            Монтаж: {assignmentLine(data.drops?.installByUser)}. Закрыто: {assignmentLine(data.drops?.closedByUser)}.
-            Плитка панелей {data.drops?.tilePanels ?? 0}, площадь {data.drops?.tileArea ?? 0}.
+            чему 0. Хранилище mf_partner_db_v5. Комнат {data.drops?.rooms ?? 0}. Событий {data.drops?.events ?? 0}.
+            Отсечено: компания {data.drops?.company ?? 0}, период {data.drops?.period ?? 0}, исполнитель{' '}
+            {data.drops?.assignee ?? 0}. Монтаж: {assignmentLine(data.drops?.installByUser)}. Закрыто:{' '}
+            {assignmentLine(data.drops?.closedByUser)}. Плитка панелей {data.drops?.tilePanels ?? 0}, площадь{' '}
+            {data.drops?.tileArea ?? 0}.
           </p>
         ) : null}
 

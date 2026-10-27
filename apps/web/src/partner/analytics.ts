@@ -5,6 +5,7 @@ import type {
   AnalyticsObject,
   AnalyticsTool,
 } from '../../../../packages/shared/partner';
+import { aggregateAnalyticsDashboard, isStaffRole, networkAdminScope } from '../../../../packages/shared/partner';
 import { buildStaffDrill, type DrillPeriod, type StaffDrillResult } from '../../../../packages/shared/staffDrill.js';
 import { getAnalyticsSessionId } from '../analytics/sessionId';
 import { cacheAnalyticsEvents, loadCachedAnalyticsEvents, rememberCalculation } from './offlineDb';
@@ -17,6 +18,7 @@ import {
   enqueueAnalyticsEvents,
   ensureActionHistoryCleared,
   ensureDemoAnalyticsHistory,
+  loadCachedObjects,
   loadDemoAnalyticsEvents,
   loadDb,
   loadSession,
@@ -140,6 +142,94 @@ const LOCAL_DEMO_ORGS = new Set(['org_demo', 'org_demo_spb']);
 
 function readsLocalDemo(orgId?: string | null): boolean {
   return Boolean(orgId && LOCAL_DEMO_ORGS.has(orgId));
+}
+
+function dedupeAnalyticsEvents(list: AnalyticsEvent[]): AnalyticsEvent[] {
+  const seen = new Set<string>();
+  const out: AnalyticsEvent[] = [];
+  for (const event of list) {
+    if (!event?.id || seen.has(event.id)) continue;
+    seen.add(event.id);
+    out.push(event);
+  }
+  return out;
+}
+
+/** Те же события, из которых собирается подпись «Сохранённая история». */
+export async function loadSharedAnalyticsEvents(orgId?: string | null): Promise<AnalyticsEvent[]> {
+  ensureDemoAnalyticsHistory();
+  const extra = readsLocalDemo(orgId) ? [] : await cachedEvents();
+  return dedupeAnalyticsEvents([...extra, ...loadDemoAnalyticsEvents()]);
+}
+
+/**
+ * Плитки и рейтинг: один список событий, один список комнат, одно окно.
+ * Комнаты — тот же массив, что у доски «Проекты»; если хук ещё пуст, берётся его кэш.
+ */
+export function composeCabinetAnalytics(input: {
+  events: AnalyticsEvent[];
+  objects?: Array<Record<string, unknown>>;
+  projects?: Array<Record<string, unknown>>;
+  from?: string | null;
+  to?: string | null;
+  orgId?: string | null;
+  metric?: string;
+  period?: DrillPeriod;
+  userId?: string | null;
+  mode?: 'admin' | 'partner';
+  kpi?: { panels: number; areaM2: number } | null;
+}): { dash: AnalyticsDashboard; drill: StaffDrillResult } {
+  const db = loadDb();
+  const session = loadSession();
+  const orgId = input.mode === 'admin' ? input.orgId || null : session?.orgId || input.orgId || null;
+  const cached = loadCachedObjects() as unknown as Array<Record<string, unknown>>;
+  const stored = db.objects as unknown as Array<Record<string, unknown>>;
+  const rooms = input.objects?.length ? input.objects : cached.length ? cached : stored;
+  const projects = input.projects?.length
+    ? input.projects
+    : ((db.projects || []) as unknown as Array<Record<string, unknown>>);
+  const executorDirectory = db.users
+    .filter((user) => isStaffRole(user.role))
+    .map((user) => ({
+      userId: user.id,
+      login: user.login,
+      displayName: user.displayName,
+      orgId: user.orgId,
+      role: user.role,
+    }));
+  const dash = aggregateAnalyticsDashboard(input.events, {
+    source: 'local',
+    from: input.from,
+    to: input.to,
+    orgId,
+    partnerCount: db.users.filter((user) => user.role === 'owner').length,
+    executorCount: orgId
+      ? executorDirectory.filter((user) => user.orgId === orgId).length
+      : executorDirectory.length,
+    executorDirectory,
+    ...networkAdminScope(db.users),
+  });
+  const drill = buildStaffDrill({
+    viewer: {
+      id: session?.id || '',
+      role: session?.role || (input.mode === 'admin' ? 'admin' : 'owner'),
+      orgId: session?.orgId || orgId,
+    },
+    users: db.users,
+    events: input.events as unknown as Array<Record<string, unknown>>,
+    objects: rooms,
+    projects,
+    metric: input.metric || 'staff',
+    period: input.period || 'month',
+    userId: input.userId || null,
+    orgId,
+    from: input.from,
+    to: input.to,
+    unbounded: input.from === 'all',
+    demoFill: false,
+    kpi: input.kpi === undefined ? { panels: dash.kpi.panels, areaM2: dash.kpi.areaM2 } : input.kpi,
+  });
+  return { dash, drill };
 }
 
 async function cachedEvents(): Promise<AnalyticsEvent[]> {

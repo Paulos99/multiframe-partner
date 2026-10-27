@@ -791,13 +791,16 @@ function publicRow(row, metric) {
     mountedRooms: row.mountedRooms || 0,
     mountedAreaM2: round1(row.mountedAreaM2 || 0),
     mountedPanels: Math.round(row.mountedPanels || 0),
-    projectCount: row.boardCards?.length
-      ? row.boardCards.length
-      : row.boardProjectIds?.size
-        ? row.boardProjectIds.size
-        : row.workKeys
-          ? row.workKeys.size
-          : 0,
+    projectCount:
+      row.projectTotal != null
+        ? row.projectTotal
+        : row.boardCards?.length
+          ? row.boardCards.length
+          : row.boardProjectIds?.size
+            ? row.boardProjectIds.size
+            : row.workKeys
+              ? row.workKeys.size
+              : 0,
     value: displayValue(row, metric),
   };
 }
@@ -1091,12 +1094,14 @@ export function buildStaffDrill(input) {
           row.measuredRooms ===
         0,
     );
-  const tilePanels = Math.round(
+  const computedPanels = Math.round(
     tileEvents.reduce((sum, event) => sum + (event.action === 'result' || event.action === 'calc_done' ? num(event.object?.panels) : 0), 0),
   );
-  const tileArea = round1(
+  const computedArea = round1(
     tileEvents.reduce((sum, event) => sum + (event.action === 'result' || event.action === 'calc_done' ? num(event.object?.areaM2) : 0), 0),
   );
+  const tilePanels = Number.isFinite(Number(input.kpi?.panels)) ? Math.round(Number(input.kpi.panels)) : computedPanels;
+  const tileArea = Number.isFinite(Number(input.kpi?.areaM2)) ? round1(Number(input.kpi.areaM2)) : computedArea;
   const tileHasWork = tilePanels > 0 || tileArea > 0 || tileEvents.some((event) => event.action === 'pdf' || event.action === 'result' || event.action === 'calc_done');
   const demoFilled = Boolean(allZero && input.demoFill && !tileHasWork);
   if (demoFilled) working = applyDemoFill(working, window.period);
@@ -1112,6 +1117,49 @@ export function buildStaffDrill(input) {
   }
   drops.tilePanels = tilePanels;
   drops.tileArea = tileArea;
+  drops.events = tileEvents.length;
+  for (const row of working) {
+    if (row.role !== 'measurer' || row.measuredRooms > 0) continue;
+    if (row.completed <= 0 && row.problemomer + row.calculator <= 0) continue;
+    const roomsTouched = new Set();
+    for (const event of row.seenEvents || []) {
+      if (!completed(event)) continue;
+      const linked = linkWork(event, input.projects, drillObjects);
+      roomsTouched.add(String(linked?.roomId || linked?.projectId || event.id));
+    }
+    row.measuredRooms = Math.max(1, roomsTouched.size);
+  }
+  for (const row of working) {
+    if (row.role !== 'sales') continue;
+    if (row.boardCards?.length) {
+      row.projectTotal = row.boardCards.length;
+      row.projectList = projectsFromCards(row.boardCards);
+      continue;
+    }
+    const fromBoard = collectProjects(
+      row.userId,
+      windowRooms.length ? windowRooms : companyRooms,
+      input.projects,
+      orgId,
+      null,
+      null,
+      false,
+      (object) => assigneeById.get(object.id),
+    );
+    const fromEvents = projectsFromEvents(
+      row.userId,
+      row.seenEvents || [],
+      input.projects,
+      orgId,
+      null,
+      null,
+      () => true,
+      drillObjects,
+    );
+    const list = mergeProjectLists(fromBoard, fromEvents);
+    row.projectList = list;
+    row.projectTotal = list.length;
+  }
 
   const byRole = new Map(RANK_ROLES.map((role) => [role, []]));
   for (const row of working) {
@@ -1206,15 +1254,20 @@ export function buildStaffDrill(input) {
         : (input.events || []).filter(
             (event) => eventMatchesUser(event, input.userId) && inWindow(event.at, window.from, window.to),
           );
-    const boardProjects = person?.boardCards?.length
-      ? projectsFromCards(person.boardCards)
-      : collectProjects(input.userId, drillObjects, input.projects, orgId, window.from, window.to, true, (object) =>
-          assigneeById.get(object.id),
+    const boardProjects = person?.projectList?.length
+      ? person.projectList
+      : person?.boardCards?.length
+        ? projectsFromCards(person.boardCards)
+        : collectProjects(input.userId, drillObjects, input.projects, orgId, window.from, window.to, true, (object) =>
+            assigneeById.get(object.id),
+          );
+    // Список в строке и «Топ проектов» — один и тот же массив, без повторной обрезки.
+    let projects = person?.projectList?.length
+      ? person.projectList.slice()
+      : mergeProjectLists(
+          boardProjects,
+          projectsFromEvents(input.userId, matchedEvents, input.projects, orgId, null, null, () => true, input.objects),
         );
-    let projects = mergeProjectLists(
-      boardProjects,
-      projectsFromEvents(input.userId, matchedEvents, input.projects, orgId, null, null, () => true, input.objects),
-    );
     projects = projects.map((project) => realRoom(project, input.objects?.length ? input.objects : drillObjects, orgId));
     if (!projects.length && person && (person.areaM2 > 0 || person.panels > 0)) {
       const rooms = (input.objects || []).filter((room) => room && room.id && (!orgId || room.orgId === orgId));

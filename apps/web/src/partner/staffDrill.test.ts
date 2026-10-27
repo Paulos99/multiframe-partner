@@ -906,6 +906,71 @@ test('существующий v5 без исполнителя получает
   assert.equal(kept[0]?.assignedTo, 'u_crew1b');
 });
 
+test('плитка сводки и рейтинг сходятся, даже если события пришли отдельно от комнат', () => {
+  const owned = [event({ id: 'own', orgId: 'org_demo', userId: 'owner', role: 'owner', object: { areaM2: 2403, panels: 5206 } })];
+  const result = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_demo' },
+    users: buildLocalDemoUsers(),
+    events: owned,
+    objects: buildLocalDemoObjects().filter((object) => object.orgId === 'org_demo'),
+    metric: 'staff',
+    period: 'month',
+    orgId: 'org_demo',
+    now,
+    demoFill: false,
+    kpi: { panels: 5206, areaM2: 2403 },
+  });
+  const dash = aggregateAnalyticsDashboard(owned as AnalyticsEvent[], {
+    source: 'local',
+    from: result.from,
+    to: result.to,
+    orgId: 'org_demo',
+  });
+  assert.equal(result.drops.rooms, 11);
+  assert.equal(result.drops.tilePanels, dash.kpi.panels);
+  assert.equal(displayedSum(result.ranking, 'panels'), dash.kpi.panels);
+  assert.equal(displayedSum(result.ranking, 'areaM2'), dash.kpi.areaM2);
+  assert.equal(result.ranking.find((row) => row.displayName === 'Без исполнителя')?.panels, 5206);
+  assert.ok((result.ranking.find((row) => row.role === 'crew')?.mountedRooms || 0) > 0);
+  const sales = result.ranking.find((row) => row.role === 'sales');
+  assert.equal(sales?.projectCount, 11);
+  const opened = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_demo' },
+    users: buildLocalDemoUsers(),
+    events: owned,
+    objects: buildLocalDemoObjects().filter((object) => object.orgId === 'org_demo'),
+    metric: 'staff',
+    period: 'month',
+    userId: sales?.userId,
+    orgId: 'org_demo',
+    now,
+    demoFill: false,
+  });
+  const count = opened.ranking.find((row) => row.userId === sales?.userId)?.projectCount || 0;
+  assert.equal(count, 11);
+  assert.equal(opened.detail?.projects.length, count);
+  assert.ok(opened.detail?.projects.every((project) => project.roomId));
+});
+
+test('замерщик с расчётами не остаётся с нулём замеров', () => {
+  const result = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_a' },
+    users,
+    events: [
+      event({ id: 'm-only', userId: 'measurer', tool: 'calculator', action: 'calc_done', object: { areaM2: 1433.5, panels: 10, label: 'Кухня' } }),
+    ],
+    objects: [],
+    metric: 'area',
+    period: 'month',
+    orgId: 'org_a',
+    now,
+    demoFill: false,
+  });
+  const measurer = result.ranking.find((row) => row.userId === 'measurer');
+  assert.equal(measurer?.areaM2, 1433.5);
+  assert.ok((measurer?.measuredRooms || 0) > 0);
+});
+
 test('события владельца попадают в «Без исполнителя» и сумма равна плитке', () => {
   const owned = [
     event({ id: 'own', userId: 'owner', role: 'owner', object: { areaM2: 2403, panels: 5206 } }),

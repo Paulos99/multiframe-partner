@@ -98,6 +98,8 @@ export type StaffDrillDrops = {
   closedByUser: Record<string, number>;
   tilePanels: number;
   tileArea: number;
+  /** События того же окна, из которого собрана плитка. */
+  events?: number;
 };
 
 export type StaffDrillResult = {
@@ -140,4 +142,6 @@ export function buildStaffDrill(input: {
   to?: string | null;
   unbounded?: boolean;
   demoFill?: boolean;
+  /** Плитка сводки. Если передана, сумма рейтинга догоняет именно её. */
+  kpi?: { panels?: number; areaM2?: number } | null;
 }): StaffDrillResult;
