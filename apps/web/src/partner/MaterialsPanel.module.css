@@ -571,3 +571,105 @@
   font-size: 0.72rem;
   font-weight: 750;
 }
+
+.offlineGearWrap {
+  position: relative;
+  z-index: 40;
+}
+
+.offlineGear {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--cab-border, var(--border-color));
+  border-radius: 12px;
+  background: var(--cab-subtle, var(--bg-card));
+  color: var(--cab-muted, var(--text-secondary));
+  cursor: pointer;
+}
+
+.offlineGear:hover,
+.offlineGear[aria-expanded='true'] {
+  color: var(--cab-accent-text, var(--accent-color));
+  border-color: color-mix(in srgb, var(--cab-accent, var(--accent-color)) 55%, var(--cab-border, var(--border-color)));
+}
+
+.offlineGear:focus-visible {
+  outline: 2px solid var(--cab-accent, var(--accent-color));
+  outline-offset: 2px;
+}
+
+.offlineGearDot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cab-accent, var(--accent-color));
+  box-shadow: 0 0 0 2px var(--cab-card, var(--bg-card));
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.offlineBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.offlinePop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 3;
+  box-sizing: border-box;
+  width: min(320px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--cab-border, var(--border-color));
+  border-radius: 14px;
+  background: var(--cab-card, var(--bg-card));
+  color: var(--cab-ink, inherit);
+  box-shadow: 0 16px 50px #0003;
+}
+
+.offlinePop:focus {
+  outline: none;
+}
+
+.offlinePop:focus-visible {
+  outline: 2px solid var(--cab-accent, var(--accent-color));
+  outline-offset: 2px;
+}
+
+.offlinePopTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.offlinePop .offlineMeta {
+  margin: 0;
+}
+
+.offlinePopActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.offlinePopActions button {
+  width: 100%;
+  min-height: 44px;
+}

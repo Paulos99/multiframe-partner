@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
 import { MaterialsPanel } from './MaterialsPanel';
+import { OfflineGearSlot } from './offlineGearSlot';
 import styles from './HelpTrainingPanel.module.css';
 
 type HelpSection = {
@@ -144,10 +145,15 @@ function SectionBlock({ section, highlight }: { section: HelpSection; highlight?
 export function HelpTrainingPanel({ role }: { role: UserRole }) {
   const personal = useMemo(() => BY_ROLE[role], [role]);
   const [section, setSection] = useState<'materials' | 'cabinet'>('materials');
+  const [gearSlot, setGearSlot] = useState<HTMLElement | null>(null);
 
   return (
+    <OfflineGearSlot.Provider value={gearSlot}>
     <div className={styles.panel}>
-      <h2>Обучение</h2>
+      <div className={styles.head}>
+        <h2>Обучение</h2>
+        <div ref={setGearSlot} className={styles.gearSlot} />
+      </div>
       <div className={styles.tabs} role="tablist" aria-label="Разделы обучения">
         <button
           type="button"
@@ -184,5 +190,6 @@ export function HelpTrainingPanel({ role }: { role: UserRole }) {
         </div>
       )}
     </div>
+    </OfflineGearSlot.Provider>
   );
 }

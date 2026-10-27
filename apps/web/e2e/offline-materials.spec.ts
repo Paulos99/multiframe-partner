@@ -103,16 +103,48 @@ test('офлайн: скачать всё, докачать после обры�
   const net: Net = { ranges: [], failOnce: new Set(['mat_vid_stream bytes=8192-12287']), originalHits: 0 };
   await setup(page, net);
   const card = page.getByTestId('offline-card');
-  // Оценка до скачивания: 3 файла (заглушка и папка не считаются), размер лёгкой копии, а не 600 МБ.
+  // До загрузки — компактное предложение, без шестерёнки и без кнопок обновления.
+  await expect(page.getByTestId('offline-gear')).toHaveCount(0);
   await expect(card).toContainText('3 файла · около 28 КБ');
+  await expect(card.getByRole('button', { name: 'Обновить сейчас' })).toHaveCount(0);
   await card.getByRole('button', { name: 'Скачать для офлайна' }).click();
 
-  // Обрыв на третьем куске видео — ошибка, часть уже на устройстве.
-  await expect(card.getByRole('alert')).toBeVisible({ timeout: 20000 });
-  await expect(card.getByRole('button', { name: 'Обновить сейчас' })).toBeVisible();
+  // Обрыв на третьем куске видео — ошибка, часть уже на устройстве. Кнопки уехали в шестерёнку.
+  const gear = page.getByRole('button', { name: 'Офлайн-доступ', exact: true });
+  await expect(gear).toBeVisible({ timeout: 20000 });
+  await expect(page.getByTestId('offline-card')).toHaveCount(0);
+  await expect(page.getByTestId('offline-gear-dot')).toBeVisible();
+  await expect(gear).toHaveText('');
+  await gear.click();
+  const panel = page.getByRole('dialog', { name: 'Офлайн-доступ' });
+  await expect(panel.getByRole('alert')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Обновить сейчас' })).toBeVisible();
   const before = net.ranges.filter((r) => r.startsWith('mat_vid_stream')).length;
-  await card.getByRole('button', { name: 'Обновить сейчас' }).click();
-  await expect(card).toContainText('Все материалы на устройстве', { timeout: 20000 });
+  await panel.getByRole('button', { name: 'Обновить сейчас' }).click();
+  await expect(gear).toBeVisible({ timeout: 20000 });
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  await gear.click();
+  await expect(panel).toContainText('Все материалы на устройстве', { timeout: 20000 });
+  await expect(panel).toContainText(/Обновлено/);
+  const wide = await panel.boundingBox();
+  expect(wide!.x).toBeGreaterThanOrEqual(0);
+  expect(wide!.x + wide!.width).toBeLessThanOrEqual(1440);
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gear.click();
+  const narrow = await panel.boundingBox();
+  expect(narrow!.x).toBeGreaterThanOrEqual(0);
+  expect(narrow!.x + narrow!.width).toBeLessThanOrEqual(390);
+  for (const name of ['Обновить сейчас', 'Удалить офлайн-копии']) {
+    const box = await panel.getByRole('button', { name, exact: true }).boundingBox();
+    expect(box!.height, name).toBeGreaterThanOrEqual(44);
+  }
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const videoRanges = net.ranges.filter((r) => r.startsWith('mat_vid_stream'));
   // Докачка с места обрыва: первые два куска повторно не запрашивались.
   expect(videoRanges.slice(before)[0]).toBe('mat_vid_stream bytes=8192-12287');
@@ -156,8 +188,11 @@ test('офлайн: скачать всё, докачать после обры�
   net.offline = false;
   await reopenMaterials(page);
   await expect(page.getByTestId('materials-offline-note')).toHaveCount(0);
+  await gear.click();
+  await expect(panel).toBeVisible();
   page.once('dialog', (d) => void d.accept());
-  await page.getByTestId('offline-card').getByRole('button', { name: 'Удалить офлайн-копии' }).click();
+  await panel.getByRole('button', { name: 'Удалить офлайн-копии' }).click();
+  await expect(page.getByTestId('offline-gear')).toHaveCount(0);
   await expect(page.getByTestId('offline-card').getByRole('button', { name: 'Скачать для офлайна' })).toBeVisible();
   await expect(page.getByTestId('offline-badge')).toHaveCount(0);
   expect(await page.evaluate(() => caches.has('mf-offline-materials-v1'))).toBe(false);
