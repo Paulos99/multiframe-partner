@@ -199,7 +199,7 @@ export function StaffDrillDrawer({
 
         {explainZeros && data ? (
           <p className={styles.whyZeroReport} data-testid="why-zero">
-            чему 0. Источник: {analyticsSourceLabel(model.source)}. Хранилище mf_partner_db_v5. Комнат{' '}
+            Почему 0. Источник: {analyticsSourceLabel(model.source)}. Хранилище mf_partner_db_v5. Комнат{' '}
             {data.drops?.rooms ?? 0}. Событий {data.drops?.events ?? 0}.
             Отсечено: компания {data.drops?.company ?? 0}, период {data.drops?.period ?? 0}, исполнитель{' '}
             {data.drops?.assignee ?? 0}. Монтаж: {assignmentLine(data.drops?.installByUser)}. Закрыто:{' '}

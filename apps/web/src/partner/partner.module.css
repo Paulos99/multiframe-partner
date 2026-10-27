@@ -1818,13 +1818,17 @@
 }
 
 .whyZeroReport {
+  flex: 0 0 auto;
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: 12px;
+  overflow: visible;
   background: var(--cab-surface-2, rgba(1, 100, 79, 0.08));
   color: inherit;
   font-size: 0.82rem;
   line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .metaLine,
@@ -3185,7 +3189,7 @@
 .drawerBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 69;
   border: 0;
   background: rgba(22, 48, 40, 0.28);
   cursor: pointer;
@@ -3193,14 +3197,14 @@
 
 .drawer {
   position: fixed;
-  top: var(--cab-top, 72px);
+  top: 0;
   right: 0;
-  z-index: 41;
+  z-index: 70;
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: min(440px, 100%);
-  height: calc(100dvh - var(--cab-top, 72px));
+  height: 100dvh;
   overflow: auto;
   padding: 16px 20px calc(28px + env(safe-area-inset-bottom));
   background: var(--cab-card);

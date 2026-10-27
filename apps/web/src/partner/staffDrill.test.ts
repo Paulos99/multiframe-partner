@@ -3,7 +3,13 @@ import test from 'node:test';
 import { aggregateAnalyticsDashboard, normalizeRole, type AnalyticsEvent } from '../../../../packages/shared/partner';
 import { buildStaffDrill, visibleStaff } from '../../../../packages/shared/staffDrill.js';
 import { composeCabinetAnalytics, presetRange, rangeFromYmd } from './analytics';
-import { assignDemoRoomStaff, buildLocalDemoObjects, buildLocalDemoOrgs, buildLocalDemoUsers } from './demoSeed';
+import {
+  assignDemoRoomStaff,
+  buildLocalDemoAnalytics,
+  buildLocalDemoObjects,
+  buildLocalDemoOrgs,
+  buildLocalDemoUsers,
+} from './demoSeed';
 
 const now = '2026-10-27T12:00:00.000Z';
 
@@ -1092,5 +1098,85 @@ test('пустой снимок комнат не отрезает топ от �
       period,
     );
     assert.equal(result.drops.rooms, company.length, period);
+  }
+});
+
+test('накопленная история: топ, проекты, замеры и абзац читают одну доску', () => {
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+    configurable: true,
+  });
+  const users = buildLocalDemoUsers();
+  const objects = buildLocalDemoObjects();
+  const events = buildLocalDemoAnalytics();
+  storage.set(
+    'mf_partner_db_v5',
+    JSON.stringify({
+      users,
+      orgs: buildLocalDemoOrgs(),
+      links: [],
+      activity: [],
+      objects,
+      projects: [],
+    }),
+  );
+  storage.set('mf_partner_objects_v1', JSON.stringify([{ id: 'blocked', orgId: 'org_demo' }]));
+  storage.set('mf_partner_analytics_v1', JSON.stringify(events));
+  storage.set(
+    'mf_partner_session_v2',
+    JSON.stringify({ id: 'u_partner1', login: 'partner1', role: 'owner', displayName: 'Владелец', orgId: 'org_demo' }),
+  );
+  const staff = users.map((user) => ({
+    id: user.id,
+    login: user.login,
+    displayName: user.displayName,
+    role: user.role,
+    orgId: user.orgId,
+  }));
+  const company = objects.filter((object) => object.orgId === 'org_demo');
+  const run = (period: 'month' | 'quarter' | 'year', metric: string, userId?: string) => {
+    const bounds = presetRange(period, new Date(now));
+    const range = rangeFromYmd(bounds.fromYmd, bounds.toYmd);
+    return composeCabinetAnalytics({
+      events: events as AnalyticsEvent[],
+      objects: [{ id: 'blocked', orgId: 'org_demo' }],
+      users: staff,
+      from: range.from,
+      to: range.to,
+      orgId: 'org_demo',
+      mode: 'partner',
+      metric,
+      period,
+      userId: userId || null,
+    });
+  };
+  const opened = run('month', 'area', 'u_sales1');
+  const sales = opened.drill.ranking.find((row) => row.userId === 'u_sales1');
+  const top = opened.drill.detail?.projects || [];
+  assert.equal(opened.drill.drops.rooms, company.length);
+  assert.ok((opened.drill.drops.events || 0) > 0);
+  assert.ok(opened.dash.kpi.panels > 0);
+  assert.ok(opened.dash.kpi.areaM2 > 0);
+  assert.ok(top.length > 0);
+  assert.equal(sales?.projectCount, top.length);
+  assert.ok(top.some((project) => project.name === 'Никитин И.' && project.roomId === 'obj_a07'));
+  assert.ok(top.some((project) => project.name === 'Морозова Е.'));
+  assert.ok(top.some((project) => project.name === 'Вася' && project.roomId === 'obj_a05'));
+  const measurer = opened.drill.ranking.find((row) => row.userId === 'u_exec1');
+  assert.ok((measurer?.areaM2 || 0) > 0);
+  assert.ok((measurer?.problemomer || 0) + (measurer?.calculator || 0) > 0);
+  assert.ok((measurer?.measuredRooms || 0) > 0);
+  for (const period of ['month', 'quarter', 'year'] as const) {
+    const drill = run(period, 'panels').drill;
+    const crew = drill.ranking.filter((row) => row.role === 'crew');
+    assert.ok(crew.length > 0, period);
+    assert.ok(crew.some((row) => row.mountedRooms > 0 && row.mountedPanels > 0), period);
+    assert.equal(drill.drops.rooms, company.length, period);
+    assert.ok((drill.drops.events || 0) > 0, period);
   }
 });

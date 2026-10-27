@@ -1144,19 +1144,25 @@ export function buildStaffDrill(input) {
   drops.tilePanels = tilePanels;
   drops.tileArea = tileArea;
   drops.events = tileEvents.length;
-  for (const row of working) {
-    if (row.role !== 'measurer' || row.measuredRooms > 0) continue;
-    if (row.areaM2 <= 0 && row.completed <= 0 && row.problemomer + row.calculator <= 0) continue;
-    const roomsTouched = new Set();
-    for (const event of row.seenEvents || []) {
-      if (!completed(event)) continue;
-      const linked = linkWork(event, input.projects, drillObjects);
-      roomsTouched.add(String(linked?.roomId || linked?.projectId || event.id));
-    }
-    row.measuredRooms = Math.max(1, roomsTouched.size);
+
+  function projectsOnBoard(row) {
+    if (row.boardCards?.length) return projectsFromCards(row.boardCards);
+    return collectProjects(
+      row.userId,
+      companyRooms,
+      input.projects,
+      orgId,
+      window.from,
+      window.to,
+      true,
+      (object) => assigneeById.get(object.id),
+    );
   }
-  for (const row of working) {
-    if (row.role !== 'sales') continue;
+
+  /** Тот же список, что рисуется в «Топ проектов»: комнаты компании и события этой строки. */
+  function shownProjects(row) {
+    if (!row) return [];
+    if (Array.isArray(row.projectList)) return row.projectList.slice();
     const fromEvents = projectsFromEvents(
       row.userId,
       row.seenEvents || [],
@@ -1165,21 +1171,53 @@ export function buildStaffDrill(input) {
       null,
       null,
       () => true,
-      drillObjects,
+      companyRooms,
     );
-    const fromBoard = row.boardCards?.length
-      ? projectsFromCards(row.boardCards)
-      : collectProjects(
-          row.userId,
-          windowRooms.length ? windowRooms : companyRooms,
-          input.projects,
-          orgId,
-          null,
-          null,
-          false,
-          (object) => assigneeById.get(object.id),
-        );
-    const list = listedProjects(fromBoard, fromEvents);
+    const fromBoard = projectsOnBoard(row);
+    let projects = listedProjects(fromBoard, fromEvents);
+    if (!projects.length) projects = mergeProjectLists(fromBoard, fromEvents);
+    projects = projects.map((project) => realRoom(project, companyRooms, orgId));
+    if (!projects.length && (row.areaM2 > 0 || row.panels > 0)) {
+      const room = companyRooms
+        .filter((item) => item && item.id)
+        .slice()
+        .sort((a, b) => num(b.room?.areaM2) - num(a.room?.areaM2) || String(a.id).localeCompare(String(b.id)))[0];
+      if (room) {
+        projects = [
+          {
+            id: String(room.projectId || room.id),
+            name: room.clientName || room.roomName || room.address || 'Комната',
+            areaM2: round1(row.areaM2),
+            panels: Math.round(row.panels),
+            rooms: 1,
+            roomId: room.id,
+          },
+        ];
+      }
+    }
+    if (!projects.length && demoFilled) projects = demoProjects(row.userId);
+    return projects;
+  }
+
+  for (const row of working) {
+    if (row.role !== 'measurer') continue;
+    const measured = companyRooms.filter(
+      (object) => roomHasMeasurement(object) && assigneeById.get(object.id) === row.userId,
+    ).length;
+    if (measured > 0) row.measuredRooms = measured;
+    else if (row.measuredRooms <= 0 && (row.areaM2 > 0 || row.completed > 0 || row.problemomer + row.calculator > 0)) {
+      const roomsTouched = new Set();
+      for (const event of row.seenEvents || []) {
+        if (!completed(event)) continue;
+        const linked = linkWork(event, input.projects, companyRooms);
+        roomsTouched.add(String(linked?.roomId || linked?.projectId || event.id));
+      }
+      row.measuredRooms = Math.max(1, roomsTouched.size);
+    }
+  }
+  for (const row of working) {
+    if (row.role !== 'sales') continue;
+    const list = shownProjects(row);
     row.projectList = list;
     row.projectTotal = list.length;
   }
@@ -1270,56 +1308,10 @@ export function buildStaffDrill(input) {
           panels: 0,
           completed: 0,
         };
-    const matchedEvents = demoFilled
-      ? []
-      : person?.seenEvents?.length
-        ? person.seenEvents
-        : (input.events || []).filter(
-            (event) => eventMatchesUser(event, input.userId) && inWindow(event.at, window.from, window.to),
-          );
-    const boardProjects = person?.projectList?.length
-      ? person.projectList
-      : person?.boardCards?.length
-        ? projectsFromCards(person.boardCards)
-        : collectProjects(input.userId, drillObjects, input.projects, orgId, window.from, window.to, true, (object) =>
-            assigneeById.get(object.id),
-          );
-    // Список в строке и «Топ проектов» — один и тот же массив, без повторной обрезки.
-    let projects = person?.projectList?.length
-      ? person.projectList.slice()
-      : mergeProjectLists(
-          boardProjects,
-          projectsFromEvents(input.userId, matchedEvents, input.projects, orgId, null, null, () => true, input.objects),
-        );
-    projects = projects.map((project) => realRoom(project, input.objects?.length ? input.objects : drillObjects, orgId));
-    if (!projects.length && person && (person.areaM2 > 0 || person.panels > 0)) {
-      const rooms = (input.objects || []).filter((room) => room && room.id && (!orgId || room.orgId === orgId));
-      const room = rooms.slice().sort((a, b) => num(b.room?.areaM2) - num(a.room?.areaM2) || String(a.id).localeCompare(String(b.id)))[0];
-      if (room) {
-        projects = [
-          {
-            id: String(room.projectId || room.id),
-            name: room.clientName || room.roomName || room.address || 'Комната',
-            areaM2: round1(person.areaM2),
-            panels: Math.round(person.panels),
-            rooms: 1,
-            roomId: room.id,
-          },
-        ];
-      }
-    }
-    if (!projects.length && demoFilled) {
-      projects = mergeProjectLists(
-        collectProjects(input.userId, input.objects, input.projects, orgId, window.from, window.to, false),
-        [],
-      );
-    }
-    if (!projects.length && demoFilled) projects = demoProjects(input.userId);
+    const projects = person ? shownProjects(person) : [];
     detail = { userId: input.userId, months, averages, projects };
-    if (projects.length) {
-      for (const row of ranking) {
-        if (row.userId === input.userId && !(row.projectCount > 0)) row.projectCount = projects.length;
-      }
+    for (const row of ranking) {
+      if (row.userId === input.userId) row.projectCount = projects.length;
     }
   }
 

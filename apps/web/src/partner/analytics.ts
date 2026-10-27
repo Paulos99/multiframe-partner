@@ -573,7 +573,7 @@ function localStaffDrill(opts: {
       .map(([userId, count]) => `${userId}×${count}`)
       .join(', ') || 'нет';
     console.info(
-      `[чему 0] хранилище mf_partner_db_v5, комнат ${drops.rooms}, компания ${drops.company}, период ${drops.period}, исполнитель ${drops.assignee}, монтаж ${install}, закрыто ${closed}, плитка панелей ${drops.tilePanels}, площадь ${drops.tileArea}`,
+      `[Почему 0] хранилище mf_partner_db_v5, комнат ${drops.rooms}, компания ${drops.company}, период ${drops.period}, исполнитель ${drops.assignee}, монтаж ${install}, закрыто ${closed}, плитка панелей ${drops.tilePanels}, площадь ${drops.tileArea}`,
     );
   }
   return result;

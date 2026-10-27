@@ -189,7 +189,9 @@ test('сессия уже активна: reload, сразу Аналитика,
   await panelsTile.click();
   const why = page.getByRole('dialog', { name: 'Панели' }).getByTestId('why-zero');
   await expect(why).toBeVisible();
+  await expect(why).toContainText('Почему 0. Источник:');
   const report = await why.innerText();
+  expect(report.startsWith('Почему 0.')).toBe(true);
   const panelsInReport = paragraphTile(report, 'Плитка панелей');
   const areaInReport = paragraphTile(report, 'площадь');
   const tileNow = tileNumber(await panelsTile.innerText());

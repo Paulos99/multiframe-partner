@@ -29,7 +29,7 @@ function roomTitle(room: JobObject): string {
 
 function roomMeta(room: JobObject): string {
   const place = [room.clientName, room.address].filter(Boolean).join(' · ');
-  const area = room.room.areaM2 != null ? `${room.room.areaM2} м²` : '';
+  const area = room.room?.areaM2 != null ? `${room.room.areaM2} м²` : '';
   return [JOB_OBJECT_STATUS_LABELS[room.status], place, area].filter(Boolean).join(' · ');
 }
 
@@ -38,7 +38,11 @@ function nearest(rooms: JobObject[], role: UserRole): JobObject[] {
     role === 'crew' ? rooms.filter((room) => room.status === 'install' || room.status === 'measured') : rooms;
   return [...list]
     .filter((room) => room.status !== 'closed')
-    .sort((a, b) => NEXT_RANK[a.status] - NEXT_RANK[b.status] || b.updatedAt.localeCompare(a.updatedAt))
+    .sort(
+      (a, b) =>
+        (NEXT_RANK[a.status] ?? 9) - (NEXT_RANK[b.status] ?? 9) ||
+        String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')),
+    )
     .slice(0, 5);
 }
 
