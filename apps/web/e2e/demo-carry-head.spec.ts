@@ -63,20 +63,22 @@ async function stopVite(child: ChildProcess | null) {
 }
 
 async function signIn(page: Page) {
+  const shell = page.getByRole('complementary', { name: 'Разделы кабинета' });
   const owner = page.getByRole('button', { name: 'Владелец Прайс и команда' }).first();
-  if (await owner.isVisible().catch(() => false)) {
-    await owner.click();
-  }
-  await expect(page.getByText(/Объекты/).first()).toBeVisible({ timeout: 30000 });
+  await owner.or(shell).first().waitFor({ timeout: 30000 });
+  if (await owner.isVisible().catch(() => false)) await owner.click();
+  await expect(shell).toBeVisible({ timeout: 30000 });
 }
 
 async function clickThrough(page: Page) {
   await signIn(page);
-  const objects = page.getByRole('tab', { name: /Объекты/ }).or(page.getByRole('button', { name: /Объекты/ })).or(page.getByText(/Объекты/)).first();
-  await objects.click();
-  const room = page.locator('[data-room-id]').first();
-  await room.waitFor();
-  await room.click();
+  const quoted = page.getByRole('button', { name: /Никитин И\./ }).first();
+  if (await quoted.isVisible().catch(() => false)) {
+    await quoted.click();
+  } else {
+    await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
+    await page.locator('[data-room-id]').first().click();
+  }
   const status = page.getByRole('group', { name: 'Сменить статус' });
   await status.waitFor();
   const install = status.getByRole('button', { name: 'Монтаж', exact: true });
@@ -84,9 +86,8 @@ async function clickThrough(page: Page) {
   const close = page.getByRole('button', { name: 'Закрыть', exact: true });
   if (await close.count()) await close.first().click();
 
-  const tools = page.getByRole('tab', { name: 'Инструменты', exact: true }).or(page.getByRole('button', { name: 'Инструменты', exact: true })).first();
-  await tools.click();
-  await page.getByRole('button', { name: 'Открыть Проблемомер', exact: true }).click();
+  await page.getByRole('tab', { name: 'Сегодня', exact: true }).click();
+  await page.getByRole('button', { name: 'Проблемомер', exact: true }).click();
   await page.getByRole('button', { name: 'Начать', exact: true }).click();
   const title = page.getByRole('heading', { name: 'Акустический профиль помещения' });
   for (let i = 0; i < 24; i += 1) {
@@ -101,17 +102,17 @@ async function clickThrough(page: Page) {
     await page.waitForTimeout(300);
   }
   await title.waitFor({ timeout: 30000 });
-  const saveCard = page.getByRole('region', { name: 'Объект', exact: true });
+  const saveCard = page.getByRole('region', { name: 'Комната', exact: true });
   await saveCard.getByLabel('Комната', { exact: true }).fill('Кухня');
   await saveCard.getByPlaceholder('Имя').fill('Клиент');
   await saveCard.getByPlaceholder('+7…').fill('+70000000000');
   await saveCard.getByPlaceholder('Улица, дом, квартира').fill('Адрес');
-  await saveCard.getByRole('button', { name: 'Сохранить объект', exact: true }).click();
-  await page.getByText('Объект сохранён').first().waitFor({ timeout: 20000 });
+  await saveCard.getByRole('button', { name: 'Сохранить комнату', exact: true }).click();
+  await page.getByText('Комната сохранена').first().waitFor({ timeout: 20000 });
 
   await page.getByRole('button', { name: 'Кабинет', exact: true }).click();
-  await tools.click();
-  await page.getByRole('button', { name: 'Открыть Калькулятор', exact: true }).click();
+  await page.getByRole('tab', { name: 'Сегодня', exact: true }).click();
+  await page.getByRole('button', { name: 'Калькулятор', exact: true }).click();
   const frame = page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]');
   await frame.getByRole('heading', { name: 'Что вы знаете о помещении?' }).waitFor();
   await frame.getByRole('button', { name: /Ввести размеры/ }).click();
