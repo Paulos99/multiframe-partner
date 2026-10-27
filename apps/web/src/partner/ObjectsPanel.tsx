@@ -32,6 +32,7 @@ import { formatDocStamp } from './historyFormatting';
 import { ObjectHistory } from './ObjectHistory';
 import listStyles from './ProjectList.module.css';
 import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
+import { ProjectDesk } from './ProjectDesk';
 import styles from './partner.module.css';
 
 const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
@@ -534,6 +535,20 @@ export function ObjectsPanel({
         />
       </label>
 
+      <ProjectDesk
+        projects={api.projects}
+        rooms={api.objects}
+        role={user.role}
+        staff={staff}
+        actor={{ id: user.id, role: user.role, displayName: user.displayName }}
+        query={query}
+        onSave={(id, input) => api.updateProject(id, input)}
+        onOpenRoom={(room) => {
+          setSelectedKey(room.projectId || `room:${room.id}`);
+          setSelectedId(room.id);
+        }}
+      />
+
       {!api.objectsLoading && !cards.length ? (
         <div className={styles.emptyState}>
           <p className={styles.lead}>
@@ -554,6 +569,8 @@ export function ObjectsPanel({
           ) : null}
         </div>
       ) : (
+        <>
+        <p className={styles.lead}>Комнаты по стадиям</p>
         <KanbanBoard
           rooms={cards.flatMap((card) => visibleRooms(card.rooms, 'all'))}
           projects={api.projects}
@@ -575,6 +592,7 @@ export function ObjectsPanel({
             setSelectedId(room.id);
           }}
         />
+        </>
       )}
 
       {creating && canCreate

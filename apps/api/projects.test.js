@@ -342,6 +342,7 @@ describe('projects', { concurrency: false }, () => {
       );
       assert.deepEqual(measurerRooms.map((obj) => obj.roomName), ['Кухня']);
       assert.equal(measurerRooms[0].room.areaM2, 12);
+      assert.equal(measurerRooms[0].estimate.totalCost, 72000);
 
       const crewProjects = await api('GET', '/projects', { token: crew });
       assert.equal(JSON.stringify(crewProjects.data).includes('totalCost'), false);
@@ -350,9 +351,9 @@ describe('projects', { concurrency: false }, () => {
         (obj) => obj.projectId === project.id,
       );
       assert.deepEqual(crewRooms.map((obj) => obj.roomName), ['Спальня']);
-      // Цены видят все роли, монтажник тоже.
-      assert.equal(crewRooms[0].estimate.totalCost, 96000);
-      assert.ok(crewRooms[0].estimate.panelsCost > 0);
+      assert.equal(JSON.stringify(crewRooms).includes('totalCost'), false);
+      assert.equal(JSON.stringify(crewRooms).includes('panelsCost'), false);
+      assert.equal(crewRooms[0].estimate.totalCost, undefined);
       assert.equal(crewRooms[0].estimate.panels, 16);
       const hidden = await api('GET', `/objects/${saved[0].id}`, { token: crew });
       assert.equal(hidden.status, 404);
@@ -371,6 +372,7 @@ describe('projects', { concurrency: false }, () => {
         diskRooms.map((obj) => obj.room.areaM2).sort((a, b) => a - b),
         [9.5, 12, 16],
       );
+      assert.equal(diskRooms.find((obj) => obj.roomName === 'Спальня').estimate.totalCost, 96000);
     } finally {
       await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
     }
@@ -451,5 +453,81 @@ describe('projects', { concurrency: false }, () => {
 
     const legacy = storedPlatform().objects.find((obj) => obj.id === 'obj_a11');
     assert.equal(Object.prototype.hasOwnProperty.call(legacy, 'projectId'), false);
+  });
+
+  test('настройки проекта правит владелец и менеджер, замерщик только читает', async () => {
+    const owner = await login('partner1', 'demo1234');
+    const sales = await login('sales1', 'exec1234');
+    const measurer = await login('exec1', 'exec1234');
+    const crew = await login('crew1', 'exec1234');
+    const created = readJson(
+      await call('POST', '/projects', {
+        token: owner,
+        body: { name: 'Настройки', clientName: 'Соколова', address: 'ул. Лесная, 3', city: 'Москва' },
+      }),
+    );
+    const id = created.project.id;
+    assert.equal(created.project.description, '');
+    assert.equal(created.project.status, undefined);
+    assert.equal(created.project.archivedAt, null);
+    assert.equal(created.project.totalCost, undefined);
+
+    assert.equal(
+      (await call('PATCH', `/projects/${id}`, { token: measurer, body: { description: 'чужая правка' } })).statusCode,
+      403,
+    );
+    assert.equal(
+      (await call('PATCH', `/projects/${id}`, { token: crew, body: { name: 'нет' } })).statusCode,
+      403,
+    );
+    assert.equal(
+      (await call('PATCH', `/projects/${id}`, { token: owner, body: { crewUserId: 'u_sales1' } })).statusCode,
+      400,
+    );
+    assert.equal(
+      (await call('PATCH', `/projects/${id}`, { token: owner, body: { measurerUserId: 'u_measurer2' } })).statusCode,
+      400,
+    );
+    assert.equal(
+      (await call('PATCH', `/projects/${id}`, { token: sales, body: { dueAt: '2026-02-31' } })).statusCode,
+      400,
+    );
+
+    const saved = readJson(
+      await call('PATCH', `/projects/${id}`, {
+        token: sales,
+        body: {
+          description: 'Тихая спальня над улицей',
+          status: 'measure',
+          managerUserId: 'u_sales1',
+          measurerUserId: 'u_measurer1',
+          crewUserId: 'u_crew1',
+          startsAt: '2026-11-02',
+          dueAt: '2026-11-20',
+        },
+      }),
+    );
+    assert.equal(saved.project.description, 'Тихая спальня над улицей');
+    assert.equal(saved.project.status, 'measure');
+    assert.equal(saved.project.managerUserId, 'u_sales1');
+    assert.equal(saved.project.measurerUserId, 'u_measurer1');
+    assert.equal(saved.project.crewUserId, 'u_crew1');
+    assert.equal(saved.project.startsAt, '2026-11-02');
+    assert.equal(saved.project.dueAt, '2026-11-20');
+    assert.equal(saved.project.name, 'Настройки');
+    assert.equal(saved.project.totalCost, undefined);
+
+    const seen = readJson(await call('GET', '/projects', { token: measurer })).projects.find((item) => item.id === id);
+    assert.equal(seen.description, 'Тихая спальня над улицей');
+    const crewSeen = readJson(await call('GET', '/projects', { token: crew })).projects.find((item) => item.id === id);
+    assert.equal(crewSeen.description, 'Тихая спальня над улицей');
+    assert.equal(JSON.stringify(crewSeen).includes('totalCost'), false);
+
+    const archived = readJson(await call('PATCH', `/projects/${id}`, { token: owner, body: { archived: true } }));
+    assert.ok(archived.project.archivedAt);
+    const restored = readJson(await call('PATCH', `/projects/${id}`, { token: owner, body: { archived: false } }));
+    assert.equal(restored.project.archivedAt, null);
+    assert.equal(restored.project.description, 'Тихая спальня над улицей');
+    assert.equal(restored.project.status, 'measure');
   });
 });

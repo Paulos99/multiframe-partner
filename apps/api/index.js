@@ -21,6 +21,7 @@ import {
 } from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
+import { estimateForRole } from '../../packages/shared/projectAccess.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -359,9 +360,14 @@ function objectVisibleTo(user, obj) {
   return false;
 }
 
-/** Цены видят все роли: смета объекта отдаётся целиком. */
-function publicObject(obj) {
-  return { ...obj, history: obj.history || [], documents: visibleDocuments(obj.documents) };
+/** Бригада получает количества без цен и сумм. Замерщик и остальные роли видят расчёт целиком. */
+function publicObject(obj, role) {
+  return {
+    ...obj,
+    estimate: estimateForRole(obj.estimate, role),
+    history: obj.history || [],
+    documents: visibleDocuments(obj.documents),
+  };
 }
 
 /** Client clock, clamped so a far-future stamp cannot lock the row. */

@@ -40,7 +40,7 @@ async function uploadAsOwner(request: import('@playwright/test').APIRequestConte
   return obj as { documents: Array<{ kind: string; id: string }>; estimate: { totalCost: number | null } };
 }
 
-test('API: монтажник видит цены и все документы, старая спецификация в паре скрыта', async ({ request }) => {
+test('API: бригада не получает суммы, документы остаются, старая спецификация в паре скрыта', async ({ request }) => {
   const owner = await uploadAsOwner(request);
   expect(owner.documents.map((d) => d.kind)).toEqual(['profile', 'estimate', 'spec']);
   const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.crew', password } });
@@ -48,7 +48,9 @@ test('API: монтажник видит цены и все документы, 
   expect(user.org.panelPriceRub).toBe(2396);
   const list = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${token}` } });
   const room = (await list.json()).objects.find((o: { id: string }) => o.id === 'ui_crew_room');
-  expect(room.estimate.totalCost).toBe(75261);
+  expect(room.estimate.totalCost).toBeUndefined();
+  expect(room.estimate.panelsCost).toBeUndefined();
+  expect(room.estimate.panels).toBe(16);
   expect(room.documents.map((d: { id: string }) => d.id)).toEqual([
     owner.documents[0].id,
     'legacy_est',

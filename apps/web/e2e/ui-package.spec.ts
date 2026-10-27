@@ -137,6 +137,9 @@ test('reorder within a column persists after reload', async ({ page }) => {
   ).toBeVisible();
   await expect(card).toHaveCount(1);
   const target = page.locator('[data-room-id="ui_measured"]');
+  // Список проектов сдвигает доску вниз: без прокрутки точка сброса у края
+  // окна, и перетаскивание само прокручивает страницу мимо карточки.
+  await target.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
   const from = await card.boundingBox(),
     to = await target.boundingBox();
   if (!from || !to) throw new Error('Missing card geometry');
