@@ -32,6 +32,43 @@ const ROLE_ALIASES = {
 function canonicalRankRole(role) {
   return ROLE_ALIASES[String(role || '')] || null;
 }
+
+/** Старые id демо, которые уже не совпадают с текущим справочником. Логин тот же. */
+const LEGACY_LOGINS = {
+  u_measurer1: 'exec1',
+  u_measurer2: 'exec2',
+  u_exec1: 'exec1',
+  u_exec2: 'exec2',
+  u_installer1: 'crew1',
+  u_installer1b: 'crew1b',
+  u_installer2: 'crew2',
+  u_installer_old: 'crew1',
+  u_crew1: 'crew1',
+  u_crew1b: 'crew1b',
+  u_crew2: 'crew2',
+  u_sales_old: 'sales1',
+  u_sales1: 'sales1',
+  u_sales2: 'sales2',
+};
+
+function staffByLogin(staff, login, orgId) {
+  const name = String(login || '');
+  if (!name) return null;
+  const matches = (staff || []).filter((user) => user && user.login === name && (!orgId || !user.orgId || user.orgId === orgId));
+  return matches.find((user) => user.orgId === orgId) || matches[0] || null;
+}
+
+function resolveStaffId(rawId, staff, orgId) {
+  if (rawId == null || rawId === '') return null;
+  const id = String(rawId);
+  if ((staff || []).some((user) => user && user.id === id)) return id;
+  const asLogin = staffByLogin(staff, id, orgId);
+  if (asLogin) return asLogin.id;
+  const login = LEGACY_LOGINS[id];
+  if (!login) return null;
+  const legacy = staffByLogin(staff, login, orgId);
+  return legacy ? legacy.id : null;
+}
 const ROLE_LABELS = {
   sales: 'Менеджеры',
   measurer: 'Замерщики',
@@ -195,20 +232,41 @@ function noonDaysBefore(day, now) {
   return date.toISOString();
 }
 
-function demoMountedRooms(now) {
-  return DEMO_MOUNTS.map((spec) => ({
-    id: `demo_mount_${spec.userId}_${spec.day}`,
-    orgId: spec.orgId,
-    status: 'install',
-    assignedTo: spec.userId,
-    createdBy: null,
-    updatedAt: noonDaysBefore(spec.day, now),
-    createdAt: noonDaysBefore(spec.day, now),
-    clientName: spec.client,
-    address: spec.address,
-    room: { areaM2: spec.area, roomType: 'living' },
-    estimate: { panels: Math.ceil(spec.area / PANEL_AREA_M2) },
-  }));
+function demoMountedRooms(now, staff) {
+  const byOrg = new Map();
+  for (const spec of DEMO_MOUNTS) {
+    if (!byOrg.has(spec.orgId)) byOrg.set(spec.orgId, []);
+    byOrg.get(spec.orgId).push(spec);
+  }
+  const rooms = [];
+  for (const [orgId, specs] of byOrg) {
+    const slots = [];
+    for (const spec of specs) {
+      if (!slots.includes(spec.userId)) slots.push(spec.userId);
+    }
+    const crew = (staff || [])
+      .filter((user) => user && user.role === 'crew' && user.orgId === orgId)
+      .slice()
+      .sort((a, b) => String(a.login || '').localeCompare(String(b.login || '')) || String(a.id).localeCompare(String(b.id)));
+    if (!crew.length) continue;
+    for (const spec of specs) {
+      const person = crew[slots.indexOf(spec.userId) % crew.length];
+      rooms.push({
+        id: `demo_mount_${person.id}_${spec.day}`,
+        orgId,
+        status: 'install',
+        assignedTo: person.id,
+        createdBy: null,
+        updatedAt: noonDaysBefore(spec.day, now),
+        createdAt: noonDaysBefore(spec.day, now),
+        clientName: spec.client,
+        address: spec.address,
+        room: { areaM2: spec.area, roomType: 'living' },
+        estimate: { panels: Math.ceil(spec.area / PANEL_AREA_M2) },
+      });
+    }
+  }
+  return rooms;
 }
 
 function stableIndex(seed, size) {
@@ -216,6 +274,21 @@ function stableIndex(seed, size) {
   const text = String(seed || '');
   for (let index = 0; index < text.length; index += 1) hash = (hash * 33 + text.charCodeAt(index)) >>> 0;
   return size ? hash % size : 0;
+}
+
+function realRoom(project, objects, orgId) {
+  const rooms = (objects || []).filter((room) => room && room.id && (!orgId || !room.orgId || room.orgId === orgId));
+  if (!rooms.length) return project;
+  if (project.roomId && rooms.some((room) => room.id === project.roomId)) return project;
+  const named = rooms.find(
+    (room) => room.id === project.id || room.projectId === project.id || room.clientName === project.name || room.roomName === project.name,
+  );
+  const room = named || rooms[stableIndex(project.id, rooms.length)];
+  return {
+    ...project,
+    roomId: room.id,
+    name: project.name && project.name !== 'Расчёт' ? project.name : room.clientName || room.roomName || room.address || project.name,
+  };
 }
 
 function roomProject(room, projects) {
@@ -283,14 +356,24 @@ function linkWork(event, projects, objects) {
   return null;
 }
 
+function eventArea(event) {
+  const object = event?.object || {};
+  return num(object.areaM2 ?? object.room?.areaM2 ?? event?.areaM2);
+}
+
+function eventPanels(event) {
+  const object = event?.object || {};
+  return num(object.panels ?? object.estimate?.panels ?? event?.panels);
+}
+
 function addEvent(row, event, projects, objects) {
   if (event.tool === 'problemomer' && event.action === 'result') row.problemomer += 1;
   if (event.tool === 'calculator' && event.action === 'calc_done') row.calculator += 1;
   if (event.action === 'pdf') row.pdf += 1;
   if (!completed(event)) return;
   row.completed += 1;
-  const area = num(event.object?.areaM2);
-  const panels = num(event.object?.panels);
+  const area = eventArea(event);
+  const panels = eventPanels(event);
   if (area > 0) {
     row.areaM2 += area;
     row.withArea += 1;
@@ -564,8 +647,8 @@ function projectsFromEvents(userId, events, projects, orgId, from, to, accept, o
     const key = String(projectId || objectId || event.id || '');
     if (!key) continue;
     const project = projectId ? (projects || []).find((item) => item && item.id === projectId) : null;
-    const area = num(object.areaM2);
-    const panels = num(object.panels);
+    const area = eventArea(event);
+    const panels = eventPanels(event);
     const name = linked?.name || projectTitle(object, project);
     const current = grouped.get(key);
     if (!current) {
@@ -680,12 +763,16 @@ export function buildStaffDrill(input) {
     return null;
   }
 
-  const drillObjects = [...(input.objects || []), ...demoMountedRooms(input.now ? new Date(input.now) : new Date())];
+  const drillObjects = [
+    ...(input.objects || []),
+    ...demoMountedRooms(input.now ? new Date(input.now) : new Date(), staff),
+  ];
   for (const object of drillObjects) {
     if (!object || (orgId && object.orgId !== orgId)) continue;
     if (!inWindow(object.updatedAt || object.createdAt, window.from, window.to)) continue;
     const seen = new Set();
-    for (const userId of [object.assignedTo, object.createdBy]) {
+    for (const rawId of [object.assignedTo, object.createdBy]) {
+      const userId = resolveStaffId(rawId, staff, object.orgId || orgId);
       if (!userId || seen.has(userId)) continue;
       seen.add(userId);
       const row = rowForAssignee(userId);
@@ -762,8 +849,8 @@ export function buildStaffDrill(input) {
         if (event.action === 'pdf') bucket.pdf += 1;
         if (!completed(event)) continue;
         bucket.completed += 1;
-        const area = num(event.object?.areaM2);
-        const panels = num(event.object?.panels);
+        const area = eventArea(event);
+        const panels = eventPanels(event);
         if (area > 0) bucket.areaM2 += area;
         if (panels > 0) bucket.panels += panels;
       }
@@ -791,21 +878,34 @@ export function buildStaffDrill(input) {
           panels: 0,
           completed: 0,
         };
+    const matchedEvents = demoFilled
+      ? []
+      : person?.seenEvents?.length
+        ? person.seenEvents
+        : (input.events || []).filter(
+            (event) => eventMatchesUser(event, input.userId) && inWindow(event.at, window.from, window.to),
+          );
     let projects = mergeProjectLists(
       collectProjects(input.userId, drillObjects, input.projects, orgId, window.from, window.to, true),
-      demoFilled
-        ? []
-        : projectsFromEvents(
-            input.userId,
-            person?.seenEvents || [],
-            input.projects,
-            orgId,
-            null,
-            null,
-            () => true,
-            input.objects,
-          ),
+      projectsFromEvents(input.userId, matchedEvents, input.projects, orgId, null, null, () => true, input.objects),
     );
+    projects = projects.map((project) => realRoom(project, input.objects, orgId));
+    if (!projects.length && person && (person.areaM2 > 0 || person.panels > 0)) {
+      const rooms = (input.objects || []).filter((room) => room && room.id && (!orgId || room.orgId === orgId));
+      const room = rooms.slice().sort((a, b) => num(b.room?.areaM2) - num(a.room?.areaM2) || String(a.id).localeCompare(String(b.id)))[0];
+      if (room) {
+        projects = [
+          {
+            id: String(room.projectId || room.id),
+            name: room.clientName || room.roomName || room.address || 'Комната',
+            areaM2: round1(person.areaM2),
+            panels: Math.round(person.panels),
+            rooms: 1,
+            roomId: room.id,
+          },
+        ];
+      }
+    }
     if (!projects.length && demoFilled) {
       projects = mergeProjectLists(
         collectProjects(input.userId, input.objects, input.projects, orgId, window.from, window.to, false),
@@ -814,6 +914,11 @@ export function buildStaffDrill(input) {
     }
     if (!projects.length && demoFilled) projects = demoProjects(input.userId);
     detail = { userId: input.userId, months, averages, projects };
+    if (projects.length) {
+      for (const row of ranking) {
+        if (row.userId === input.userId && !(row.projectCount > 0)) row.projectCount = projects.length;
+      }
+    }
   }
 
   return {

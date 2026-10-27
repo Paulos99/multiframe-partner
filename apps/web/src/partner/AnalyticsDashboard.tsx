@@ -34,7 +34,7 @@ import {
 import { calcModeLabel } from './calcModeLabel';
 import { JournalDownload } from './JournalDownload';
 import { spansMoreThanTwoMonths } from './periodSpan';
-import { CountUp, FadeRise } from './motionBits';
+import { FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import { StaffDrillDrawer } from './StaffDrillDrawer';
@@ -160,9 +160,7 @@ function KpiCard({
   const body = (
     <>
       <span className={styles.kpiLabel}>{label}</span>
-      <strong>
-        <CountUp value={value} />
-      </strong>
+      <strong>{formatNum(value)}</strong>
       {delta != null ? (
         <span className={`${styles.kpiDelta} ${deltaClass(value, prev)}`}>
           {delta} к пред.
@@ -535,6 +533,13 @@ export function AnalyticsDashboard({
 
       {section === 'overview' ? (
         <div className={styles.dashSection}>
+          {loading ? (
+            <div className={styles.kpiRow} aria-busy="true">
+              {Array.from({ length: mode === 'admin' ? 9 : 8 }, (_, index) => (
+                <Skeleton key={index} kind="cards" count={1} label="Загрузка показателя" />
+              ))}
+            </div>
+          ) : (
           <FadeRise className={styles.kpiRow}>
             {(
               [
@@ -566,6 +571,7 @@ export function AnalyticsDashboard({
               />
             ))}
           </FadeRise>
+          )}
           {openMetric ? null : (
             <p className={styles.hint}>Нажмите показатель — откроются воронка и динамика.</p>
           )}

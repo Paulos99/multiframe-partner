@@ -433,10 +433,43 @@ export function rangeForMonthDay(
 /**
  * One period for the STP home and the analytics screen.
  * Both read it, and only one PeriodCalendar writes it.
+ * Выбор сохраняется в браузере и переживает перезагрузку.
  */
 export type AnalyticsPeriod = { fromYmd: string | null; toYmd: string | null };
 
-let periodSnapshot: AnalyticsPeriod = { fromYmd: ymdShift(-6), toYmd: ymdShift(0) };
+const PERIOD_KEY = 'mf_partner_analytics_period_v1';
+
+function defaultPeriod(): AnalyticsPeriod {
+  return { fromYmd: ymdShift(-6), toYmd: ymdShift(0) };
+}
+
+function validYmd(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+export function readStoredPeriod(raw: string | null, fallback = defaultPeriod()): AnalyticsPeriod {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as Partial<AnalyticsPeriod>;
+    const fromOk = parsed.fromYmd === null || validYmd(parsed.fromYmd);
+    const toOk = parsed.toYmd === null || validYmd(parsed.toYmd);
+    if (!fromOk || !toOk || parsed.fromYmd === undefined || parsed.toYmd === undefined) return fallback;
+    return { fromYmd: parsed.fromYmd, toYmd: parsed.toYmd };
+  } catch {
+    return fallback;
+  }
+}
+
+function loadPeriod(): AnalyticsPeriod {
+  try {
+    if (typeof localStorage === 'undefined') return defaultPeriod();
+    return readStoredPeriod(localStorage.getItem(PERIOD_KEY));
+  } catch {
+    return defaultPeriod();
+  }
+}
+
+let periodSnapshot: AnalyticsPeriod = loadPeriod();
 const periodListeners = new Set<() => void>();
 
 export function getAnalyticsPeriod(): AnalyticsPeriod {
@@ -446,6 +479,11 @@ export function getAnalyticsPeriod(): AnalyticsPeriod {
 export function setAnalyticsPeriod(fromYmd: string | null, toYmd: string | null): void {
   if (periodSnapshot.fromYmd === fromYmd && periodSnapshot.toYmd === toYmd) return;
   periodSnapshot = { fromYmd, toYmd };
+  try {
+    localStorage.setItem(PERIOD_KEY, JSON.stringify(periodSnapshot));
+  } catch {
+    /* хранилище недоступно — период живёт до перезагрузки */
+  }
   periodListeners.forEach((listener) => listener());
 }
 

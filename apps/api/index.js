@@ -72,7 +72,9 @@ function cityOrThrow(raw, previous) {
 
 function normalizeRole(role) {
   if (role === 'partner') return 'owner';
-  if (role === 'executor') return 'measurer';
+  if (role === 'executor' || role === 'exec') return 'measurer';
+  if (role === 'manager') return 'sales';
+  if (role === 'installer' || role === 'install') return 'crew';
   if (['admin', 'owner', 'sales', 'measurer', 'crew'].includes(role)) return role;
   return 'measurer';
 }

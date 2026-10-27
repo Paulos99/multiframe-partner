@@ -89,6 +89,15 @@ export async function loadVisibleObjects(user: SessionUser, remote: boolean): Pr
   } else {
     base = await loadAllObjects();
     if (!base.length) base = loadCachedObjects();
+    // Старый демо-кабинет хранил комнаты только в localStorage. Без токена они остаются источником.
+    if (!loadToken() && (user.orgId === 'org_demo' || user.orgId === 'org_demo_spb')) {
+      const local = listLocalObjects(user);
+      if (!base.length) base = local;
+      else {
+        const ids = new Set(base.map((obj) => obj.id));
+        base = base.concat(local.filter((obj) => obj.id && !ids.has(obj.id)));
+      }
+    }
   }
   if (isDemoModeEnabled()) {
     return base

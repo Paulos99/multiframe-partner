@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { aggregateAnalyticsDashboard, type AnalyticsEvent } from '../../../../packages/shared/partner';
+import { aggregateAnalyticsDashboard, normalizeRole, type AnalyticsEvent } from '../../../../packages/shared/partner';
 import { buildStaffDrill, visibleStaff } from '../../../../packages/shared/staffDrill.js';
 
 const now = '2026-10-27T12:00:00.000Z';
@@ -525,4 +525,91 @@ test('сохранённая история со старыми id и ролям
   assert.equal(crew?.value, crew?.mountedPanels);
   assert.ok(crew && crew.value >= 16);
   assert.notEqual(crew?.value, 99);
+});
+
+test('старые id и роли: монтажники не нули, топ проектов открывается', () => {
+  assert.equal(normalizeRole('manager'), 'sales');
+  assert.equal(normalizeRole('installer'), 'crew');
+  assert.equal(normalizeRole('executor'), 'measurer');
+  const directory = [
+    { id: 'u_partner1', login: 'partner1', displayName: 'Владелец', role: 'owner', orgId: 'org_demo' },
+    { id: 'u_fresh_sales', login: 'sales1', displayName: 'Менеджер', role: 'manager', orgId: 'org_demo' },
+    { id: 'u_fresh_exec', login: 'exec1', displayName: 'Замерщик', role: 'executor', orgId: 'org_demo' },
+    { id: 'u_fresh_crew', login: 'crew1', displayName: 'Монтажник', role: 'installer', orgId: 'org_demo' },
+    { id: 'u_fresh_crew_b', login: 'crew1b', displayName: 'Монтажник 2', role: 'installer', orgId: 'org_demo' },
+  ];
+  const room = {
+    id: 'room_click',
+    orgId: 'org_demo',
+    projectId: 'room_click',
+    clientName: 'Старая гостиная',
+    roomName: 'Гостиная',
+    status: 'quote_sent',
+    assignedTo: 'u_measurer1',
+    createdBy: 'u_sales_old',
+    updatedAt: now,
+    room: { areaM2: 18, roomType: 'living' },
+    estimate: { panels: 44 },
+  };
+  const install = {
+    id: 'room_mount',
+    orgId: 'org_demo',
+    status: 'install',
+    assignedTo: 'u_crew1',
+    createdBy: 'u_partner1',
+    updatedAt: now,
+    clientName: 'Смонтированная',
+    room: { areaM2: 22 },
+    estimate: { panels: 54 },
+  };
+  function at(days: number) {
+    return new Date(Date.parse(now) - days * 24 * 60 * 60 * 1000).toISOString();
+  }
+  const saved = [1, 40, 200].map((day) => ({
+    at: at(day),
+    orgId: 'org_demo',
+    userId: 'u_sales_old',
+    login: 'sales1',
+    role: 'manager',
+    tool: 'calculator',
+    action: 'calc_done',
+    object: { areaM2: 100 + day, panels: 40, clientName: 'Старая гостиная' },
+  }));
+  function run(period: 'month' | 'quarter' | 'year', metric: string) {
+    return buildStaffDrill({
+      viewer: { id: 'u_partner1', role: 'owner', orgId: 'org_demo' },
+      users: directory,
+      events: saved,
+      objects: [room, install],
+      projects: [],
+      metric,
+      period,
+      userId: 'u_fresh_sales',
+      orgId: 'org_demo',
+      now,
+      demoFill: false,
+    });
+  }
+  const areas = (['month', 'quarter', 'year'] as const).map((period) => run(period, 'area'));
+  const managerAreas = areas.map((result) => result.ranking.find((row) => row.userId === 'u_fresh_sales')?.areaM2 || 0);
+  assert.ok(managerAreas[1] > managerAreas[0]);
+  assert.ok(managerAreas[2] > managerAreas[1]);
+  for (const result of areas) {
+    const manager = result.ranking.find((row) => row.userId === 'u_fresh_sales');
+    assert.ok((manager?.projectCount || 0) > 0);
+    assert.ok((result.detail?.projects.length || 0) > 0);
+    assert.equal(result.detail?.projects[0]?.roomId, 'room_click');
+    assert.equal(result.detail?.projects[0]?.name, 'Старая гостиная');
+  }
+  const mounted = (['month', 'quarter', 'year'] as const).map((period) => {
+    const crew = run(period, 'panels').roles.find((role) => role.id === 'crew')?.ranking || [];
+    assert.equal(crew.length, 2, period);
+    for (const row of crew) {
+      assert.ok(row.mountedPanels > 0, `${row.displayName} ${period}`);
+      assert.ok(row.mountedRooms > 0);
+      assert.equal(row.value, row.mountedPanels);
+    }
+    return crew.reduce((sum, row) => sum + row.value, 0);
+  });
+  assert.ok(mounted[2] > mounted[0]);
 });

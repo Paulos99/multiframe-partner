@@ -488,3 +488,144 @@ test('сервер: реальные события с чужими id попа�
   await expect(team.getByText('За период проектов нет')).toHaveCount(0);
   await expect(team.getByText('Тестовая квартира')).toBeVisible();
 });
+
+test('накопленное хранилище: старые id, без вспышки цифр, период помнится', async ({ page }) => {
+  const at = noonDaysAgo;
+  const room = {
+    id: 'room_click',
+    orgId: 'org_demo',
+    projectId: 'room_click',
+    createdAt: at(12),
+    updatedAt: at(1),
+    createdBy: 'u_partner1',
+    assignedTo: 'u_measurer1',
+    status: 'quote_sent',
+    clientName: 'Старая гостиная',
+    clientPhone: '',
+    address: 'ул. Арбат, 12',
+    city: 'Москва',
+    room: { roomType: 'living', areaM2: 18 },
+    estimate: { panels: 44, dowels: 0, panelsCost: 0, installCost: 0, dowelsCost: 0, totalCost: 0 },
+    clientSummary: 'Старая гостиная',
+    history: [],
+  };
+  const mount = {
+    ...room,
+    id: 'room_mount',
+    projectId: 'room_mount',
+    status: 'install',
+    assignedTo: 'u_crew1',
+    clientName: 'Смонтированная',
+    clientSummary: 'Смонтированная',
+    updatedAt: at(2),
+    room: { roomType: 'bedroom', areaM2: 22 },
+    estimate: { panels: 54, dowels: 0, panelsCost: 0, installCost: 0, dowelsCost: 0, totalCost: 0 },
+  };
+  const users = [
+    { id: 'u_partner1', login: 'partner1', password: 'demo1234', role: 'owner', displayName: 'Владелец', orgId: 'org_demo', createdAt: at(40) },
+    { id: 'u_fresh_sales', login: 'sales1', password: 'exec1234', role: 'manager', displayName: 'Менеджер', orgId: 'org_demo', createdAt: at(40) },
+    { id: 'u_fresh_exec', login: 'exec1', password: 'exec1234', role: 'executor', displayName: 'Замерщик', orgId: 'org_demo', createdAt: at(40) },
+    { id: 'u_fresh_crew', login: 'crew1', password: 'exec1234', role: 'installer', displayName: 'Монтажник', orgId: 'org_demo', createdAt: at(40) },
+    { id: 'u_fresh_crew_b', login: 'crew1b', password: 'exec1234', role: 'installer', displayName: 'Монтажник 2', orgId: 'org_demo', createdAt: at(40) },
+  ];
+  const org = (id: string, companyName: string, city: string) => ({
+    id,
+    createdAt: at(40),
+    createdBy: 'u_admin',
+    settings: { companyName, city, panelPriceRub: 1000, pricePerM2: 1000, installPricePerM2: 500, dowelsPerPanel: 2, dowelPriceRub: 10 },
+  });
+  const events = [1, 40, 200].map((day) => ({
+    id: `ae_legacy_sales_${day}`,
+    at: at(day),
+    orgId: 'org_demo',
+    userId: 'u_sales_old',
+    login: 'sales1',
+    role: 'manager',
+    companyName: 'Потолки Столицы',
+    tool: 'calculator',
+    action: 'calc_done',
+    object: { areaM2: 100 + day, panels: 40, clientName: 'Старая гостиная' },
+  }));
+  await page.addInitScript(
+    ({ historyKey, analyticsKey, sessionKey, dbKey, periodKey, stored, db }) => {
+      localStorage.setItem(historyKey, '1');
+      if (sessionStorage.getItem('mf_e2e_period_guard') !== '1') {
+        localStorage.removeItem(periodKey);
+        sessionStorage.setItem('mf_e2e_period_guard', '1');
+      }
+      localStorage.setItem(analyticsKey, JSON.stringify(stored));
+      localStorage.setItem(dbKey, JSON.stringify(db));
+      localStorage.setItem(
+        sessionKey,
+        JSON.stringify({ id: 'u_partner1', login: 'partner1', role: 'owner', displayName: 'Владелец', orgId: 'org_demo', org: null }),
+      );
+    },
+    {
+      historyKey: HISTORY_RESET,
+      analyticsKey: ANALYTICS,
+      sessionKey: SESSION,
+      dbKey: 'mf_partner_db_v5',
+      periodKey: 'mf_partner_analytics_period_v1',
+      stored: events,
+      db: {
+        users,
+        orgs: [org('org_demo', 'Потолки Столицы', 'Москва'), org('org_demo_spb', 'Северный Потолок', 'Санкт-Петербург')],
+        links: [],
+        activity: [],
+        objects: [room, mount],
+        projects: [],
+      },
+    },
+  );
+
+  await page.goto('/');
+  await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  const tile = page.getByRole('button', { name: /Площадь, м²/ }).first();
+  await expect(tile).toBeVisible();
+  const firstTile = await tile.innerText();
+  expect(tileNumber(firstTile)).toBeGreaterThan(0);
+  await page.waitForTimeout(1200);
+  expect(await tile.innerText()).toBe(firstTile);
+
+  await page.getByRole('button', { name: /Панели/ }).first().click();
+  const panels = page.getByRole('dialog', { name: 'Панели' });
+  await panels.getByRole('tab', { name: 'Монтажники' }).click();
+  const mounted = () => panels.getByRole('button').filter({ hasText: 'Смонтировано' });
+  await expect.poll(async () => mounted().count()).toBe(2);
+  const lines = async () => (await mounted().allInnerTexts()).join('\n');
+  await panels.getByRole('button', { name: 'Месяц', exact: true }).click();
+  await expect.poll(async () => lines()).not.toContain('Смонтировано 0');
+  const monthText = await lines();
+  await panels.getByRole('button', { name: 'Квартал', exact: true }).click();
+  await expect.poll(async () => lines()).not.toBe(monthText);
+  const quarterText = await lines();
+  await panels.getByRole('button', { name: 'Год', exact: true }).click();
+  await expect.poll(async () => lines()).not.toBe(quarterText);
+  expect(await lines()).not.toContain('Смонтировано 0');
+  await panels.getByRole('button', { name: 'Закрыть', exact: true }).click();
+
+  await tile.click();
+  const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+  await drill.getByRole('tab', { name: 'Менеджеры' }).click();
+  await drill.getByRole('button', { name: 'Год', exact: true }).click();
+  await drill.getByRole('button', { name: /Менеджер/ }).first().click();
+  await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
+  await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
+  await expect(drill.getByText(/проекты 0/)).toHaveCount(0);
+  await drill.getByRole('button', { name: /Старая гостиная/ }).first().click();
+  await expect(page.getByRole('dialog', { name: 'Комната' }).getByRole('heading', { name: 'Старая гостиная' })).toBeVisible();
+  await page.getByRole('dialog', { name: 'Комната' }).getByRole('button', { name: 'Закрыть', exact: true }).click();
+
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  const trigger = page.getByRole('group', { name: 'Период аналитики' }).getByRole('button');
+  const before = (await trigger.innerText()).trim();
+  await trigger.click();
+  await page.getByRole('dialog', { name: 'Период' }).getByRole('button', { name: '30 дней', exact: true }).click();
+  await expect.poll(async () => (await trigger.innerText()).trim()).not.toBe(before);
+  const saved = (await trigger.innerText()).trim();
+  await page.reload();
+  await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Период аналитики' }).getByRole('button')).toHaveText(saved);
+});
