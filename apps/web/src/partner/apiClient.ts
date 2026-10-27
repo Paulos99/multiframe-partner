@@ -185,6 +185,16 @@ export async function apiDeleteStaff(staffUserId: string): Promise<void> {
   await request(`/org/staff/${staffUserId}`, { method: 'DELETE' });
 }
 
+export async function apiRenameStaff(
+  staffUserId: string,
+  displayName: string,
+): Promise<{ id: string; login: string; role: UserRole; displayName: string }> {
+  return request(`/org/staff/${encodeURIComponent(staffUserId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ displayName }),
+  });
+}
+
 export async function apiListObjects(): Promise<JobObject[]> {
   const data = await request<{ objects: JobObject[] }>('/objects');
   return data.objects;
@@ -506,6 +516,11 @@ export async function apiProfile() { return (await request<{user:SessionUser}>('
 export async function apiUpdateProfile(login:string,currentPassword:string) {
   const result=await request<{user:SessionUser;token:string}>('/me',{method:'PATCH',body:JSON.stringify({login,currentPassword})});
   saveToken(result.token); return result.user;
+}
+export async function apiUpdateDisplayName(displayName:string) {
+  const result=await request<{user:SessionUser;token?:string}>('/me',{method:'PATCH',body:JSON.stringify({displayName})});
+  if(result.token) saveToken(result.token);
+  return result.user;
 }
 export async function apiChangePassword(currentPassword:string,newPassword:string) {
   const result=await request<{token:string}>('/me/password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});

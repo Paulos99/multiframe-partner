@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type DragEvent, type FormEvent } from 'react';
+import { personName } from '../../../../packages/shared/personName.js';
 import { usePartner } from './PartnerContext';
 import {
   apiProfile,
@@ -18,7 +19,8 @@ type Pending = 'login' | 'password';
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export function ProfilePanel({ onClose }: { onClose: () => void }) {
-  const { user, acceptProfile } = usePartner();
+  const { user, acceptProfile, updateDisplayName } = usePartner();
+  const [name, setName] = useState(() => personName(user?.displayName));
   const [login, setLogin] = useState(user?.login || '');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -31,6 +33,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const loginBtn = useRef<HTMLButtonElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const passwordBtn = useRef<HTMLButtonElement>(null);
   const reduce = usePrefersReducedMotion();
   const remote = hasRemoteApi();
@@ -38,6 +41,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
+    nameRef.current?.focus();
     return () => element?.close();
   }, []);
   useEffect(() => {
@@ -69,6 +73,26 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
       setMessage('Фото обновлено');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить фото');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const storedPersonal = personName(user?.displayName);
+  const nameDirty =
+    name.trim() !== storedPersonal || (name.trim() === '' && Boolean((user?.displayName || '').trim()));
+
+  async function saveName(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    setBusy(true);
+    try {
+      const next = await updateDisplayName(name);
+      setName(personName(next.displayName));
+      setMessage('Имя обновлено');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить имя');
     } finally {
       setBusy(false);
     }
@@ -143,8 +167,27 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
           <CloseIcon size="1em" />
         </button>
       </div>
+      <form className={styles.nameForm} onSubmit={(event) => void saveName(event)}>
+        <label>
+          Имя
+          <input
+            ref={nameRef}
+            value={name}
+            maxLength={80}
+            autoComplete="name"
+            placeholder="Например, Анна Соколова"
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        {storedPersonal ? null : (
+          <p className={styles.nameHint}>Пока без имени приветствие будет без имени.</p>
+        )}
+        <button className={styles.action} disabled={busy || !nameDirty}>
+          Сохранить имя
+        </button>
+      </form>
       {!remote ? (
-        <p role="status">Редактирование профиля доступно при подключении к серверу.</p>
+        <p role="status">Логин, пароль и фото доступны при подключении к серверу. Имя сохранится на этом устройстве.</p>
       ) : null}
       <fieldset disabled={busy || !remote} className={styles.fields}>
         <div className={styles.photo}>

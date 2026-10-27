@@ -8,6 +8,7 @@ import {
   type SessionUser,
   type UserRole,
 } from '../../../../packages/shared/partner';
+import { personName } from '../../../../packages/shared/personName.js';
 import { Button } from '../ui/Button';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { CityField } from './CityField';
@@ -59,7 +60,7 @@ function FrameBody({ children }: { children: ReactNode }) {
 
 function profileOf(user: SessionUser, onLogout: () => void) {
   return {
-    name: user.displayName,
+    name: personName(user.displayName),
     role: ROLE_LABELS[user.role],
     company: user.org?.companyName,
     onLogout,
