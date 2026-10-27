@@ -36,6 +36,8 @@ import {
   apiDeleteProject,
   apiListStaff,
   apiLogin,
+  apiRenameStaff,
+  apiUpdateDisplayName,
   apiLogout,
   apiMe,
   apiResetStaffPassword,
@@ -75,6 +77,8 @@ import {
   deleteLocalProject,
   deleteStaffAccount,
   enqueueObjectDocuments,
+  renameStaffDisplayName,
+  updateOwnDisplayName,
   generatePassword,
   listActivity,
   listPartners,
@@ -178,6 +182,10 @@ type PartnerApi = {
   partnerResetStaffPassword: (staffUserId: string, password: string) => Promise<string>;
   partnerDeleteStaff: (staffUserId: string) => Promise<void>;
   partnerListStaff: () => StaffMember[];
+  renameStaff: (staffUserId: string, displayName: string) => Promise<{ id: string; displayName: string }>;
+  updateDisplayName: (displayName: string) => Promise<SessionUser>;
+  profileOpenToken: number;
+  requestOpenProfile: () => void;
   /** @deprecated */
   partnerCreateExecutor: (input: {
     login: string;
@@ -242,6 +250,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [profileOpenToken, setProfileOpenToken] = useState(0);
+  const requestOpenProfile = useCallback(() => setProfileOpenToken((n) => n + 1), []);
   const [objects, setObjects] = useState<JobObject[]>([]);
   const [objectsLoading, setObjectsLoading] = useState(false);
   const [staffLoading,setStaffLoading]=useState(false);
@@ -607,7 +617,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       } else {
         settings = updateOrgSettings(user.orgId, nextPatch, user);
       }
-      const next = { ...user, org: settings, displayName: settings.companyName || user.displayName };
+      const next = { ...user, org: settings };
       persistPartnerCalcParams(partnerCalcParamsFromOrg(settings));
       saveSession(next);
       setUser(next);
@@ -718,6 +728,47 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       const pw = resetStaffPassword(staffUserId, password, user);
       setTick((n) => n + 1);
       return pw;
+    },
+    [user, remote],
+  );
+
+  const updateDisplayName = useCallback(
+    async (displayName: string) => {
+      if (!user) throw new Error('Нет сессии');
+      if (remote && loadToken()) {
+        const next = await apiUpdateDisplayName(displayName);
+        saveSession(next);
+        setUser(next);
+        return next;
+      }
+      const next = updateOwnDisplayName(user, displayName);
+      setUser(next);
+      return next;
+    },
+    [user, remote],
+  );
+
+  const renameStaff = useCallback(
+    async (staffUserId: string, displayName: string) => {
+      if (!user) throw new Error('Нет сессии');
+      if (remote && loadToken()) {
+        const updated = await apiRenameStaff(staffUserId, displayName);
+        setStaffCache(await apiListStaff());
+        if (updated.id === user.id) {
+          const next = { ...user, displayName: updated.displayName };
+          saveSession(next);
+          setUser(next);
+        }
+        return { id: updated.id, displayName: updated.displayName };
+      }
+      const saved = renameStaffDisplayName(staffUserId, displayName, user);
+      if (staffUserId === user.id) {
+        const next = { ...user, displayName: saved };
+        saveSession(next);
+        setUser(next);
+      }
+      setTick((n) => n + 1);
+      return { id: staffUserId, displayName: saved };
     },
     [user, remote],
   );
@@ -997,6 +1048,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerCreateStaff,
       partnerResetStaffPassword,
       partnerDeleteStaff,
+      renameStaff,
+      updateDisplayName,
+      profileOpenToken,
+      requestOpenProfile,
       partnerListStaff: () =>
         (staffCache.length
           ? staffCache
@@ -1072,6 +1127,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerCreateStaff,
       partnerResetStaffPassword,
       partnerDeleteStaff,
+      renameStaff,
+      updateDisplayName,
+      profileOpenToken,
+      requestOpenProfile,
       refreshObjects,
       projects,
       projectsLoading,

@@ -191,12 +191,15 @@ describe('управление сотрудниками', { concurrency: false }
     assert.equal(userById('u_partner1').role, 'owner');
     assert.equal(userById('u_partner1').passwordHash, ownerBefore.passwordHash);
 
+    const ownerName = userById('u_partner1').displayName;
     const patchRole = await call('PATCH', '/org/staff/u_partner1', {
       token: sales,
-      body: { role: 'measurer' },
+      body: { role: 'measurer', displayName: 'Подмена имени', phone: '+79990001122' },
     });
-    assert.equal(patchRole.statusCode, 404);
+    assert.equal(patchRole.statusCode, 403);
     assert.equal(userById('u_partner1').role, 'owner');
+    assert.equal(userById('u_partner1').displayName, ownerName);
+    assert.equal(userById('u_partner1').phone, undefined);
 
     const resetOwner = await call('POST', '/org/staff/reset-password', {
       token: sales,
@@ -302,6 +305,12 @@ describe('управление сотрудниками', { concurrency: false }
         403,
       );
       assert.equal((await call('DELETE', '/org/staff/u_crew1', { token })).statusCode, 403);
+      const crewName = userById('u_crew1').displayName;
+      assert.equal(
+        (await call('PATCH', '/org/staff/u_crew1', { token, body: { displayName: 'Нет' } })).statusCode,
+        403,
+      );
+      assert.equal(userById('u_crew1').displayName, crewName);
       assert.equal(
         (
           await call('POST', '/org/staff/reset-password', {
@@ -334,5 +343,48 @@ describe('управление сотрудниками', { concurrency: false }
     assert.equal(userById(created.id).orgId, 'org_demo');
     assert.equal((await call('DELETE', `/org/staff/${created.id}`, { token: owner })).statusCode, 200);
     assert.equal(userById(created.id), undefined);
+  });
+
+  test('владелец меняет имя своего сотрудника, чужая компания — нет', async () => {
+    const owner = tokens.owner || (await login('partner1', 'demo1234'));
+    const otherOwner = await login('partner2', 'demo1234');
+    const before = userById('u_sales1');
+    const renamed = readJson(
+      await call('PATCH', `/org/staff/${before.id}`, {
+        token: owner,
+        body: {
+          displayName: '  Ольга   Крылова ',
+          role: 'owner',
+          phone: '+79990001122',
+          orgId: 'org_demo_spb',
+          login: 'stolen',
+        },
+      }),
+    );
+    assert.equal(renamed.displayName, 'Ольга Крылова');
+    assert.equal(renamed.role, 'sales');
+    assert.equal(renamed.login, before.login);
+    const stored = userById('u_sales1');
+    assert.equal(stored.displayName, 'Ольга Крылова');
+    assert.equal(stored.role, 'sales');
+    assert.equal(stored.orgId, 'org_demo');
+    assert.equal(stored.login, before.login);
+    assert.equal(stored.phone, undefined);
+    assert.equal(stored.passwordHash, before.passwordHash);
+
+    const cross = await call('PATCH', '/org/staff/u_sales1', {
+      token: otherOwner,
+      body: { displayName: 'Чужая компания' },
+    });
+    assert.equal(cross.statusCode, 403);
+    assert.equal(userById('u_sales1').displayName, 'Ольга Крылова');
+
+    const missing = await call('PATCH', '/org/staff/u_sales1', {
+      token: owner,
+      body: { role: 'crew' },
+    });
+    assert.equal(missing.statusCode, 400);
+    assert.equal(userById('u_sales1').role, 'sales');
+    assert.equal(userById('u_sales1').displayName, 'Ольга Крылова');
   });
 });

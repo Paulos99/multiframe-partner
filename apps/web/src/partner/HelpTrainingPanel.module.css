@@ -17,8 +17,21 @@
   }
 }
 
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.gearSlot {
+  flex: 0 0 auto;
+}
+
 .panel h2 {
   margin: 0;
+  min-width: 0;
   font-size: 1.35rem;
   font-weight: 750;
   letter-spacing: -0.02em;

@@ -36,6 +36,7 @@ import {
   OFFICIAL_PRICE_PER_M2,
   STAFF_ROLES,
 } from '../../../../packages/shared/partner';
+import { applyDemoPersonalNames, normalizePersonName, personName } from '../../../../packages/shared/personName.js';
 import { carriedObjectLink } from './objectLink';
 import {
   buildLocalDemoAnalytics,
@@ -120,6 +121,7 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     ...u,
     role: normalizeRole(u.role as string),
   }));
+  applyDemoPersonalNames(users);
   const orgs = (raw.orgs || []).map((o) => ({
     ...o,
     settings: normalizeOrgSettings({
@@ -270,14 +272,26 @@ export function loadSession(): SessionUser | null {
     if (!raw) return null;
     const session = JSON.parse(raw) as SessionUser;
     session.role = normalizeRole(session.role as string);
+    const db = loadDb();
+    let dirty = false;
     if (session.orgId) {
-      const db = loadDb();
       const org = db.orgs.find((o) => o.id === session.orgId);
       if (org) {
         session.org = normalizeOrgSettings(org.settings);
-        saveSession(session);
+        dirty = true;
       }
     }
+    const person = db.users.find((u) => u.id === session.id);
+    if (
+      person &&
+      personName(person.displayName) &&
+      !personName(session.displayName) &&
+      session.displayName !== person.displayName
+    ) {
+      session.displayName = person.displayName;
+      dirty = true;
+    }
+    if (dirty) saveSession(session);
     return session;
   } catch {
     return null;
@@ -595,6 +609,50 @@ export function createExecutorAccount(input: {
     role: 'measurer',
     owner: { ...input.partner, role: 'owner' },
   });
+}
+
+export function updateOwnDisplayName(actor: SessionUser, displayName: string): SessionUser {
+  const name = normalizePersonName(displayName);
+  const db = loadDb();
+  const idx = db.users.findIndex((u) => u.id === actor.id);
+  if (idx < 0) throw new Error('Пользователь не найден');
+  const users = [...db.users];
+  users[idx] = { ...users[idx]!, displayName: name };
+  saveDb({ ...db, users });
+  const next = { ...actor, displayName: name };
+  saveSession(next);
+  return next;
+}
+
+/** Имя сотрудника своей компании. Только владелец. Роль, логин и организация не меняются. */
+export function renameStaffDisplayName(
+  staffUserId: string,
+  displayName: string,
+  owner: SessionUser,
+): string {
+  if (owner.role !== 'owner' || !owner.orgId) throw new Error('Недостаточно прав');
+  const name = normalizePersonName(displayName);
+  const db = loadDb();
+  const idx = db.users.findIndex((u) => u.id === staffUserId);
+  if (idx < 0) throw new Error('Сотрудник не найден');
+  const target = db.users[idx]!;
+  if (target.orgId !== owner.orgId) throw new Error('Недостаточно прав');
+  const role = normalizeRole(target.role);
+  if (!isStaffRole(role)) throw new Error('Недостаточно прав');
+  const users = [...db.users];
+  users[idx] = { ...target, displayName: name };
+  let next: PartnerDb = { ...db, users };
+  next = pushActivity(next, {
+    orgId: owner.orgId,
+    userId: owner.id,
+    login: owner.login,
+    action: 'rename_staff',
+    detail: `${target.login} · ${name || '—'}`,
+  });
+  saveDb(next);
+  const session = loadSession();
+  if (session?.id === staffUserId) saveSession({ ...session, displayName: name });
+  return name;
 }
 
 export function resetStaffPassword(

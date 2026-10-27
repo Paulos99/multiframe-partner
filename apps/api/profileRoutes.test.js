@@ -147,6 +147,51 @@ test('avatar cannot fall back to data bucket', async () => {
   assert.equal(storage.length, 0);
   assert.equal(writes, 0);
 });
+test('own name saves without password and ignores phone, role and org', async () => {
+  user.displayName = 'Старое имя';
+  user.sessionVersion = 2;
+  const r = await call('PATCH', '/me', {
+    displayName: '  Анна   Соколова  ',
+    phone: '+79990001122',
+    role: 'admin',
+    orgId: 'foreign',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.token, undefined);
+  assert.equal(platform.users[0].displayName, 'Анна Соколова');
+  assert.equal(platform.users[0].phone, undefined);
+  assert.equal(platform.users[0].role, 'owner');
+  assert.equal(platform.users[0].orgId, 'org_test');
+  assert.equal(platform.users[0].sessionVersion, 2);
+  assert.equal(writes, 1);
+});
+test('empty name is stored and a too long name is rejected', async () => {
+  user.displayName = 'Анна';
+  const cleared = await call('PATCH', '/me', { displayName: '   ' });
+  assert.equal(cleared.status, 200);
+  assert.equal(platform.users[0].displayName, '');
+  await assert.rejects(
+    call('PATCH', '/me', { displayName: 'я'.repeat(81) }),
+    (e) => e.status === 400,
+  );
+  assert.equal(platform.users[0].displayName, '');
+});
+test('failed login change does not overwrite the name', async () => {
+  user.displayName = 'Старое имя';
+  await assert.rejects(
+    call('PATCH', '/me', {
+      login: 'new.login',
+      displayName: 'Новое имя',
+      currentPassword: 'incorrect',
+      phone: '+79990001122',
+    }),
+    (e) => e.status === 403,
+  );
+  assert.equal(platform.users[0].displayName, 'Старое имя');
+  assert.equal(platform.users[0].login, 'profile.test');
+  assert.equal(platform.users[0].phone, undefined);
+  assert.equal(writes, 0);
+});
 test('profile reads never expose password hashes', async () => {
   const r = await call('GET', '/me');
   assert.equal(r.status, 200);
