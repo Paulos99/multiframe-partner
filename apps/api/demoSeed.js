@@ -661,6 +661,8 @@ const DEMO_ORG_IDS = new Set(['org_demo', 'org_demo_spb']);
 const SEED_EVENT_ID =
   /^(ev_(login|open|result|pdf|share|calc|calcpdf|admin)_|ev_boost_capital_)/;
 
+const YEAR_SPAN_MS = 300 * 24 * 60 * 60 * 1000;
+
 export function demoHistorySchema(events) {
   const list = Array.isArray(events) ? events : [];
   const marker = list.find((event) => event && event.id === 'ev_demo_history_schema');
@@ -668,13 +670,24 @@ export function demoHistorySchema(events) {
   return Number.isFinite(schema) ? schema : 0;
 }
 
+function demoHistoryReady(events) {
+  const list = Array.isArray(events) ? events : [];
+  if (demoHistorySchema(list) < DEMO_HISTORY_SCHEMA) return false;
+  const stamps = list
+    .filter((event) => event && DEMO_ORG_IDS.has(event.orgId) && event.id !== 'ev_demo_history_schema')
+    .map((event) => Date.parse(event.at))
+    .filter((stamp) => !Number.isNaN(stamp));
+  if (stamps.length < 2) return false;
+  return Math.max(...stamps) - Math.min(...stamps) >= YEAR_SPAN_MS;
+}
+
 /**
- * Уже записанная демо-история дополняется до года один раз — по версии схемы,
- * а не по длине хвоста. События генератора заменяются, чужие id сохраняются.
+ * Демо-история дополняется до года, пока события без маркера не покрывают год.
+ * Маркер на короткой пачке не замораживает её. Готовая пачка возвращается как есть.
  */
 export function extendDemoAnalyticsHistory(events) {
   const list = Array.isArray(events) ? events : [];
-  if (demoHistorySchema(list) >= DEMO_HISTORY_SCHEMA) return list;
+  if (demoHistoryReady(list)) return list;
   const demo = list.filter((event) => event && DEMO_ORG_IDS.has(event.orgId));
   if (!demo.length) return list;
   const fresh = buildDemoAnalyticsEvents();

@@ -363,3 +363,133 @@ test('топ проектов строится по событиям, даже �
   assert.equal(office?.rooms, 2);
   assert.equal(result.detail?.projects.some((project) => project.name === 'Кухня на Арбате'), true);
 });
+
+test('сохранённая история со старыми id и ролями сходится с плиткой', () => {
+  const directory = [
+    { id: 'u_partner1', login: 'partner1', displayName: 'Владелец', role: 'owner', orgId: 'org_demo' },
+    { id: 'u_sales1', login: 'sales1', displayName: 'Менеджер', role: 'sales', orgId: 'org_demo' },
+    { id: 'u_sales2', login: 'sales2', displayName: 'Другой менеджер', role: 'sales', orgId: 'org_demo' },
+    { id: 'u_exec1', login: 'exec1', displayName: 'Замерщик', role: 'measurer', orgId: 'org_demo' },
+    { id: 'u_crew1', login: 'crew1', displayName: 'Монтажник', role: 'crew', orgId: 'org_demo' },
+  ];
+  const saved = [
+    event({
+      id: 'legacy-measurer',
+      orgId: 'org_demo',
+      userId: 'u_measurer1',
+      login: 'exec1',
+      role: 'executor',
+      object: { areaM2: 22, panels: 8, projectId: 'proj-legacy', label: 'Кухня' },
+    }),
+    event({
+      id: 'legacy-sales',
+      orgId: 'org_demo',
+      userId: 'u_sales_old',
+      login: 'sales1',
+      role: 'manager',
+      tool: 'calculator',
+      action: 'calc_done',
+      object: { areaM2: 14, panels: 5, projectId: 'proj-legacy' },
+    }),
+    event({
+      id: 'legacy-crew',
+      orgId: 'org_demo',
+      userId: 'u_installer_old',
+      login: 'crew1',
+      role: 'installer',
+      object: { areaM2: 6, panels: 99 },
+    }),
+    event({
+      id: 'legacy-owner',
+      orgId: 'org_demo',
+      userId: 'u_partner1',
+      login: 'partner1',
+      role: 'owner',
+      object: { areaM2: 100, panels: 40 },
+    }),
+    event({
+      id: 'legacy-other-sales',
+      orgId: 'org_demo',
+      userId: 'u_sales_foreign',
+      login: 'sales2',
+      role: 'manager',
+      object: { areaM2: 9, panels: 3 },
+    }),
+  ];
+  const result = buildStaffDrill({
+    viewer: { id: 'u_partner1', role: 'owner', orgId: 'org_demo' },
+    users: directory,
+    events: saved,
+    objects: [
+      {
+        id: 'mounted',
+        orgId: 'org_demo',
+        status: 'install',
+        assignedTo: 'u_crew1',
+        updatedAt: now,
+        room: { areaM2: 24 },
+        estimate: { panels: 16 },
+        projectId: 'proj-legacy',
+      },
+    ],
+    projects: [{ id: 'proj-legacy', name: 'Кухня на Арбате', orgId: 'org_demo' }],
+    metric: 'area',
+    period: 'month',
+    orgId: 'org_demo',
+    now,
+    demoFill: false,
+  });
+  assert.deepEqual(result.roles.map((role) => role.id), ['sales', 'measurer', 'crew']);
+  assert.equal(result.roles.map((role) => role.label).join(','), 'Менеджеры,Замерщики,Монтажники');
+  assert.equal(result.ranking.some((row) => row.userId === 'u_partner1' || row.userId === 'u_measurer1'), false);
+  assert.equal(result.ranking.find((row) => row.userId === 'u_exec1')?.areaM2, 22);
+  assert.equal(result.ranking.find((row) => row.userId === 'u_sales1')?.areaM2, 14);
+  assert.equal(result.ranking.find((row) => row.userId === 'u_crew1')?.areaM2, 6);
+  const dash = aggregateAnalyticsDashboard(withoutOwner(saved) as AnalyticsEvent[], {
+    source: 'local',
+    from: result.from,
+    to: result.to,
+    orgId: 'org_demo',
+  });
+  assert.equal(displayedSum(result.ranking, 'areaM2'), dash.kpi.areaM2);
+  const sales = buildStaffDrill({
+    viewer: { id: 'u_sales1', role: 'sales', orgId: 'org_demo' },
+    users: directory,
+    events: saved,
+    objects: [],
+    projects: [{ id: 'proj-legacy', name: 'Кухня на Арбате', orgId: 'org_demo' }],
+    metric: 'area',
+    period: 'month',
+    userId: 'u_sales1',
+    orgId: 'org_demo',
+    now,
+    demoFill: false,
+  });
+  assert.equal(sales.scope, 'team');
+  assert.deepEqual(sales.ranking.map((row) => row.userId).sort(), ['u_crew1', 'u_exec1', 'u_sales1']);
+  assert.equal(sales.detail?.projects.some((project) => project.name === 'Кухня на Арбате'), true);
+  const panels = buildStaffDrill({
+    viewer: { id: 'u_partner1', role: 'owner', orgId: 'org_demo' },
+    users: directory,
+    events: saved,
+    objects: [
+      {
+        id: 'mounted',
+        orgId: 'org_demo',
+        status: 'install',
+        assignedTo: 'u_crew1',
+        updatedAt: now,
+        room: { areaM2: 24 },
+        estimate: { panels: 16 },
+      },
+    ],
+    projects: [],
+    metric: 'panels',
+    period: 'month',
+    orgId: 'org_demo',
+    now,
+    demoFill: false,
+  });
+  assert.equal(panels.roles.find((role) => role.id === 'crew')?.ranking[0]?.value, 16);
+  assert.equal(panels.roles.find((role) => role.id === 'crew')?.ranking[0]?.mountedPanels, 16);
+});

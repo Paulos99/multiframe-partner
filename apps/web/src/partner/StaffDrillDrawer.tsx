@@ -29,6 +29,29 @@ const PERIODS: Array<{ id: DrillPeriod; label: string }> = [
   { id: 'year', label: 'Год' },
 ];
 
+const RANK_TAB_LABELS: Record<DrillRoleId, string> = {
+  sales: 'Менеджеры',
+  measurer: 'Замерщики',
+  crew: 'Монтажники',
+};
+
+function visibleRoles(data: StaffDrillResult | null) {
+  const provided = (data?.roles || []).filter((role) => role.ranking.length);
+  const source = provided.length
+    ? provided
+    : (['sales', 'measurer', 'crew'] as DrillRoleId[])
+        .map((id) => ({
+          id,
+          label: RANK_TAB_LABELS[id],
+          ranking: (data?.ranking || []).filter((row) => row.role === id),
+        }))
+        .filter((role) => role.ranking.length);
+  return source.map((role) => ({
+    ...role,
+    label: RANK_TAB_LABELS[role.id] || role.label,
+  }));
+}
+
 function formatNum(n: number): string {
   if (!Number.isFinite(n)) return '0';
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
@@ -129,7 +152,7 @@ export function StaffDrillDrawer({
     };
   }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to]);
 
-  const roles = data?.roles || [];
+  const roles = visibleRoles(data);
   const activeRole = roles.find((role) => role.id === roleId) || roles[0] || null;
   const ranking = activeRole?.ranking || [];
   const person = ranking.find((row) => row.userId === userId) || data?.ranking.find((row) => row.userId === userId) || null;

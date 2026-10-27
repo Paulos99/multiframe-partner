@@ -94,6 +94,42 @@ test('редкий хвост без версии схемы всё равно �
   assert.equal(extendDemoAnalyticsHistory(extended), extended);
 });
 
+test('маркер схемы на короткой пачке не мешает дополнению до года', () => {
+  const short = [
+    {
+      id: 'ev_demo_history_schema',
+      schema: 3,
+      at: new Date().toISOString(),
+      orgId: 'org_demo',
+      action: 'schema',
+    },
+    {
+      id: 'ev_result_org_demo_0_0',
+      at: new Date().toISOString(),
+      orgId: 'org_demo',
+      action: 'result',
+      object: { areaM2: 10 },
+    },
+    {
+      id: 'ae_kept_short',
+      at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+      orgId: 'org_demo',
+      userId: 'u_sales1',
+      action: 'result',
+      object: { areaM2: 4 },
+    },
+  ];
+  const extended = extendDemoAnalyticsHistory(short);
+  assert.notEqual(extended, short);
+  assert.equal(extended.some((event) => event.id === 'ae_kept_short'), true);
+  assert.ok(extended.length > short.length + 50);
+  const stamps = extended
+    .filter((event) => event.orgId === 'org_demo' && event.id !== 'ev_demo_history_schema')
+    .map((event) => Date.parse(event.at));
+  assert.ok(Math.max(...stamps) - Math.min(...stamps) > 300 * 24 * 60 * 60 * 1000);
+  assert.equal(extendDemoAnalyticsHistory(extended), extended);
+});
+
 test('агрегаты Потолков Столицы в 1.3 раза выше Северного Потолка', () => {
   const platform = buildDemoPlatform({ withHashes: false });
   const events = buildDemoAnalyticsEvents();

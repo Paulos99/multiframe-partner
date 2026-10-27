@@ -249,15 +249,27 @@ function capWithSchemaMarker<T extends { id?: string }>(events: T[]): T[] {
   return marker ? [...head, marker] : head;
 }
 
+const YEAR_SPAN_MS = 300 * 24 * 60 * 60 * 1000;
+
+function storedDemoReady(events: Array<{ id?: string; orgId?: string | null; at?: string; schema?: number }>): boolean {
+  const marker = events.find((event) => event?.id === 'ev_demo_history_schema');
+  if (!(Number(marker?.schema) >= Number(DEMO_ANALYTICS_VERSION))) return false;
+  const stamps = events
+    .filter((event) => event && DEMO_ORG_IDS.has(String(event.orgId || '')) && event.id !== 'ev_demo_history_schema')
+    .map((event) => Date.parse(event.at || ''))
+    .filter((stamp) => !Number.isNaN(stamp));
+  if (stamps.length < 2) return false;
+  return Math.max(...stamps) - Math.min(...stamps) >= YEAR_SPAN_MS;
+}
+
 /**
- * Версия схемы 3 замораживает уже сохранённую историю.
- * Пока версии нет, короткая демо-пачка один раз заменяется годом, чужие id остаются.
+ * Короткая демо-история один раз заменяется годом, чужие id остаются.
+ * Уже покрытый год не пересобирается: плитки не прыгают между загрузками.
  */
 export function ensureDemoAnalyticsHistory(): void {
   try {
-    if (localStorage.getItem(DEMO_ANALYTICS_VERSION_KEY) === DEMO_ANALYTICS_VERSION) return;
     const raw = localStorage.getItem(ANALYTICS_KEY);
-    let existing: Array<{ id?: string; orgId?: string | null; at?: string }> = [];
+    let existing: Array<{ id?: string; orgId?: string | null; at?: string; schema?: number }> = [];
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as unknown;
@@ -266,6 +278,13 @@ export function ensureDemoAnalyticsHistory(): void {
         existing = [];
       }
     }
+    if (storedDemoReady(existing)) {
+      if (localStorage.getItem(DEMO_ANALYTICS_VERSION_KEY) !== DEMO_ANALYTICS_VERSION) {
+        localStorage.setItem(DEMO_ANALYTICS_VERSION_KEY, DEMO_ANALYTICS_VERSION);
+      }
+      return;
+    }
+    if (existing.length && !existing.some((event) => DEMO_ORG_IDS.has(String(event.orgId || '')))) return;
     const fresh = buildLocalDemoAnalytics();
     const freshIds = new Set(fresh.map((event) => event.id));
     const kept = existing.filter((event) => {
@@ -286,9 +305,9 @@ export function ensureDemoAnalyticsHistory(): void {
   }
 }
 
-/** Уже сохранённая история версии 3 не пересобирается, даже если базу кабинета сбросили. */
+/** Готовая годовая история не пересобирается, даже если базу кабинета сбросили. */
 export function seedDemoAnalyticsOnce(force = false): void {
-  if (force && demoAnalyticsVersion() === DEMO_ANALYTICS_VERSION) return;
+  void force;
   ensureDemoAnalyticsHistory();
 }
 

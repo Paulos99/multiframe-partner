@@ -17,8 +17,21 @@ export const DRILL_METRICS = [
 export const DRILL_PERIODS = ['month', 'quarter', 'year'];
 
 const RANK_ROLES = ['sales', 'measurer', 'crew'];
-const RANK_ROLE_SET = new Set(RANK_ROLES);
 const FIELD_ROLES = new Set(['measurer', 'crew']);
+const ROLE_ALIASES = {
+  sales: 'sales',
+  manager: 'sales',
+  measurer: 'measurer',
+  executor: 'measurer',
+  exec: 'measurer',
+  crew: 'crew',
+  installer: 'crew',
+  install: 'crew',
+};
+
+function canonicalRankRole(role) {
+  return ROLE_ALIASES[String(role || '')] || null;
+}
 const ROLE_LABELS = {
   sales: 'Менеджеры',
   measurer: 'Замерщики',
@@ -116,9 +129,9 @@ export function visibleStaff(viewer, users, orgId) {
   const role = viewer?.role;
   if (role !== 'admin' && role !== 'owner' && role !== 'sales') return [];
   const focus = role === 'admin' ? orgId || null : viewer?.orgId || orgId || null;
-  const people = (users || []).filter(
-    (user) => user && RANK_ROLE_SET.has(user.role) && (!focus || user.orgId === focus),
-  );
+  const people = (users || [])
+    .filter((user) => user && canonicalRankRole(user.role) && (!focus || user.orgId === focus))
+    .map((user) => ({ ...user, role: canonicalRankRole(user.role) }));
   if (role === 'sales') {
     return people.filter((user) => user.id === viewer.id || FIELD_ROLES.has(user.role));
   }
@@ -177,9 +190,7 @@ function eventMetric(row, metric) {
 
 /** Монтажники на плитке «Панели» ранжируются по смонтированному, не по чужим расчётам. */
 function displayValue(row, metric) {
-  if (row.role === 'crew' && metric === 'panels' && row.mountedPanels > 0) {
-    return Math.round(row.mountedPanels);
-  }
+  if (row.role === 'crew' && metric === 'panels') return Math.round(row.mountedPanels);
   return eventMetric(row, metric);
 }
 
@@ -410,10 +421,11 @@ function finishProjects(grouped) {
     .slice(0, 8);
 }
 
-function projectsFromEvents(userId, events, projects, orgId, from, to) {
+function projectsFromEvents(userId, events, projects, orgId, from, to, accept) {
+  const same = accept || ((event) => event.userId === userId);
   const grouped = new Map();
   for (const event of events || []) {
-    if (!event || event.userId !== userId) continue;
+    if (!event || !same(event)) continue;
     if (String(event.role || '') === 'admin') continue;
     if (orgId && event.orgId !== orgId) continue;
     if (!inWindow(event.at, from, to)) continue;
@@ -470,12 +482,33 @@ export function buildStaffDrill(input) {
   const allowed = new Set(staff.map((user) => user.id));
   const companyScope = input.viewer?.role !== 'sales';
   const usersById = new Map((input.users || []).filter(Boolean).map((user) => [user.id, user]));
+  const usersByLogin = new Map();
+  for (const user of input.users || []) {
+    if (!user?.login) continue;
+    usersByLogin.set(`${user.orgId || ''}::${user.login}`, user);
+  }
   const rows = new Map(staff.map((user) => [user.id, emptyRow(user)]));
 
+  function personFor(event) {
+    if (event?.userId && usersById.has(event.userId)) return usersById.get(event.userId);
+    const login = String(event?.login || '');
+    if (!login) return null;
+    return usersByLogin.get(`${event.orgId || orgId || ''}::${login}`) || null;
+  }
+
   function rankRole(event) {
-    const known = usersById.get(event.userId);
-    const role = known?.role || event.role || '';
-    return RANK_ROLE_SET.has(role) ? role : null;
+    const known = personFor(event);
+    const fromDirectory = canonicalRankRole(known?.role);
+    if (fromDirectory) return fromDirectory;
+    if (known && (known.role === 'owner' || known.role === 'admin' || known.role === 'partner')) return null;
+    return canonicalRankRole(event?.role);
+  }
+
+  function eventMatchesUser(event, userId) {
+    if (!event || !userId) return false;
+    if (event.userId === userId) return true;
+    const known = personFor(event);
+    return Boolean(known && known.id === userId && canonicalRankRole(known.role));
   }
 
   function adopt(event, role) {
@@ -500,8 +533,10 @@ export function buildStaffDrill(input) {
     if (!inWindow(event.at, window.from, window.to)) continue;
     const role = rankRole(event);
     if (!role) continue;
-    if (!companyScope && !allowed.has(event.userId)) continue;
-    const row = rows.get(event.userId) || (companyScope ? adopt(event, role) : null);
+    const known = personFor(event);
+    const staffId = known && canonicalRankRole(known.role) === role ? known.id : null;
+    if (!companyScope && !(staffId && allowed.has(staffId))) continue;
+    const row = (staffId && rows.get(staffId)) || (companyScope ? adopt(event, role) : null);
     if (row) addEvent(row, event);
   }
 
@@ -575,7 +610,7 @@ export function buildStaffDrill(input) {
     } else {
       const buckets = new Map(keys.map((key) => [key, emptyBucket(key)]));
       for (const event of input.events || []) {
-        if (!event || event.userId !== input.userId) continue;
+        if (!eventMatchesUser(event, input.userId)) continue;
         if (String(event.role || '') === 'admin') continue;
         if (orgId && event.orgId !== orgId) continue;
         if (!inWindow(event.at, window.from, window.to)) continue;
@@ -619,7 +654,15 @@ export function buildStaffDrill(input) {
       collectProjects(input.userId, input.objects, input.projects, orgId, window.from, window.to, true),
       demoFilled
         ? []
-        : projectsFromEvents(input.userId, input.events, input.projects, orgId, window.from, window.to),
+        : projectsFromEvents(
+            input.userId,
+            input.events,
+            input.projects,
+            orgId,
+            window.from,
+            window.to,
+            (event) => eventMatchesUser(event, input.userId),
+          ),
     );
     if (!projects.length && demoFilled) {
       projects = mergeProjectLists(
