@@ -84,15 +84,13 @@ test('сохранённая история: плитки и рейтинг из
     { historyKey: HISTORY_RESET, analyticsKey: ANALYTICS, sessionKey: SESSION, periodKey: PERIOD, stored: events },
   );
 
-  let dashboardHits = 0;
-  let drillHits = 0;
-  await page.route('**/analytics/dashboard**', (route) => {
-    dashboardHits += 1;
-    return route.abort();
+  const dashboardStatuses: number[] = [];
+  const drillRequests: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/analytics/dashboard')) dashboardStatuses.push(response.status());
   });
-  await page.route('**/analytics/drill**', (route) => {
-    drillHits += 1;
-    return route.abort();
+  page.on('request', (request) => {
+    if (request.url().includes('/analytics/drill')) drillRequests.push(request.url());
   });
 
   await page.goto('/?demo=1');
@@ -116,6 +114,7 @@ test('сохранённая история: плитки и рейтинг из
   const drill = page.getByRole('dialog', { name: 'Панели' });
   const why = drill.getByTestId('why-zero');
   await expect(why).toBeVisible();
+  await expect(why).toContainText('Источник: локально');
   await expect(why).toContainText('Комнат 11');
   await expect(why).toContainText('Плитка панелей 5206');
   await expect(why).toContainText('площадь 2403');
@@ -165,6 +164,6 @@ test('сохранённая история: плитки и рейтинг из
     path: '/opt/cursor/artifacts/screenshots/analytics-room-card.png',
     fullPage: true,
   });
-  expect(dashboardHits).toBe(0);
-  expect(drillHits).toBe(0);
+  expect(dashboardStatuses).toContain(200);
+  expect(drillRequests).toEqual([]);
 });

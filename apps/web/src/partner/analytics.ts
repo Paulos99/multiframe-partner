@@ -25,7 +25,7 @@ import {
   peekAnalyticsQueue,
 } from './localStore';
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
+const API_BASE = (import.meta.env?.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
 const OPEN_THROTTLE_KEY = 'mf_partner_open_throttle_v1';
 const OPEN_THROTTLE_MS = 30 * 60 * 1000;
 
@@ -239,6 +239,125 @@ export function composeCabinetAnalytics(input: {
     kpi: input.kpi === undefined ? { panels: dash.kpi.panels, areaM2: dash.kpi.areaM2 } : input.kpi,
   });
   return { dash, drill };
+}
+
+export type AnalyticsTileSource = 'local' | 'server';
+
+/** Один объект на плитки и на рейтинг. Рейтинг получает его пропсом, без второго запроса. */
+export type AnalyticsTileModel = {
+  events: AnalyticsEvent[];
+  objects: Array<Record<string, unknown>>;
+  projects: Array<Record<string, unknown>>;
+  users: Array<{ id: string; login?: string; displayName?: string; role: string; orgId?: string | null }>;
+  kpi: { panels: number; areaM2: number };
+  source: AnalyticsTileSource;
+  from: string | null;
+  to: string | null;
+  dash: AnalyticsDashboard;
+};
+
+export type DashboardProbe =
+  | { kind: 'no-api' }
+  | { kind: 'network' }
+  | { kind: 'http'; status: number; body: unknown };
+
+export function analyticsSourceLabel(source: AnalyticsTileSource): string {
+  return source === 'server' ? 'сервер' : 'локально';
+}
+
+/** Комнаты доски. Пустой хук не затирает кэш и mf_partner_db_v5. */
+export function roomsForCabinet(hookRooms?: Array<Record<string, unknown>> | null): Array<Record<string, unknown>> {
+  if (hookRooms?.length) return hookRooms;
+  const cached = loadCachedObjects() as unknown as Array<Record<string, unknown>>;
+  if (cached.length) return cached;
+  return loadDb().objects as unknown as Array<Record<string, unknown>>;
+}
+
+function serverEvents(body: unknown): AnalyticsEvent[] {
+  if (!body || typeof body !== 'object') return [];
+  const events = (body as { events?: unknown }).events;
+  return Array.isArray(events) ? (events as AnalyticsEvent[]) : [];
+}
+
+/** Пустое тело, нулевой kpi без событий, 401, 404 и сеть не становятся входом плиток. */
+export function acceptServerEvents(probe: DashboardProbe, preferLocal: boolean): boolean {
+  if (preferLocal) return false;
+  if (probe.kind !== 'http' || probe.status !== 200) return false;
+  return serverEvents(probe.body).length > 0;
+}
+
+/**
+ * Сервер принимается только вместе со своими событиями.
+ * Иначе возвращается тот же локальный объект, из которого уже нарисованы плитки.
+ */
+export function applyDashboardProbe(
+  local: AnalyticsTileModel,
+  probe: DashboardProbe,
+  opts: { preferLocal: boolean; orgId?: string | null; mode: 'admin' | 'partner' },
+): AnalyticsTileModel {
+  if (!acceptServerEvents(probe, opts.preferLocal)) return local;
+  const events = serverEvents(probe.kind === 'http' ? probe.body : null);
+  const composed = composeCabinetAnalytics({
+    events,
+    objects: local.objects,
+    projects: local.projects,
+    users: local.users,
+    from: local.from,
+    to: local.to,
+    orgId: opts.orgId,
+    mode: opts.mode,
+  });
+  return {
+    events,
+    objects: local.objects,
+    projects: local.projects,
+    users: local.users,
+    kpi: { panels: composed.dash.kpi.panels, areaM2: composed.dash.kpi.areaM2 },
+    source: 'server',
+    from: local.from,
+    to: local.to,
+    dash: { ...composed.dash, source: 'api' },
+  };
+}
+
+/** Живой запрос сводки. Демо его не пропускает: пустой ответ просто не принимается. */
+export async function probeAnalyticsDashboard(opts: {
+  mode: 'admin' | 'partner';
+  orgId?: string | null;
+  partnerLogin?: string | null;
+}): Promise<DashboardProbe> {
+  if (!API_BASE) return { kind: 'no-api' };
+  try {
+    const q = new URLSearchParams();
+    if (opts.orgId) q.set('orgId', opts.orgId);
+    const headers: Record<string, string> = {
+      'X-Analytics-Role': opts.mode === 'admin' ? 'admin' : 'owner',
+      'Content-Type': 'application/json',
+    };
+    const token = (() => {
+      try {
+        return localStorage.getItem('mf_partner_token_v1');
+      } catch {
+        return null;
+      }
+    })();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (opts.partnerLogin) headers['X-Partner-Login'] = opts.partnerLogin;
+    if (opts.orgId) headers['X-Analytics-Org'] = opts.orgId;
+    const res = await fetch(`${API_BASE}/analytics/dashboard?${q.toString()}`, {
+      headers,
+      signal: AbortSignal.timeout(8000),
+    });
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    return { kind: 'http', status: res.status, body };
+  } catch {
+    return { kind: 'network' };
+  }
 }
 
 async function cachedEvents(): Promise<AnalyticsEvent[]> {

@@ -8,8 +8,7 @@ import type {
   DrillRoleId,
   StaffDrillResult,
 } from '../../../../packages/shared/staffDrill.js';
-import type { AnalyticsEvent } from '../../../../packages/shared/partner';
-import { composeCabinetAnalytics, fetchAnalyticsDashboard, presetRange, rangeFromYmd } from './analytics';
+import { analyticsSourceLabel, composeCabinetAnalytics, presetRange, rangeFromYmd, type AnalyticsTileModel } from './analytics';
 import { isDemoModeEnabled } from './demoMode';
 import { Skeleton } from './Skeleton';
 import styles from './partner.module.css';
@@ -94,10 +93,7 @@ export function StaffDrillDrawer({
   onPeriodChange,
   onClose,
   onOpenRoom,
-  objects,
-  projects,
-  events,
-  users,
+  model,
   children,
 }: {
   metric: string;
@@ -108,12 +104,8 @@ export function StaffDrillDrawer({
   onPeriodChange?: (period: DrillPeriod) => void;
   onClose: () => void;
   onOpenRoom?: (roomId: string) => void;
-  objects?: Array<Record<string, unknown>>;
-  projects?: Array<Record<string, unknown>>;
-  /** Тот же массив, из которого посчитаны плитки на экране. */
-  events?: AnalyticsEvent[];
-  /** Сотрудники того же кабинета, что и доска. */
-  users?: Array<{ id: string; login?: string; displayName?: string; role: string; orgId?: string | null }>;
+  /** Тот же объект, из которого нарисованы плитки. Второй запрос сюда не ходит. */
+  model: AnalyticsTileModel;
   children?: ReactNode;
 }) {
   const [period, setPeriod] = useState<DrillPeriod | null>(null);
@@ -141,50 +133,40 @@ export function StaffDrillDrawer({
   const preset = period ? presetRange(period) : null;
   const activeRange = preset
     ? rangeFromYmd(preset.fromYmd, preset.toYmd)
-    : { from: from ?? null, to: to ?? null };
+    : { from: from ?? model.from, to: to ?? model.to };
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const from = activeRange.from ?? (activeRange.to ? null : 'all');
-    const to = activeRange.to;
-    const localDemo = orgId === 'org_demo' || orgId === 'org_demo_spb';
-    void (async () => {
-      try {
-        // Демо уже держит полный архив. Чужой сервер отдаёт события выбранного окна, комнаты остаются из кабинета.
-        let list = events || [];
-        if (!localDemo) {
-          const remote = await fetchAnalyticsDashboard({ mode, from, to, orgId });
-          if (remote.source === 'api') list = remote.events || [];
-        }
-        const { drill } = composeCabinetAnalytics({
-          events: list,
-          objects,
-          projects,
-          users,
-          from,
-          to,
-          orgId,
-          metric,
-          period: period ?? 'month',
-          userId,
-          mode,
-        });
-        if (!cancelled) setData(drill);
-      } catch (reason: unknown) {
-        if (!cancelled) {
-          setData(null);
-          setError(reason instanceof Error ? reason.message : 'Не удалось открыть рейтинг');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+    try {
+      const { drill } = composeCabinetAnalytics({
+        events: model.events,
+        objects: model.objects,
+        projects: model.projects,
+        users: model.users,
+        from: activeRange.from ?? (activeRange.to ? null : 'all'),
+        to: activeRange.to,
+        orgId,
+        metric,
+        period: period ?? 'month',
+        userId,
+        mode,
+        kpi: period ? undefined : model.kpi,
+      });
+      if (!cancelled) setData(drill);
+    } catch (reason: unknown) {
+      if (!cancelled) {
+        setData(null);
+        setError(reason instanceof Error ? reason.message : 'Не удалось открыть рейтинг');
       }
-    })();
+    } finally {
+      if (!cancelled) setLoading(false);
+    }
     return () => {
       cancelled = true;
     };
-  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to, objects, projects, events, users]);
+  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to, model]);
 
   const roles = visibleRoles(data);
   const activeRole = roles.find((role) => role.id === roleId) || roles[0] || null;
@@ -228,7 +210,8 @@ export function StaffDrillDrawer({
 
         {explainZeros && data ? (
           <p className={styles.whyZeroReport} data-testid="why-zero">
-            чему 0. Хранилище mf_partner_db_v5. Комнат {data.drops?.rooms ?? 0}. Событий {data.drops?.events ?? 0}.
+            чему 0. Источник: {analyticsSourceLabel(model.source)}. Хранилище mf_partner_db_v5. Комнат{' '}
+            {data.drops?.rooms ?? 0}. Событий {data.drops?.events ?? 0}.
             Отсечено: компания {data.drops?.company ?? 0}, период {data.drops?.period ?? 0}, исполнитель{' '}
             {data.drops?.assignee ?? 0}. Монтаж: {assignmentLine(data.drops?.installByUser)}. Закрыто:{' '}
             {assignmentLine(data.drops?.closedByUser)}. Плитка панелей {data.drops?.tilePanels ?? 0}, площадь{' '}
