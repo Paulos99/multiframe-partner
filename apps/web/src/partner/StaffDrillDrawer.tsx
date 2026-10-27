@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
 import type {
@@ -47,12 +47,14 @@ export function StaffDrillDrawer({
   orgId,
   onClose,
   onOpenRoom,
+  children,
 }: {
   metric: string;
   mode: 'admin' | 'partner';
   orgId?: string | null;
   onClose: () => void;
   onOpenRoom?: (roomId: string) => void;
+  children?: ReactNode;
 }) {
   const [period, setPeriod] = useState<DrillPeriod>('month');
   const [userId, setUserId] = useState<string | null>(null);
@@ -141,6 +143,8 @@ export function StaffDrillDrawer({
             </button>
           ))}
         </div>
+
+        {person ? null : children}
 
         {loading && !data ? <Skeleton kind="rows" count={4} label="Загрузка рейтинга" /> : null}
         {error ? (

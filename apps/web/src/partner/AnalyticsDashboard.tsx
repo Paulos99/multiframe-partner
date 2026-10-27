@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type {
   AnalyticsBreakdownItem,
   AnalyticsDashboard as DashData,
+  AnalyticsFunnel,
   AnalyticsKpi,
+  AnalyticsSeriesPoint,
 } from '../../../../packages/shared/partner';
 import {
   HOUSE_TYPE_OPTIONS,
@@ -14,11 +16,13 @@ import {
   type RoomType,
 } from '../state/types';
 import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
+import { funnelStopCounts, funnelStopPercents } from '../../../../packages/shared/funnel';
 import {
   fetchAnalyticsDashboard,
   formatPeriodLabel,
   getAnalyticsFocusOrg,
   getAnalyticsPeriod,
+  monthLabel,
   rangeFromYmd,
   setAnalyticsFocusOrg,
   setAnalyticsPeriod,
@@ -27,11 +31,13 @@ import {
 } from './analytics';
 import { calcModeLabel } from './calcModeLabel';
 import { JournalDownload } from './JournalDownload';
+import { spansMoreThanTwoMonths } from './periodSpan';
 import { CountUp, FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import { StaffDrillDrawer } from './StaffDrillDrawer';
 import styles from './partner.module.css';
+import { FunnelIcon } from '../icons';
 
 const HOUSE_LABELS = Object.fromEntries(
   HOUSE_TYPE_OPTIONS.map((o) => [o.id, o.label]),
@@ -48,6 +54,11 @@ function formatWhen(iso: string | null): string {
   } catch {
     return iso;
   }
+}
+
+function formatDay(day: string): string {
+  const [, m, d] = day.split('-');
+  return m && d ? `${d}.${m}` : day;
 }
 
 function formatNum(n: number): string {
@@ -149,6 +160,144 @@ function KpiCard({
   );
 }
 
+function FunnelBlock({
+  title,
+  steps,
+}: {
+  title: string;
+  steps: Array<{ label: string; value: number }>;
+}) {
+  const reached = steps.map((step) => step.value);
+  const stopped = funnelStopCounts(reached);
+  const percents = funnelStopPercents(reached);
+  const opened = stopped.reduce((sum, value) => sum + value, 0);
+  return (
+    <div className={styles.funnelBlock}>
+      <h4 className={styles.funnelTitle}>
+        <FunnelIcon size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+        {title}
+        <span
+          className={styles.funnelLabel}
+          style={{ display: 'block', marginTop: 4, fontSize: '0.75rem', fontWeight: 650 }}
+        >
+          Открыли: {opened} · где остановились, в сумме 100%
+        </span>
+      </h4>
+      <ol className={styles.funnelSteps}>
+        {steps.map((step, index) => (
+          <li key={step.label}>
+            <span className={styles.funnelLabel}>{step.label}</span>
+            <strong title="Остановились на этом этапе">{stopped[index]}</strong>
+            <span className={styles.funnelPct}>{percents[index]}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+type SliceRow = { label: string; total: number };
+
+function monthsFromSeries(series: AnalyticsSeriesPoint[]): SliceRow[] {
+  const months = new Map<string, number>();
+  for (const p of series) {
+    const [y, m, d] = p.day.split('-');
+    if (!y || !m || !d) continue;
+    const key = `${y}-${m}`;
+    months.set(key, (months.get(key) || 0) + p.problemomer + p.calculator + p.pdf + p.logins);
+  }
+  return [...months.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([key, total]) => ({ label: monthLabel(key), total }));
+}
+
+function MonthSlice({ rows }: { rows: SliceRow[] }) {
+  const max = Math.max(1, ...rows.map((r) => r.total));
+  if (!rows.length) return <p className={styles.lead}>Пока нет данных по месяцам</p>;
+  return (
+    <ul className={styles.sliceList}>
+      {rows.map((r) => (
+        <li key={r.label} className={styles.sliceRow}>
+          <span>{r.label}</span>
+          <span className={styles.sliceTrack}>
+            <span className={styles.sliceFill} style={{ width: `${(r.total / max) * 100}%` }} />
+          </span>
+          <strong>{r.total}</strong>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
+  const max = Math.max(
+    1,
+    ...series.map((p) => Math.max(p.problemomer, p.calculator, p.pdf, p.logins)),
+  );
+  const showEvery = series.length > 14 ? Math.ceil(series.length / 10) : 1;
+
+  return (
+    <div className={styles.seriesWrap}>
+      <div className={styles.seriesLegend}>
+        <span className={styles.legPm}>PM</span>
+        <span className={styles.legCalc}>Кальк.</span>
+        <span className={styles.legPdf}>PDF</span>
+        <span className={styles.legLogin}>Входы</span>
+      </div>
+      <div className={styles.seriesChart} role="img" aria-label="Динамика по дням">
+        {series.map((p, i) => (
+          <div key={p.day} className={styles.seriesDay}>
+            <div className={styles.seriesBars}>
+              <div
+                className={`${styles.seriesBar} ${styles.barPm}`}
+                style={{ height: `${(p.problemomer / max) * 100}%` }}
+                title={`PM: ${p.problemomer}`}
+              />
+              <div
+                className={`${styles.seriesBar} ${styles.barCalc}`}
+                style={{ height: `${(p.calculator / max) * 100}%` }}
+                title={`Кальк.: ${p.calculator}`}
+              />
+              <div
+                className={`${styles.seriesBar} ${styles.barPdf}`}
+                style={{ height: `${(p.pdf / max) * 100}%` }}
+                title={`PDF: ${p.pdf}`}
+              />
+              <div
+                className={`${styles.seriesBar} ${styles.barLogin}`}
+                style={{ height: `${(p.logins / max) * 100}%` }}
+                title={`Входы: ${p.logins}`}
+              />
+            </div>
+            {i % showEvery === 0 || i === series.length - 1 ? (
+              <span className={styles.seriesTick}>{formatDay(p.day)}</span>
+            ) : (
+              <span className={styles.seriesTick} />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function funnelStepsPm(f: AnalyticsFunnel) {
+  return [
+    { label: 'Только открыл', value: f.problemomer.open },
+    { label: 'Посчитал, без PDF', value: f.problemomer.result },
+    { label: 'Скачал PDF, не поделился', value: f.problemomer.pdf },
+    { label: 'Поделился', value: f.problemomer.share },
+  ];
+}
+
+function funnelStepsCalc(f: AnalyticsFunnel) {
+  return [
+    { label: 'Только открыл', value: f.calculator.open },
+    { label: 'Посчитал, без PDF', value: f.calculator.calcDone },
+    { label: 'Скачал PDF', value: f.calculator.pdf },
+  ];
+}
+
 function BreakdownList({
   title,
   items,
@@ -211,7 +360,6 @@ export function AnalyticsDashboard({
 
   const partnersList = useMemo(
     () => (mode === 'admin' ? api.adminListPartners() : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [mode, api, data],
   );
 
@@ -366,7 +514,9 @@ export function AnalyticsDashboard({
               />
             ))}
           </FadeRise>
-          <p className={styles.hint}>Нажмите показатель, чтобы открыть рейтинг.</p>
+          {openMetric ? null : (
+            <p className={styles.hint}>Нажмите показатель — откроются воронка и динамика.</p>
+          )}
         </div>
       ) : null}
 
@@ -544,7 +694,25 @@ export function AnalyticsDashboard({
           orgId={mode === 'partner' ? user.orgId : focusOrg || null}
           onOpenRoom={onOpenRoom}
           onClose={() => setOpenMetric(null)}
-        />
+        >
+          <h3 className={styles.dashSub}>Воронка</h3>
+          <div className={styles.funnelGrid}>
+            <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
+            <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
+          </div>
+          <h3 className={styles.dashSub}>Динамика</h3>
+          {dash.series.length ? (
+            <SeriesChart series={dash.series} />
+          ) : (
+            <p className={styles.lead}>Пока нет точек для графика</p>
+          )}
+          {spansMoreThanTwoMonths(fromYmd, toYmd, dash.series) ? (
+            <>
+              <h3 className={styles.dashSub}>По месяцам</h3>
+              <MonthSlice rows={monthsFromSeries(dash.series)} />
+            </>
+          ) : null}
+        </StaffDrillDrawer>
       ) : null}
     </div>
   );

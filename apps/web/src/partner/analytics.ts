@@ -255,28 +255,34 @@ export async function fetchStaffDrill(opts: {
   userId?: string | null;
   orgId?: string | null;
 }): Promise<StaffDrillResult> {
-  const local = localStaffDrill(opts);
-  if (!API_BASE) return local;
+  if (!API_BASE) return localStaffDrill(opts);
+  const q = new URLSearchParams();
+  q.set('metric', opts.metric);
+  q.set('period', opts.period);
+  if (opts.userId) q.set('userId', opts.userId);
+  if (opts.orgId) q.set('orgId', opts.orgId);
+  let res: Response;
   try {
-    const q = new URLSearchParams();
-    q.set('metric', opts.metric);
-    q.set('period', opts.period);
-    if (opts.userId) q.set('userId', opts.userId);
-    if (opts.orgId) q.set('orgId', opts.orgId);
-    const res = await fetch(`${API_BASE}/analytics/drill?${q.toString()}`, {
+    res = await fetch(`${API_BASE}/analytics/drill?${q.toString()}`, {
       headers: authHeaders(opts.mode, opts.orgId),
     });
-    if (res.status === 401 || res.status === 403) {
-      throw new Error('Аналитика недоступна');
-    }
-    if (!res.ok) throw new Error(String(res.status));
-    const data = (await res.json()) as StaffDrillResult;
-    if (!Array.isArray(data.ranking)) return local;
-    return data;
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Аналитика недоступна') throw error;
-    return local;
+  } catch {
+    throw new Error('Не удалось загрузить рейтинг. Проверьте соединение.');
   }
+  if (res.status === 401 || res.status === 403) {
+    throw new Error('Аналитика недоступна');
+  }
+  if (!res.ok) throw new Error('Не удалось загрузить рейтинг. Проверьте соединение.');
+  let data: StaffDrillResult;
+  try {
+    data = (await res.json()) as StaffDrillResult;
+  } catch {
+    throw new Error('Не удалось загрузить рейтинг. Проверьте соединение.');
+  }
+  if (!data || !Array.isArray(data.ranking)) {
+    throw new Error('Не удалось загрузить рейтинг. Проверьте соединение.');
+  }
+  return data;
 }
 
 export function periodFromDays(days: number | null): { from: string | null; to: string | null } {
