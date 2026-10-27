@@ -89,12 +89,33 @@ export function areaSum(rooms: JobObject[]): { known: number; total: number; mis
   return { known, total: Math.round(total * 10) / 10, missing: rooms.length - known };
 }
 
+const ROOM_KIND: Record<string, string> = {
+  living: 'Гостиная',
+  bedroom: 'Спальня',
+  kids: 'Детская',
+  kitchen: 'Кухня',
+  office: 'Кабинет',
+  other: 'Другое',
+};
+
+/** Своё название комнаты, иначе тип из проблемомера. */
+export function roomTitle(room: {
+  roomName?: string | null;
+  room?: { roomType?: string | null; roomTypeCustom?: string | null } | null;
+}): string {
+  const named = room.roomName?.trim();
+  if (named && named !== 'Комната' && named !== 'Помещение') return named;
+  const type = room.room?.roomType || '';
+  if (type === 'other') return room.room?.roomTypeCustom?.trim() || ROOM_KIND.other;
+  return ROOM_KIND[type] || 'Комната';
+}
+
 export type NextStep = { roomId: string; text: string };
 
 export function nextSteps(rooms: JobObject[]): NextStep[] {
   const steps: NextStep[] = [];
   for (const room of rooms) {
-    const name = room.roomName?.trim() || 'Комната';
+    const name = roomTitle(room);
     if (room.status === 'closed') continue;
     if (room.room?.areaM2 == null) {
       steps.push({ roomId: room.id, text: `${name}: указать площадь` });

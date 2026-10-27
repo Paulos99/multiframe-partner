@@ -21,6 +21,7 @@ import {
 } from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
+import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { estimateForRole } from '../../packages/shared/projectAccess.js';
 import {
   deleteObject,
@@ -284,7 +285,15 @@ async function loadPlatformFallback() {
 }
 
 async function loadPlatform() {
-  return loadStoredDocument(platformDocumentSpec());
+  const platform = await loadStoredDocument(platformDocumentSpec());
+  if (groupOrphanRooms(platform)) {
+    try {
+      await savePlatform(platform);
+    } catch (error) {
+      console.warn('project grouping save failed', error?.message || error);
+    }
+  }
+  return platform;
 }
 
 async function savePlatform(platform) {

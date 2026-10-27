@@ -40,6 +40,7 @@ import {
   OFFICIAL_PRICE_PER_M2,
   STAFF_ROLES,
 } from '../../../../packages/shared/partner';
+import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { carriedObjectLink } from './objectLink';
 import {
   buildLocalDemoAnalytics,
@@ -106,7 +107,7 @@ export function generatePassword(length = 10): string {
 }
 
 function defaultDb(): PartnerDb {
-  return {
+  const db: PartnerDb = {
     users: buildLocalDemoUsers() as StoredUser[],
     orgs: buildLocalDemoOrgs().map((o) => ({
       ...o,
@@ -117,6 +118,8 @@ function defaultDb(): PartnerDb {
     objects: buildLocalDemoObjects(),
     projects: [],
   };
+  groupOrphanRooms(db);
+  return db;
 }
 
 function migrateDb(raw: PartnerDb): PartnerDb {
@@ -138,7 +141,7 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     }),
   }));
   const materials = Array.isArray(raw.materials) ? raw.materials : undefined;
-  return {
+  const next: PartnerDb = {
     users,
     orgs,
     links: raw.links || [],
@@ -147,6 +150,8 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     projects: Array.isArray(raw.projects) ? raw.projects : [],
     ...(materials ? { materials } : {}),
   };
+  groupOrphanRooms(next);
+  return next;
 }
 
 /** Старые демо-записи с login system подписывались тем, кто открыл историю. Имя пишется в саму запись. */

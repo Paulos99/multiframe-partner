@@ -58,14 +58,25 @@ describe('projects', { concurrency: false }, () => {
     tokens.admin = await login('admin', 'admin1234');
 
     const before = storedPlatform();
-    assert.equal(Object.prototype.hasOwnProperty.call(before, 'projects'), false);
+    assert.equal(Array.isArray(before.projects), true);
     const legacy = before.objects.find((obj) => obj.id === 'obj_a11');
     assert.ok(legacy);
-    assert.equal(Object.prototype.hasOwnProperty.call(legacy, 'projectId'), false);
+    assert.match(legacy.projectId, /^prj_/);
+    const chernov = before.projects.find((project) => project.id === legacy.projectId);
+    assert.equal(chernov.name, 'Чернов А.');
+    assert.equal(chernov.clientName, 'Чернов А.');
+    assert.equal(chernov.address, 'ул. Бауманская, 33');
+    assert.equal(chernov.orgId, 'org_demo');
+    assert.equal(before.objects.every((obj) => obj.projectId), true);
+    const ivanova = before.objects.filter((obj) => obj.clientName === 'Иванова А.');
+    assert.equal(new Set(ivanova.map((obj) => obj.projectId)).size, 1);
+    const capitalBefore = before.projects.filter((project) => project.orgId === 'org_demo').length;
+    const northBefore = before.projects.filter((project) => project.orgId === 'org_demo_spb').length;
 
     const listed = readJson(await call('GET', '/projects', { token: tokens.owner }));
-    assert.deepEqual(listed.projects, []);
-    assert.equal(Object.prototype.hasOwnProperty.call(storedPlatform(), 'projects'), false);
+    assert.equal(listed.projects.length, capitalBefore);
+    assert.equal(listed.projects.some((project) => project.id === legacy.projectId), true);
+    assert.equal(storedPlatform().projects.length, before.projects.length);
 
     const denied = await call('POST', '/projects', {
       token: tokens.measurer,
@@ -118,17 +129,15 @@ describe('projects', { concurrency: false }, () => {
     assert.equal(otherProject.project.orgId, 'org_demo_spb');
 
     const ownerList = readJson(await call('GET', '/projects', { token: tokens.owner }));
-    assert.deepEqual(
-      ownerList.projects.map((project) => project.id),
-      [projectId],
-    );
+    assert.equal(ownerList.projects.some((project) => project.id === projectId), true);
+    assert.equal(ownerList.projects.some((project) => project.id === otherProject.project.id), false);
+    assert.equal(ownerList.projects.length, capitalBefore + 1);
     const otherList = readJson(await call('GET', '/projects', { token: tokens.other }));
-    assert.deepEqual(
-      otherList.projects.map((project) => project.id),
-      [otherProject.project.id],
-    );
+    assert.equal(otherList.projects.some((project) => project.id === otherProject.project.id), true);
+    assert.equal(otherList.projects.some((project) => project.id === projectId), false);
+    assert.equal(otherList.projects.length, northBefore + 1);
     const adminList = readJson(await call('GET', '/projects', { token: tokens.admin }));
-    assert.equal(adminList.projects.length, 2);
+    assert.equal(adminList.projects.length, capitalBefore + northBefore + 2);
 
     assert.equal(
       (await call('PATCH', `/projects/${projectId}`, { token: tokens.other, body: { name: 'Захват' } }))
@@ -179,7 +188,7 @@ describe('projects', { concurrency: false }, () => {
     assert.equal(legacyResponse.statusCode, 200, legacyResponse.body);
     const legacyPatch = readJson(legacyResponse);
     assert.equal(legacyPatch.object.id, 'obj_a11');
-    assert.equal(Object.prototype.hasOwnProperty.call(legacyPatch.object, 'projectId'), false);
+    assert.equal(legacyPatch.object.projectId, legacy.projectId);
     assert.equal(legacyPatch.object.clientName, 'Чернов А.');
 
     assert.equal(
@@ -384,7 +393,7 @@ describe('projects', { concurrency: false }, () => {
     const crew = await login('crew1', 'exec1234');
     const other = await login('partner2', 'demo1234');
     const legacyBefore = storedPlatform().objects.find((obj) => obj.id === 'obj_a11');
-    assert.equal(Object.prototype.hasOwnProperty.call(legacyBefore, 'projectId'), false);
+    assert.match(legacyBefore.projectId, /^prj_/);
 
     assert.equal(
       (await call('POST', '/objects', { token: crew, body: { clientName: 'Монтаж', address: 'нет' } })).statusCode,
@@ -452,7 +461,7 @@ describe('projects', { concurrency: false }, () => {
     assert.equal(moved.object.estimate.totalCost, 5000);
 
     const legacy = storedPlatform().objects.find((obj) => obj.id === 'obj_a11');
-    assert.equal(Object.prototype.hasOwnProperty.call(legacy, 'projectId'), false);
+    assert.equal(legacy.projectId, legacyBefore.projectId);
   });
 
   test('настройки проекта правит владелец и менеджер, замерщик только читает', async () => {

@@ -33,6 +33,7 @@ import { ObjectHistory } from './ObjectHistory';
 import listStyles from './ProjectList.module.css';
 import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
 import { ProjectDesk } from './ProjectDesk';
+import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import styles from './partner.module.css';
 
 const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
@@ -215,21 +216,29 @@ export function ObjectsPanel({
     return map;
   }, [api.objects]);
 
+  const grouped = useMemo(() => {
+    const doc = {
+      projects: api.projects.map((project) => ({ ...project })),
+      objects: api.objects.map((object) => ({ ...object })),
+    };
+    groupOrphanRooms(doc);
+    return doc;
+  }, [api.projects, api.objects]);
   const cards = useMemo(
-    () => buildProjectCards(api.projects, api.objects).filter((card) => cardMatches(card, query, roomFilter)),
-    [api.projects, api.objects, query, roomFilter],
+    () => buildProjectCards(grouped.projects, grouped.objects).filter((card) => cardMatches(card, query, roomFilter)),
+    [grouped, query, roomFilter],
   );
   const selectedCard = useMemo(
-    () => buildProjectCards(api.projects, api.objects).find((card) => card.key === selectedKey) || null,
-    [api.projects, api.objects, selectedKey],
+    () => buildProjectCards(grouped.projects, grouped.objects).find((card) => card.key === selectedKey) || null,
+    [grouped, selectedKey],
   );
   const selectedRooms = useMemo(
     () => (selectedCard ? visibleRooms(selectedCard.rooms, roomFilter) : []),
     [selectedCard, roomFilter],
   );
   const selected = useMemo(
-    () => api.objects.find((o) => o.id === selectedId) || null,
-    [api.objects, selectedId],
+    () => grouped.objects.find((object) => object.id === selectedId) || null,
+    [grouped, selectedId],
   );
   useEffect(() => {
     if (!openCreateToken || !canCreate) return;
@@ -536,8 +545,8 @@ export function ObjectsPanel({
       </label>
 
       <ProjectDesk
-        projects={api.projects}
-        rooms={api.objects}
+        projects={grouped.projects}
+        rooms={grouped.objects}
         role={user.role}
         staff={staff}
         actor={{ id: user.id, role: user.role, displayName: user.displayName }}
@@ -573,7 +582,7 @@ export function ObjectsPanel({
         <p className={styles.lead}>Комнаты по стадиям</p>
         <KanbanBoard
           rooms={cards.flatMap((card) => visibleRooms(card.rooms, 'all'))}
-          projects={api.projects}
+          projects={grouped.projects}
           role={user.role}
           pendingId={pendingId}
           loading={api.objectsLoading && !api.objects.length}

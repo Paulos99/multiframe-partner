@@ -27,6 +27,7 @@ import {
   projectMatches,
   projectRooms,
   projectStatusLabel,
+  roomTitle,
   readProjectView,
   writeProjectView,
   type ProjectDeskView,
@@ -486,7 +487,7 @@ function Work({
       {rooms.map((room) => (
         <button key={room.id} type="button" className={styles.roomBtn} onClick={() => onOpenRoom(room)}>
           <span>
-            <strong>{room.roomName || 'Комната'}</strong>
+            <strong>{roomTitle(room)}</strong>
             <span>
               {room.room?.areaM2 != null ? formatArea(room.room.areaM2) : 'Площадь не указана'}
               {' · '}
@@ -534,7 +535,7 @@ function Team({ project, rooms, staff }: { project: Project; rooms: JobObject[];
           <ul className={styles.steps}>
             {rooms.filter((room) => room.assignedTo).map((room) => (
               <li key={room.id}>
-                {room.roomName || 'Комната'}: {personName(staff, room.assignedTo)}
+                {roomTitle(room)}: {personName(staff, room.assignedTo)}
               </li>
             ))}
           </ul>
@@ -589,7 +590,7 @@ function Reports({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room:
             {measured.map((room) => (
               <button key={room.id} type="button" className={styles.roomBtn} onClick={() => onOpenRoom(room)}>
                 <span>
-                  <strong>{room.roomName || 'Комната'}</strong>
+                  <strong>{roomTitle(room)}</strong>
                   <span>
                     {room.room?.areaM2 != null ? formatArea(room.room.areaM2) : 'Площадь не указана'}
                     {' · '}
@@ -610,7 +611,7 @@ function Reports({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room:
             {installed.map((room) => (
               <button key={room.id} type="button" className={styles.roomBtn} onClick={() => onOpenRoom(room)}>
                 <span>
-                  <strong>{room.roomName || 'Комната'}</strong>
+                  <strong>{roomTitle(room)}</strong>
                   <span>{JOB_OBJECT_STATUS_LABELS[room.status as JobObjectStatus] || room.status}</span>
                 </span>
               </button>
@@ -646,7 +647,7 @@ function Documents({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (roo
             <span>
               {doc.kind === 'profile' ? documentLabel(doc.kind) : 'Коммерческое предложение'}
               {' · '}
-              {room.roomName || 'Комната'}
+              {roomTitle(room)}
               {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
             </span>
           </span>
