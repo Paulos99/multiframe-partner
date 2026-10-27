@@ -704,3 +704,86 @@ test('доска проектов: 11 комнат считаются монта
   assert.equal(byName.get('Монтажник · Потолки Столицы'), 3);
   assert.equal(byName.get('Монтажник 2 · Потолки Столицы'), 1);
 });
+
+test('старые комнаты без projectId и assignedTo: бригада, отметка и группировка доски', () => {
+  const at = Date.parse(now);
+  const directory = [
+    { id: 'fresh_owner', login: 'partner1', displayName: 'Владелец', role: 'owner', orgId: 'org_demo' },
+    { id: 'fresh_sales', login: 'sales1', displayName: 'Менеджер', role: 'manager', orgId: 'org_demo' },
+    { id: 'fresh_sales_old', login: 'sales_old', displayName: 'Старый менеджер', role: 'sales', orgId: 'org_demo' },
+    { id: 'fresh_crew', login: 'crew1', displayName: 'Монтажник', role: 'installer', orgId: 'org_demo' },
+    { id: 'fresh_crew_b', login: 'crew1b', displayName: 'Монтажник 2', role: 'installer', orgId: 'org_demo' },
+  ];
+  const objects = [
+    {
+      id: 'legacy_a',
+      orgId: 'org_demo',
+      projectId: 'old_flat',
+      clientName: 'Старая квартира',
+      areaM2: 22,
+      panels: 40,
+      updatedAt: at,
+      history: [
+        { at, action: 'assign', detail: 'u_crew1b' },
+        { at, action: 'status', detail: 'смонтировано', login: 'partner1', userId: 'fresh_owner' },
+      ],
+    },
+    {
+      id: 'legacy_a2',
+      orgId: 'org_demo',
+      projectId: 'old_flat',
+      clientName: 'Старая квартира',
+      roomName: 'Спальня',
+      areaM2: 8,
+      panels: 5,
+      history: [{ at, action: 'status', detail: 'install', login: 'crew1b', userId: 'missing-crew' }],
+    },
+    {
+      id: 'legacy_b',
+      orgId: 'org_demo',
+      clientName: 'Вторая',
+      areaM2: 10,
+      panels: 12,
+      history: [{ at, action: 'status', detail: 'смонтировано', login: 'crew1', userId: 'missing-id' }],
+    },
+  ];
+  const result = buildStaffDrill({
+    viewer: { id: 'fresh_owner', role: 'owner', orgId: 'org_demo' },
+    users: directory,
+    events: [
+      {
+        at: now,
+        orgId: 'org_demo',
+        userId: 'u_sales_old',
+        login: 'sales1',
+        role: 'manager',
+        tool: 'calculator',
+        action: 'calc_done',
+        object: { areaM2: 30, panels: 4 },
+      },
+    ],
+    objects,
+    projects: [],
+    metric: 'panels',
+    period: 'month',
+    userId: 'fresh_sales',
+    orgId: 'org_demo',
+    now,
+    demoFill: false,
+  });
+  const crew = result.roles.find((role) => role.id === 'crew')?.ranking || [];
+  const byName = new Map(crew.map((row) => [row.displayName, row]));
+  assert.equal(byName.get('Монтажник')?.mountedRooms, 1);
+  assert.equal(byName.get('Монтажник')?.mountedPanels, 12);
+  assert.equal(byName.get('Монтажник 2')?.mountedRooms, 2);
+  assert.equal(byName.get('Монтажник 2')?.mountedPanels, 45);
+  for (const row of result.ranking.filter((item) => item.role === 'sales')) {
+    assert.equal(row.projectCount, 2);
+  }
+  const flat = result.detail?.projects.find((project) => project.name === 'Старая квартира');
+  assert.equal(flat?.rooms, 2);
+  assert.equal(flat?.roomId, 'legacy_a');
+  assert.equal(flat?.areaM2, 30);
+  const second = result.detail?.projects.find((project) => project.roomId === 'legacy_b');
+  assert.equal(second?.name, 'Вторая');
+});
