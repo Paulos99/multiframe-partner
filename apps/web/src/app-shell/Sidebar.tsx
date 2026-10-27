@@ -16,11 +16,16 @@ export function Sidebar({
   items,
   mode = 'tabs',
   tools,
+  sheet = false,
+  open = false,
 }: {
   items: SideItem[];
   /** Вкладки ролей остаются role=tab. У замерщика и монтажника это прежняя кнопка. */
   mode?: 'tabs' | 'buttons';
   tools?: ReactNode;
+  /** Узкий планшет: панель выезжает по кнопке «Меню». */
+  sheet?: boolean;
+  open?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeId = items.find((item) => item.active)?.id ?? null;
@@ -61,7 +66,14 @@ export function Sidebar({
     );
 
   return (
-    <aside className={styles.side} aria-label="Разделы кабинета">
+    <aside
+      id="cab-sections"
+      className={styles.side}
+      aria-label="Разделы кабинета"
+      data-sheet={sheet ? '' : undefined}
+      data-open={sheet && open ? '' : undefined}
+      aria-hidden={sheet && !open ? true : undefined}
+    >
       <div className={styles.brand}>
         <CabinetBrand />
       </div>

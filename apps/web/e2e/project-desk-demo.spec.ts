@@ -46,7 +46,7 @@ test('демо ?demo=1 группирует комнаты и открывает
   await desk.getByRole('button', { name: 'Список', exact: true }).click();
 
   await desk.getByRole('button', { name: 'Иванова А.', exact: true }).click();
-  const card = page.getByRole('dialog', { name: 'Карточка проекта' });
+  const card = page.getByRole('region', { name: 'Проект' });
   await expect(card).toBeVisible();
   const tabs = ['Обзор', 'Рабочая информация', 'Команда', 'Задачи', 'Отчёты', 'Документы', 'Настройки'] as const;
   for (const [index, name] of tabs.entries()) {
@@ -56,13 +56,13 @@ test('демо ?demo=1 группирует комнаты и открывает
   }
 
   await card.getByRole('tab', { name: 'Команда', exact: true }).click();
-  await expect(card.getByText('Павел Орлов')).toBeVisible();
+  await expect(card.getByText('Павел Орлов').first()).toBeVisible();
   await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
   await card.getByRole('button', { name: /Гостиная/ }).click();
-  const room = page.getByRole('dialog', { name: 'Комната' });
+  const room = page.getByRole('region', { name: 'Комната' });
   await expect(room).toBeVisible();
   await room.screenshot({ path: `${shots}/04-room.png` });
-  await page.keyboard.press('Escape');
+  await room.getByRole('button', { name: 'К проекту', exact: true }).click();
   await expect(room).toHaveCount(0);
   await expect(card).toBeVisible();
 
@@ -75,18 +75,8 @@ test('демо ?demo=1 группирует комнаты и открывает
   await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
   await card.screenshot({ path: `${shots}/05-settings.png` });
   const overview = card.getByRole('tab', { name: 'Обзор', exact: true });
-  const box = await overview.boundingBox();
-  if (!box) throw new Error('вкладка Обзор не видна');
-  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-  await expect
-    .poll(() =>
-      page.evaluate(
-        ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="tab"]')?.textContent?.trim() ?? '',
-        point,
-      ),
-    )
-    .toBe('Обзор');
-  await page.mouse.click(point.x, point.y);
+  await overview.click();
+  await expect(page).toHaveURL(/#project\/[^/]+\/overview$/);
   await expect(overview).toHaveAttribute('aria-selected', 'true');
   await expect(card.getByText('Демо: тихая квартира')).toBeVisible();
   await card.screenshot({ path: `${shots}/06-overview.png` });
@@ -119,7 +109,7 @@ test('демо-бригада видит список комнат без кан
   await expect(done.getByRole('heading', { name: 'Петров С.', exact: true })).toBeVisible();
 
   await open.getByRole('button', { name: 'Детская' }).click();
-  const room = page.getByRole('dialog', { name: 'Комната' });
+  const room = page.getByRole('region', { name: 'Комната' });
   await expect(room).toBeVisible();
   await expect(room).not.toContainText('₽');
   await expect(room.getByText('Итого комнаты')).toHaveCount(0);

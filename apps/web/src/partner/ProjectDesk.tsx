@@ -14,7 +14,6 @@ import {
   type ProjectStatus,
   type UserRole,
 } from '../../../../packages/shared/partner';
-import { SettingsIcon } from '../icons';
 import { formatRub } from './estimate';
 import {
   areaSum,
@@ -24,6 +23,7 @@ import {
   nextSteps,
   personName,
   problemomerLine,
+  projectAssigneeId,
   projectMatches,
   projectRooms,
   panelLabel,
@@ -35,6 +35,7 @@ import {
   type CrewProjectGroup,
   type ProjectDeskView,
 } from './projectDesk';
+import type { ProjectTab } from './projectRoute';
 import { preliminaryRoomTotal } from './projectSummary';
 import styles from './ProjectDesk.module.css';
 
@@ -66,8 +67,14 @@ export function ProjectDesk({
   staff,
   actor,
   query,
+  page,
+  onOpenProject,
+  onDesk,
+  onTab,
   onSave,
   onOpenRoom,
+  onAddRoom,
+  onDeleteProject,
 }: {
   projects: Project[];
   rooms: JobObject[];
@@ -75,15 +82,19 @@ export function ProjectDesk({
   staff: Person[];
   actor?: Person;
   query: string;
+  page: { projectId: string; tab: ProjectTab } | null;
+  onOpenProject: (id: string) => void;
+  onDesk: () => void;
+  onTab: (tab: ProjectTab) => void;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
   onOpenRoom: (room: JobObject) => void;
+  onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
+  onDeleteProject?: (project: Project) => void;
 }) {
   const [view, setView] = useState<ProjectDeskView>(() =>
     readProjectView(typeof localStorage === 'undefined' ? null : localStorage),
   );
   const [archive, setArchive] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabId>('overview');
   const seesMoney = roleSeesProjectMoney(role);
   const canEdit = canCreateObjects(role);
   const archiveCount = projects.filter((project) => project.archivedAt).length;
@@ -106,10 +117,10 @@ export function ProjectDesk({
   );
 
   const open = useMemo(() => {
-    if (!openId) return null;
-    const visible = rows.find((row) => row.project.id === openId);
+    if (!page) return null;
+    const visible = rows.find((row) => row.project.id === page.projectId);
     if (visible) return visible;
-    const project = projects.find((item) => item.id === openId);
+    const project = projects.find((item) => item.id === page.projectId);
     if (!project) return null;
     const own = projectRooms(project, rooms);
     return {
@@ -118,16 +129,40 @@ export function ProjectDesk({
       status: effectiveProjectStatus(project, own),
       archived: Boolean(project.archivedAt),
     };
-  }, [openId, rows, projects, rooms]);
+  }, [page, rows, projects, rooms]);
 
   function choose(next: ProjectDeskView) {
     setView(next);
     writeProjectView(typeof localStorage === 'undefined' ? null : localStorage, next);
   }
 
-  function show(id: string) {
-    setOpenId(id);
-    setTab('overview');
+  if (page) {
+    if (!open) {
+      return (
+        <section className={styles.page} aria-label="Проект">
+          <p className={styles.empty}>Проект не найден или вам его не назначили.</p>
+          <button type="button" className={styles.ghost} onClick={onDesk}>
+            К проектам
+          </button>
+        </section>
+      );
+    }
+    return (
+      <ProjectPage
+        row={open}
+        staff={staff}
+        actor={actor}
+        seesMoney={seesMoney}
+        canEdit={canEdit}
+        tab={page.tab}
+        onTab={onTab}
+        onDesk={onDesk}
+        onSave={onSave}
+        onOpenRoom={onOpenRoom}
+        onAddRoom={onAddRoom}
+        onDeleteProject={onDeleteProject}
+      />
+    );
   }
 
   if (role === 'crew') {
@@ -157,24 +192,10 @@ export function ProjectDesk({
           {query ? 'По этому запросу проектов нет.' : archive ? 'В архиве пусто.' : 'Пока нет проектов. Новый проект создаётся вместе с первой комнатой.'}
         </p>
       ) : view === 'list' ? (
-        <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={show} />
+        <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} />
       ) : (
-        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={show} />
+        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} />
       )}
-      {open ? (
-        <ProjectCard
-          row={open}
-          staff={staff}
-          actor={actor}
-          seesMoney={seesMoney}
-          canEdit={canEdit}
-          tab={tab}
-          onTab={setTab}
-          onClose={() => setOpenId(null)}
-          onSave={onSave}
-          onOpenRoom={onOpenRoom}
-        />
-      ) : null}
     </section>
   );
 }
@@ -375,7 +396,7 @@ function ProjectBoard({
   );
 }
 
-function ProjectCard({
+function ProjectPage({
   row,
   staff,
   actor,
@@ -383,9 +404,11 @@ function ProjectCard({
   canEdit,
   tab,
   onTab,
-  onClose,
+  onDesk,
   onSave,
   onOpenRoom,
+  onAddRoom,
+  onDeleteProject,
 }: {
   row: Row;
   staff: Person[];
@@ -394,68 +417,58 @@ function ProjectCard({
   canEdit: boolean;
   tab: TabId;
   onTab: (tab: TabId) => void;
-  onClose: () => void;
+  onDesk: () => void;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
   onOpenRoom: (room: JobObject) => void;
+  onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
+  onDeleteProject?: (project: Project) => void;
 }) {
   const people = actor && !staff.some((person) => person.id === actor.id) ? [actor, ...staff] : staff;
   const { project, rooms, status } = row;
   const area = areaSum(rooms);
   const money = preliminaryRoomTotal(rooms);
   const steps = nextSteps(rooms);
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
-      if (document.querySelector('[role="dialog"][aria-label="Комната"]')) return;
-      onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  const subtitle =
+    [project.clientName, [project.address, project.city].filter(Boolean).join(', '), projectStatusLabel(status)]
+      .filter(Boolean)
+      .join(' · ') || 'Контакт и адрес пока не заполнены';
 
-  return createPortal(
-    <>
-      <button type="button" className={styles.backdrop} aria-label="Закрыть карточку проекта" onClick={onClose} />
-      <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label="Карточка проекта">
-        <div className={styles.chrome}>
-          <div className={styles.head}>
-            <div>
-              <h3>{project.name}</h3>
-              <p className={styles.lead}>
-                {[project.clientName, project.address, project.city].filter(Boolean).join(' · ') || 'Контакт и адрес пока не заполнены'}
-              </p>
-            </div>
-            <div className={styles.headActions}>
-              <button
-                type="button"
-                className={styles.iconBtn}
-                aria-label="Настройки проекта"
-                aria-pressed={tab === 'settings'}
-                onClick={() => onTab('settings')}
-              >
-                <SettingsIcon size={22} />
-              </button>
-              <button type="button" className={styles.ghost} onClick={onClose}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-          <div className={styles.tabs} role="tablist" aria-label="Разделы карточки">
-            {TABS.map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={styles.tab}
-                role="tab"
-                aria-selected={tab === id}
-                onClick={() => onTab(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+  return (
+    <section className={styles.page} aria-label="Проект">
+      <nav className={styles.crumbs} aria-label="Путь">
+        <button type="button" onClick={onDesk}>
+          Проекты
+        </button>
+        <span aria-hidden="true">/</span>
+        <span>{project.name}</span>
+      </nav>
+      <header className={styles.pageHead}>
+        <div>
+          <p className={styles.eyebrow}>Проекты</p>
+          <h1>{project.name}</h1>
+          <p className={styles.lead}>{subtitle}</p>
         </div>
-        <div className={styles.body}>
+        {canEdit ? (
+          <button type="button" className={styles.ghost} aria-pressed={tab === 'settings'} onClick={() => onTab('settings')}>
+            Настройки проекта
+          </button>
+        ) : null}
+      </header>
+      <div className={styles.tabs} role="tablist" aria-label="Разделы проекта">
+        {TABS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={styles.tab}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => onTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className={styles.pageBody}>
         {tab === 'overview' ? (
           <Overview
             project={project}
@@ -470,18 +483,23 @@ function ProjectCard({
             onSettings={() => onTab('settings')}
           />
         ) : null}
-        {tab === 'work' ? <Work rooms={rooms} seesMoney={seesMoney} onOpenRoom={onOpenRoom} /> : null}
+        {tab === 'work' ? (
+          <Work
+            rooms={rooms}
+            seesMoney={seesMoney}
+            onOpenRoom={onOpenRoom}
+            onAddRoom={canEdit && onAddRoom ? (name) => onAddRoom(project.id, name) : undefined}
+          />
+        ) : null}
         {tab === 'team' ? <Team project={project} rooms={rooms} staff={people} /> : null}
         {tab === 'tasks' ? <Tasks steps={steps} rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
         {tab === 'reports' ? <Reports rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
         {tab === 'documents' ? <Documents rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
         {tab === 'settings' ? (
-          <Settings project={project} status={status} staff={people} actor={actor} canEdit={canEdit} onSave={onSave} />
+          <Settings project={project} rooms={rooms} status={status} staff={people} actor={actor} canEdit={canEdit} onSave={onSave} onDelete={onDeleteProject} />
         ) : null}
-        </div>
-      </aside>
-    </>,
-    document.body,
+      </div>
+    </section>
   );
 }
 
@@ -576,17 +594,55 @@ function Overview({
   );
 }
 
+function AddRoomForm({ onAdd }: { onAdd: (roomName: string) => Promise<void> }) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const label = name.trim();
+    if (!label) return;
+    setBusy(true);
+    setError('');
+    try {
+      await onAdd(label);
+      setName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось добавить комнату');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className={`${styles.form} ${styles.addRoom}`} onSubmit={(event) => void submit(event)}>
+      <label>
+        Новая комната
+        <input value={name} placeholder="Спальня" maxLength={120} onChange={(event) => setName(event.target.value)} />
+      </label>
+      <button type="submit" className={styles.primary} disabled={busy || !name.trim()}>
+        {busy ? 'Сохраняем…' : 'Добавить комнату'}
+      </button>
+      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+    </form>
+  );
+}
+
 function Work({
   rooms,
   seesMoney,
   onOpenRoom,
+  onAddRoom,
 }: {
   rooms: JobObject[];
   seesMoney: boolean;
   onOpenRoom: (room: JobObject) => void;
+  onAddRoom?: (roomName: string) => Promise<void>;
 }) {
-  if (!rooms.length) return <p className={styles.lead}>В проекте пока нет доступных вам комнат.</p>;
+  if (!rooms.length && !onAddRoom) return <p className={styles.lead}>В проекте пока нет доступных вам комнат.</p>;
   return (
+    <>
+    {onAddRoom ? <AddRoomForm onAdd={onAddRoom} /> : null}
+    {!rooms.length ? <p className={styles.lead}>В проекте пока нет комнат.</p> : null}
     <div className={styles.rooms}>
       {rooms.map((room) => (
         <button key={room.id} type="button" className={styles.roomBtn} onClick={() => onOpenRoom(room)}>
@@ -613,6 +669,7 @@ function Work({
         </button>
       ))}
     </div>
+    </>
   );
 }
 
@@ -622,15 +679,15 @@ function Team({ project, rooms, staff }: { project: Project; rooms: JobObject[];
       <dl className={styles.team}>
         <div>
           <dt>Менеджер</dt>
-          <dd>{personName(staff, project.managerUserId)}</dd>
+          <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'manager'))}</dd>
         </div>
         <div>
           <dt>Замерщик</dt>
-          <dd>{personName(staff, project.measurerUserId)}</dd>
+          <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'measurer'))}</dd>
         </div>
         <div>
           <dt>Бригада</dt>
-          <dd>{personName(staff, project.crewUserId)}</dd>
+          <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'crew'))}</dd>
         </div>
       </dl>
       {rooms.some((room) => room.assignedTo) ? (
@@ -763,25 +820,29 @@ function Documents({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (roo
 
 function Settings({
   project,
+  rooms,
   status,
   staff,
   actor,
   canEdit,
   onSave,
+  onDelete,
 }: {
   project: Project;
+  rooms: JobObject[];
   status: ProjectStatus;
   staff: Person[];
   actor?: Person;
   canEdit: boolean;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
+  onDelete?: (project: Project) => void;
 }) {
-  const [form, setForm] = useState(() => draftFrom(project, status));
+  const [form, setForm] = useState(() => draftFrom(project, status, rooms, staff));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [savedTick, setSavedTick] = useState(0);
   useEffect(() => {
-    setForm(draftFrom(project, status));
+    setForm(draftFrom(project, status, rooms, staff));
   }, [project.id, project.updatedAt, status]);
   useEffect(() => {
     if (!savedTick) return;
@@ -816,15 +877,15 @@ function Settings({
           </div>
           <div>
             <dt>Менеджер</dt>
-            <dd>{personName(staff, project.managerUserId)}</dd>
+            <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'manager'))}</dd>
           </div>
           <div>
             <dt>Замерщик</dt>
-            <dd>{personName(staff, project.measurerUserId)}</dd>
+            <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'measurer'))}</dd>
           </div>
           <div>
             <dt>Бригада</dt>
-            <dd>{personName(staff, project.crewUserId)}</dd>
+            <dd>{personName(staff, projectAssigneeId(project, rooms, staff, 'crew'))}</dd>
           </div>
           <div>
             <dt>Начало</dt>
@@ -944,6 +1005,14 @@ function Settings({
         {busy ? 'Сохраняем…' : 'Сохранить'}
       </button>
     </form>
+    {onDelete ? (
+      <div className={styles.dangerZone}>
+        <p className={styles.lead}>Проект удаляется вместе со всеми его комнатами.</p>
+        <button type="button" className={styles.danger} onClick={() => onDelete(project)}>
+          Удалить проект
+        </button>
+      </div>
+    ) : null}
     {savedTick
       ? createPortal(
           <p className={styles.toast} role="status">
@@ -988,7 +1057,7 @@ function PeopleField({
   );
 }
 
-function draftFrom(project: Project, status: ProjectStatus) {
+function draftFrom(project: Project, status: ProjectStatus, rooms: JobObject[], staff: Person[]) {
   return {
     name: project.name,
     description: project.description || '',
@@ -997,9 +1066,9 @@ function draftFrom(project: Project, status: ProjectStatus) {
     address: project.address || '',
     city: project.city || '',
     status: project.status || status,
-    managerUserId: project.managerUserId || '',
-    measurerUserId: project.measurerUserId || '',
-    crewUserId: project.crewUserId || '',
+    managerUserId: projectAssigneeId(project, rooms, staff, 'manager') || '',
+    measurerUserId: projectAssigneeId(project, rooms, staff, 'measurer') || '',
+    crewUserId: projectAssigneeId(project, rooms, staff, 'crew') || '',
     startsAt: project.startsAt || '',
     dueAt: project.dueAt || '',
     archived: Boolean(project.archivedAt),

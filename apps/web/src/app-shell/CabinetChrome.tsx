@@ -6,7 +6,7 @@ import { MobileProfileScreen, ProfileTabIcon } from './MobileProfile';
 import { ProfileMenu } from './ProfileMenu';
 import { Sidebar, type SideItem } from './Sidebar';
 import { ThemeToggle } from './ThemeToggle';
-import { usePhoneLayout } from './usePhoneLayout';
+import { usePhoneLayout, useSheetMenu } from './usePhoneLayout';
 import styles from './CabinetChrome.module.css';
 
 export type { SideItem };
@@ -36,8 +36,21 @@ export function CabinetChrome({
   children: ReactNode;
 }) {
   const phone = usePhoneLayout();
+  const sheet = useSheetMenu();
+  const [menuOpen, setMenuOpen] = useState(false);
   const { profileOpenToken } = usePartner();
   const [profileOpen, setProfileOpen] = useState(false);
+  useEffect(() => {
+    if (!sheet) setMenuOpen(false);
+  }, [sheet]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
   useEffect(() => {
     if (profileOpenToken > 0) setProfileOpen(true);
   }, [profileOpenToken]);
@@ -65,6 +78,7 @@ export function CabinetChrome({
           ...item,
           active: showProfile ? false : item.active,
           onSelect: () => {
+            setMenuOpen(false);
             setProfileOpen(false);
             item.onSelect();
           },
@@ -73,16 +87,39 @@ export function CabinetChrome({
           id: 'profile',
           label: 'Профиль',
           active: showProfile,
-          onSelect: () => setProfileOpen(true),
+          onSelect: () => {
+            setMenuOpen(false);
+            setProfileOpen(true);
+          },
           icon: <ProfileTabIcon />,
         },
       ]
-    : items;
+    : items.map((item) => ({
+        ...item,
+        onSelect: () => {
+          setMenuOpen(false);
+          item.onSelect();
+        },
+      }));
   return (
     <div className={styles.frame} ref={frameRef}>
-      <Sidebar items={navItems} mode={mode} tools={tools} />
+      {sheet && menuOpen ? (
+        <button type="button" className={styles.menuBackdrop} aria-label="Закрыть меню" onClick={() => setMenuOpen(false)} />
+      ) : null}
+      <Sidebar items={navItems} mode={mode} tools={tools} sheet={sheet} open={menuOpen} />
       <div className={styles.main}>
         <header className={styles.topbar} ref={barRef}>
+          {sheet ? (
+            <button
+              type="button"
+              className={styles.menuButton}
+              aria-expanded={menuOpen}
+              aria-controls="cab-sections"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              Меню
+            </button>
+          ) : null}
           <div className={styles.mobileBrand}>
             <CabinetBrand />
           </div>
