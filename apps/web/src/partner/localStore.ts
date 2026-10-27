@@ -27,6 +27,10 @@ import {
   canManageStaff,
   canMoveObjects,
   visibleDocuments,
+  cleanProjectDate,
+  cleanProjectStatus,
+  estimateForRole,
+  PROJECT_STATUSES,
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
   isStaffRole,
@@ -36,6 +40,7 @@ import {
   OFFICIAL_PRICE_PER_M2,
   STAFF_ROLES,
 } from '../../../../packages/shared/partner';
+import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { applyDemoPersonalNames, normalizePersonName, personName } from '../../../../packages/shared/personName.js';
 import { carriedObjectLink } from './objectLink';
 import {
@@ -103,7 +108,7 @@ export function generatePassword(length = 10): string {
 }
 
 function defaultDb(): PartnerDb {
-  return {
+  const db: PartnerDb = {
     users: buildLocalDemoUsers() as StoredUser[],
     orgs: buildLocalDemoOrgs().map((o) => ({
       ...o,
@@ -114,6 +119,8 @@ function defaultDb(): PartnerDb {
     objects: buildLocalDemoObjects(),
     projects: [],
   };
+  groupOrphanRooms(db);
+  return db;
 }
 
 function migrateDb(raw: PartnerDb): PartnerDb {
@@ -136,7 +143,7 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     }),
   }));
   const materials = Array.isArray(raw.materials) ? raw.materials : undefined;
-  return {
+  const next: PartnerDb = {
     users,
     orgs,
     links: raw.links || [],
@@ -145,6 +152,8 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     projects: Array.isArray(raw.projects) ? raw.projects : [],
     ...(materials ? { materials } : {}),
   };
+  groupOrphanRooms(next);
+  return next;
 }
 
 /** Старые демо-записи с login system подписывались тем, кто открыл историю. Имя пишется в саму запись. */
@@ -793,7 +802,7 @@ export function isObjectVisible(user: SessionUser, obj: JobObject): boolean {
  */
 export function presentCachedObject(user: SessionUser, obj: JobObject): JobObject | null {
   if (!objectVisible(user, obj)) return null;
-  return presentObject(obj);
+  return presentObject(obj, user.role);
 }
 
 function objectVisible(user: SessionUser, obj: JobObject): boolean {
@@ -810,28 +819,78 @@ function objectVisible(user: SessionUser, obj: JobObject): boolean {
   return false;
 }
 
-/** Цены видят все роли: меняется только список документов. */
-function presentObject(obj: JobObject): JobObject {
-  return { ...obj, documents: visibleDocuments(obj.documents) };
+/** Бригада видит количества без цен. Остальные роли — полный расчёт. */
+function presentObject(obj: JobObject, role: UserRole): JobObject {
+  return {
+    ...obj,
+    estimate: estimateForRole(obj.estimate, role),
+    documents: visibleDocuments(obj.documents),
+  };
 }
 
 export function listLocalObjects(user: SessionUser): JobObject[] {
   const db = loadDb();
   return db.objects
     .filter((o) => objectVisible(user, o))
-    .map((o) => presentObject(o));
+    .map((o) => presentObject(o, user.role));
 }
 
 function projectVisibleLocal(user: SessionUser, project: Project, objects: JobObject[]): boolean {
   if (user.role === 'admin') return true;
   if (!user.orgId || project.orgId !== user.orgId) return false;
   if (user.role === 'owner' || user.role === 'sales') return true;
+  if (user.role === 'measurer' && project.measurerUserId === user.id) return true;
+  if (user.role === 'crew' && project.crewUserId === user.id) return true;
   return objects.some((obj) => obj.projectId === project.id && objectVisible(user, obj));
 }
 
 export function listLocalProjects(user: SessionUser): Project[] {
   const db = loadDb();
   return (db.projects || []).filter((project) => projectVisibleLocal(user, project, db.objects));
+}
+
+function projectAssignee(
+  db: { users: Array<{ id: string; orgId?: string | null; role: string }> },
+  input: ProjectInput,
+  existing: Project | undefined,
+  key: 'managerUserId' | 'measurerUserId' | 'crewUserId',
+  orgId: string,
+  roles: UserRole[],
+  label: string,
+): string | null {
+  if (!Object.prototype.hasOwnProperty.call(input, key)) return existing?.[key] || null;
+  const raw = input[key];
+  if (raw == null || String(raw).trim() === '') return null;
+  const id = String(raw).trim();
+  const person = db.users.find((user) => user.id === id);
+  if (!person || person.orgId !== orgId || !roles.includes(normalizeRole(person.role))) {
+    throw new Error(`${label} не из этой компании`);
+  }
+  return id;
+}
+
+function projectStatusField(input: ProjectInput, existing?: Project): Project['status'] {
+  if (!Object.prototype.hasOwnProperty.call(input, 'status')) return existing?.status;
+  const cleaned = cleanProjectStatus(input.status);
+  if (cleaned.error) throw new Error(cleaned.error);
+  return cleaned.value && PROJECT_STATUSES.includes(cleaned.value) ? cleaned.value : undefined;
+}
+
+function projectDateField(
+  input: ProjectInput,
+  existing: Project | undefined,
+  key: 'startsAt' | 'dueAt',
+): string | null {
+  if (!Object.prototype.hasOwnProperty.call(input, key)) return existing?.[key] || null;
+  const cleaned = cleanProjectDate(input[key]);
+  if (cleaned.error) throw new Error(cleaned.error);
+  return cleaned.value;
+}
+
+function projectArchiveField(input: ProjectInput, existing: Project | undefined, now: string): string | null {
+  if (!Object.prototype.hasOwnProperty.call(input, 'archived')) return existing?.archivedAt || null;
+  if (input.archived) return existing?.archivedAt || now;
+  return null;
 }
 
 export function upsertLocalProject(input: ProjectInput, actor: SessionUser): Project {
@@ -844,14 +903,24 @@ export function upsertLocalProject(input: ProjectInput, actor: SessionUser): Pro
   const name = String(input.name ?? existing?.name ?? '').trim();
   if (!name) throw new Error('Укажите название проекта');
   const now = new Date().toISOString();
+  const orgId = existing?.orgId || actor.orgId;
+  const status = projectStatusField(input, existing);
   const project: Project = {
     id: existing?.id || input.id || uid('prj'),
-    orgId: existing?.orgId || actor.orgId,
+    orgId,
     name: name.slice(0, 250),
     clientName: String(input.clientName ?? existing?.clientName ?? '').trim(),
     clientPhone: String(input.clientPhone ?? existing?.clientPhone ?? '').trim(),
     address: String(input.address ?? existing?.address ?? '').trim(),
     city: String(input.city ?? existing?.city ?? '').trim(),
+    description: String(input.description ?? existing?.description ?? '').trim().slice(0, 4000),
+    ...(status ? { status } : {}),
+    managerUserId: projectAssignee(db, input, existing, 'managerUserId', orgId, ['owner', 'sales'], 'Менеджер'),
+    measurerUserId: projectAssignee(db, input, existing, 'measurerUserId', orgId, ['measurer'], 'Замерщик'),
+    crewUserId: projectAssignee(db, input, existing, 'crewUserId', orgId, ['crew'], 'Бригада'),
+    startsAt: projectDateField(input, existing, 'startsAt'),
+    dueAt: projectDateField(input, existing, 'dueAt'),
+    archivedAt: projectArchiveField(input, existing, now),
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     createdBy: existing?.createdBy || actor.id,
@@ -1017,7 +1086,7 @@ export function upsertLocalObject(
   if (obj.pendingSync) enqueueObjectSync(obj);
   else removeFromObjectQueue(obj.id);
   cacheObjects(listLocalObjects(actor));
-  return presentObject(obj);
+  return presentObject(obj, actor.role);
 }
 
 export function cacheObjects(objects: JobObject[]): void {
@@ -1255,5 +1324,5 @@ export function appendLocalObjectDocuments(
   };
   saveDb({ ...db, objects: db.objects.map((o) => (o.id === next.id ? next : o)) });
   cacheObjects(listLocalObjects(actor));
-  return presentObject(next);
+  return presentObject(next, actor.role);
 }

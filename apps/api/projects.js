@@ -5,11 +5,18 @@
  * Чтение отсутствующего ключа platform.projects — пустой список.
  */
 
+import {
+  PROJECT_STATUSES,
+  cleanProjectDate,
+  cleanProjectStatus,
+} from '../../packages/shared/projectAccess.js';
+
 const NAME_MAX = 250;
 const TEXT_MAX = 250;
 const PHONE_MAX = 80;
 const CITY_MAX = 120;
 const ROOM_MAX = 120;
+const DESCRIPTION_MAX = 4000;
 
 function httpError(status, message) {
   return Object.assign(new Error(message), { status });
@@ -23,8 +30,9 @@ function projectRows(platform) {
   return Array.isArray(platform?.projects) ? platform.projects : [];
 }
 
-/** Ответ клиенту: только поля контракта, без смет и итогов. */
+/** Ответ клиенту: поля проекта, без смет и итогов. Статус пуст, пока его не сохранили. */
 export function publicProject(project) {
+  const status = PROJECT_STATUSES.includes(project.status) ? project.status : undefined;
   return {
     id: project.id,
     orgId: project.orgId,
@@ -33,6 +41,14 @@ export function publicProject(project) {
     clientPhone: project.clientPhone || '',
     address: project.address || '',
     city: project.city || '',
+    description: project.description || '',
+    ...(status ? { status } : {}),
+    managerUserId: project.managerUserId || null,
+    measurerUserId: project.measurerUserId || null,
+    crewUserId: project.crewUserId || null,
+    startsAt: project.startsAt || null,
+    dueAt: project.dueAt || null,
+    archivedAt: project.archivedAt || null,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     createdBy: project.createdBy,
@@ -48,6 +64,10 @@ function projectVisible(user, project, platform, objectVisibleTo) {
   if (!user.orgId || project.orgId !== user.orgId) return false;
   if (user.role === 'owner' || user.role === 'sales') return true;
   if (user.role === 'measurer' || user.role === 'crew') {
+    const named =
+      (user.role === 'measurer' && project.measurerUserId === user.id) ||
+      (user.role === 'crew' && project.crewUserId === user.id);
+    if (named) return true;
     return (platform.objects || []).some(
       (obj) => obj.projectId === project.id && objectVisibleTo(user, obj),
     );
@@ -55,25 +75,74 @@ function projectVisible(user, project, platform, objectVisibleTo) {
   return false;
 }
 
+function canonicalRole(role) {
+  if (role === 'partner') return 'owner';
+  if (role === 'executor') return 'measurer';
+  return role;
+}
+
+function assignee(body, existing, key, platform, orgId, roles, label) {
+  if (!Object.prototype.hasOwnProperty.call(body, key)) return existing?.[key] || null;
+  const raw = body[key];
+  if (raw == null || String(raw).trim() === '') return null;
+  const id = String(raw).trim();
+  const person = (platform?.users || []).find((user) => user.id === id);
+  if (!person || person.orgId !== orgId || !roles.includes(canonicalRole(person.role))) {
+    throw httpError(400, `${label} не из этой компании`);
+  }
+  return person.id;
+}
+
+function dateField(body, existing, key) {
+  if (!Object.prototype.hasOwnProperty.call(body, key)) return existing?.[key] || null;
+  const cleaned = cleanProjectDate(body[key]);
+  if (cleaned.error) throw httpError(400, cleaned.error);
+  return cleaned.value;
+}
+
+function statusField(body, existing) {
+  if (!Object.prototype.hasOwnProperty.call(body, 'status')) return existing?.status;
+  const cleaned = cleanProjectStatus(body.status);
+  if (cleaned.error) throw httpError(400, cleaned.error);
+  return cleaned.value;
+}
+
+function archiveField(body, existing) {
+  if (!Object.prototype.hasOwnProperty.call(body, 'archived')) return existing?.archivedAt || null;
+  if (body.archived) return existing?.archivedAt || new Date().toISOString();
+  return null;
+}
+
 function clientProjectId(raw) {
   const id = String(raw || '').trim();
   return /^prj_[a-z0-9]+$/i.test(id) ? id : '';
 }
 
-function writeProject(body, existing, actor, uid) {
-  const name = text(body.name !== undefined ? body.name : existing?.name, NAME_MAX);
+function writeProject(body, existing, actor, uid, platform) {
+  const source = body && typeof body === 'object' ? body : {};
+  const name = text(source.name !== undefined ? source.name : existing?.name, NAME_MAX);
   if (!name) throw httpError(400, 'Укажите название проекта');
   const pick = (key, max) =>
-    text(body[key] !== undefined ? body[key] : existing?.[key], max);
+    text(source[key] !== undefined ? source[key] : existing?.[key], max);
+  const orgId = existing?.orgId || actor.orgId;
   const now = new Date().toISOString();
+  const status = statusField(source, existing);
   return {
-    id: existing?.id || clientProjectId(body.id) || uid('prj'),
-    orgId: existing?.orgId || actor.orgId,
+    id: existing?.id || clientProjectId(source.id) || uid('prj'),
+    orgId,
     name,
     clientName: pick('clientName', TEXT_MAX),
     clientPhone: pick('clientPhone', PHONE_MAX),
     address: pick('address', TEXT_MAX),
     city: pick('city', CITY_MAX),
+    description: pick('description', DESCRIPTION_MAX),
+    ...(status ? { status } : {}),
+    managerUserId: assignee(source, existing, 'managerUserId', platform, orgId, ['owner', 'sales'], 'Менеджер'),
+    measurerUserId: assignee(source, existing, 'measurerUserId', platform, orgId, ['measurer'], 'Замерщик'),
+    crewUserId: assignee(source, existing, 'crewUserId', platform, orgId, ['crew'], 'Бригада'),
+    startsAt: dateField(source, existing, 'startsAt'),
+    dueAt: dateField(source, existing, 'dueAt'),
+    archivedAt: archiveField(source, existing),
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     createdBy: existing?.createdBy || actor.id,
@@ -141,6 +210,7 @@ export function ensureProjectForNewObject(platform, body, actor, uid) {
     null,
     actor,
     uid,
+    platform,
   );
   if (!Array.isArray(platform.projects)) platform.projects = [];
   platform.projects = [project, ...platform.projects];
@@ -178,7 +248,7 @@ export async function handleProjects(ctx) {
     if (found && found.orgId !== user.orgId) {
       return ctx.json(403, { message: 'Недостаточно прав' });
     }
-    const project = writeProject(body, found, user, ctx.uid);
+    const project = writeProject(body, found, user, ctx.uid, platform);
     if (!Array.isArray(platform.projects)) platform.projects = [];
     if (found) {
       const idx = platform.projects.findIndex((item) => item.id === found.id);
@@ -233,7 +303,7 @@ export async function handleProjects(ctx) {
   if (idx < 0 || !projectVisible(user, rows[idx], platform, ctx.objectVisibleTo)) {
     return ctx.json(404, { message: 'Проект не найден' });
   }
-  const project = writeProject(ctx.getBody() || {}, rows[idx], user, ctx.uid);
+  const project = writeProject(ctx.getBody() || {}, rows[idx], user, ctx.uid, platform);
   if (!Array.isArray(platform.projects)) platform.projects = rows.slice();
   platform.projects[idx] = project;
   await ctx.savePlatform(platform);

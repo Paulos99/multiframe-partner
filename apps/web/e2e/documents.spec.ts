@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openProjectRoom } from './open-room';
 
 const password = 'ui-fixture-password-only';
 const API = 'http://127.0.0.1:4181';
@@ -40,7 +41,7 @@ async function uploadAsOwner(request: import('@playwright/test').APIRequestConte
   return obj as { documents: Array<{ kind: string; id: string }>; estimate: { totalCost: number | null } };
 }
 
-test('API: монтажник видит цены и все документы, старая спецификация в паре скрыта', async ({ request }) => {
+test('API: бригада не получает суммы, документы остаются, старая спецификация в паре скрыта', async ({ request }) => {
   const owner = await uploadAsOwner(request);
   expect(owner.documents.map((d) => d.kind)).toEqual(['profile', 'estimate', 'spec']);
   const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.crew', password } });
@@ -48,7 +49,9 @@ test('API: монтажник видит цены и все документы, 
   expect(user.org.panelPriceRub).toBe(2396);
   const list = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${token}` } });
   const room = (await list.json()).objects.find((o: { id: string }) => o.id === 'ui_crew_room');
-  expect(room.estimate.totalCost).toBe(75261);
+  expect(room.estimate.totalCost).toBeUndefined();
+  expect(room.estimate.panelsCost).toBeUndefined();
+  expect(room.estimate.panels).toBe(16);
   expect(room.documents.map((d: { id: string }) => d.id)).toEqual([
     owner.documents[0].id,
     'legacy_est',
@@ -68,9 +71,7 @@ test('монтажник: PDF в комнате без цен, предпрос�
   await enter(page, 'crew');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
 
-  const card = page.locator('[data-room-id="ui_crew_room"]');
-  await expect(card).toContainText('Смета · Профиль');
-  await card.click();
+  await openProjectRoom(page, 'Гостиная');
 
   await page.locator('summary', { hasText: 'Документы' }).click();
   const rows = page.locator('[data-doc-kind]');
@@ -95,7 +96,7 @@ test('менеджер видит те же PDF в карточке комнат
   await uploadAsOwner(request);
   await enter(page, 'sales');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_crew_room"]').click();
+  await openProjectRoom(page, 'Гостиная');
   await page.locator('summary', { hasText: 'Документы' }).click();
   await expect(page.locator('[data-doc-kind="profile"]')).toHaveCount(1);
   await expect(page.locator('[data-doc-kind="estimate"]')).toHaveCount(2);

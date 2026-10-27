@@ -174,14 +174,12 @@ test('локальный API: dry-run, идемпотентность и чуж�
     });
     assert.equal(dry.report.dryRun, true);
     assert.equal(dry.report.protectedSkipped, 1);
-    assert.ok(dry.report.willCreate > 0);
+    assert.equal(dry.report.willCreate, 0);
+    assert.ok(dry.report.alreadyLinked > 0);
     assert.equal(dry.requests.some((call) => call.startsWith('POST /projects')), false);
     assert.equal(dry.requests.some((call) => call.startsWith('PATCH /objects')), false);
     const afterDry = stored();
-    assert.equal(
-      afterDry.objects.find((obj) => obj.id === 'obj_a01').projectId,
-      undefined,
-    );
+    assert.equal(afterDry.objects.find((obj) => obj.id === 'obj_a01').projectId, kept.projectId);
     assert.equal(afterDry.objects.find((obj) => obj.id === 'obj_a11').projectId, PROTECTED_PROJECT_ID);
 
     const live = await runFromConfig({
@@ -194,7 +192,8 @@ test('локальный API: dry-run, идемпотентность и чуж�
     assert.equal(live.requests.some((call) => call.startsWith('DELETE')), false);
     const migrated = stored();
     const room = migrated.objects.find((obj) => obj.id === 'obj_a01');
-    assert.equal(room.projectId, stableProjectId('obj_a01'));
+    assert.equal(room.projectId, kept.projectId);
+    assert.notEqual(room.projectId, stableProjectId('obj_a01'));
     assert.equal(room.clientName, kept.clientName);
     assert.equal(room.address, kept.address);
     assert.equal(room.status, kept.status);

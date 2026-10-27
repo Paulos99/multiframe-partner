@@ -1,5 +1,4 @@
-import { roomCountLabel, roomRank } from './kanban';
-import { KanbanBoard } from './KanbanBoard';
+import { roomCountLabel } from './kanban';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -32,6 +31,8 @@ import { formatDocStamp } from './historyFormatting';
 import { ObjectHistory } from './ObjectHistory';
 import listStyles from './ProjectList.module.css';
 import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
+import { ProjectDesk } from './ProjectDesk';
+import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import styles from './partner.module.css';
 
 const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
@@ -214,21 +215,29 @@ export function ObjectsPanel({
     return map;
   }, [api.objects]);
 
+  const grouped = useMemo(() => {
+    const doc = {
+      projects: api.projects.map((project) => ({ ...project })),
+      objects: api.objects.map((object) => ({ ...object })),
+    };
+    groupOrphanRooms(doc);
+    return doc;
+  }, [api.projects, api.objects]);
   const cards = useMemo(
-    () => buildProjectCards(api.projects, api.objects).filter((card) => cardMatches(card, query, roomFilter)),
-    [api.projects, api.objects, query, roomFilter],
+    () => buildProjectCards(grouped.projects, grouped.objects).filter((card) => cardMatches(card, query, roomFilter)),
+    [grouped, query, roomFilter],
   );
   const selectedCard = useMemo(
-    () => buildProjectCards(api.projects, api.objects).find((card) => card.key === selectedKey) || null,
-    [api.projects, api.objects, selectedKey],
+    () => buildProjectCards(grouped.projects, grouped.objects).find((card) => card.key === selectedKey) || null,
+    [grouped, selectedKey],
   );
   const selectedRooms = useMemo(
     () => (selectedCard ? visibleRooms(selectedCard.rooms, roomFilter) : []),
     [selectedCard, roomFilter],
   );
   const selected = useMemo(
-    () => api.objects.find((o) => o.id === selectedId) || null,
-    [api.objects, selectedId],
+    () => grouped.objects.find((object) => object.id === selectedId) || null,
+    [grouped, selectedId],
   );
   useEffect(() => {
     if (!openCreateToken || !canCreate) return;
@@ -267,45 +276,6 @@ export function ObjectsPanel({
       setMsg('Сохранено');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Ошибка');
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  // Optimistic order lives in KanbanBoard; here we persist and compensate on failure.
-  async function moveRoom(changes: JobObject[]) {
-    setErr(null);
-    setMsg(null);
-    setPendingId(changes[changes.length - 1].id);
-    const originals = new Map(api.objects.map((room) => [room.id, room]));
-    const savedIds: string[] = [];
-    let pendingSync = false;
-    try {
-      for (const room of changes) {
-        const saved = await api.saveObject({ id: room.id, status: room.status, stageOrder: room.stageOrder });
-        savedIds.push(room.id);
-        pendingSync ||= !!saved.pendingSync;
-      }
-      setMsg(pendingSync ? 'Стадия сохранена на устройстве, ожидает синхронизации' : 'Стадия сохранена');
-    } catch (error) {
-      let incomplete = false;
-      for (const id of savedIds.reverse()) {
-        const room = originals.get(id);
-        if (!room) continue;
-        try {
-          await api.saveObject({ id, status: room.status, stageOrder: roomRank(room) });
-        } catch {
-          incomplete = true;
-        }
-      }
-      setErr(
-        incomplete
-          ? 'Не удалось восстановить весь порядок. Обновите страницу.'
-          : error instanceof Error
-            ? error.message
-            : 'Порядок не сохранён',
-      );
-      throw error;
     } finally {
       setPendingId(null);
     }
@@ -465,7 +435,7 @@ export function ObjectsPanel({
   const emptyHint =
     user.role === 'crew' || user.role === 'measurer'
       ? 'Пока нет назначенных комнат. Назначение приходит от менеджера или владельца.'
-      : 'Пока нет проектов. Создайте проект с первой комнатой — она появится на доске.';
+      : 'Пока нет проектов. Создайте проект с первой комнатой — она откроется в карточке.';
 
   async function removeProject(id: string) {
     setDeleting(true);
@@ -494,7 +464,7 @@ export function ObjectsPanel({
         <div>
           <h2>Проекты</h2>
           <p className={styles.lead}>
-            Проект — это клиент и адрес. Комната внутри считается отдельно. Карточка открывается рядом, доска остаётся на месте.
+            Проект — это клиент и адрес. Комнаты открываются внутри карточки проекта.
           </p>
         </div>
         {canCreate ? (
@@ -534,6 +504,20 @@ export function ObjectsPanel({
         />
       </label>
 
+      <ProjectDesk
+        projects={grouped.projects}
+        rooms={grouped.objects}
+        role={user.role}
+        staff={staff}
+        actor={{ id: user.id, role: user.role, displayName: user.displayName }}
+        query={query}
+        onSave={(id, input) => api.updateProject(id, input)}
+        onOpenRoom={(room) => {
+          setSelectedKey(room.projectId || `room:${room.id}`);
+          setSelectedId(room.id);
+        }}
+      />
+
       {!api.objectsLoading && !cards.length ? (
         <div className={styles.emptyState}>
           <p className={styles.lead}>
@@ -553,29 +537,7 @@ export function ObjectsPanel({
             </button>
           ) : null}
         </div>
-      ) : (
-        <KanbanBoard
-          rooms={cards.flatMap((card) => visibleRooms(card.rooms, 'all'))}
-          projects={api.projects}
-          role={user.role}
-          pendingId={pendingId}
-          loading={api.objectsLoading && !api.objects.length}
-          staff={staff}
-          onCreate={
-            canCreate
-              ? () => {
-                  setCreating(true);
-                }
-              : undefined
-          }
-          onMove={moveRoom}
-          onDelete={canDelete ? setToDelete : undefined}
-          onOpen={(room) => {
-            setSelectedKey(room.projectId || `room:${room.id}`);
-            setSelectedId(room.id);
-          }}
-        />
-      )}
+      ) : null}
 
       {creating && canCreate
         ? createPortal(

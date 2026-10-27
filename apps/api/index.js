@@ -21,6 +21,8 @@ import {
 } from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
+import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
+import { estimateForRole } from '../../packages/shared/projectAccess.js';
 import { applyDemoPersonalNames, normalizePersonName } from '../../packages/shared/personName.js';
 import {
   deleteObject,
@@ -285,8 +287,14 @@ async function loadPlatformFallback() {
 
 async function loadPlatform() {
   const platform = await loadStoredDocument(platformDocumentSpec());
-  if (platform?.users && applyDemoPersonalNames(platform.users)) {
-    await savePlatform(platform);
+  const names = Boolean(platform?.users && applyDemoPersonalNames(platform.users));
+  const grouped = groupOrphanRooms(platform);
+  if (names || grouped) {
+    try {
+      await savePlatform(platform);
+    } catch (error) {
+      console.warn('platform save failed', error?.message || error);
+    }
   }
   return platform;
 }
@@ -364,9 +372,14 @@ function objectVisibleTo(user, obj) {
   return false;
 }
 
-/** Цены видят все роли: смета объекта отдаётся целиком. */
-function publicObject(obj) {
-  return { ...obj, history: obj.history || [], documents: visibleDocuments(obj.documents) };
+/** Бригада получает количества без цен и сумм. Замерщик и остальные роли видят расчёт целиком. */
+function publicObject(obj, role) {
+  return {
+    ...obj,
+    estimate: estimateForRole(obj.estimate, role),
+    history: obj.history || [],
+    documents: visibleDocuments(obj.documents),
+  };
 }
 
 /** Client clock, clamped so a far-future stamp cannot lock the row. */

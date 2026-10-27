@@ -71,7 +71,7 @@ export async function countMyOutbox(userId: string): Promise<number> {
 export async function loadVisibleObjects(user: SessionUser, remote: boolean): Promise<JobObject[]> {
   const outbox = await listOutbox();
   let base: JobObject[] = [];
-  if (!remote) {
+  if (!remote || (isDemoModeEnabled() && !loadToken())) {
     base = listLocalObjects(user);
   } else if (loadToken() && navigator.onLine) {
     try {
@@ -402,7 +402,7 @@ async function visibleProjectQueue(user: SessionUser): Promise<ProjectOutboxOp[]
 }
 
 export async function loadVisibleProjects(user: SessionUser, remote: boolean): Promise<ProjectLoadResult> {
-  if (!remote) {
+  if (!remote || (isDemoModeEnabled() && !loadToken())) {
     return { projects: listLocalProjects(user), error: null, unavailable: false };
   }
   const queued = await visibleProjectQueue(user).catch(() => []);
@@ -460,7 +460,9 @@ export async function saveProjectSynced(
   input: ProjectInput,
   id?: string,
 ): Promise<Project> {
-  if (!remote) return upsertLocalProject(id ? { ...input, id } : input, user);
+  if (!remote || (isDemoModeEnabled() && !loadToken())) {
+    return upsertLocalProject(id ? { ...input, id } : input, user);
+  }
   const draft: ProjectInput = id ? { ...input, id } : input;
   if (loadToken() && (typeof navigator === 'undefined' || navigator.onLine)) {
     try {

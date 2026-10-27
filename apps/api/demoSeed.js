@@ -6,6 +6,7 @@
  */
 import bcrypt from 'bcryptjs';
 import { boostCapitalEvents, boostCapitalStaff } from '../../packages/shared/demoAnalyticsBoost.js';
+import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { DEMO_PERSONAL_NAMES } from '../../packages/shared/personName.js';
 import { sealDisabledDemoUsers } from './sealDemoUsers.js';
 
@@ -404,8 +405,9 @@ export function buildDemoPlatform(opts = {}) {
       },
     ],
   };
-  if (opts.boostCapital === false) return platform;
-  return sealDisabledDemoUsers(boostCapitalStaff(platform));
+  const seeded = opts.boostCapital === false ? platform : sealDisabledDemoUsers(boostCapitalStaff(platform));
+  groupOrphanRooms(seeded);
+  return seeded;
 }
 
 function pushEvent(list, e) {

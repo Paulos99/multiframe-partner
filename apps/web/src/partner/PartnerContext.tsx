@@ -31,9 +31,11 @@ import {
   apiAdminResetPassword,
   apiAdminUpdatePartnerCity,
   apiBase,
+  apiCreateProject,
   apiCreateStaff,
   apiDeleteStaff,
   apiDeleteProject,
+  apiPatchObject,
   apiListStaff,
   apiLogin,
   apiRenameStaff,
@@ -60,6 +62,7 @@ import {
   persistPartnerCalcParams,
 } from './calcUrl';
 export { calcUrlFromOrg } from './calcUrl';
+import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { withDemoDocuments } from './demoDocuments';
 import { isDemoModeEnabled } from './demoMode';
 import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
@@ -282,6 +285,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const remote = hasRemoteApi();
   const objectsEpoch = useRef(0);
   const projectsEpoch = useRef(0);
+  const groupedPosts = useRef(new Set<string>());
 
   const refreshObjects = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = Boolean(opts?.silent);
@@ -807,6 +811,52 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     }
     return()=>{cancelled=true;};
   },[user,remote,tick]);
+
+  useEffect(() => {
+    const orphans = objects.filter((object) => !String(object.projectId || '').trim());
+    if (!user || !orphans.length) return;
+    const doc = {
+      projects: projects.map((project) => ({ ...project })),
+      objects: objects.map((object) => ({ ...object })),
+    };
+    if (!groupOrphanRooms(doc)) return;
+    const nextProjects = doc.projects as Project[];
+    const nextObjects = doc.objects as JobObject[];
+    setProjects(nextProjects);
+    setObjects(nextObjects);
+    if (!remote || !loadToken() || !canCreateObjects(user.role)) return;
+    const fresh = nextProjects.filter((project) => !projects.some((item) => item.id === project.id));
+    void (async () => {
+      for (const project of fresh) {
+        if (groupedPosts.current.has(project.id)) continue;
+        groupedPosts.current.add(project.id);
+        try {
+          await apiCreateProject({
+            id: project.id,
+            name: project.name,
+            clientName: project.clientName,
+            clientPhone: project.clientPhone,
+            address: project.address,
+            city: project.city,
+          });
+        } catch (err) {
+          groupedPosts.current.delete(project.id);
+          if (isApiError(err) && err.status === 403) return;
+        }
+      }
+      for (const object of nextObjects) {
+        if (!orphans.some((item) => item.id === object.id) || !object.projectId) continue;
+        const mark = `${object.id}:${object.projectId}`;
+        if (groupedPosts.current.has(mark)) continue;
+        groupedPosts.current.add(mark);
+        try {
+          await apiPatchObject(object.id, { projectId: object.projectId });
+        } catch {
+          groupedPosts.current.delete(mark);
+        }
+      }
+    })();
+  }, [objects, projects, remote, user]);
 
   const saveObject = useCallback(
     async (input: Partial<JobObject> & { id?: string }) => {
