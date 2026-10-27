@@ -57,7 +57,12 @@ const PROJECTS_CACHE_KEY = 'mf_partner_projects_v1';
 const PROJECTS_READY_KEY = 'mf_partner_projects_ready_v1';
 const HISTORY_RESET_KEY = 'mf_partner_history_reset_v2';
 const DEMO_ANALYTICS_SEED_KEY = 'mf_partner_demo_analytics_seed_v2';
+const DEMO_ANALYTICS_VERSION_KEY = 'mf_partner_demo_analytics_version';
+export const DEMO_ANALYTICS_VERSION = '3';
 const ANALYTICS_CAP = 2000;
+const DEMO_ORG_IDS = new Set(['org_demo', 'org_demo_spb']);
+const SEED_EVENT_ID =
+  /^(ev_(login|open|result|pdf|share|calc|calcpdf|admin)_|ev_boost_capital_)/;
 
 export type StoredUser = {
   id: string;
@@ -176,6 +181,7 @@ export function clearAllActionHistory(): void {
   }
   localStorage.removeItem(ANALYTICS_KEY);
   localStorage.removeItem(ANALYTICS_QUEUE_KEY);
+  localStorage.removeItem(DEMO_ANALYTICS_VERSION_KEY);
 }
 
 /** One-shot wipe after UI redesign — returns true if this call cleared data. */
@@ -227,39 +233,63 @@ export function loadDb(): PartnerDb {
   }
 }
 
-function storedAnalyticsSpanMs(raw: string | null): number {
-  if (!raw || raw.length <= 2) return 0;
+export function demoAnalyticsVersion(): string | null {
   try {
-    const list = JSON.parse(raw) as Array<{ at?: string }>;
-    if (!Array.isArray(list) || list.length < 2) return 0;
-    let min = Number.POSITIVE_INFINITY;
-    let max = Number.NEGATIVE_INFINITY;
-    for (const item of list) {
-      const stamp = Date.parse(item?.at || '');
-      if (Number.isNaN(stamp)) continue;
-      if (stamp < min) min = stamp;
-      if (stamp > max) max = stamp;
-    }
-    if (!Number.isFinite(min) || !Number.isFinite(max)) return 0;
-    return max - min;
+    return localStorage.getItem(DEMO_ANALYTICS_VERSION_KEY);
   } catch {
-    return 0;
+    return null;
   }
 }
 
-/** Демо-история на год. Короткая пачка пересобирается один раз: иначе месяц, квартал и год совпадают. */
-export function seedDemoAnalyticsOnce(force = false): void {
+function capWithSchemaMarker<T extends { id?: string }>(events: T[]): T[] {
+  if (events.length <= ANALYTICS_CAP) return events;
+  const marker = events.find((event) => event.id === 'ev_demo_history_schema');
+  const rest = events.filter((event) => event.id !== 'ev_demo_history_schema');
+  const head = rest.slice(0, marker ? ANALYTICS_CAP - 1 : ANALYTICS_CAP);
+  return marker ? [...head, marker] : head;
+}
+
+/**
+ * Версия схемы 3 замораживает уже сохранённую историю.
+ * Пока версии нет, короткая демо-пачка один раз заменяется годом, чужие id остаются.
+ */
+export function ensureDemoAnalyticsHistory(): void {
   try {
-    const existing = localStorage.getItem(ANALYTICS_KEY);
-    const seeded = localStorage.getItem(DEMO_ANALYTICS_SEED_KEY) === '1';
-    const span = storedAnalyticsSpanMs(existing);
-    if (!force && seeded && existing && existing.length > 2 && span >= 100 * 24 * 60 * 60 * 1000) return;
-    const events = buildLocalDemoAnalytics() as AnalyticsEvent[];
-    localStorage.setItem(ANALYTICS_KEY, JSON.stringify(events.slice(0, ANALYTICS_CAP)));
+    if (localStorage.getItem(DEMO_ANALYTICS_VERSION_KEY) === DEMO_ANALYTICS_VERSION) return;
+    const raw = localStorage.getItem(ANALYTICS_KEY);
+    let existing: Array<{ id?: string; orgId?: string | null; at?: string }> = [];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) existing = parsed as typeof existing;
+      } catch {
+        existing = [];
+      }
+    }
+    const fresh = buildLocalDemoAnalytics();
+    const freshIds = new Set(fresh.map((event) => event.id));
+    const kept = existing.filter((event) => {
+      if (!event) return false;
+      const orgId = event.orgId || '';
+      if (!DEMO_ORG_IDS.has(orgId)) return true;
+      const id = String(event.id || '');
+      if (id === 'ev_demo_history_schema') return false;
+      if (SEED_EVENT_ID.test(id)) return false;
+      return !freshIds.has(id);
+    });
+    const merged = [...fresh, ...kept].sort((a, b) => Date.parse(b.at || '') - Date.parse(a.at || ''));
+    localStorage.setItem(ANALYTICS_KEY, JSON.stringify(capWithSchemaMarker(merged)));
     localStorage.setItem(DEMO_ANALYTICS_SEED_KEY, '1');
+    localStorage.setItem(DEMO_ANALYTICS_VERSION_KEY, DEMO_ANALYTICS_VERSION);
   } catch {
     /* ignore */
   }
+}
+
+/** Уже сохранённая история версии 3 не пересобирается, даже если базу кабинета сбросили. */
+export function seedDemoAnalyticsOnce(force = false): void {
+  if (force && demoAnalyticsVersion() === DEMO_ANALYTICS_VERSION) return;
+  ensureDemoAnalyticsHistory();
 }
 
 export function saveDb(db: PartnerDb): void {

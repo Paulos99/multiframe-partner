@@ -16,8 +16,22 @@ export const DRILL_METRICS = [
 
 export const DRILL_PERIODS = ['month', 'quarter', 'year'];
 
-const COMPANY_ROLES = new Set(['owner', 'sales', 'measurer', 'crew']);
+const RANK_ROLES = ['sales', 'measurer', 'crew'];
+const RANK_ROLE_SET = new Set(RANK_ROLES);
 const FIELD_ROLES = new Set(['measurer', 'crew']);
+const ROLE_LABELS = {
+  sales: 'Менеджеры',
+  measurer: 'Замерщики',
+  crew: 'Монтажники',
+};
+const ROOM_LABELS = {
+  living: 'Гостиная',
+  bedroom: 'Спальня',
+  kids: 'Детская',
+  kitchen: 'Кухня',
+  office: 'Кабинет',
+  other: 'Другое',
+};
 
 const MONTHS = [
   'январь',
@@ -103,11 +117,7 @@ export function visibleStaff(viewer, users, orgId) {
   if (role !== 'admin' && role !== 'owner' && role !== 'sales') return [];
   const focus = role === 'admin' ? orgId || null : viewer?.orgId || orgId || null;
   const people = (users || []).filter(
-    (user) =>
-      user &&
-      COMPANY_ROLES.has(user.role) &&
-      user.role !== 'admin' &&
-      (!focus || user.orgId === focus),
+    (user) => user && RANK_ROLE_SET.has(user.role) && (!focus || user.orgId === focus),
   );
   if (role === 'sales') {
     return people.filter((user) => user.id === viewer.id || FIELD_ROLES.has(user.role));
@@ -128,6 +138,11 @@ function emptyRow(user) {
     panels: 0,
     completed: 0,
     withArea: 0,
+    measuredRooms: 0,
+    mountedRooms: 0,
+    mountedAreaM2: 0,
+    mountedPanels: 0,
+    workKeys: new Set(),
   };
 }
 
@@ -144,9 +159,12 @@ function addEvent(row, event) {
     row.withArea += 1;
   }
   if (panels > 0) row.panels += panels;
+  const object = event.object || {};
+  const key = object.projectId || object.objectId || object.roomId || event.id;
+  if (key) row.workKeys.add(String(key));
 }
 
-function metricValue(row, metric) {
+function eventMetric(row, metric) {
   if (metric === 'problemomer') return row.problemomer;
   if (metric === 'calculator') return row.calculator;
   if (metric === 'pdf') return row.pdf;
@@ -155,6 +173,28 @@ function metricValue(row, metric) {
   if (metric === 'done') return row.completed;
   if (metric === 'avg') return row.withArea ? round1(row.areaM2 / row.withArea) : 0;
   return row.problemomer + row.calculator + row.pdf;
+}
+
+/** Монтажники на плитке «Панели» ранжируются по смонтированному, не по чужим расчётам. */
+function displayValue(row, metric) {
+  if (row.role === 'crew' && metric === 'panels' && row.mountedPanels > 0) {
+    return Math.round(row.mountedPanels);
+  }
+  return eventMetric(row, metric);
+}
+
+function preferredRoles(metric) {
+  if (metric === 'problemomer' || metric === 'calculator' || metric === 'pdf') {
+    return ['sales', 'measurer'];
+  }
+  if (metric === 'panels' || metric === 'staff') return ['sales', 'measurer', 'crew'];
+  return ['sales', 'measurer'];
+}
+
+function roleHasMetric(rows, metric) {
+  if (!rows.length) return false;
+  if (metric === 'staff') return true;
+  return rows.some((row) => displayValue(row, metric) > 0);
 }
 
 function periodScale(period) {
@@ -309,17 +349,7 @@ function collectProjects(userId, objects, projects, orgId, from, to, respectWind
       current.roomId = object.id;
     }
   }
-  return [...grouped.values()]
-    .map((row) => ({
-      id: row.id,
-      name: row.name,
-      areaM2: round1(row.areaM2),
-      panels: Math.round(row.panels),
-      rooms: row.rooms,
-      roomId: row.roomId,
-    }))
-    .sort((a, b) => b.areaM2 - a.areaM2 || b.panels - a.panels || a.name.localeCompare(b.name, 'ru'))
-    .slice(0, 8);
+  return [...grouped.values()];
 }
 
 const DEMO_PROJECT_NAMES = ['Квартира на Тверской', 'Офис на Садовом', 'Спальня в Жуковке'];
@@ -347,8 +377,88 @@ function publicRow(row, metric) {
     areaM2: round1(row.areaM2),
     panels: Math.round(row.panels),
     completed: row.completed,
-    value: metricValue(row, metric),
+    measuredRooms: row.measuredRooms || 0,
+    mountedRooms: row.mountedRooms || 0,
+    mountedAreaM2: round1(row.mountedAreaM2 || 0),
+    mountedPanels: Math.round(row.mountedPanels || 0),
+    projectCount: row.workKeys ? row.workKeys.size : 0,
+    value: displayValue(row, metric),
   };
+}
+
+function projectTitle(object, project) {
+  if (project?.name) return project.name;
+  if (object?.label) return String(object.label);
+  if (object?.roomName) return String(object.roomName);
+  const roomType = object?.roomType;
+  if (roomType && ROOM_LABELS[roomType]) return ROOM_LABELS[roomType];
+  if (typeof roomType === 'string' && roomType.trim()) return roomType.trim();
+  return 'Расчёт';
+}
+
+function finishProjects(grouped) {
+  return [...grouped.values()]
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      areaM2: round1(row.areaM2),
+      panels: Math.round(row.panels),
+      rooms: row.rooms,
+      roomId: row.roomId || null,
+    }))
+    .sort((a, b) => b.areaM2 - a.areaM2 || b.panels - a.panels || a.name.localeCompare(b.name, 'ru'))
+    .slice(0, 8);
+}
+
+function projectsFromEvents(userId, events, projects, orgId, from, to) {
+  const grouped = new Map();
+  for (const event of events || []) {
+    if (!event || event.userId !== userId) continue;
+    if (String(event.role || '') === 'admin') continue;
+    if (orgId && event.orgId !== orgId) continue;
+    if (!inWindow(event.at, from, to)) continue;
+    if (!completed(event)) continue;
+    const object = event.object || {};
+    const projectId = object.projectId || null;
+    const objectId = object.objectId || object.roomId || null;
+    const key = String(projectId || objectId || event.id);
+    const project = projectId ? (projects || []).find((item) => item && item.id === projectId) : null;
+    const area = num(object.areaM2);
+    const panels = num(object.panels);
+    const name = projectTitle(object, project);
+    const current = grouped.get(key);
+    if (!current) {
+      grouped.set(key, {
+        id: key,
+        name,
+        areaM2: area,
+        panels,
+        rooms: 1,
+        roomId: objectId || null,
+        bestArea: area,
+      });
+      continue;
+    }
+    current.areaM2 += area;
+    current.panels += panels;
+    current.rooms += 1;
+    if (area >= current.bestArea) {
+      current.bestArea = area;
+      if (objectId) current.roomId = objectId;
+      if (name && name !== 'Расчёт') current.name = name;
+    }
+  }
+  return [...grouped.values()];
+}
+
+function mergeProjectLists(roomProjects, eventProjects) {
+  const grouped = new Map();
+  for (const row of roomProjects) grouped.set(row.id, { ...row });
+  for (const row of eventProjects) {
+    if (grouped.has(row.id)) continue;
+    grouped.set(row.id, row);
+  }
+  return finishProjects(grouped);
 }
 
 export function buildStaffDrill(input) {
@@ -362,7 +472,13 @@ export function buildStaffDrill(input) {
   const usersById = new Map((input.users || []).filter(Boolean).map((user) => [user.id, user]));
   const rows = new Map(staff.map((user) => [user.id, emptyRow(user)]));
 
-  function adopt(event) {
+  function rankRole(event) {
+    const known = usersById.get(event.userId);
+    const role = known?.role || event.role || '';
+    return RANK_ROLE_SET.has(role) ? role : null;
+  }
+
+  function adopt(event, role) {
     const id = event.userId || `login:${event.login || 'unknown'}`;
     const existing = rows.get(id);
     if (existing) return existing;
@@ -370,7 +486,7 @@ export function buildStaffDrill(input) {
       id,
       login: event.login || '',
       displayName: event.login || 'Без сотрудника',
-      role: event.role || 'measurer',
+      role,
     });
     rows.set(id, row);
     return row;
@@ -382,26 +498,70 @@ export function buildStaffDrill(input) {
     if (usersById.get(event.userId)?.role === 'admin') continue;
     if (orgId && event.orgId !== orgId) continue;
     if (!inWindow(event.at, window.from, window.to)) continue;
+    const role = rankRole(event);
+    if (!role) continue;
     if (!companyScope && !allowed.has(event.userId)) continue;
-    const row = rows.get(event.userId) || (companyScope ? adopt(event) : null);
+    const row = rows.get(event.userId) || (companyScope ? adopt(event, role) : null);
     if (row) addEvent(row, event);
+  }
+
+  for (const object of input.objects || []) {
+    if (!object || (orgId && object.orgId !== orgId)) continue;
+    if (!inWindow(object.updatedAt || object.createdAt, window.from, window.to)) continue;
+    const seen = new Set();
+    for (const userId of [object.assignedTo, object.createdBy]) {
+      if (!userId || seen.has(userId)) continue;
+      seen.add(userId);
+      const row = rows.get(userId);
+      if (!row) continue;
+      if (object.projectId) row.workKeys.add(String(object.projectId));
+      if (row.role === 'measurer' && object.status && object.status !== 'draft') row.measuredRooms += 1;
+      if (row.role === 'crew' && (object.status === 'install' || object.status === 'closed')) {
+        row.mountedRooms += 1;
+        row.mountedAreaM2 += num(object.room?.areaM2);
+        row.mountedPanels += num(object.estimate?.panels);
+      }
+    }
   }
 
   let working = [...rows.values()];
   const allZero =
     working.length > 0 &&
     working.every(
-      (row) => row.problemomer + row.calculator + row.pdf + row.areaM2 + row.panels + row.completed === 0,
+      (row) =>
+        row.problemomer +
+          row.calculator +
+          row.pdf +
+          row.areaM2 +
+          row.panels +
+          row.completed +
+          row.mountedRooms +
+          row.measuredRooms ===
+        0,
     );
   const demoFilled = Boolean(allZero && input.demoFill);
   if (demoFilled) working = applyDemoFill(working, window.period);
   else reconcileTotals(working);
 
-  const ranking = working
-    .map((row) => publicRow(row, metric))
-    .sort(
-      (a, b) => b.value - a.value || String(a.displayName).localeCompare(String(b.displayName), 'ru'),
-    );
+  const byRole = new Map(RANK_ROLES.map((role) => [role, []]));
+  for (const row of working) {
+    const list = byRole.get(row.role);
+    if (list) list.push(row);
+  }
+  const order = [...preferredRoles(metric)];
+  for (const role of RANK_ROLES) {
+    if (!order.includes(role) && roleHasMetric(byRole.get(role) || [], metric)) order.push(role);
+  }
+  const roles = order
+    .filter((role) => roleHasMetric(byRole.get(role) || [], metric))
+    .map((role) => ({
+      id: role,
+      label: ROLE_LABELS[role],
+      ranking: (byRole.get(role) || [])
+        .map((row) => publicRow(row, metric))
+        .sort((a, b) => b.value - a.value || String(a.displayName).localeCompare(String(b.displayName), 'ru')),
+    }));
+  const ranking = roles.flatMap((role) => role.ranking);
 
   let detail = null;
   if (input.userId && allowed.has(input.userId)) {
@@ -455,24 +615,16 @@ export function buildStaffDrill(input) {
           panels: 0,
           completed: 0,
         };
-    let projects = collectProjects(
-      input.userId,
-      input.objects,
-      input.projects,
-      orgId,
-      window.from,
-      window.to,
-      true,
+    let projects = mergeProjectLists(
+      collectProjects(input.userId, input.objects, input.projects, orgId, window.from, window.to, true),
+      demoFilled
+        ? []
+        : projectsFromEvents(input.userId, input.events, input.projects, orgId, window.from, window.to),
     );
     if (!projects.length && demoFilled) {
-      projects = collectProjects(
-        input.userId,
-        input.objects,
-        input.projects,
-        orgId,
-        window.from,
-        window.to,
-        false,
+      projects = mergeProjectLists(
+        collectProjects(input.userId, input.objects, input.projects, orgId, window.from, window.to, false),
+        [],
       );
     }
     if (!projects.length && demoFilled) projects = demoProjects(input.userId);
@@ -486,6 +638,7 @@ export function buildStaffDrill(input) {
     to: window.to,
     scope: input.viewer?.role === 'sales' ? 'team' : 'company',
     demoFilled,
+    roles,
     ranking,
     detail,
   };

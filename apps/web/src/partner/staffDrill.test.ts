@@ -101,10 +101,11 @@ test('владелец видит всю компанию и не видит ч�
   const result = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { metric: 'problemomer' });
   assert.equal(result.scope, 'company');
   assert.deepEqual(
-    result.ranking.slice(0, 2).map((row) => row.userId),
-    ['measurer', 'owner'],
+    visibleStaff({ id: 'owner', role: 'owner', orgId: 'org_a' }, users, 'org_a').map((user) => user.id).sort(),
+    ['crew', 'measurer', 'sales', 'sales2'],
   );
-  assert.deepEqual(result.ranking.slice(2).map((row) => row.userId).sort(), ['crew', 'sales', 'sales2']);
+  assert.deepEqual(result.roles.map((role) => role.id), ['measurer']);
+  assert.equal(result.ranking.some((row) => row.role === 'owner' || row.userId === 'owner'), false);
   const measurer = result.ranking.find((row) => row.userId === 'measurer');
   assert.equal(measurer?.problemomer, 2);
   assert.equal(measurer?.calculator, 1);
@@ -120,8 +121,9 @@ test('средняя площадь и готовые расчёты счита�
   const avg = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { metric: 'avg' });
   const done = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { metric: 'done' });
   assert.equal(avg.ranking.find((row) => row.userId === 'measurer')?.value, 11.7);
-  assert.equal(done.ranking[0]?.userId, 'measurer');
-  assert.equal(done.ranking[0]?.value, 3);
+  const measurerDone = done.ranking.find((row) => row.userId === 'measurer');
+  assert.equal(measurerDone?.value, 3);
+  assert.equal(done.ranking.some((row) => row.role === 'owner'), false);
 });
 
 test('менеджер видит себя и полевую команду, без владельца и других менеджеров', () => {
@@ -189,10 +191,15 @@ function displayedSum(rows: Array<{ areaM2: number; panels: number }>, key: 'are
   return key === 'panels' ? total : Math.round(total * 10) / 10;
 }
 
+function withoutOwner(list: Array<Record<string, unknown>>) {
+  return list.filter((item) => item.userId !== 'owner' && item.role !== 'owner' && item.role !== 'admin');
+}
+
 test('сумма рейтинга владельца равна плиткам за тот же период', () => {
   for (const period of ['month', 'quarter', 'year'] as const) {
     const result = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { period, metric: 'area' });
-    const dash = aggregateAnalyticsDashboard(events as AnalyticsEvent[], {
+    assert.equal(result.ranking.some((row) => row.role === 'owner'), false);
+    const dash = aggregateAnalyticsDashboard(withoutOwner(events) as AnalyticsEvent[], {
       source: 'local',
       from: result.from,
       to: result.to,
@@ -230,7 +237,7 @@ test('дробные м² и событие без карточки сотруд
   ];
   const all = [...events, ...extra];
   const result = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { metric: 'area', events: all });
-  const dash = aggregateAnalyticsDashboard(all as AnalyticsEvent[], {
+  const dash = aggregateAnalyticsDashboard(withoutOwner(all) as AnalyticsEvent[], {
     source: 'local',
     from: result.from,
     to: result.to,
@@ -265,4 +272,94 @@ test('месяц, квартал и год дают разную сумму ре
     return result.ranking.reduce((sum, row) => sum + row.areaM2, 0);
   });
   assert.ok(totals[0] < totals[1] && totals[1] < totals[2], totals.join(','));
+});
+
+test('без активности владельца сумма ролей совпадает с плиткой компании', () => {
+  const staffEvents = events.filter((item) => (item as { userId?: string }).userId !== 'owner');
+  const result = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { metric: 'area', events: staffEvents });
+  const dash = aggregateAnalyticsDashboard(staffEvents as AnalyticsEvent[], {
+    source: 'local',
+    from: result.from,
+    to: result.to,
+    orgId: 'org_a',
+  });
+  assert.equal(displayedSum(result.ranking, 'areaM2'), dash.kpi.areaM2);
+  assert.equal(displayedSum(result.ranking, 'panels'), dash.kpi.panels);
+  assert.deepEqual(result.roles.map((role) => role.id).sort(), ['measurer', 'sales']);
+});
+
+test('плитка «Панели» показывает расчёт и отдельно монтаж', () => {
+  const panelEvents = [
+    event({ id: 's', userId: 'sales', object: { areaM2: 8, panels: 3 } }),
+    event({ id: 'm', userId: 'measurer', object: { areaM2: 10, panels: 4 } }),
+  ];
+  const result = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_a' },
+    users,
+    events: panelEvents,
+    objects: [
+      {
+        id: 'mounted',
+        orgId: 'org_a',
+        status: 'install',
+        assignedTo: 'crew',
+        updatedAt: now,
+        room: { areaM2: 24 },
+        estimate: { panels: 16 },
+      },
+    ],
+    projects: [],
+    metric: 'panels',
+    period: 'month',
+    orgId: 'org_a',
+    now,
+    demoFill: false,
+  });
+  assert.deepEqual(result.roles.map((role) => role.id), ['sales', 'measurer', 'crew']);
+  assert.equal(result.roles.find((role) => role.id === 'crew')?.ranking[0]?.value, 16);
+  assert.equal(result.roles.find((role) => role.id === 'crew')?.ranking[0]?.mountedRooms, 1);
+  assert.equal(
+    result.ranking.reduce((sum, row) => sum + row.panels, 0),
+    7,
+  );
+  const problemomer = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_a' },
+    users,
+    events: panelEvents,
+    objects: [],
+    projects: [],
+    metric: 'problemomer',
+    period: 'month',
+    orgId: 'org_a',
+    now,
+    demoFill: false,
+  });
+  assert.deepEqual(problemomer.roles.map((role) => role.id), ['sales', 'measurer']);
+});
+
+test('топ проектов строится по событиям, даже если комнаты не назначены', () => {
+  const result = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_a' },
+    users,
+    events: [
+      event({ id: 'p1', userId: 'sales', object: { areaM2: 40, panels: 16, label: 'Кухня на Арбате' } }),
+      event({ id: 'p2', userId: 'sales', object: { areaM2: 22, panels: 8, projectId: 'proj-x' } }),
+      event({ id: 'p3', userId: 'sales', object: { areaM2: 18, panels: 6, projectId: 'proj-x' } }),
+    ],
+    objects: [],
+    projects: [{ id: 'proj-x', name: 'Офис на Патриарших', orgId: 'org_a' }],
+    metric: 'area',
+    period: 'month',
+    userId: 'sales',
+    orgId: 'org_a',
+    now,
+    demoFill: false,
+  });
+  assert.equal(result.ranking.find((row) => row.userId === 'sales')?.areaM2, 80);
+  assert.equal(result.ranking.find((row) => row.userId === 'sales')?.projectCount, 2);
+  assert.equal(result.detail?.projects.length, 2);
+  const office = result.detail?.projects.find((project) => project.name === 'Офис на Патриарших');
+  assert.equal(office?.areaM2, 40);
+  assert.equal(office?.rooms, 2);
+  assert.equal(result.detail?.projects.some((project) => project.name === 'Кухня на Арбате'), true);
 });

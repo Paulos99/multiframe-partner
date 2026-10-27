@@ -79,6 +79,16 @@ function daysAgo(n, _hour, _minute) {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/** Полдень локального дня: повторная сборка в те же сутки даёт те же отметки. */
+function analyticsAt(day) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - day);
+  return date.toISOString();
+}
+
+export const DEMO_HISTORY_SCHEMA = 3;
+
 const DEMO_PEOPLE = {
   u_partner1: { login: 'partner1', name: 'Владелец · Потолки Столицы' },
   u_sales1: { login: 'sales1', name: 'Менеджер · Потолки Столицы' },
@@ -471,7 +481,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         n += 1;
         pushEvent(events, {
           id: `ev_login_${org.orgId}_${day}_${u.login}`,
-          at: daysAgo(day, 8 + (n % 3), 10 + (n % 40)),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -490,7 +500,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         n += 1;
         pushEvent(events, {
           id: `ev_open_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 10 + i, 5),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -524,7 +534,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         n += 1;
         pushEvent(events, {
           id: `ev_result_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 11 + i, 20),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -538,7 +548,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         if (i % 2 === 0) {
           pushEvent(events, {
             id: `ev_pdf_${org.orgId}_${day}_${i}`,
-            at: daysAgo(day, 11 + i, 35),
+            at: analyticsAt(day),
             orgId: org.orgId,
             userId: u.id,
             login: u.login,
@@ -553,7 +563,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         if (i === 0 && day % 4 === 0) {
           pushEvent(events, {
             id: `ev_share_${org.orgId}_${day}_${i}`,
-            at: daysAgo(day, 12, 0),
+            at: analyticsAt(day),
             orgId: org.orgId,
             userId: u.id,
             login: u.login,
@@ -579,7 +589,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         };
         pushEvent(events, {
           id: `ev_calc_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 15 + i, 10),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -593,7 +603,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         if (i === 0) {
           pushEvent(events, {
             id: `ev_calcpdf_${org.orgId}_${day}_${i}`,
-            at: daysAgo(day, 15 + i, 25),
+            at: analyticsAt(day),
             orgId: org.orgId,
             userId: u.id,
             login: u.login,
@@ -609,11 +619,26 @@ export function buildDemoAnalyticsEvents(opts = {}) {
     }
   }
 
+  events.push({
+    id: 'ev_demo_history_schema',
+    schema: DEMO_HISTORY_SCHEMA,
+    at: analyticsAt(DEMO_HISTORY_DAYS - 1),
+    orgId: 'org_demo',
+    userId: 'u_partner1',
+    login: 'partner1',
+    role: 'owner',
+    companyName: 'Потолки Столицы',
+    city: 'Москва',
+    tool: 'cabinet',
+    action: 'schema',
+    object: null,
+  });
+
   // Admin logins
   for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 14) {
     pushEvent(events, {
       id: `ev_admin_login_${day}`,
-      at: daysAgo(day, 9, 0),
+      at: analyticsAt(day),
       orgId: null,
       userId: 'u_admin',
       login: 'admin',
@@ -636,29 +661,31 @@ const DEMO_ORG_IDS = new Set(['org_demo', 'org_demo_spb']);
 const SEED_EVENT_ID =
   /^(ev_(login|open|result|pdf|share|calc|calcpdf|admin)_|ev_boost_capital_)/;
 
-/**
- * Короткая демо-история не различает месяц, квартал и год.
- * События генератора заменяются целиком; чужие записи компании сохраняются,
- * а к ним добавляется только хвост старше 40 дней.
- */
-export function extendDemoAnalyticsHistory(events, now = Date.now()) {
+export function demoHistorySchema(events) {
   const list = Array.isArray(events) ? events : [];
+  const marker = list.find((event) => event && event.id === 'ev_demo_history_schema');
+  const schema = Number(marker?.schema);
+  return Number.isFinite(schema) ? schema : 0;
+}
+
+/**
+ * Уже записанная демо-история дополняется до года один раз — по версии схемы,
+ * а не по длине хвоста. События генератора заменяются, чужие id сохраняются.
+ */
+export function extendDemoAnalyticsHistory(events) {
+  const list = Array.isArray(events) ? events : [];
+  if (demoHistorySchema(list) >= DEMO_HISTORY_SCHEMA) return list;
   const demo = list.filter((event) => event && DEMO_ORG_IDS.has(event.orgId));
   if (!demo.length) return list;
-  const stamps = demo.map((event) => Date.parse(event.at)).filter((stamp) => !Number.isNaN(stamp));
-  if (!stamps.length) return list;
-  if (Math.max(...stamps) - Math.min(...stamps) >= 100 * 24 * 60 * 60 * 1000) return list;
   const fresh = buildDemoAnalyticsEvents();
-  const seedOnly = demo.every((event) => SEED_EVENT_ID.test(String(event.id || '')));
-  if (seedOnly) {
-    const others = list.filter((event) => !event || !DEMO_ORG_IDS.has(event.orgId));
-    return [...fresh, ...others].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  }
-  const ids = new Set(list.map((event) => event && event.id));
-  const older = fresh.filter((event) => {
-    const stamp = Date.parse(event?.at || '');
-    return event && !ids.has(event.id) && !Number.isNaN(stamp) && now - stamp > 40 * 24 * 60 * 60 * 1000;
+  const freshIds = new Set(fresh.map((event) => event.id));
+  const kept = list.filter((event) => {
+    if (!event) return false;
+    if (!DEMO_ORG_IDS.has(event.orgId)) return true;
+    const id = String(event.id || '');
+    if (id === 'ev_demo_history_schema') return false;
+    if (SEED_EVENT_ID.test(id)) return false;
+    return !freshIds.has(id);
   });
-  if (!older.length) return list;
-  return [...older, ...list].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return [...fresh, ...kept].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }

@@ -111,6 +111,16 @@ function daysAgo(n: number, _hour?: number, _minute?: number): string {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/** Полдень локального дня: повторная сборка в те же сутки даёт те же отметки. */
+function analyticsAt(day: number): string {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - day);
+  return date.toISOString();
+}
+
+export const DEMO_HISTORY_SCHEMA = 3;
+
 /** День отсчёта, а не день недели: одни и те же цифры в любой день календаря. */
 const DEMO_HISTORY_DAYS = 371;
 
@@ -341,7 +351,8 @@ export type LocalAnalyticsEvent = {
   companyName: string;
   city?: string;
   tool: 'problemomer' | 'calculator' | 'cabinet';
-  action: 'login' | 'open' | 'result' | 'pdf' | 'share' | 'calc_done';
+  action: 'login' | 'open' | 'result' | 'pdf' | 'share' | 'calc_done' | 'schema';
+  schema?: number;
   object?: Record<string, unknown> | null;
 };
 
@@ -379,7 +390,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         if (u.role === 'owner' && day % 3 !== 0) continue;
         events.push({
           id: `ev_login_${org.orgId}_${day}_${u.login}`,
-          at: daysAgo(day, 8 + (day % 3), 10),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -396,7 +407,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         const u = i % 2 === 0 ? org.measurer : org.sales;
         events.push({
           id: `ev_open_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 10 + i, 5),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -424,7 +435,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         };
         events.push({
           id: `ev_result_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 11 + i, 20),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -438,7 +449,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         if (i % 2 === 0) {
           events.push({
             id: `ev_pdf_${org.orgId}_${day}_${i}`,
-            at: daysAgo(day, 11 + i, 35),
+            at: analyticsAt(day),
             orgId: org.orgId,
             userId: u.id,
             login: u.login,
@@ -463,7 +474,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         };
         events.push({
           id: `ev_calc_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 15 + i, 10),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: org.sales.id,
           login: org.sales.login,
@@ -477,6 +488,20 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
       }
     }
   }
+
+  events.push({
+    id: 'ev_demo_history_schema',
+    schema: DEMO_HISTORY_SCHEMA,
+    at: analyticsAt(DEMO_HISTORY_DAYS - 1),
+    orgId: 'org_demo',
+    userId: 'u_partner1',
+    login: 'partner1',
+    role: 'owner',
+    companyName: 'Потолки Столицы',
+    city: 'Москва',
+    tool: 'cabinet',
+    action: 'schema',
+  });
 
   return boostCapitalEvents(events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)));
 }

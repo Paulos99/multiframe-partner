@@ -14,8 +14,11 @@ import {
   buildLocalDashboard,
   clearAnalyticsQueue,
   clearAllActionHistory,
+  DEMO_ANALYTICS_VERSION,
+  demoAnalyticsVersion,
   enqueueAnalyticsEvents,
   ensureActionHistoryCleared,
+  ensureDemoAnalyticsHistory,
   loadAnalyticsEvents,
   loadDb,
   loadSession,
@@ -132,6 +135,13 @@ export function bootstrapHistoryReset(): void {
   } catch {
     ensureActionHistoryCleared();
   }
+  ensureDemoAnalyticsHistory();
+}
+
+const FROZEN_DEMO_ORGS = new Set(['org_demo', 'org_demo_spb']);
+
+function frozenDemoOrg(orgId?: string | null): boolean {
+  return Boolean(orgId && FROZEN_DEMO_ORGS.has(orgId) && demoAnalyticsVersion() === DEMO_ANALYTICS_VERSION);
 }
 
 async function cachedEvents(): Promise<AnalyticsEvent[]> {
@@ -150,7 +160,9 @@ export async function fetchAnalyticsDashboard(opts: {
   partnerLogin?: string | null;
   journal?: boolean;
 }): Promise<AnalyticsDashboard> {
-  const extra = await cachedEvents();
+  ensureDemoAnalyticsHistory();
+  const frozen = frozenDemoOrg(opts.orgId);
+  const extra = frozen ? [] : await cachedEvents();
   const local = buildLocalDashboard(
     {
       from: opts.from,
@@ -161,7 +173,7 @@ export async function fetchAnalyticsDashboard(opts: {
     extra,
   );
 
-  if (!API_BASE) return local;
+  if (!API_BASE || frozen) return local;
 
   try {
     const q = new URLSearchParams();
@@ -262,7 +274,9 @@ export async function fetchStaffDrill(opts: {
   from?: string | null;
   to?: string | null;
 }): Promise<StaffDrillResult> {
-  if (!API_BASE) return localStaffDrill(opts);
+  ensureDemoAnalyticsHistory();
+  const focusOrg = opts.mode === 'admin' ? opts.orgId || null : loadSession()?.orgId || opts.orgId || null;
+  if (!API_BASE || frozenDemoOrg(focusOrg)) return localStaffDrill(opts);
   const q = new URLSearchParams();
   q.set('metric', opts.metric);
   q.set('period', opts.period);
@@ -364,6 +378,13 @@ export function ymdLocal(date: Date): string {
 export function ymdShift(days: number, base = new Date()): string {
   const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + days);
   return ymdLocal(d);
+}
+
+/** Скользящие месяц, квартал и год для панели показателя. Сводку не меняет. */
+export function presetRange(period: DrillPeriod, now = new Date()): { fromYmd: string; toYmd: string } {
+  const months = period === 'year' ? 12 : period === 'quarter' ? 3 : 1;
+  const from = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+  return { fromYmd: ymdLocal(from), toYmd: ymdLocal(now) };
 }
 
 /** Inclusive local calendar range. Nulls mean all time. */

@@ -57,6 +57,43 @@ test('демо-история детерминирована и длиннее �
   assert.equal(extendDemoAnalyticsHistory(extended), extended);
 });
 
+test('редкий хвост без версии схемы всё равно дополняется до года', () => {
+  const sparse = [
+    {
+      id: 'ev_login_org_demo_1_partner1',
+      at: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(),
+      orgId: 'org_demo',
+      action: 'login',
+    },
+    {
+      id: 'ev_result_org_demo_0_0',
+      at: new Date().toISOString(),
+      orgId: 'org_demo',
+      action: 'result',
+      object: { areaM2: 10 },
+    },
+    {
+      id: 'ae_user_kept',
+      at: new Date().toISOString(),
+      orgId: 'org_demo',
+      userId: 'u_sales1',
+      action: 'result',
+      object: { areaM2: 3 },
+    },
+    { id: 'other_org', at: new Date().toISOString(), orgId: 'org_real', action: 'login' },
+  ];
+  const extended = extendDemoAnalyticsHistory(sparse);
+  assert.ok(extended.length > 100);
+  assert.equal(extended.find((event) => event.id === 'ev_demo_history_schema')?.schema, 3);
+  assert.equal(extended.some((event) => event.id === 'ae_user_kept'), true);
+  assert.equal(extended.some((event) => event.id === 'other_org'), true);
+  const span =
+    Math.max(...extended.map((event) => Date.parse(event.at))) -
+    Math.min(...extended.map((event) => Date.parse(event.at)));
+  assert.ok(span > 300 * 24 * 60 * 60 * 1000);
+  assert.equal(extendDemoAnalyticsHistory(extended), extended);
+});
+
 test('агрегаты Потолков Столицы в 1.3 раза выше Северного Потолка', () => {
   const platform = buildDemoPlatform({ withHashes: false });
   const events = buildDemoAnalyticsEvents();

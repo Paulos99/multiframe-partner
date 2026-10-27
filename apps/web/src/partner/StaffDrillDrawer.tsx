@@ -5,9 +5,10 @@ import type {
   DrillPeriod,
   DrillProject,
   DrillRankingRow,
+  DrillRoleId,
   StaffDrillResult,
 } from '../../../../packages/shared/staffDrill.js';
-import { fetchStaffDrill, rangeFromYmd, ymdLocal } from './analytics';
+import { fetchStaffDrill, presetRange, rangeFromYmd } from './analytics';
 import { Skeleton } from './Skeleton';
 import styles from './partner.module.css';
 
@@ -37,14 +38,18 @@ function roleLabel(role: string): string {
   return ROLE_LABELS[role as UserRole] || role;
 }
 
-function activityLine(row: Pick<DrillRankingRow, 'problemomer' | 'calculator' | 'pdf' | 'areaM2' | 'panels'>): string {
+function monthLine(row: Pick<DrillRankingRow, 'problemomer' | 'calculator' | 'pdf' | 'areaM2' | 'panels'>): string {
   return `Проблемомер ${row.problemomer} · расчёты ${row.calculator} · PDF ${row.pdf} · ${formatNum(row.areaM2)} м² · панели ${formatNum(row.panels)}`;
 }
 
-function presetRange(period: DrillPeriod, now = new Date()): { fromYmd: string; toYmd: string } {
-  const months = period === 'year' ? 12 : period === 'quarter' ? 3 : 1;
-  const from = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
-  return { fromYmd: ymdLocal(from), toYmd: ymdLocal(now) };
+function activityLine(row: DrillRankingRow): string {
+  if (row.role === 'crew') {
+    return `Смонтировано ${formatNum(row.mountedRooms)} · ${formatNum(row.mountedAreaM2)} м² · панели ${formatNum(row.mountedPanels)}`;
+  }
+  if (row.role === 'measurer') {
+    return `Замеры ${formatNum(row.measuredRooms)} · ${formatNum(row.areaM2)} м² · расчёты ${formatNum(row.problemomer + row.calculator)}`;
+  }
+  return `Проблемомер ${row.problemomer} · расчёты ${row.calculator} · PDF ${row.pdf} · проекты ${formatNum(row.projectCount)} · ${formatNum(row.areaM2)} м²`;
 }
 
 export function StaffDrillDrawer({
@@ -63,12 +68,13 @@ export function StaffDrillDrawer({
   orgId?: string | null;
   from?: string | null;
   to?: string | null;
-  onPeriodChange?: (fromYmd: string, toYmd: string) => void;
+  onPeriodChange?: (period: DrillPeriod) => void;
   onClose: () => void;
   onOpenRoom?: (roomId: string) => void;
   children?: ReactNode;
 }) {
   const [period, setPeriod] = useState<DrillPeriod | null>(null);
+  const [roleId, setRoleId] = useState<DrillRoleId | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [data, setData] = useState<StaffDrillResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +88,11 @@ export function StaffDrillDrawer({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  useEffect(() => {
+    setRoleId(null);
+    setUserId(null);
+  }, [metric]);
 
   const preset = period ? presetRange(period) : null;
   const activeRange = preset
@@ -118,7 +129,10 @@ export function StaffDrillDrawer({
     };
   }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to]);
 
-  const person = data?.ranking.find((row) => row.userId === userId) || null;
+  const roles = data?.roles || [];
+  const activeRole = roles.find((role) => role.id === roleId) || roles[0] || null;
+  const ranking = activeRole?.ranking || [];
+  const person = ranking.find((row) => row.userId === userId) || data?.ranking.find((row) => row.userId === userId) || null;
   const detail = data?.detail && data.detail.userId === userId ? data.detail : null;
 
   function openProject(project: DrillProject) {
@@ -163,15 +177,36 @@ export function StaffDrillDrawer({
               className={styles.ghost}
               aria-pressed={period === item.id}
               onClick={() => {
-                const next = presetRange(item.id);
                 setPeriod(item.id);
-                onPeriodChange?.(next.fromYmd, next.toYmd);
+                setUserId(null);
+                onPeriodChange?.(item.id);
               }}
             >
               {item.label}
             </button>
           ))}
         </div>
+
+        {roles.length ? (
+          <div className={styles.drillPeriods} role="tablist" aria-label="Роли">
+            {roles.map((role) => (
+              <button
+                key={role.id}
+                type="button"
+                role="tab"
+                className={styles.ghost}
+                aria-selected={activeRole?.id === role.id}
+                aria-pressed={activeRole?.id === role.id}
+                onClick={() => {
+                  setRoleId(role.id);
+                  setUserId(null);
+                }}
+              >
+                {role.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {loading && !data ? <Skeleton kind="rows" count={4} label="Загрузка рейтинга" /> : null}
         {error ? (
@@ -185,7 +220,7 @@ export function StaffDrillDrawer({
 
         {!person ? (
           <div className={styles.drillRank}>
-            {data?.ranking.map((row, index) => (
+            {ranking.map((row, index) => (
               <button
                 key={row.userId}
                 type="button"
@@ -205,7 +240,7 @@ export function StaffDrillDrawer({
                 <span className={styles.drillStats}>{activityLine(row)}</span>
               </button>
             ))}
-            {data && !data.ranking.length ? <p className={styles.lead}>Пока нет активности</p> : null}
+            {data && !ranking.length ? <p className={styles.lead}>Пока нет активности</p> : null}
           </div>
         ) : null}
 
@@ -213,18 +248,29 @@ export function StaffDrillDrawer({
 
         {person && detail ? (
           <div className={styles.drillDetail}>
-            <h4 className={styles.dashSub}>Среднемесячные показатели</h4>
+            <h4 className={styles.dashSub}>
+              {person.role === 'crew' ? 'За период' : 'Среднемесячные показатели'}
+            </h4>
             <div className={styles.drillAvg}>
-              {(
-                [
-                  ['Проблемомер', detail.averages.problemomer],
-                  ['Расчёты', detail.averages.calculator],
-                  ['PDF', detail.averages.pdf],
-                  ['Площадь, м²', detail.averages.areaM2],
-                  ['Панели', detail.averages.panels],
-                  ['Готовых расчётов', detail.averages.completed],
-                ] as Array<[string, number]>
-              ).map(([label, value]) => (
+              {(person.role === 'crew'
+                ? ([
+                    ['Смонтировано комнат', person.mountedRooms],
+                    ['Площадь, м²', person.mountedAreaM2],
+                    ['Панели', person.mountedPanels],
+                  ] as Array<[string, number]>)
+                : person.role === 'measurer'
+                  ? ([
+                      ['Замеры', person.measuredRooms],
+                      ['Площадь, м²', detail.averages.areaM2],
+                      ['Расчёты', detail.averages.problemomer + detail.averages.calculator],
+                    ] as Array<[string, number]>)
+                  : ([
+                      ['Проблемомер', detail.averages.problemomer],
+                      ['Расчёты', detail.averages.calculator],
+                      ['PDF', detail.averages.pdf],
+                      ['Проекты', person.projectCount],
+                      ['Площадь, м²', detail.averages.areaM2],
+                    ] as Array<[string, number]>)).map(([label, value]) => (
                 <div key={label} className={styles.drillAvgItem}>
                   <span>{label}</span>
                   <strong>{formatNum(value)}</strong>
@@ -237,7 +283,7 @@ export function StaffDrillDrawer({
               {detail.months.map((month) => (
                 <li key={month.key}>
                   <span>{month.label}</span>
-                  <span>{activityLine(month)}</span>
+                  <span>{monthLine(month)}</span>
                 </li>
               ))}
             </ul>

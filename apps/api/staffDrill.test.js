@@ -141,7 +141,8 @@ test('GET /analytics/drill: владелец видит компанию, мен
   const measurer = owner.body.ranking.find((row) => row.userId === 'u_measurer');
   assert.equal(measurer.problemomer, 1);
   assert.equal(measurer.areaM2, 10);
-  assert.ok(owner.body.ranking.some((row) => row.userId === 'u_owner'));
+  assert.equal(owner.body.ranking.some((row) => row.userId === 'u_owner'), false);
+  assert.deepEqual(owner.body.roles.map((role) => role.id), ['measurer']);
   assert.equal(owner.body.ranking.some((row) => row.userId === 'u_other'), false);
 
   const sales = await call('GET', '/analytics/drill', null, await tokenFor('sales.a'), {
@@ -183,6 +184,6 @@ test('агрегат не подменяет нули, если это не де
     demoFill: false,
   });
   assert.equal(result.demoFilled, false);
-  assert.equal(result.ranking[0].value, 0);
-  assert.equal(result.ranking[0].panels, 0);
+  assert.equal(result.roles.length, 0);
+  assert.equal(result.ranking.length, 0);
 });

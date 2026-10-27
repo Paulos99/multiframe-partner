@@ -27,6 +27,8 @@ export type DrillUser = {
   orgId?: string | null;
 };
 
+export type DrillRoleId = 'sales' | 'measurer' | 'crew';
+
 export type DrillRankingRow = {
   userId: string;
   login: string;
@@ -38,7 +40,18 @@ export type DrillRankingRow = {
   areaM2: number;
   panels: number;
   completed: number;
+  measuredRooms: number;
+  mountedRooms: number;
+  mountedAreaM2: number;
+  mountedPanels: number;
+  projectCount: number;
   value: number;
+};
+
+export type DrillRoleRanking = {
+  id: DrillRoleId;
+  label: string;
+  ranking: DrillRankingRow[];
 };
 
 export type DrillMonth = {
@@ -77,6 +90,7 @@ export type StaffDrillResult = {
   to: string | null;
   scope: 'company' | 'team';
   demoFilled: boolean;
+  roles: DrillRoleRanking[];
   ranking: DrillRankingRow[];
   detail: {
     userId: string;

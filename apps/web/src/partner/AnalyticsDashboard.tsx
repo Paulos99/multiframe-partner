@@ -17,12 +17,14 @@ import {
 } from '../state/types';
 import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
 import { funnelStopCounts, funnelStopPercents } from '../../../../packages/shared/funnel';
+import type { DrillPeriod } from '../../../../packages/shared/staffDrill.js';
 import {
   fetchAnalyticsDashboard,
   formatPeriodLabel,
   getAnalyticsFocusOrg,
   getAnalyticsPeriod,
   monthLabel,
+  presetRange,
   rangeFromYmd,
   setAnalyticsFocusOrg,
   setAnalyticsPeriod,
@@ -57,8 +59,28 @@ function formatWhen(iso: string | null): string {
 }
 
 function formatDay(day: string): string {
-  const [, m, d] = day.split('-');
+  const parts = day.split('-');
+  if (parts.length === 2) {
+    const [y, m] = parts;
+    return y && m ? `${m}.${y.slice(-2)}` : day;
+  }
+  const [, m, d] = parts;
   return m && d ? `${d}.${m}` : day;
+}
+
+function seriesByMonth(series: AnalyticsSeriesPoint[]): AnalyticsSeriesPoint[] {
+  const map = new Map<string, AnalyticsSeriesPoint>();
+  for (const point of series) {
+    const key = point.day.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(key)) continue;
+    const row = map.get(key) || { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 };
+    row.problemomer += point.problemomer;
+    row.calculator += point.calculator;
+    row.pdf += point.pdf;
+    row.logins += point.logins;
+    map.set(key, row);
+  }
+  return [...map.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
 }
 
 function formatNum(n: number): string {
@@ -229,7 +251,7 @@ function MonthSlice({ rows }: { rows: SliceRow[] }) {
   );
 }
 
-function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
+function SeriesChart({ series, title = 'Динамика по дням' }: { series: AnalyticsSeriesPoint[]; title?: string }) {
   const max = Math.max(
     1,
     ...series.map((p) => Math.max(p.problemomer, p.calculator, p.pdf, p.logins)),
@@ -244,7 +266,7 @@ function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
         <span className={styles.legPdf}>PDF</span>
         <span className={styles.legLogin}>Входы</span>
       </div>
-      <div className={styles.seriesChart} role="img" aria-label="Динамика по дням">
+      <div className={styles.seriesChart} role="img" aria-label={title}>
         {series.map((p, i) => (
           <div key={p.day} className={styles.seriesDay}>
             <div className={styles.seriesBars}>
@@ -355,6 +377,8 @@ export function AnalyticsDashboard({
   const toYmd = period.toYmd;
   const [section, setSection] = useState<AnalyticsTab>('overview');
   const [openMetric, setOpenMetric] = useState<string | null>(null);
+  const [panelPeriod, setPanelPeriod] = useState<DrillPeriod | null>(null);
+  const [panelData, setPanelData] = useState<{ period: DrillPeriod; dash: DashData } | null>(null);
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -389,6 +413,32 @@ export function AnalyticsDashboard({
       cancelled = true;
     };
   }, [mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section]);
+
+  useEffect(() => {
+    if (openMetric) return;
+    setPanelPeriod(null);
+    setPanelData(null);
+  }, [openMetric]);
+
+  useEffect(() => {
+    if (!openMetric || !panelPeriod) return;
+    let cancelled = false;
+    const bounds = presetRange(panelPeriod);
+    const { from, to } = rangeFromYmd(bounds.fromYmd, bounds.toYmd);
+    const orgId = mode === 'partner' ? user.orgId : focusOrg || null;
+    void fetchAnalyticsDashboard({
+      mode,
+      from,
+      to,
+      orgId,
+      partnerLogin: user.login,
+    }).then((next) => {
+      if (!cancelled) setPanelData({ period: panelPeriod, dash: next });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [openMetric, panelPeriod, mode, user.orgId, user.login, focusOrg]);
 
   const inactivePartners = useMemo(() => {
     if (mode !== 'admin' || !data) return [];
@@ -437,7 +487,9 @@ export function AnalyticsDashboard({
           <p className={styles.lead}>
             {dash.source === 'api'
               ? 'Данные с сервера'
-              : 'Только этот браузер, сервер недоступен'}
+              : user.orgId === 'org_demo' || user.orgId === 'org_demo_spb' || focusOrg === 'org_demo' || focusOrg === 'org_demo_spb'
+                ? 'Сохранённая история'
+                : 'Только этот браузер, сервер недоступен'}
             {` · ${formatPeriodLabel(fromYmd, toYmd)}`}
           </p>
         </div>
@@ -694,27 +746,39 @@ export function AnalyticsDashboard({
           orgId={mode === 'partner' ? user.orgId : focusOrg || null}
           from={rangeFromYmd(fromYmd, toYmd).from}
           to={rangeFromYmd(fromYmd, toYmd).to}
-          onPeriodChange={(nextFrom, nextTo) => setAnalyticsPeriod(nextFrom, nextTo)}
+          onPeriodChange={setPanelPeriod}
           onOpenRoom={onOpenRoom}
           onClose={() => setOpenMetric(null)}
         >
-          <h3 className={styles.dashSub}>Воронка</h3>
-          <div className={styles.funnelGrid}>
-            <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
-            <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
-          </div>
-          <h3 className={styles.dashSub}>Динамика по дням</h3>
-          {dash.series.length ? (
-            <SeriesChart series={dash.series} />
-          ) : (
-            <p className={styles.lead}>Пока нет точек для графика</p>
-          )}
-          {spansMoreThanTwoMonths(fromYmd, toYmd, dash.series) ? (
-            <>
-              <h3 className={styles.dashSub}>По месяцам</h3>
-              <MonthSlice rows={monthsFromSeries(dash.series)} />
-            </>
-          ) : null}
+          {(() => {
+            const panelReady = Boolean(panelPeriod && panelData?.period === panelPeriod);
+            const view = panelReady && panelData ? panelData.dash : dash;
+            const monthlyAxis = panelReady && (panelPeriod === 'quarter' || panelPeriod === 'year');
+            const chartTitle = monthlyAxis ? 'Динамика по месяцам' : 'Динамика по дням';
+            const chartSeries = monthlyAxis ? seriesByMonth(view.series) : view.series;
+            const bounds = panelPeriod ? presetRange(panelPeriod) : { fromYmd, toYmd };
+            return (
+              <>
+                <h3 className={styles.dashSub}>Воронка</h3>
+                <div className={styles.funnelGrid}>
+                  <FunnelBlock title="Проблемомер" steps={funnelStepsPm(view.funnel)} />
+                  <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(view.funnel)} />
+                </div>
+                <h3 className={styles.dashSub}>{chartTitle}</h3>
+                {chartSeries.length ? (
+                  <SeriesChart series={chartSeries} title={chartTitle} />
+                ) : (
+                  <p className={styles.lead}>Пока нет точек для графика</p>
+                )}
+                {spansMoreThanTwoMonths(bounds.fromYmd, bounds.toYmd, view.series) ? (
+                  <>
+                    <h3 className={styles.dashSub}>По месяцам</h3>
+                    <MonthSlice rows={monthsFromSeries(view.series)} />
+                  </>
+                ) : null}
+              </>
+            );
+          })()}
         </StaffDrillDrawer>
       ) : null}
     </div>
