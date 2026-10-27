@@ -11,6 +11,7 @@ import {
 import { personName } from '../../../../packages/shared/personName.js';
 import { Button } from '../ui/Button';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { useCabinetSection } from './analyticsRoute';
 import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
@@ -112,7 +113,7 @@ type AdminTab = 'today' | 'partners' | 'analytics' | 'help';
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const partners = useMemo(() => api.adminListPartners(), [api]);
-  const [tab, setTab] = useState<AdminTab>(() => {
+  const [tab, setTab] = useCabinetSection<AdminTab>('analytics', () => {
     consumeReturnToTools();
     return 'today';
   });
@@ -432,7 +433,7 @@ function OwnerCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [tab, setTab] = useState<OwnerTab>(() => {
+  const [tab, setTab] = useCabinetSection<OwnerTab>('analytics', () => {
     consumeReturnToTools();
     if (typeof window !== 'undefined' && parseStaffHash(window.location.hash).kind === 'person') return 'staff';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
@@ -653,7 +654,15 @@ function OwnerCabinet({
 
       {tab === 'analytics' ? (
         <TabPanel>
-          <AnalyticsDashboard mode="partner" />
+          <AnalyticsDashboard
+            mode="partner"
+            onOpenRoom={(id) => {
+              const room = api.objects.find((item) => item.id === id);
+              if (room?.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: id });
+              else api.openObject(id);
+              setTab('projects');
+            }}
+          />
         </TabPanel>
       ) : null}
 
@@ -677,7 +686,7 @@ function SalesCabinet({
   const api = usePartner();
   const user = api.user!;
   const [createToken, setCreateToken] = useState(0);
-  const [tab, setTab] = useState<'today' | 'projects' | 'analytics' | 'help'>(() => {
+  const [tab, setTab] = useCabinetSection<'today' | 'projects' | 'analytics' | 'help'>('analytics', () => {
     consumeReturnToTools();
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
@@ -736,7 +745,15 @@ function SalesCabinet({
       ) : null}
       {tab === 'analytics' ? (
         <TabPanel>
-          <AnalyticsDashboard mode="partner" />
+          <AnalyticsDashboard
+            mode="partner"
+            onOpenRoom={(id) => {
+              const room = api.objects.find((item) => item.id === id);
+              if (room?.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: id });
+              else api.openObject(id);
+              setTab('projects');
+            }}
+          />
         </TabPanel>
       ) : null}
 

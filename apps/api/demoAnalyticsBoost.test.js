@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
+import { buildDemoAnalyticsEvents, buildDemoPlatform, extendDemoAnalyticsHistory } from './demoSeed.js';
 import {
   applyCapitalDemoBoost,
   BOOST_RATIO,
@@ -35,6 +35,101 @@ const METRICS = [
 function target(value) {
   return Math.round(Number(value) * BOOST_RATIO);
 }
+
+test('демо-история детерминирована и длиннее года', () => {
+  const first = buildDemoAnalyticsEvents({ boostCapital: false });
+  const second = buildDemoAnalyticsEvents({ boostCapital: false });
+  assert.deepEqual(
+    first.map((event) => event.id).sort(),
+    second.map((event) => event.id).sort(),
+  );
+  const age = Date.now() - Math.min(...first.map((event) => Date.parse(event.at)));
+  assert.ok(age > 300 * 24 * 60 * 60 * 1000, String(age));
+  const results = (day) =>
+    first.filter((event) => new RegExp(`^ev_result_org_demo_${day}_\\d+$`).test(event.id)).length;
+  assert.ok(results(1) > results(5), `будний ${results(1)}, выходной ${results(5)}`);
+  const recent = first.filter((event) => Date.now() - Date.parse(event.at) < 20 * 24 * 60 * 60 * 1000);
+  const extended = extendDemoAnalyticsHistory(recent);
+  const span =
+    Math.max(...extended.map((event) => Date.parse(event.at))) -
+    Math.min(...extended.map((event) => Date.parse(event.at)));
+  assert.ok(span > 100 * 24 * 60 * 60 * 1000);
+  assert.equal(extendDemoAnalyticsHistory(extended), extended);
+});
+
+test('редкий хвост без версии схемы всё равно дополняется до года', () => {
+  const sparse = [
+    {
+      id: 'ev_login_org_demo_1_partner1',
+      at: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(),
+      orgId: 'org_demo',
+      action: 'login',
+    },
+    {
+      id: 'ev_result_org_demo_0_0',
+      at: new Date().toISOString(),
+      orgId: 'org_demo',
+      action: 'result',
+      object: { areaM2: 10 },
+    },
+    {
+      id: 'ae_user_kept',
+      at: new Date().toISOString(),
+      orgId: 'org_demo',
+      userId: 'u_sales1',
+      action: 'result',
+      object: { areaM2: 3 },
+    },
+    { id: 'other_org', at: new Date().toISOString(), orgId: 'org_real', action: 'login' },
+  ];
+  const extended = extendDemoAnalyticsHistory(sparse);
+  assert.ok(extended.length > 100);
+  assert.equal(extended.find((event) => event.id === 'ev_demo_history_schema')?.schema, 3);
+  assert.equal(extended.some((event) => event.id === 'ae_user_kept'), true);
+  assert.equal(extended.some((event) => event.id === 'other_org'), true);
+  const span =
+    Math.max(...extended.map((event) => Date.parse(event.at))) -
+    Math.min(...extended.map((event) => Date.parse(event.at)));
+  assert.ok(span > 300 * 24 * 60 * 60 * 1000);
+  assert.equal(extendDemoAnalyticsHistory(extended), extended);
+});
+
+test('маркер схемы на короткой пачке не мешает дополнению до года', () => {
+  const short = [
+    {
+      id: 'ev_demo_history_schema',
+      schema: 3,
+      at: new Date().toISOString(),
+      orgId: 'org_demo',
+      action: 'schema',
+    },
+    {
+      id: 'ev_result_org_demo_0_0',
+      at: new Date().toISOString(),
+      orgId: 'org_demo',
+      action: 'result',
+      object: { areaM2: 10 },
+    },
+    {
+      id: 'ae_kept_short',
+      at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+      orgId: 'org_demo',
+      userId: 'u_sales1',
+      action: 'result',
+      object: { areaM2: 4 },
+    },
+  ];
+  const extended = extendDemoAnalyticsHistory(short);
+  assert.notEqual(extended, short);
+  assert.equal(extended.find((event) => event.id === 'ev_result_org_demo_0_0')?.object?.areaM2, 10);
+  assert.equal(extended.some((event) => event.id === 'ae_kept_short'), true);
+  assert.ok(extended.length > short.length + 50);
+  const stamps = extended
+    .filter((event) => event.orgId === 'org_demo' && event.id !== 'ev_demo_history_schema')
+    .map((event) => Date.parse(event.at));
+  assert.ok(Math.max(...stamps) - Math.min(...stamps) > 300 * 24 * 60 * 60 * 1000);
+  assert.equal(extendDemoAnalyticsHistory(extended), extended);
+});
 
 test('агрегаты Потолков Столицы в 1.3 раза выше Северного Потолка', () => {
   const platform = buildDemoPlatform({ withHashes: false });

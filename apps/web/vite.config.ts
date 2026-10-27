@@ -13,6 +13,37 @@ const base = process.env.VITE_BASE || '/';
  * Без них PDF с невстроенными шрифтами или JPEG2000-картинками рисуется с ошибками.
  * В кэш PWA не попадают (globIgnores) — грузятся по требованию.
  */
+/**
+ * Уже установленный Workbox переживает Ctrl+Shift+R и в dev отдаёт старый precache.
+ * В vite dev по /sw.js и /dev-sw.js отдаём worker, который сам снимает регистрацию.
+ */
+function devServiceWorkerKiller(): Plugin {
+  const script = `self.addEventListener('install', function () { self.skipWaiting(); });
+self.addEventListener('activate', function (event) {
+  event.waitUntil((async function () {
+    var keys = await caches.keys();
+    await Promise.all(keys.map(function (key) { return caches.delete(key); }));
+    await self.registration.unregister();
+    var clients = await self.clients.matchAll({ type: 'window' });
+    await Promise.all(clients.map(function (client) { return client.navigate(client.url); }));
+  })());
+});
+`;
+  return {
+    name: 'mf-dev-sw-killer',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = decodeURIComponent((req.url || '').split('?')[0] || '');
+        if (path !== '/sw.js' && path !== '/dev-sw.js') return next();
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(script);
+      });
+    },
+  };
+}
+
 function pdfjsAssets(): Plugin {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), 'node_modules/pdfjs-dist');
   const dirs = ['cmaps', 'standard_fonts', 'wasm', 'iccs'];
@@ -49,8 +80,12 @@ export default defineConfig({
   plugins: [
     react(),
     pdfjsAssets(),
+    devServiceWorkerKiller(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: null,
+      selfDestroying: process.env.VITE_DEMO_MODE === 'true',
+      devOptions: { enabled: false },
       includeAssets: [
         'logo-stp.png',
         'logo-multiframe.png',

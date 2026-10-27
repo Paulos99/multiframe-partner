@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 import { signToken as signAuthToken, verifyToken } from './authTokens.js';
 import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
 import ruCitiesTsv from './data/ru-cities.js';
-import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
+import { buildDemoAnalyticsEvents, buildDemoPlatform, extendDemoAnalyticsHistory } from './demoSeed.js';
 import { findVisibleDocument, incomingDocumentKind, visibleDocuments } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
 import { handleMaterialPreview } from './materialsPreview.js';
@@ -21,6 +21,7 @@ import {
 } from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
+import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { estimateForRole } from '../../packages/shared/projectAccess.js';
 import { applyDemoPersonalNames, normalizePersonName } from '../../packages/shared/personName.js';
@@ -74,7 +75,9 @@ function cityOrThrow(raw, previous) {
 
 function normalizeRole(role) {
   if (role === 'partner') return 'owner';
-  if (role === 'executor') return 'measurer';
+  if (role === 'executor' || role === 'exec') return 'measurer';
+  if (role === 'manager') return 'sales';
+  if (role === 'installer' || role === 'install') return 'crew';
   if (['admin', 'owner', 'sales', 'measurer', 'crew'].includes(role)) return role;
   return 'measurer';
 }
@@ -305,6 +308,22 @@ async function savePlatform(platform) {
 
 async function loadEvents() {
   return loadStoredDocument(eventsDocumentSpec());
+}
+
+let demoHistoryWrite = null;
+
+async function eventsForAnalytics() {
+  const events = await loadEvents();
+  const extended = extendDemoAnalyticsHistory(events);
+  if (extended === events) return events;
+  if (!demoHistoryWrite) {
+    demoHistoryWrite = saveEvents(extended, events).catch((error) => {
+      demoHistoryWrite = null;
+      console.warn('demo analytics history', error?.message || error);
+    });
+  }
+  await demoHistoryWrite;
+  return extended;
 }
 
 async function saveEvents(list, loaded) {
@@ -1635,6 +1654,47 @@ export async function handler(event = {}) {
       return json(405, { message: 'Очистка аналитики отключена' });
     }
 
+    if (method === 'GET' && path.endsWith('/analytics/drill')) {
+      const auth = await requireAuth(event);
+      const role = auth.user.role;
+      if (!['admin', 'owner', 'sales'].includes(role)) {
+        return json(403, { message: 'Аналитика недоступна' });
+      }
+      const query = getQuery(event);
+      let orgId = role === 'admin' ? query.orgId || null : auth.user.orgId;
+      if (role === 'admin') {
+        const key = header(event, 'X-Analytics-Key');
+        if (key && key !== ANALYTICS_ADMIN_KEY()) {
+          return json(403, { message: 'Admin key required' });
+        }
+      }
+      const platform = auth.platform;
+      const events = await eventsForAnalytics();
+      const demoOrg = (platform.orgs || []).some((org) => org.id === 'org_demo' || org.id === 'org_demo_spb');
+      const focusDemo = !orgId || orgId === 'org_demo' || orgId === 'org_demo_spb';
+      const drill = buildStaffDrill({
+        viewer: { id: auth.user.id, role, orgId: auth.user.orgId },
+        users: (platform.users || []).map((user) => ({
+          id: user.id,
+          login: user.login,
+          displayName: user.displayName,
+          role: normalizeRole(user.role),
+          orgId: user.orgId,
+        })),
+        events,
+        objects: platform.objects || [],
+        projects: platform.projects || [],
+        metric: query.metric,
+        period: query.period,
+        userId: query.userId || null,
+        from: query.from || null,
+        to: query.to || null,
+        orgId,
+        demoFill: demoOrg && focusDemo,
+      });
+      return json(200, drill);
+    }
+
     if (method === 'GET' && path.endsWith('/analytics/dashboard')) {
       const query = getQuery(event);
       let orgId = query.orgId || header(event, 'X-Analytics-Org') || null;
@@ -1655,7 +1715,7 @@ export async function handler(event = {}) {
           }
         }
         const platform = auth.platform;
-        const events = await loadEvents();
+        const events = await eventsForAnalytics();
         const staffDir = platform.users
           .filter((u) => STAFF_ROLES.includes(normalizeRole(u.role)))
           .map((u) => ({
@@ -1684,7 +1744,7 @@ export async function handler(event = {}) {
           if (key !== ANALYTICS_ADMIN_KEY()) {
             return json(403, { message: 'Admin key required' });
           }
-          const events = await loadEvents();
+          const events = await eventsForAnalytics();
           const dash = aggregateAnalyticsDashboard(events, {
             source: 'api',
             from: query.from || null,
@@ -1695,7 +1755,7 @@ export async function handler(event = {}) {
           return json(200, dash);
         }
         if (!orgId) return json(400, { message: 'orgId required' });
-        const events = await loadEvents();
+        const events = await eventsForAnalytics();
         const dash = aggregateAnalyticsDashboard(events, {
           source: 'api',
           from: query.from || null,

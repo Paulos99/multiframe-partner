@@ -65,6 +65,22 @@ async function expectFullResult(page: Page, withSave: boolean) {
     await section.scrollIntoViewIfNeeded();
     await expect(section, name).toHaveCSS('opacity', '1', { timeout: 5000 });
   }
+  const kpi = page.getByRole('region', { name: 'Ключевые показатели', exact: true });
+  for (const [title, index] of [
+    ['Воздушный шум', 'Rw'],
+    ['Ударный шум', 'Lnw'],
+  ] as const) {
+    const card = kpi.locator('article').filter({ hasText: title });
+    const value = card.locator('strong');
+    const hint = card.getByText(new RegExp(`разница \\d+ дБ · ${index}`));
+    await expect(value).toHaveText(/на \d+% тише/);
+    await expect(hint).toBeVisible();
+    const [valueSize, hintSize] = await Promise.all([
+      value.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
+      hint.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
+    ]);
+    expect(valueSize, title).toBeGreaterThan(hintSize);
+  }
   await expect(page.getByRole('heading', { name: 'Эффективность MultiFrame' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Сравнить на слух' })).toBeVisible();
   await expect(page.getByText('Сильный дискомфорт')).toHaveCount(0);

@@ -409,11 +409,13 @@
 }
 
 .kpiValue {
-  font-size: clamp(28px, 2.5vw, 36px);
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: clamp(22px, 2.2vw, 32px);
   font-weight: 850;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.04em;
-  line-height: 1;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
   color: var(--text-primary);
   cursor: default;
 }
@@ -1595,7 +1597,7 @@
   }
 
   .kpiValue {
-    font-size: clamp(24px, 7vw, 30px);
+    font-size: clamp(20px, 5.6vw, 26px);
   }
 
   .kpiLabel {

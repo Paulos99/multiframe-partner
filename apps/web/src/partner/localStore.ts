@@ -43,7 +43,9 @@ import {
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { applyDemoPersonalNames, normalizePersonName, personName } from '../../../../packages/shared/personName.js';
 import { carriedObjectLink } from './objectLink';
+import { supplementDemoHistory } from '../../../../packages/shared/demoHistory.js';
 import {
+  assignDemoRoomStaff,
   buildLocalDemoAnalytics,
   buildLocalDemoObjects,
   buildLocalDemoOrgs,
@@ -63,6 +65,8 @@ const PROJECTS_CACHE_KEY = 'mf_partner_projects_v1';
 const PROJECTS_READY_KEY = 'mf_partner_projects_ready_v1';
 const HISTORY_RESET_KEY = 'mf_partner_history_reset_v2';
 const DEMO_ANALYTICS_SEED_KEY = 'mf_partner_demo_analytics_seed_v2';
+const DEMO_ANALYTICS_VERSION_KEY = 'mf_partner_demo_analytics_version';
+export const DEMO_ANALYTICS_VERSION = '3';
 const ANALYTICS_CAP = 2000;
 
 export type StoredUser = {
@@ -148,7 +152,7 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     orgs,
     links: raw.links || [],
     activity: raw.activity || [],
-    objects: repairStoredHistory(raw.objects || [], users),
+    objects: assignDemoRoomStaff(repairStoredHistory(raw.objects || [], users), users),
     projects: Array.isArray(raw.projects) ? raw.projects : [],
     ...(materials ? { materials } : {}),
   };
@@ -187,6 +191,7 @@ export function clearAllActionHistory(): void {
   }
   localStorage.removeItem(ANALYTICS_KEY);
   localStorage.removeItem(ANALYTICS_QUEUE_KEY);
+  localStorage.removeItem(DEMO_ANALYTICS_VERSION_KEY);
 }
 
 /** One-shot wipe after UI redesign — returns true if this call cleared data. */
@@ -201,18 +206,64 @@ export function ensureActionHistoryCleared(): boolean {
   }
 }
 
+function readStoredDb(key: string): PartnerDb | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PartnerDb;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (!Array.isArray(parsed.users) && !Array.isArray(parsed.objects)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function dropLegacyKeys(): void {
+  try {
+    localStorage.removeItem(DB_KEY_LEGACY);
+    localStorage.removeItem('mf_partner_db_v3');
+    localStorage.removeItem('mf_partner_db_v2');
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Ключ v5 ещё не создан, а комнаты уже лежат в v4.
+ * Переносим их, а не заменяем свежим сидом: сид стирал бы клики проблемомера и монтажа.
+ * Недостающую вторую демо-компанию добавляем рядом, объекты не трогаем.
+ */
+function adoptLegacyDb(legacy: PartnerDb): PartnerDb {
+  const migrated = migrateDb(legacy);
+  const fresh = defaultDb();
+  const hasSpb = migrated.orgs.some((org) => org.id === 'org_demo_spb');
+  if (migrated.users.length && hasSpb) return migrated;
+  const orgIds = new Set(migrated.orgs.map((org) => org.id));
+  const logins = new Set(migrated.users.map((user) => user.login));
+  return {
+    ...migrated,
+    users: [...migrated.users, ...fresh.users.filter((user) => !logins.has(user.login))],
+    orgs: [...migrated.orgs, ...fresh.orgs.filter((org) => !orgIds.has(org.id))],
+    objects: migrated.objects.length ? migrated.objects : fresh.objects,
+    projects: migrated.projects?.length ? migrated.projects : fresh.projects,
+  };
+}
+
 export function loadDb(): PartnerDb {
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (!raw) {
-      // Fresh seed. Drop prior local DBs so старые демо-часы не остаются.
-      try {
-        localStorage.removeItem(DB_KEY_LEGACY);
-        localStorage.removeItem('mf_partner_db_v3');
-        localStorage.removeItem('mf_partner_db_v2');
-      } catch {
-        /* ignore */
+      const legacy =
+        readStoredDb(DB_KEY_LEGACY) || readStoredDb('mf_partner_db_v3') || readStoredDb('mf_partner_db_v2');
+      if (legacy && ((legacy.users && legacy.users.length) || (legacy.objects && legacy.objects.length))) {
+        const db = adoptLegacyDb(legacy);
+        saveDb(db);
+        dropLegacyKeys();
+        seedDemoAnalyticsOnce();
+        return db;
       }
+      dropLegacyKeys();
       const db = defaultDb();
       saveDb(db);
       seedDemoAnalyticsOnce();
@@ -238,20 +289,35 @@ export function loadDb(): PartnerDb {
   }
 }
 
-/** One-shot local analytics month for offline demo dashboards. */
-export function seedDemoAnalyticsOnce(force = false): void {
+export function demoAnalyticsVersion(): string | null {
   try {
-    if (!force && localStorage.getItem(DEMO_ANALYTICS_SEED_KEY) === '1') {
-      const existing = localStorage.getItem(ANALYTICS_KEY);
-      // The one-shot history wipe removes events after the flag is set.
-      if (existing && existing.length > 2) return;
+    return localStorage.getItem(DEMO_ANALYTICS_VERSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Хранилище не пересобирается. Недостающий год считается при чтении,
+ * иначе короткая пачка либо не влезает в localStorage, либо затирает принятую неделю.
+ */
+export function ensureDemoAnalyticsHistory(): void {
+  try {
+    const raw = localStorage.getItem(ANALYTICS_KEY);
+    if (!raw || !raw.includes('org_demo')) return;
+    if (localStorage.getItem(DEMO_ANALYTICS_VERSION_KEY) !== DEMO_ANALYTICS_VERSION) {
+      localStorage.setItem(DEMO_ANALYTICS_VERSION_KEY, DEMO_ANALYTICS_VERSION);
     }
-    const events = buildLocalDemoAnalytics() as AnalyticsEvent[];
-    localStorage.setItem(ANALYTICS_KEY, JSON.stringify(events.slice(0, ANALYTICS_CAP)));
     localStorage.setItem(DEMO_ANALYTICS_SEED_KEY, '1');
   } catch {
     /* ignore */
   }
+}
+
+/** Готовая годовая история не пересобирается, даже если базу кабинета сбросили. */
+export function seedDemoAnalyticsOnce(force = false): void {
+  void force;
+  ensureDemoAnalyticsHistory();
 }
 
 export function saveDb(db: PartnerDb): void {
@@ -835,6 +901,19 @@ export function listLocalObjects(user: SessionUser): JobObject[] {
     .map((o) => presentObject(o, user.role));
 }
 
+/** Пустая демо-компания показывает ту же доску, что «Топ проектов»: Никитин, Морозова, Вася. */
+export function fillDemoCompanyRooms(objects: JobObject[], orgId?: string | null): JobObject[] {
+  const own = (objects || []).filter(
+    (obj) =>
+      obj &&
+      (obj.clientName || obj.room?.areaM2) &&
+      (!orgId || !obj.orgId || obj.orgId === orgId),
+  );
+  if (own.length) return objects;
+  if (orgId !== 'org_demo' && orgId !== 'org_demo_spb') return objects;
+  return buildLocalDemoObjects().filter((obj) => obj.orgId === orgId);
+}
+
 function projectVisibleLocal(user: SessionUser, project: Project, objects: JobObject[]): boolean {
   if (user.role === 'admin') return true;
   if (!user.orgId || project.orgId !== user.orgId) return false;
@@ -1153,6 +1232,12 @@ export function loadAnalyticsEvents(): AnalyticsEvent[] {
   return readJsonArray<AnalyticsEvent>(ANALYTICS_KEY);
 }
 
+/** Сохранённые события плюс недостающий хвост демо-года. Хранилище не пишется. */
+export function loadDemoAnalyticsEvents(): AnalyticsEvent[] {
+  const stored = loadAnalyticsEvents();
+  return supplementDemoHistory(stored, buildLocalDemoAnalytics() as AnalyticsEvent[]);
+}
+
 export function appendAnalyticsEvent(event: AnalyticsEvent): void {
   const list = [event, ...loadAnalyticsEvents()].slice(0, ANALYTICS_CAP);
   localStorage.setItem(ANALYTICS_KEY, JSON.stringify(list));
@@ -1201,7 +1286,7 @@ export function buildLocalDashboard(
       orgId: u.orgId,
       role: u.role,
     }));
-  return aggregateAnalyticsDashboard(dedupeEvents([...extra, ...loadAnalyticsEvents()]), {
+  return aggregateAnalyticsDashboard(dedupeEvents([...extra, ...loadDemoAnalyticsEvents()]), {
     source: 'local',
     from: opts.from,
     to: opts.to,

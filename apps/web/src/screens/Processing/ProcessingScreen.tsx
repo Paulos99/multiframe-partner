@@ -103,7 +103,6 @@ export function ProcessingScreen() {
       cancelAnimationFrame(raf);
       window.clearTimeout(exitTimer.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once ceremony
   }, []);
 
   const current = STATUS_LINES[lineIndex] ?? STATUS_LINES[0]!;

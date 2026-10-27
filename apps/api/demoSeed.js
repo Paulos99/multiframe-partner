@@ -6,6 +6,7 @@
  */
 import bcrypt from 'bcryptjs';
 import { boostCapitalEvents, boostCapitalStaff } from '../../packages/shared/demoAnalyticsBoost.js';
+import { demoHistoryReady, supplementDemoHistory } from '../../packages/shared/demoHistory.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { DEMO_PERSONAL_NAMES } from '../../packages/shared/personName.js';
 import { sealDisabledDemoUsers } from './sealDemoUsers.js';
@@ -80,6 +81,16 @@ export const DEMO_ACCOUNTS = [
 function daysAgo(n, _hour, _minute) {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 }
+
+/** Полдень локального дня: повторная сборка в те же сутки даёт те же отметки. */
+function analyticsAt(day) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - day);
+  return date.toISOString();
+}
+
+export const DEMO_HISTORY_SCHEMA = 3;
 
 const DEMO_PEOPLE = {
   u_partner1: { login: 'partner1', name: 'Владелец · Потолки Столицы' },
@@ -426,7 +437,16 @@ function pushEvent(list, e) {
   });
 }
 
-/** ~30 days of analytics for both orgs. Capital is lifted to round(north × 1.3). */
+/** День отсчёта, а не день недели: одни и те же цифры в любой день календаря. */
+const DEMO_HISTORY_DAYS = 371;
+
+function includeDemoDay(day) {
+  if (day < 28) return true;
+  if (day < 100) return day % 4 === 0;
+  return day % 14 === 0;
+}
+
+/** Год истории. Столица поднимается до round(север × 1.3). */
 export function buildDemoAnalyticsEvents(opts = {}) {
   const events = [];
   const orgs = [
@@ -451,10 +471,9 @@ export function buildDemoAnalyticsEvents(opts = {}) {
   ];
 
   let n = 0;
-  for (let day = 29; day >= 0; day -= 1) {
-    const weekday = new Date();
-    weekday.setDate(weekday.getDate() - day);
-    const isWeekend = weekday.getDay() === 0 || weekday.getDay() === 6;
+  for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 1) {
+    if (!includeDemoDay(day)) continue;
+    const isWeekend = day % 7 === 5 || day % 7 === 6;
     const intensity = isWeekend ? 0.35 : 1;
 
     for (const org of orgs) {
@@ -466,7 +485,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         n += 1;
         pushEvent(events, {
           id: `ev_login_${org.orgId}_${day}_${u.login}`,
-          at: daysAgo(day, 8 + (n % 3), 10 + (n % 40)),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -485,7 +504,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         n += 1;
         pushEvent(events, {
           id: `ev_open_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 10 + i, 5),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -519,7 +538,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         n += 1;
         pushEvent(events, {
           id: `ev_result_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 11 + i, 20),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -533,7 +552,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         if (i % 2 === 0) {
           pushEvent(events, {
             id: `ev_pdf_${org.orgId}_${day}_${i}`,
-            at: daysAgo(day, 11 + i, 35),
+            at: analyticsAt(day),
             orgId: org.orgId,
             userId: u.id,
             login: u.login,
@@ -548,7 +567,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         if (i === 0 && day % 4 === 0) {
           pushEvent(events, {
             id: `ev_share_${org.orgId}_${day}_${i}`,
-            at: daysAgo(day, 12, 0),
+            at: analyticsAt(day),
             orgId: org.orgId,
             userId: u.id,
             login: u.login,
@@ -574,7 +593,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         };
         pushEvent(events, {
           id: `ev_calc_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 15 + i, 10),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -588,7 +607,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
         if (i === 0) {
           pushEvent(events, {
             id: `ev_calcpdf_${org.orgId}_${day}_${i}`,
-            at: daysAgo(day, 15 + i, 25),
+            at: analyticsAt(day),
             orgId: org.orgId,
             userId: u.id,
             login: u.login,
@@ -604,11 +623,26 @@ export function buildDemoAnalyticsEvents(opts = {}) {
     }
   }
 
+  events.push({
+    id: 'ev_demo_history_schema',
+    schema: DEMO_HISTORY_SCHEMA,
+    at: analyticsAt(DEMO_HISTORY_DAYS - 1),
+    orgId: 'org_demo',
+    userId: 'u_partner1',
+    login: 'partner1',
+    role: 'owner',
+    companyName: 'Потолки Столицы',
+    city: 'Москва',
+    tool: 'cabinet',
+    action: 'schema',
+    object: null,
+  });
+
   // Admin logins
-  for (let day = 29; day >= 0; day -= 5) {
+  for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 14) {
     pushEvent(events, {
       id: `ev_admin_login_${day}`,
-      at: daysAgo(day, 9, 0),
+      at: analyticsAt(day),
       orgId: null,
       userId: 'u_admin',
       login: 'admin',
@@ -625,4 +659,24 @@ export function buildDemoAnalyticsEvents(opts = {}) {
   const platform = buildDemoPlatform({ withHashes: false });
   const demoStaff = platform.users.filter((user) => user.demo && user.loginDisabled);
   return boostCapitalEvents(sorted, demoStaff, platform);
+}
+
+const DEMO_ORG_IDS = new Set(['org_demo', 'org_demo_spb']);
+
+export function demoHistorySchema(events) {
+  const list = Array.isArray(events) ? events : [];
+  const marker = list.find((event) => event && event.id === 'ev_demo_history_schema');
+  const schema = Number(marker?.schema);
+  return Number.isFinite(schema) ? schema : 0;
+}
+
+/**
+ * При чтении добирает только ту часть года, которой нет в сохранённой пачке.
+ * Недавние события остаются как есть: от них не зависит запись в хранилище.
+ */
+export function extendDemoAnalyticsHistory(events) {
+  const list = Array.isArray(events) ? events : [];
+  if (!list.some((event) => event && DEMO_ORG_IDS.has(event.orgId))) return list;
+  if (demoHistoryReady(list)) return list;
+  return supplementDemoHistory(list, buildDemoAnalyticsEvents());
 }

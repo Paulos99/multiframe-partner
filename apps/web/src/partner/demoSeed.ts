@@ -112,6 +112,25 @@ function daysAgo(n: number, _hour?: number, _minute?: number): string {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/** Полдень локального дня: повторная сборка в те же сутки даёт те же отметки. */
+function analyticsAt(day: number): string {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - day);
+  return date.toISOString();
+}
+
+export const DEMO_HISTORY_SCHEMA = 3;
+
+/** День отсчёта, а не день недели: одни и те же цифры в любой день календаря. */
+const DEMO_HISTORY_DAYS = 371;
+
+function includeDemoDay(day: number): boolean {
+  if (day < 28) return true;
+  if (day < 100) return day % 4 === 0;
+  return day % 14 === 0;
+}
+
 const DEMO_PEOPLE: Record<string, { login: string; name: string }> = {
   u_partner1: { login: 'partner1', name: 'Владелец · Потолки Столицы' },
   u_sales1: { login: 'sales1', name: 'Менеджер · Потолки Столицы' },
@@ -311,6 +330,48 @@ export function buildLocalDemoOrgs(): DemoOrg[] {
   ];
 }
 
+/**
+ * Демо-комнаты без живого исполнителя получают текущего сотрудника своей компании.
+ * Уже назначенная роль не переписывается. Вызывается и для нового сида, и для записанного v5.
+ */
+export function assignDemoRoomStaff<T extends { id?: string; orgId?: string | null; status?: string | null; assignedTo?: string | null }>(
+  objects: T[],
+  users: Array<{ id: string; role: string; orgId?: string | null }>,
+): T[] {
+  const byOrg = new Map<string, { crew: string[]; sales?: string; measurer?: string }>();
+  for (const user of users) {
+    if (user.orgId !== 'org_demo' && user.orgId !== 'org_demo_spb') continue;
+    const slot = byOrg.get(user.orgId) || { crew: [] };
+    if (user.role === 'crew') slot.crew.push(user.id);
+    if (user.role === 'sales' && !slot.sales) slot.sales = user.id;
+    if (user.role === 'measurer' && !slot.measurer) slot.measurer = user.id;
+    byOrg.set(user.orgId, slot);
+  }
+  for (const slot of byOrg.values()) slot.crew.sort();
+  return objects.map((object) => {
+    const slot = object.orgId ? byOrg.get(object.orgId) : undefined;
+    if (!slot) return object;
+    const current = users.find((user) => user.id === object.assignedTo);
+    let next: string | undefined;
+    if (object.status === 'install' || object.status === 'closed') {
+      if (current?.role === 'crew') return object;
+      if (!slot.crew.length) return object;
+      const index = [...String(object.id || '')].reduce((sum, char) => sum + char.charCodeAt(0), 0) % slot.crew.length;
+      next = slot.crew[index];
+    } else if (object.status === 'quote_sent') {
+      if (current?.role === 'sales') return object;
+      next = slot.sales;
+    } else if (object.status === 'measured') {
+      if (current?.role === 'measurer') return object;
+      next = slot.measurer;
+    } else {
+      return object;
+    }
+    if (!next || next === object.assignedTo) return object;
+    return { ...object, assignedTo: next };
+  });
+}
+
 export function buildLocalDemoObjects(): JobObject[] {
   const moscow = SPECS_A.map((s) =>
     makeObject(s, 'org_demo', 'Москва', 'u_partner1', 'u_exec1', s.id === 'obj_a04' ? 'u_crew1b' : 'u_crew1', 'u_sales1'),
@@ -333,7 +394,8 @@ export type LocalAnalyticsEvent = {
   companyName: string;
   city?: string;
   tool: 'problemomer' | 'calculator' | 'cabinet';
-  action: 'login' | 'open' | 'result' | 'pdf' | 'share' | 'calc_done';
+  action: 'login' | 'open' | 'result' | 'pdf' | 'share' | 'calc_done' | 'schema';
+  schema?: number;
   object?: Record<string, unknown> | null;
 };
 
@@ -360,10 +422,9 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
     },
   ];
 
-  for (let day = 29; day >= 0; day -= 1) {
-    const d = new Date();
-    d.setDate(d.getDate() - day);
-    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+  for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 1) {
+    if (!includeDemoDay(day)) continue;
+    const isWeekend = day % 7 === 5 || day % 7 === 6;
     const intensity = isWeekend ? 0.35 : 1;
 
     for (const org of orgs) {
@@ -372,7 +433,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         if (u.role === 'owner' && day % 3 !== 0) continue;
         events.push({
           id: `ev_login_${org.orgId}_${day}_${u.login}`,
-          at: daysAgo(day, 8 + (day % 3), 10),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -389,7 +450,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         const u = i % 2 === 0 ? org.measurer : org.sales;
         events.push({
           id: `ev_open_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 10 + i, 5),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -417,7 +478,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         };
         events.push({
           id: `ev_result_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 11 + i, 20),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: u.id,
           login: u.login,
@@ -431,7 +492,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         if (i % 2 === 0) {
           events.push({
             id: `ev_pdf_${org.orgId}_${day}_${i}`,
-            at: daysAgo(day, 11 + i, 35),
+            at: analyticsAt(day),
             orgId: org.orgId,
             userId: u.id,
             login: u.login,
@@ -456,7 +517,7 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
         };
         events.push({
           id: `ev_calc_${org.orgId}_${day}_${i}`,
-          at: daysAgo(day, 15 + i, 10),
+          at: analyticsAt(day),
           orgId: org.orgId,
           userId: org.sales.id,
           login: org.sales.login,
@@ -470,6 +531,20 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
       }
     }
   }
+
+  events.push({
+    id: 'ev_demo_history_schema',
+    schema: DEMO_HISTORY_SCHEMA,
+    at: analyticsAt(DEMO_HISTORY_DAYS - 1),
+    orgId: 'org_demo',
+    userId: 'u_partner1',
+    login: 'partner1',
+    role: 'owner',
+    companyName: 'Потолки Столицы',
+    city: 'Москва',
+    tool: 'cabinet',
+    action: 'schema',
+  });
 
   return boostCapitalEvents(events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)));
 }

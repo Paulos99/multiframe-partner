@@ -157,13 +157,37 @@ test('diagnostic and calculator open without runtime regressions', async ({page}
  await page.getByRole('button',{name:'Кабинет',exact:true}).click();await page.getByRole('button',{name:'Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
 });
 
-for (const role of ['admin', 'owner'] as const) {
-  test(`${role}: сводка аналитики без «Объёма», «Отправок», «Входов» и «По дням месяца»`, async ({ page }) => {
+for (const role of ['admin', 'owner', 'sales'] as const) {
+  test(`${role}: сводка аналитики без «Объёма», «Отправок», «Входов» и «По дням месяца»`, async ({ page, request }) => {
+    if (role === 'owner') {
+      await request.post('http://127.0.0.1:4181/analytics/events', {
+        data: {
+          events: [
+            {
+              id: 'ui_area_sales',
+              at: new Date().toISOString(),
+              orgId: 'ui_org',
+              userId: 'ui_sales',
+              login: 'ui.sales',
+              role: 'sales',
+              companyName: 'UI test company',
+              tool: 'problemomer',
+              action: 'result',
+              object: {
+                areaM2: 24,
+                panels: 16,
+                projectId: 'ui_project',
+                objectId: 'ui_room',
+                label: 'Спальня',
+              },
+            },
+          ],
+        },
+      });
+    }
     await enter(page, role);
     await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: /Площадь, м²/ }).click();
-    await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toBeVisible();
     for (const label of ['Средняя м²', 'Готовых расчётов', 'Площадь, м²', 'Панели']) {
       await expect(page.getByText(label, { exact: true })).toHaveCount(1);
     }
@@ -172,6 +196,61 @@ for (const role of ['admin', 'owner'] as const) {
     }
     await expect(page.getByText('Отправки', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Сумма м²', { exact: true })).toHaveCount(0);
+    const tile = page.getByRole('button', { name: /Площадь, м²/ }).first();
+    const periodBtn = page.getByRole('group', { name: 'Период аналитики' }).locator('button');
+    let previousTile = '';
+    let tileText = '';
+    await expect.poll(async () => {
+      const next = await tile.innerText();
+      const settled = next.length > 0 && next === previousTile;
+      previousTile = next;
+      if (settled) tileText = next;
+      return settled;
+    }).toBe(true);
+    const periodText = await periodBtn.innerText();
+    await tile.click();
+    const drill = page.getByRole('region', { name: 'Площадь, м²' });
+    await expect(drill).toBeVisible();
+    await expect(page).toHaveURL(/#analytics\/rating\/area/);
+    await drill.getByRole('button', { name: 'Квартал', exact: true }).click();
+    await expect(drill.getByRole('button', { name: 'Квартал', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(periodBtn).toHaveText(periodText);
+    await expect(drill.getByRole('heading', { name: 'Воронка', exact: true })).toBeVisible();
+    await expect(drill.getByRole('heading', { name: 'Динамика по месяцам', exact: true })).toBeVisible();
+    await expect(drill.getByText('PM', { exact: true })).toHaveCount(0);
+    await expect(drill.getByText('Кальк.', { exact: true })).toHaveCount(0);
+    await expect(drill.getByText('где остановились, в сумме 100%').first()).toBeVisible();
+    await expect(drill.getByRole('heading', { name: 'По месяцам', exact: true })).toBeVisible();
+    if (role === 'owner') {
+      await drill.getByRole('tab', { name: 'Менеджеры', exact: true }).click();
+      await drill.getByRole('button', { name: /UI sales/ }).click();
+      await expect(page).toHaveURL(/#analytics\/staff\//);
+      await expect(drill.getByRole('heading', { name: 'Среднемесячные показатели' })).toBeVisible();
+      await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
+      await drill.getByRole('button', { name: 'Назад', exact: true }).click();
+      await expect(page).toHaveURL(/#analytics\/rating\/area/);
+      await expect(drill.getByRole('button', { name: /UI sales/ })).toBeVisible();
+      await drill.getByRole('button', { name: /UI sales/ }).click();
+      await drill.getByRole('button', { name: /Тестовая квартира/ }).click();
+      await expect(page.getByRole('region', { name: 'Комната' })).toBeVisible();
+      await expect(page).toHaveURL(/#project\/.+\/room\//);
+    }
+    for (let step = 0; step < 6; step += 1) {
+      const nested = await page.evaluate(() => location.hash.startsWith('#analytics/'));
+      const room = await page.getByRole('region', { name: 'Комната' }).count();
+      if (!nested && room === 0) break;
+      await page.goBack();
+    }
+    await expect.poll(async () => tile.innerText()).toBe(tileText);
+    await expect(periodBtn).toHaveText(periodText);
+  });
+}
+
+for (const role of ['measurer', 'crew'] as const) {
+  test(`${role} не видит раздел аналитики`, async ({ page }) => {
+    await enter(page, role);
+    await expect(page.getByRole('tab', { name: 'Аналитика', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Аналитика команды', exact: true })).toHaveCount(0);
   });
 }
 

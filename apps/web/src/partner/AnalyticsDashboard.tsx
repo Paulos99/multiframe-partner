@@ -17,24 +17,35 @@ import {
 } from '../state/types';
 import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
 import { funnelStopCounts, funnelStopPercents } from '../../../../packages/shared/funnel';
+import type { DrillPeriod } from '../../../../packages/shared/staffDrill.js';
+import { goAnalytics, useAnalyticsRoute } from './analyticsRoute';
 import {
-  fetchAnalyticsDashboard,
+  applyDashboardProbe,
+  composeCabinetAnalytics,
+  loadSharedAnalyticsEvents,
+  probeAnalyticsDashboard,
+  roomsForCabinet,
+  shownTileNumbers,
+  type AnalyticsTileModel,
   formatPeriodLabel,
   getAnalyticsFocusOrg,
   getAnalyticsPeriod,
   monthLabel,
+  presetRange,
   rangeFromYmd,
   setAnalyticsFocusOrg,
   setAnalyticsPeriod,
   subscribeAnalyticsFocusOrg,
   subscribeAnalyticsPeriod,
 } from './analytics';
+import { isDemoModeEnabled } from './demoMode';
 import { calcModeLabel } from './calcModeLabel';
 import { JournalDownload } from './JournalDownload';
 import { spansMoreThanTwoMonths } from './periodSpan';
-import { CountUp, FadeRise } from './motionBits';
+import { FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
+import { StaffDrillDrawer } from './StaffDrillDrawer';
 import styles from './partner.module.css';
 import { FunnelIcon } from '../icons';
 
@@ -56,8 +67,28 @@ function formatWhen(iso: string | null): string {
 }
 
 function formatDay(day: string): string {
-  const [, m, d] = day.split('-');
+  const parts = day.split('-');
+  if (parts.length === 2) {
+    const [y, m] = parts;
+    return y && m ? `${m}.${y.slice(-2)}` : day;
+  }
+  const [, m, d] = parts;
   return m && d ? `${d}.${m}` : day;
+}
+
+function seriesByMonth(series: AnalyticsSeriesPoint[]): AnalyticsSeriesPoint[] {
+  const map = new Map<string, AnalyticsSeriesPoint>();
+  for (const point of series) {
+    const key = point.day.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(key)) continue;
+    const row = map.get(key) || { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 };
+    row.problemomer += point.problemomer;
+    row.calculator += point.calculator;
+    row.pdf += point.pdf;
+    row.logins += point.logins;
+    map.set(key, row);
+  }
+  return [...map.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
 }
 
 function formatNum(n: number): string {
@@ -131,15 +162,13 @@ function KpiCard({
   prev?: number | null;
   showDelta: boolean;
   pressed: boolean;
-  onSelect: () => void;
+  onSelect?: () => void;
 }) {
   const delta = showDelta ? deltaText(value, prev) : null;
-  return (
-    <button type="button" className={styles.kpi} aria-pressed={pressed} onClick={onSelect}>
+  const body = (
+    <>
       <span className={styles.kpiLabel}>{label}</span>
-      <strong>
-        <CountUp value={value} />
-      </strong>
+      <strong>{formatNum(value)}</strong>
       {delta != null ? (
         <span className={`${styles.kpiDelta} ${deltaClass(value, prev)}`}>
           {delta} к пред.
@@ -149,6 +178,12 @@ function KpiCard({
           {'\u00a0'}
         </span>
       )}
+    </>
+  );
+  if (!onSelect) return <div className={styles.kpi}>{body}</div>;
+  return (
+    <button type="button" className={styles.kpi} aria-pressed={pressed} onClick={onSelect}>
+      {body}
     </button>
   );
 }
@@ -222,7 +257,7 @@ function MonthSlice({ rows }: { rows: SliceRow[] }) {
   );
 }
 
-function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
+function SeriesChart({ series, title = 'Динамика по дням' }: { series: AnalyticsSeriesPoint[]; title?: string }) {
   const max = Math.max(
     1,
     ...series.map((p) => Math.max(p.problemomer, p.calculator, p.pdf, p.logins)),
@@ -232,24 +267,24 @@ function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
   return (
     <div className={styles.seriesWrap}>
       <div className={styles.seriesLegend}>
-        <span className={styles.legPm}>PM</span>
-        <span className={styles.legCalc}>Кальк.</span>
+        <span className={styles.legPm}>Проблемомер</span>
+        <span className={styles.legCalc}>Калькулятор</span>
         <span className={styles.legPdf}>PDF</span>
         <span className={styles.legLogin}>Входы</span>
       </div>
-      <div className={styles.seriesChart} role="img" aria-label="Динамика по дням">
+      <div className={styles.seriesChart} role="img" aria-label={title}>
         {series.map((p, i) => (
           <div key={p.day} className={styles.seriesDay}>
             <div className={styles.seriesBars}>
               <div
                 className={`${styles.seriesBar} ${styles.barPm}`}
                 style={{ height: `${(p.problemomer / max) * 100}%` }}
-                title={`PM: ${p.problemomer}`}
+                title={`Проблемомер: ${p.problemomer}`}
               />
               <div
                 className={`${styles.seriesBar} ${styles.barCalc}`}
                 style={{ height: `${(p.calculator / max) * 100}%` }}
-                title={`Кальк.: ${p.calculator}`}
+                title={`Калькулятор: ${p.calculator}`}
               />
               <div
                 className={`${styles.seriesBar} ${styles.barPdf}`}
@@ -272,6 +307,23 @@ function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
       </div>
     </div>
   );
+}
+
+function funnelStepsPm(f: AnalyticsFunnel) {
+  return [
+    { label: 'Только открыл', value: f.problemomer.open },
+    { label: 'Посчитал, без PDF', value: f.problemomer.result },
+    { label: 'Скачал PDF, не поделился', value: f.problemomer.pdf },
+    { label: 'Поделился', value: f.problemomer.share },
+  ];
+}
+
+function funnelStepsCalc(f: AnalyticsFunnel) {
+  return [
+    { label: 'Только открыл', value: f.calculator.open },
+    { label: 'Посчитал, без PDF', value: f.calculator.calcDone },
+    { label: 'Скачал PDF', value: f.calculator.pdf },
+  ];
 }
 
 function BreakdownList({
@@ -312,40 +364,33 @@ function BreakdownList({
   );
 }
 
-function funnelStepsPm(f: AnalyticsFunnel) {
-  return [
-    { label: 'Только открыл', value: f.problemomer.open },
-    { label: 'Посчитал, без PDF', value: f.problemomer.result },
-    { label: 'Скачал PDF, не поделился', value: f.problemomer.pdf },
-    { label: 'Поделился', value: f.problemomer.share },
-  ];
-}
-
-function funnelStepsCalc(f: AnalyticsFunnel) {
-  return [
-    { label: 'Только открыл', value: f.calculator.open },
-    { label: 'Посчитал, без PDF', value: f.calculator.calcDone },
-    { label: 'Скачал PDF', value: f.calculator.pdf },
-  ];
-}
-
 type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'objects';
 
-export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
+const DRILL_METRICS = new Set(['staff', 'problemomer', 'calculator', 'pdf', 'area', 'panels', 'avg', 'done']);
+
+export function AnalyticsDashboard({
+  mode,
+  onOpenRoom,
+}: {
+  mode: 'admin' | 'partner';
+  onOpenRoom?: (roomId: string) => void;
+}) {
   const api = usePartner();
   const user = api.user!;
   const period = useSyncExternalStore(subscribeAnalyticsPeriod, getAnalyticsPeriod, getAnalyticsPeriod);
   const focusOrg = useSyncExternalStore(subscribeAnalyticsFocusOrg, getAnalyticsFocusOrg, getAnalyticsFocusOrg);
   const fromYmd = period.fromYmd;
   const toYmd = period.toYmd;
+  const route = useAnalyticsRoute();
   const [section, setSection] = useState<AnalyticsTab>('overview');
-  const [openTile, setOpenTile] = useState<string | null>(null);
-  const [data, setData] = useState<DashData | null>(null);
+  const panelPeriod = route.page === 'overview' ? null : route.period;
+  const [panelData, setPanelData] = useState<{ period: DrillPeriod; dash: DashData } | null>(null);
+  const [model, setModel] = useState<AnalyticsTileModel | null>(null);
   const [loading, setLoading] = useState(true);
+  const data = model?.dash ?? null;
 
   const partnersList = useMemo(
     () => (mode === 'admin' ? api.adminListPartners() : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [mode, api, data],
   );
 
@@ -353,28 +398,80 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
     if (mode !== 'admin' && section === 'companies') setSection('overview');
   }, [mode, section]);
 
+  const staffKey = api.partnerListStaff().map((member) => member.id).join('|');
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const { from, to } = rangeFromYmd(fromYmd, toYmd);
     const orgId = mode === 'partner' ? user.orgId : focusOrg || null;
-    void fetchAnalyticsDashboard({
-      mode,
-      from,
-      to,
-      orgId,
-      partnerLogin: user.login,
-      journal: section === 'objects',
-    }).then((dash) => {
+    const objects = roomsForCabinet(api.objects as unknown as Array<Record<string, unknown>>, orgId);
+    const projects = (api.projects || []) as unknown as Array<Record<string, unknown>>;
+    const users = api.partnerListStaff();
+    void loadSharedAnalyticsEvents(orgId).then(async (events) => {
+      const localComposed = composeCabinetAnalytics({
+        events,
+        objects,
+        projects,
+        users,
+        from,
+        to,
+        orgId,
+        mode,
+      });
+      const shown = shownTileNumbers(localComposed);
+      const local: AnalyticsTileModel = {
+        events: events.slice(),
+        objects: objects.slice(),
+        projects: projects.slice(),
+        users: users.slice(),
+        kpi: shown,
+        source: 'local',
+        from,
+        to,
+        dash: { ...localComposed.dash, kpi: { ...localComposed.dash.kpi, panels: shown.panels, areaM2: shown.areaM2 } },
+      };
+      const preferLocal = isDemoModeEnabled() || orgId === 'org_demo' || orgId === 'org_demo_spb';
+      const probe = await probeAnalyticsDashboard({ mode, orgId, partnerLogin: user.login });
+      const next = applyDashboardProbe(local, probe, { preferLocal, orgId, mode });
       if (!cancelled) {
-        setData(dash);
+        setModel(next);
         setLoading(false);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section]);
+  }, [mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section, api.objects, api.projects, staffKey]);
+
+  useEffect(() => {
+    if (!panelPeriod || !model) {
+      setPanelData(null);
+      return;
+    }
+    let cancelled = false;
+    const bounds = presetRange(panelPeriod);
+    const { from, to } = rangeFromYmd(bounds.fromYmd, bounds.toYmd);
+    const orgId = mode === 'partner' ? user.orgId : focusOrg || null;
+    try {
+      const next = composeCabinetAnalytics({
+        events: model.events,
+        objects: model.objects,
+        projects: model.projects,
+        users: model.users,
+        from,
+        to,
+        orgId,
+        mode,
+      }).dash;
+      if (!cancelled) setPanelData({ period: panelPeriod, dash: next });
+    } catch {
+      if (!cancelled) setPanelData(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [panelPeriod, mode, user.orgId, focusOrg, model]);
 
   const inactivePartners = useMemo(() => {
     if (mode !== 'admin' || !data) return [];
@@ -404,6 +501,8 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
   }
 
   const dash = data!;
+  const tilePanels = dash.kpi.panels;
+  const tileArea = dash.kpi.areaM2;
   const showDelta = Boolean(dash.kpiPrev);
   const prev: AnalyticsKpi | null = dash.kpiPrev;
 
@@ -423,7 +522,9 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
           <p className={styles.lead}>
             {dash.source === 'api'
               ? 'Данные с сервера'
-              : 'Только этот браузер, сервер недоступен'}
+              : user.orgId === 'org_demo' || user.orgId === 'org_demo_spb' || focusOrg === 'org_demo' || focusOrg === 'org_demo_spb'
+                ? 'Сохранённая история'
+                : 'Только этот браузер, сервер недоступен'}
             {` · ${formatPeriodLabel(fromYmd, toYmd)}`}
           </p>
         </div>
@@ -452,6 +553,52 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
         </label>
       ) : null}
 
+      {route.page !== 'overview' && model ? (
+        <StaffDrillDrawer
+          metric={route.metric || 'staff'}
+          mode={mode}
+          orgId={mode === 'partner' ? user.orgId : focusOrg || null}
+          from={rangeFromYmd(fromYmd, toYmd).from}
+          to={rangeFromYmd(fromYmd, toYmd).to}
+          onOpenRoom={onOpenRoom}
+          model={model}
+          tilePanels={tilePanels}
+          tileArea={tileArea}
+        >
+          {(() => {
+            const panelReady = Boolean(panelPeriod && panelData?.period === panelPeriod);
+            const view = panelReady && panelData ? panelData.dash : dash;
+            const monthlyAxis = panelReady && (panelPeriod === 'quarter' || panelPeriod === 'year');
+            const chartTitle = monthlyAxis ? 'Динамика по месяцам' : 'Динамика по дням';
+            const chartSeries = monthlyAxis ? seriesByMonth(view.series) : view.series;
+            const bounds = panelPeriod ? presetRange(panelPeriod) : { fromYmd, toYmd };
+            return (
+              <>
+                <h3 className={styles.dashSub}>Воронка</h3>
+                <div className={styles.funnelGrid}>
+                  <FunnelBlock title="Проблемомер" steps={funnelStepsPm(view.funnel)} />
+                  <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(view.funnel)} />
+                </div>
+                <h3 className={styles.dashSub}>{chartTitle}</h3>
+                {chartSeries.length ? (
+                  <SeriesChart series={chartSeries} title={chartTitle} />
+                ) : (
+                  <p className={styles.lead}>Пока нет точек для графика</p>
+                )}
+                {spansMoreThanTwoMonths(bounds.fromYmd, bounds.toYmd, view.series) ? (
+                  <>
+                    <h3 className={styles.dashSub}>По месяцам</h3>
+                    <MonthSlice rows={monthsFromSeries(view.series)} />
+                  </>
+                ) : null}
+              </>
+            );
+          })()}
+        </StaffDrillDrawer>
+      ) : null}
+
+      {route.page === 'overview' ? (
+      <>
       <div className={styles.tabs} role="tablist" aria-label="Разделы аналитики">
         {sectionTabs.map((t) => (
           <button
@@ -469,6 +616,13 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
 
       {section === 'overview' ? (
         <div className={styles.dashSection}>
+          {loading ? (
+            <div className={styles.kpiRow} aria-busy="true">
+              {Array.from({ length: mode === 'admin' ? 9 : 8 }, (_, index) => (
+                <Skeleton key={index} kind="cards" count={1} label="Загрузка показателя" />
+              ))}
+            </div>
+          ) : (
           <FadeRise className={styles.kpiRow}>
             {(
               [
@@ -476,11 +630,11 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
                   ? [{ id: 'partners', label: 'Активные компании', value: dash.kpi.activePartners, prev: prev?.activePartners, showDelta }]
                   : []),
                 { id: 'staff', label: 'Сотрудники', value: dash.kpi.executors, prev: prev?.executors, showDelta },
-                { id: 'pm', label: 'Проблемомер', value: dash.kpi.problemomerResults, prev: prev?.problemomerResults, showDelta },
-                { id: 'calc', label: 'Калькулятор', value: dash.kpi.calculatorDone, prev: prev?.calculatorDone, showDelta },
+                { id: 'problemomer', label: 'Проблемомер', value: dash.kpi.problemomerResults, prev: prev?.problemomerResults, showDelta },
+                { id: 'calculator', label: 'Калькулятор', value: dash.kpi.calculatorDone, prev: prev?.calculatorDone, showDelta },
                 { id: 'pdf', label: 'PDF', value: dash.kpi.pdf, prev: prev?.pdf, showDelta },
-                { id: 'area', label: 'Площадь, м²', value: dash.kpi.areaM2, prev: prev?.areaM2, showDelta },
-                { id: 'panels', label: 'Панели', value: dash.kpi.panels, prev: prev?.panels, showDelta },
+                { id: 'area', label: 'Площадь, м²', value: tileArea, prev: prev?.areaM2, showDelta },
+                { id: 'panels', label: 'Панели', value: tilePanels, prev: prev?.panels, showDelta },
                 { id: 'avg', label: 'Средняя м²', value: dash.volume.areaM2Avg, prev: null, showDelta: false },
                 { id: 'done', label: 'Готовых расчётов', value: dash.volume.completedCount, prev: null, showDelta: false },
               ] as Array<{ id: string; label: string; value: number; prev?: number | null; showDelta: boolean }>
@@ -491,37 +645,21 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
                 value={tile.value}
                 prev={tile.prev}
                 showDelta={tile.showDelta}
-                pressed={openTile === tile.id}
-                onSelect={() => setOpenTile(openTile === tile.id ? null : tile.id)}
+                pressed={false}
+                onSelect={
+                  DRILL_METRICS.has(tile.id)
+                    ? () =>
+                        goAnalytics(
+                          { page: 'rating', metric: tile.id, role: null, userId: null, period: null },
+                          'push',
+                        )
+                    : undefined
+                }
               />
             ))}
           </FadeRise>
-
-          {openTile ? (
-            <>
-              <h3 className={styles.dashSub}>Воронка</h3>
-              <div className={styles.funnelGrid}>
-                <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
-                <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
-              </div>
-
-              <h3 className={styles.dashSub}>Динамика</h3>
-              {dash.series.length ? (
-                <SeriesChart series={dash.series} />
-              ) : (
-                <p className={styles.lead}>Пока нет точек для графика</p>
-              )}
-
-              {spansMoreThanTwoMonths(fromYmd, toYmd, dash.series) ? (
-                <>
-                  <h3 className={styles.dashSub}>По месяцам</h3>
-                  <MonthSlice rows={monthsFromSeries(dash.series)} />
-                </>
-              ) : null}
-            </>
-          ) : (
-            <p className={styles.hint}>Нажмите показатель — откроются воронка и динамика.</p>
           )}
+          <p className={styles.hint}>Нажмите показатель — откроются воронка и динамика.</p>
         </div>
       ) : null}
 
@@ -691,6 +829,8 @@ export function AnalyticsDashboard({ mode }: { mode: 'admin' | 'partner' }) {
             <p className={styles.lead}>Нет записей за выбранный фильтр</p>
           )}
         </div>
+      ) : null}
+      </>
       ) : null}
     </div>
   );

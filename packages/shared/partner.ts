@@ -43,7 +43,9 @@ export function isStaffRole(role: string): boolean {
 /** Migrate legacy local/API role strings. */
 export function normalizeRole(role: string | null | undefined): UserRole {
   if (role === 'partner') return 'owner';
-  if (role === 'executor') return 'measurer';
+  if (role === 'executor' || role === 'exec') return 'measurer';
+  if (role === 'manager') return 'sales';
+  if (role === 'installer' || role === 'install') return 'crew';
   if (
     role === 'admin' ||
     role === 'owner' ||
