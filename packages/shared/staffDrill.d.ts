@@ -27,7 +27,7 @@ export type DrillUser = {
   orgId?: string | null;
 };
 
-export type DrillRoleId = 'sales' | 'measurer' | 'crew';
+export type DrillRoleId = 'sales' | 'measurer' | 'crew' | 'unassigned';
 
 export type DrillRankingRow = {
   userId: string;
@@ -93,6 +93,11 @@ export type StaffDrillDrops = {
   cards: number;
   /** Комнаты доски не попали в окно целиком — в рейтинг взята сама доска. */
   boardInsteadOfEmptyPeriod: number;
+  /** userId монтажных и закрытых комнат, как их увидел рейтинг. */
+  installByUser: Record<string, number>;
+  closedByUser: Record<string, number>;
+  tilePanels: number;
+  tileArea: number;
 };
 
 export type StaffDrillResult = {

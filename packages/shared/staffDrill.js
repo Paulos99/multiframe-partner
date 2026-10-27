@@ -545,13 +545,11 @@ function linkWork(event, projects, objects) {
 }
 
 function eventArea(event) {
-  const object = event?.object || {};
-  return num(object.areaM2 ?? object.room?.areaM2 ?? event?.areaM2);
+  return num(event?.object?.areaM2);
 }
 
 function eventPanels(event) {
-  const object = event?.object || {};
-  return num(object.panels ?? object.estimate?.panels ?? event?.panels);
+  return num(event?.object?.panels);
 }
 
 function addEvent(row, event, projects, objects) {
@@ -953,19 +951,40 @@ export function buildStaffDrill(input) {
     return row;
   }
 
+  function unassignedRow() {
+    const existing = rows.get('unassigned');
+    if (existing) return existing;
+    const row = emptyRow({
+      id: 'unassigned',
+      login: '',
+      displayName: 'Без исполнителя',
+      role: 'unassigned',
+    });
+    rows.set('unassigned', row);
+    return row;
+  }
+
+  const tileEvents = [];
   for (const event of input.events || []) {
     if (!event) continue;
     if (String(event.role || '') === 'admin') continue;
     if (usersById.get(event.userId)?.role === 'admin') continue;
     if (orgId && event.orgId !== orgId) continue;
     if (!inWindow(event.at, window.from, window.to)) continue;
+    tileEvents.push(event);
     const role = rankRole(event);
-    if (!role) continue;
     const known = personFor(event);
-    const staffId = known && canonicalRankRole(known.role) === role ? known.id : null;
-    if (!companyScope && !(staffId && allowed.has(staffId))) continue;
-    const row = (staffId && rows.get(staffId)) || (companyScope ? adopt(event, role) : null);
-    if (row) addEvent(row, event, input.projects, input.objects);
+    const staffId = role && known && canonicalRankRole(known.role) === role ? known.id : null;
+    let row = staffId ? rows.get(staffId) : null;
+    if (!row && role && companyScope) row = adopt(event, role);
+    if (!row && !companyScope && staffId && allowed.has(staffId)) row = rows.get(staffId);
+    // Плитка компании считает это же событие. Без роли оно встаёт в «Без исполнителя».
+    // В срезе «моя команда» чужие события не показываем: менеджер не видит владельца и других менеджеров.
+    if (!row) {
+      if (!companyScope) continue;
+      row = unassignedRow();
+    }
+    addEvent(row, event, input.projects, input.objects);
   }
 
   function rowForAssignee(userId) {
@@ -998,6 +1017,8 @@ export function buildStaffDrill(input) {
     mounted: 0,
     cards: 0,
     boardInsteadOfEmptyPeriod: 0,
+    installByUser: {},
+    closedByUser: {},
   };
   const companyRooms = [];
   for (const object of drillObjects) {
@@ -1009,19 +1030,28 @@ export function buildStaffDrill(input) {
     }
     companyRooms.push(object);
   }
-  let attributable = companyRooms.filter((object) => roomInWindow(object, window.from, window.to));
-  // Доска живая, а метки комнат старше любого периода: иначе монтаж и проекты остаются 0 при ненулевых плитках.
-  if (companyRooms.length && attributable.length === 0) {
+  for (const object of companyRooms) {
+    const who = assigneeById.get(object.id) || object.assignedTo || '—';
+    const bucket = object.status === 'closed' ? drops.closedByUser : object.status === 'install' ? drops.installByUser : null;
+    if (bucket) bucket[who] = (bucket[who] || 0) + 1;
+  }
+  // Если в окне нет ни одной смонтированной комнаты, а на доске они есть — берём их.
+  // Иначе старая метка сида даёт «Смонтировано 0» в месяце, квартале и году сразу.
+  const outsidePeriod = (object) => !roomInWindow(object, window.from, window.to);
+  drops.period = companyRooms.filter(outsidePeriod).length;
+  const inPeriod = companyRooms.filter((object) => !outsidePeriod(object));
+  const mountedOutside = companyRooms.filter((object) => outsidePeriod(object) && isMounted(object));
+  let attributable = inPeriod;
+  if (!inPeriod.some(isMounted) && mountedOutside.length) {
+    attributable = [...inPeriod, ...mountedOutside];
+    drops.boardInsteadOfEmptyPeriod = mountedOutside.length;
+  } else if (!attributable.length && companyRooms.length) {
     const onBoard = companyRooms.filter((object) => boardIds.has(object.id));
-    drops.period = companyRooms.length;
     drops.boardInsteadOfEmptyPeriod = onBoard.length;
     attributable = onBoard;
-  } else {
-    drops.period = companyRooms.length - attributable.length;
   }
-  const windowRooms = [];
+  const windowRooms = companyRooms.filter((object) => boardIds.has(object.id));
   for (const object of attributable) {
-    if (boardIds.has(object.id)) windowRooms.push(object);
     const assignee = assigneeById.get(object.id);
     const row = assignee ? rowForAssignee(assignee) : null;
     if (!row) {
@@ -1061,9 +1091,27 @@ export function buildStaffDrill(input) {
           row.measuredRooms ===
         0,
     );
-  const demoFilled = Boolean(allZero && input.demoFill);
+  const tilePanels = Math.round(
+    tileEvents.reduce((sum, event) => sum + (event.action === 'result' || event.action === 'calc_done' ? num(event.object?.panels) : 0), 0),
+  );
+  const tileArea = round1(
+    tileEvents.reduce((sum, event) => sum + (event.action === 'result' || event.action === 'calc_done' ? num(event.object?.areaM2) : 0), 0),
+  );
+  const tileHasWork = tilePanels > 0 || tileArea > 0 || tileEvents.some((event) => event.action === 'pdf' || event.action === 'result' || event.action === 'calc_done');
+  const demoFilled = Boolean(allZero && input.demoFill && !tileHasWork);
   if (demoFilled) working = applyDemoFill(working, window.period);
   else reconcileTotals(working);
+
+  const rankedPanels = Math.round(working.reduce((sum, row) => sum + row.panels, 0));
+  const rankedArea = round1(working.reduce((sum, row) => sum + row.areaM2, 0));
+  if (companyScope && (tilePanels > rankedPanels || tileArea > rankedArea)) {
+    const gap = unassignedRow();
+    if (!working.includes(gap)) working.push(gap);
+    if (tilePanels > rankedPanels) gap.panels += tilePanels - rankedPanels;
+    if (tileArea > rankedArea) gap.areaM2 += tileArea - rankedArea;
+  }
+  drops.tilePanels = tilePanels;
+  drops.tileArea = tileArea;
 
   const byRole = new Map(RANK_ROLES.map((role) => [role, []]));
   for (const row of working) {
@@ -1083,10 +1131,24 @@ export function buildStaffDrill(input) {
         .map((row) => publicRow(row, metric))
         .sort((a, b) => b.value - a.value || String(a.displayName).localeCompare(String(b.displayName), 'ru')),
     }));
+  const unassigned = working.find((row) => row.userId === 'unassigned');
+  if (
+    unassigned &&
+    (unassigned.panels > 0 ||
+      unassigned.areaM2 > 0 ||
+      unassigned.problemomer + unassigned.calculator + unassigned.pdf > 0 ||
+      unassigned.workKeys?.size)
+  ) {
+    roles.push({
+      id: 'unassigned',
+      label: 'Без исполнителя',
+      ranking: [publicRow(unassigned, metric)],
+    });
+  }
   const ranking = roles.flatMap((role) => role.ranking);
 
   let detail = null;
-  if (input.userId && allowed.has(input.userId)) {
+  if (input.userId && (input.userId === 'unassigned' || allowed.has(input.userId))) {
     const person = working.find((row) => row.userId === input.userId);
     const keys = monthKeys(window.from, window.to, input.events);
     let months;
@@ -1097,7 +1159,7 @@ export function buildStaffDrill(input) {
     } else {
       const buckets = new Map(keys.map((key) => [key, emptyBucket(key)]));
       for (const event of input.events || []) {
-        if (!eventMatchesUser(event, input.userId)) continue;
+        if (input.userId === 'unassigned' ? !person?.seenEvents?.includes(event) : !eventMatchesUser(event, input.userId)) continue;
         if (String(event.role || '') === 'admin') continue;
         if (orgId && event.orgId !== orgId) continue;
         if (!inWindow(event.at, window.from, window.to)) continue;

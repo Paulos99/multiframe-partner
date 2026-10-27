@@ -142,7 +142,9 @@ test('GET /analytics/drill: владелец видит компанию, мен
   assert.equal(measurer.problemomer, 1);
   assert.equal(measurer.areaM2, 10);
   assert.equal(owner.body.ranking.some((row) => row.userId === 'u_owner'), false);
-  assert.deepEqual(owner.body.roles.map((role) => role.id), ['measurer']);
+  assert.deepEqual(owner.body.roles.map((role) => role.id), ['measurer', 'unassigned']);
+  assert.equal(owner.body.ranking.find((row) => row.userId === 'unassigned').problemomer, 1);
+  assert.equal(owner.body.ranking.find((row) => row.userId === 'unassigned').panels, 5);
   assert.equal(owner.body.ranking.some((row) => row.userId === 'u_other'), false);
 
   const sales = await call('GET', '/analytics/drill', null, await tokenFor('sales.a'), {

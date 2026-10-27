@@ -1817,17 +1817,14 @@
   border: 0;
 }
 
-.whyZero {
-  margin: 14px 0 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--cab-muted);
-  font: inherit;
-  font-size: 0.75rem;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.whyZeroReport {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--cab-surface-2, rgba(1, 100, 79, 0.08));
+  color: inherit;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .metaLine,

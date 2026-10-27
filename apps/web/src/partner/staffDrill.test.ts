@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { aggregateAnalyticsDashboard, normalizeRole, type AnalyticsEvent } from '../../../../packages/shared/partner';
 import { buildStaffDrill, visibleStaff } from '../../../../packages/shared/staffDrill.js';
-import { buildLocalDemoObjects, buildLocalDemoUsers } from './demoSeed';
+import { assignDemoRoomStaff, buildLocalDemoObjects, buildLocalDemoUsers } from './demoSeed';
 
 const now = '2026-10-27T12:00:00.000Z';
 
@@ -105,8 +105,9 @@ test('владелец видит всю компанию и не видит ч�
     visibleStaff({ id: 'owner', role: 'owner', orgId: 'org_a' }, users, 'org_a').map((user) => user.id).sort(),
     ['crew', 'measurer', 'sales', 'sales2'],
   );
-  assert.deepEqual(result.roles.map((role) => role.id), ['measurer']);
+  assert.deepEqual(result.roles.map((role) => role.id), ['measurer', 'unassigned']);
   assert.equal(result.ranking.some((row) => row.role === 'owner' || row.userId === 'owner'), false);
+  assert.equal(result.ranking.find((row) => row.userId === 'unassigned')?.problemomer, 1);
   const measurer = result.ranking.find((row) => row.userId === 'measurer');
   assert.equal(measurer?.problemomer, 2);
   assert.equal(measurer?.calculator, 1);
@@ -192,15 +193,11 @@ function displayedSum(rows: Array<{ areaM2: number; panels: number }>, key: 'are
   return key === 'panels' ? total : Math.round(total * 10) / 10;
 }
 
-function withoutOwner(list: Array<Record<string, unknown>>) {
-  return list.filter((item) => item.userId !== 'owner' && item.role !== 'owner' && item.role !== 'admin');
-}
-
 test('сумма рейтинга владельца равна плиткам за тот же период', () => {
   for (const period of ['month', 'quarter', 'year'] as const) {
     const result = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { period, metric: 'area' });
     assert.equal(result.ranking.some((row) => row.role === 'owner'), false);
-    const dash = aggregateAnalyticsDashboard(withoutOwner(events) as AnalyticsEvent[], {
+    const dash = aggregateAnalyticsDashboard(events as AnalyticsEvent[], {
       source: 'local',
       from: result.from,
       to: result.to,
@@ -238,7 +235,7 @@ test('дробные м² и событие без карточки сотруд
   ];
   const all = [...events, ...extra];
   const result = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { metric: 'area', events: all });
-  const dash = aggregateAnalyticsDashboard(withoutOwner(all) as AnalyticsEvent[], {
+  const dash = aggregateAnalyticsDashboard(all as AnalyticsEvent[], {
     source: 'local',
     from: result.from,
     to: result.to,
@@ -471,13 +468,14 @@ test('сохранённая история со старыми id и ролям
     now,
     demoFill: false,
   });
-  assert.deepEqual(result.roles.map((role) => role.id), ['sales', 'measurer', 'crew']);
-  assert.equal(result.roles.map((role) => role.label).join(','), 'Менеджеры,Замерщики,Монтажники');
+  assert.deepEqual(result.roles.map((role) => role.id), ['sales', 'measurer', 'crew', 'unassigned']);
+  assert.equal(result.roles.map((role) => role.label).join(','), 'Менеджеры,Замерщики,Монтажники,Без исполнителя');
+  assert.equal(result.ranking.find((row) => row.userId === 'unassigned')?.areaM2, 100);
   assert.equal(result.ranking.some((row) => row.userId === 'u_partner1' || row.userId === 'u_measurer1'), false);
   assert.equal(result.ranking.find((row) => row.userId === 'u_exec1')?.areaM2, 22);
   assert.equal(result.ranking.find((row) => row.userId === 'u_sales1')?.areaM2, 14);
   assert.equal(result.ranking.find((row) => row.userId === 'u_crew1')?.areaM2, 6);
-  const dash = aggregateAnalyticsDashboard(withoutOwner(saved) as AnalyticsEvent[], {
+  const dash = aggregateAnalyticsDashboard(saved as AnalyticsEvent[], {
     source: 'local',
     from: result.from,
     to: result.to,
@@ -870,8 +868,9 @@ test('вся доска старше года не обнуляет монтаж
     now,
     demoFill: false,
   });
-  assert.equal(result.drops.boardInsteadOfEmptyPeriod, 1);
   assert.equal(result.drops.period, 1);
+  assert.equal(result.ranking.find((row) => row.userId === 'sales')?.panels, 5206);
+  assert.equal(displayedSum(result.ranking, 'panels'), result.drops.tilePanels);
   assert.equal(result.ranking.find((row) => row.userId === 'crew')?.mountedRooms, 1);
   assert.equal(result.ranking.find((row) => row.userId === 'crew')?.mountedPanels, 12);
   assert.equal(result.ranking.find((row) => row.userId === 'sales')?.projectCount, 1);
@@ -890,4 +889,46 @@ test('вся доска старше года не обнуляет монтаж
   });
   assert.equal(mixed.drops.boardInsteadOfEmptyPeriod, 0);
   assert.equal(mixed.ranking.find((row) => row.userId === 'crew')?.mountedRooms, 1);
+});
+
+test('существующий v5 без исполнителя получает монтажника и менеджера', () => {
+  const users = buildLocalDemoUsers();
+  const bare = buildLocalDemoObjects().map((object) => ({ ...object, assignedTo: null }));
+  const filled = assignDemoRoomStaff(bare, users);
+  const moscow = filled.filter((object) => object.orgId === 'org_demo');
+  assert.ok(moscow.filter((object) => object.status === 'install' || object.status === 'closed').every((object) => object.assignedTo === 'u_crew1' || object.assignedTo === 'u_crew1b'));
+  assert.ok(moscow.filter((object) => object.status === 'quote_sent').every((object) => object.assignedTo === 'u_sales1'));
+  assert.ok(moscow.filter((object) => object.status === 'measured').every((object) => object.assignedTo === 'u_exec1'));
+  const kept = assignDemoRoomStaff(
+    [{ id: 'obj_a03', orgId: 'org_demo', status: 'install', assignedTo: 'u_crew1b' }],
+    users,
+  );
+  assert.equal(kept[0]?.assignedTo, 'u_crew1b');
+});
+
+test('события владельца попадают в «Без исполнителя» и сумма равна плитке', () => {
+  const owned = [
+    event({ id: 'own', userId: 'owner', role: 'owner', object: { areaM2: 2403, panels: 5206 } }),
+  ];
+  const result = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_a' },
+    users,
+    events: owned,
+    objects: [],
+    metric: 'panels',
+    period: 'year',
+    orgId: 'org_a',
+    now,
+    demoFill: false,
+  });
+  const dash = aggregateAnalyticsDashboard(owned as AnalyticsEvent[], {
+    source: 'local',
+    from: result.from,
+    to: result.to,
+    orgId: 'org_a',
+  });
+  assert.equal(dash.kpi.panels, 5206);
+  assert.equal(displayedSum(result.ranking, 'panels'), dash.kpi.panels);
+  assert.equal(displayedSum(result.ranking, 'areaM2'), dash.kpi.areaM2);
+  assert.equal(result.ranking.find((row) => row.displayName === 'Без исполнителя')?.panels, 5206);
 });

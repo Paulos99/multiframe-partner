@@ -329,6 +329,48 @@ export function buildLocalDemoOrgs(): DemoOrg[] {
   ];
 }
 
+/**
+ * Демо-комнаты без живого исполнителя получают текущего сотрудника своей компании.
+ * Уже назначенная роль не переписывается. Вызывается и для нового сида, и для записанного v5.
+ */
+export function assignDemoRoomStaff<T extends { id?: string; orgId?: string | null; status?: string | null; assignedTo?: string | null }>(
+  objects: T[],
+  users: Array<{ id: string; role: string; orgId?: string | null }>,
+): T[] {
+  const byOrg = new Map<string, { crew: string[]; sales?: string; measurer?: string }>();
+  for (const user of users) {
+    if (user.orgId !== 'org_demo' && user.orgId !== 'org_demo_spb') continue;
+    const slot = byOrg.get(user.orgId) || { crew: [] };
+    if (user.role === 'crew') slot.crew.push(user.id);
+    if (user.role === 'sales' && !slot.sales) slot.sales = user.id;
+    if (user.role === 'measurer' && !slot.measurer) slot.measurer = user.id;
+    byOrg.set(user.orgId, slot);
+  }
+  for (const slot of byOrg.values()) slot.crew.sort();
+  return objects.map((object) => {
+    const slot = object.orgId ? byOrg.get(object.orgId) : undefined;
+    if (!slot) return object;
+    const current = users.find((user) => user.id === object.assignedTo);
+    let next: string | undefined;
+    if (object.status === 'install' || object.status === 'closed') {
+      if (current?.role === 'crew') return object;
+      if (!slot.crew.length) return object;
+      const index = [...String(object.id || '')].reduce((sum, char) => sum + char.charCodeAt(0), 0) % slot.crew.length;
+      next = slot.crew[index];
+    } else if (object.status === 'quote_sent') {
+      if (current?.role === 'sales') return object;
+      next = slot.sales;
+    } else if (object.status === 'measured') {
+      if (current?.role === 'measurer') return object;
+      next = slot.measurer;
+    } else {
+      return object;
+    }
+    if (!next || next === object.assignedTo) return object;
+    return { ...object, assignedTo: next };
+  });
+}
+
 export function buildLocalDemoObjects(): JobObject[] {
   const moscow = SPECS_A.map((s) =>
     makeObject(s, 'org_demo', 'Москва', 'u_partner1', 'u_exec1', s.id === 'obj_a04' ? 'u_crew1b' : 'u_crew1', 'u_sales1'),

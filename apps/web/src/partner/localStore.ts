@@ -39,6 +39,7 @@ import {
 import { carriedObjectLink } from './objectLink';
 import { supplementDemoHistory } from '../../../../packages/shared/demoHistory.js';
 import {
+  assignDemoRoomStaff,
   buildLocalDemoAnalytics,
   buildLocalDemoObjects,
   buildLocalDemoOrgs,
@@ -142,7 +143,7 @@ function migrateDb(raw: PartnerDb): PartnerDb {
     orgs,
     links: raw.links || [],
     activity: raw.activity || [],
-    objects: repairStoredHistory(raw.objects || [], users),
+    objects: assignDemoRoomStaff(repairStoredHistory(raw.objects || [], users), users),
     projects: Array.isArray(raw.projects) ? raw.projects : [],
     ...(materials ? { materials } : {}),
   };

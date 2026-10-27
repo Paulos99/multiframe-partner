@@ -34,6 +34,7 @@ const RANK_TAB_LABELS: Record<DrillRoleId, string> = {
   sales: 'Менеджеры',
   measurer: 'Замерщики',
   crew: 'Монтажники',
+  unassigned: 'Без исполнителя',
 };
 
 function visibleRoles(data: StaffDrillResult | null) {
@@ -59,7 +60,14 @@ function formatNum(n: number): string {
 }
 
 function roleLabel(role: string): string {
+  if (role === 'unassigned') return 'Без исполнителя';
   return ROLE_LABELS[role as UserRole] || role;
+}
+
+function assignmentLine(counts: Record<string, number> | undefined): string {
+  const entries = Object.entries(counts || {});
+  if (!entries.length) return 'нет';
+  return entries.map(([userId, count]) => `${userId} × ${count}`).join(', ');
 }
 
 function monthLine(row: Pick<DrillRankingRow, 'problemomer' | 'calculator' | 'pdf' | 'areaM2' | 'panels'>): string {
@@ -107,7 +115,6 @@ export function StaffDrillDrawer({
   const [data, setData] = useState<StaffDrillResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showDrops, setShowDrops] = useState(false);
   const explainZeros = import.meta.env.DEV || isDemoModeEnabled();
   const title = METRIC_LABELS[metric] || 'Рейтинг';
 
@@ -200,6 +207,15 @@ export function StaffDrillDrawer({
             {userId ? 'Назад' : 'Закрыть'}
           </button>
         </div>
+
+        {explainZeros && data ? (
+          <p className={styles.whyZeroReport} data-testid="why-zero">
+            чему 0. Хранилище mf_partner_db_v5. Комнат {data.drops?.rooms ?? 0}. Отсечено: компания{' '}
+            {data.drops?.company ?? 0}, период {data.drops?.period ?? 0}, исполнитель {data.drops?.assignee ?? 0}.
+            Монтаж: {assignmentLine(data.drops?.installByUser)}. Закрыто: {assignmentLine(data.drops?.closedByUser)}.
+            Плитка панелей {data.drops?.tilePanels ?? 0}, площадь {data.drops?.tileArea ?? 0}.
+          </p>
+        ) : null}
 
         <div className={styles.drillPeriods} role="group" aria-label="Период рейтинга">
           {PERIODS.map((item) => (
@@ -355,23 +371,6 @@ export function StaffDrillDrawer({
             ) : (
               <p className={styles.lead}>За период проектов нет</p>
             )}
-          </div>
-        ) : null}
-        {explainZeros ? (
-          <div>
-            <button type="button" className={styles.whyZero} onClick={() => setShowDrops((open) => !open)}>
-              чему 0
-            </button>
-            {showDrops && data?.drops ? (
-              <p className={styles.hint}>
-                Комнат {data.drops.rooms}. Отброшено: компания {data.drops.company}, период {data.drops.period},
-                исполнитель {data.drops.assignee}. Без отметки монтажа {data.drops.notMounted}. В рейтинге монтажа{' '}
-                {data.drops.mounted}, проектов {data.drops.cards}.
-                {data.drops.boardInsteadOfEmptyPeriod
-                  ? ` Пустой период заменён доской: ${data.drops.boardInsteadOfEmptyPeriod}.`
-                  : ''}
-              </p>
-            ) : null}
           </div>
         ) : null}
       </aside>

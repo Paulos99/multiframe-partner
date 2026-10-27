@@ -228,6 +228,40 @@ function authHeaders(mode: 'admin' | 'partner', orgId?: string | null): Record<s
   return headers;
 }
 
+/** Доска из кабинета может прийти урезанной. Поля статуса и исполнителя добираем из того же v5, что и сид. */
+function mergeStoredRooms(
+  passed: Array<Record<string, unknown>> | undefined,
+  stored: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  if (!passed?.length) return stored;
+  const byId = new Map(stored.filter((object) => object?.id).map((object) => [String(object.id), object]));
+  const seen = new Set<string>();
+  const merged = passed.map((object) => {
+    const id = object?.id ? String(object.id) : '';
+    if (id) seen.add(id);
+    const full = id ? byId.get(id) : undefined;
+    if (!full) return object;
+    return {
+      ...full,
+      ...object,
+      status: object.status ?? full.status,
+      assignedTo: object.assignedTo ?? full.assignedTo,
+      orgId: object.orgId ?? full.orgId,
+      projectId: object.projectId ?? full.projectId,
+      updatedAt: object.updatedAt ?? full.updatedAt,
+      createdAt: object.createdAt ?? full.createdAt,
+      history: object.history ?? full.history,
+      room: object.room ?? full.room,
+      estimate: object.estimate ?? full.estimate,
+    };
+  });
+  for (const object of stored) {
+    const id = object?.id ? String(object.id) : '';
+    if (id && !seen.has(id)) merged.push(object);
+  }
+  return merged;
+}
+
 function localStaffDrill(opts: {
   mode: 'admin' | 'partner';
   metric: string;
@@ -244,7 +278,10 @@ function localStaffDrill(opts: {
   const orgId = opts.mode === 'admin' ? opts.orgId || null : session?.orgId || opts.orgId || null;
   const demoOrg = db.orgs.some((org) => org.id === 'org_demo' || org.id === 'org_demo_spb');
   const focusDemo = !orgId || orgId === 'org_demo' || orgId === 'org_demo_spb';
-  const boardObjects = opts.objects?.length ? opts.objects : (db.objects as unknown as Array<Record<string, unknown>>);
+  const boardObjects = mergeStoredRooms(
+    opts.objects,
+    db.objects as unknown as Array<Record<string, unknown>>,
+  );
   const boardProjects = opts.projects?.length
     ? opts.projects
     : ((db.projects || []) as unknown as Array<Record<string, unknown>>);
@@ -269,11 +306,14 @@ function localStaffDrill(opts: {
   });
   if ((import.meta.env.DEV || isDemoModeEnabled()) && result.drops) {
     const drops = result.drops;
-    const board = drops.boardInsteadOfEmptyPeriod
-      ? `, пустой период заменён доской ${drops.boardInsteadOfEmptyPeriod}`
-      : '';
+    const install = Object.entries(drops.installByUser || {})
+      .map(([userId, count]) => `${userId}×${count}`)
+      .join(', ') || 'нет';
+    const closed = Object.entries(drops.closedByUser || {})
+      .map(([userId, count]) => `${userId}×${count}`)
+      .join(', ') || 'нет';
     console.info(
-      `[чему 0] комнат ${drops.rooms}, компания ${drops.company}, период ${drops.period}, исполнитель ${drops.assignee}, без монтажа ${drops.notMounted}, смонтировано ${drops.mounted}, проектов ${drops.cards}${board}`,
+      `[чему 0] хранилище mf_partner_db_v5, комнат ${drops.rooms}, компания ${drops.company}, период ${drops.period}, исполнитель ${drops.assignee}, монтаж ${install}, закрыто ${closed}, плитка панелей ${drops.tilePanels}, площадь ${drops.tileArea}`,
     );
   }
   return result;
