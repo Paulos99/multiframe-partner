@@ -1251,3 +1251,72 @@ test('«Топ проектов» не показывает названия к�
   assert.ok(!names.includes('Спальня'));
   assert.ok(!names.includes('Гостиная'));
 });
+
+test('как в живом хранилище: главное число монтажника из той же строки, топ без комнат-проектов', () => {
+  const realUsers = [
+    { id: 'u_own', login: 'partner1', displayName: 'Владелец', role: 'owner', orgId: 'org_demo' },
+    { id: 'u_mgr', login: 'sales1', displayName: 'Менеджер', role: 'sales', orgId: 'org_demo' },
+    { id: 'u_crew1', login: 'crew1', displayName: 'Монтажник', role: 'crew', orgId: 'org_demo' },
+    { id: 'u_crew1b', login: 'crew1b', displayName: 'Монтажник 2', role: 'crew', orgId: 'org_demo' },
+  ];
+  const room = (id: string, extra: Record<string, unknown>, area: number, panels: number) => ({
+    id,
+    orgId: 'org_demo',
+    status: 'install',
+    updatedAt: now,
+    room: { areaM2: area, roomType: 'living' },
+    estimate: { panels },
+    ...extra,
+  });
+  // Комнаты без клиента и проекта: подпись — тип комнаты.
+  const boardRooms = [
+    room('i1', { roomName: 'Гостиная', assignedTo: 'u_crew1' }, 30, 70),
+    room('i2', { roomName: 'Спальня', assignedTo: 'u_crew1' }, 16, 40),
+    room('i3', { roomName: 'Гостиная', assignedTo: 'u_crew1' }, 10, 27),
+    room('i4', { roomName: 'Спальня', assignedTo: 'u_crew1b' }, 28, 68),
+    room('w1', { roomName: 'Гостиная', status: 'quote_sent', assignedTo: 'u_mgr', createdBy: 'u_mgr' }, 9, 3),
+  ];
+  const own = (id: string, userId: string, login: string, role: string, object: Record<string, unknown>) =>
+    event({ id, userId, login, role, orgId: 'org_demo', tool: 'calculator', action: 'calc_done', object });
+  const work = [
+    // Расчёты монтажника: в «Монтажниках» главное число их не берёт.
+    own('c1', 'u_crew1', 'crew1', 'crew', { areaM2: 16, panels: 5 }),
+    ...['Гостиная', 'Спальня'].flatMap((label) =>
+      [1, 2, 3, 4].map((n) => own(`m_${label}_${n}`, 'u_mgr', 'sales1', 'sales', { areaM2: 10 + n, panels: 4, label })),
+    ),
+  ];
+  const run = (metric: string, userId: string | null = null) =>
+    buildStaffDrill({
+      viewer: { id: 'u_own', role: 'owner', orgId: 'org_demo' },
+      users: realUsers,
+      events: work,
+      objects: boardRooms,
+      projects: [],
+      metric,
+      period: 'month',
+      orgId: 'org_demo',
+      userId,
+      now,
+      demoFill: false,
+    });
+  for (const metric of ['area', 'panels']) {
+    const crew = run(metric).roles.find((role) => role.id === 'crew')?.ranking || [];
+    assert.equal(crew.length, 2, metric);
+    for (const row of crew) {
+      // Одна строка — один источник: число и подпись «Смонтировано» берутся из одних полей.
+      assert.equal(row.value, metric === 'area' ? row.mountedAreaM2 : row.mountedPanels, `${metric} ${row.displayName}`);
+      assert.ok(row.mountedRooms > 0, row.displayName);
+    }
+  }
+  const crew = run('area').roles.find((role) => role.id === 'crew')?.ranking || [];
+  assert.equal(crew.find((row) => row.userId === 'u_crew1')?.value, 56);
+  assert.equal(crew.find((row) => row.userId === 'u_crew1b')?.value, 28);
+
+  const projects = run('staff', 'u_mgr').detail?.projects || [];
+  const names = projects.map((project) => project.name);
+  assert.ok(projects.length > 0);
+  assert.ok(names.every((name) => name.startsWith('Без проекта · ')), names.join('|'));
+  assert.ok(!names.some((name) => name === 'Гостиная' || name === 'Спальня'));
+  // Четыре расчёта одной комнаты — это одна комната, а не «комнат 4».
+  assert.ok(projects.every((project) => project.rooms === 1), JSON.stringify(projects.map((p) => [p.name, p.rooms])));
+});

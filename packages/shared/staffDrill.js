@@ -534,6 +534,10 @@ function linkWork(event, projects, objects) {
   if (label) {
     const room = rooms.find((item) => item.roomName === label || item.clientName === label || item.address === label);
     if (room) return roomProject(room, projects);
+    // Подпись — тип комнаты, а не клиент: такие расчёты не склеиваем в один «проект» по названию.
+    if (Object.values(ROOM_LABELS).includes(label)) {
+      return { projectId: null, roomId: object.objectId || object.roomId || null, name: label };
+    }
     return { projectId: `label:${label}`, roomId: object.objectId || object.roomId || null, name: label };
   }
   const roomType = object.roomType;
@@ -895,19 +899,22 @@ function projectsFromEvents(userId, events, projects, orgId, from, to, accept, o
         rooms: 1,
         roomId: objectId || null,
         bestArea: area,
+        roomKeys: new Set([String(objectId || event.id || key)]),
       });
       continue;
     }
     current.areaM2 += area;
     current.panels += panels;
-    current.rooms += 1;
+    // Комнат столько, сколько разных комнат, а не расчётов: несколько расчётов одной комнаты — одна комната.
+    current.roomKeys.add(String(objectId || event.id || key));
+    current.rooms = current.roomKeys.size;
     if (area >= current.bestArea) {
       current.bestArea = area;
       if (objectId) current.roomId = objectId;
       if (name && name !== 'Расчёт') current.name = name;
     }
   }
-  return [...grouped.values()];
+  return [...grouped.values()].map(({ roomKeys, ...row }) => row);
 }
 
 function roomTitle(room) {
