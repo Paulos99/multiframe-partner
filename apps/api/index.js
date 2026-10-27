@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 import { signToken as signAuthToken, verifyToken } from './authTokens.js';
 import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
 import ruCitiesTsv from './data/ru-cities.js';
-import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
+import { buildDemoAnalyticsEvents, buildDemoPlatform, extendDemoAnalyticsHistory } from './demoSeed.js';
 import { findVisibleDocument, incomingDocumentKind, visibleDocuments } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
 import { handleMaterialPreview } from './materialsPreview.js';
@@ -293,6 +293,22 @@ async function savePlatform(platform) {
 
 async function loadEvents() {
   return loadStoredDocument(eventsDocumentSpec());
+}
+
+let demoHistoryWrite = null;
+
+async function eventsForAnalytics() {
+  const events = await loadEvents();
+  const extended = extendDemoAnalyticsHistory(events);
+  if (extended === events) return events;
+  if (!demoHistoryWrite) {
+    demoHistoryWrite = saveEvents(extended, events).catch((error) => {
+      demoHistoryWrite = null;
+      console.warn('demo analytics history', error?.message || error);
+    });
+  }
+  await demoHistoryWrite;
+  return extended;
 }
 
 async function saveEvents(list, loaded) {
@@ -1591,7 +1607,7 @@ export async function handler(event = {}) {
         }
       }
       const platform = auth.platform;
-      const events = await loadEvents();
+      const events = await eventsForAnalytics();
       const demoOrg = (platform.orgs || []).some((org) => org.id === 'org_demo' || org.id === 'org_demo_spb');
       const focusDemo = !orgId || orgId === 'org_demo' || orgId === 'org_demo_spb';
       const drill = buildStaffDrill({
@@ -1609,6 +1625,8 @@ export async function handler(event = {}) {
         metric: query.metric,
         period: query.period,
         userId: query.userId || null,
+        from: query.from || null,
+        to: query.to || null,
         orgId,
         demoFill: demoOrg && focusDemo,
       });
@@ -1635,7 +1653,7 @@ export async function handler(event = {}) {
           }
         }
         const platform = auth.platform;
-        const events = await loadEvents();
+        const events = await eventsForAnalytics();
         const staffDir = platform.users
           .filter((u) => STAFF_ROLES.includes(normalizeRole(u.role)))
           .map((u) => ({
@@ -1664,7 +1682,7 @@ export async function handler(event = {}) {
           if (key !== ANALYTICS_ADMIN_KEY()) {
             return json(403, { message: 'Admin key required' });
           }
-          const events = await loadEvents();
+          const events = await eventsForAnalytics();
           const dash = aggregateAnalyticsDashboard(events, {
             source: 'api',
             from: query.from || null,
@@ -1675,7 +1693,7 @@ export async function handler(event = {}) {
           return json(200, dash);
         }
         if (!orgId) return json(400, { message: 'orgId required' });
-        const events = await loadEvents();
+        const events = await eventsForAnalytics();
         const dash = aggregateAnalyticsDashboard(events, {
           source: 'api',
           from: query.from || null,

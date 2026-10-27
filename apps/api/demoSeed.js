@@ -423,7 +423,16 @@ function pushEvent(list, e) {
   });
 }
 
-/** ~30 days of analytics for both orgs. Capital is lifted to round(north × 1.3). */
+/** День отсчёта, а не день недели: одни и те же цифры в любой день календаря. */
+const DEMO_HISTORY_DAYS = 371;
+
+function includeDemoDay(day) {
+  if (day < 28) return true;
+  if (day < 100) return day % 4 === 0;
+  return day % 14 === 0;
+}
+
+/** Год истории. Столица поднимается до round(север × 1.3). */
 export function buildDemoAnalyticsEvents(opts = {}) {
   const events = [];
   const orgs = [
@@ -448,10 +457,9 @@ export function buildDemoAnalyticsEvents(opts = {}) {
   ];
 
   let n = 0;
-  for (let day = 29; day >= 0; day -= 1) {
-    const weekday = new Date();
-    weekday.setDate(weekday.getDate() - day);
-    const isWeekend = weekday.getDay() === 0 || weekday.getDay() === 6;
+  for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 1) {
+    if (!includeDemoDay(day)) continue;
+    const isWeekend = day % 7 === 5 || day % 7 === 6;
     const intensity = isWeekend ? 0.35 : 1;
 
     for (const org of orgs) {
@@ -602,7 +610,7 @@ export function buildDemoAnalyticsEvents(opts = {}) {
   }
 
   // Admin logins
-  for (let day = 29; day >= 0; day -= 5) {
+  for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 14) {
     pushEvent(events, {
       id: `ev_admin_login_${day}`,
       at: daysAgo(day, 9, 0),
@@ -622,4 +630,35 @@ export function buildDemoAnalyticsEvents(opts = {}) {
   const platform = buildDemoPlatform({ withHashes: false });
   const demoStaff = platform.users.filter((user) => user.demo && user.loginDisabled);
   return boostCapitalEvents(sorted, demoStaff, platform);
+}
+
+const DEMO_ORG_IDS = new Set(['org_demo', 'org_demo_spb']);
+const SEED_EVENT_ID =
+  /^(ev_(login|open|result|pdf|share|calc|calcpdf|admin)_|ev_boost_capital_)/;
+
+/**
+ * Короткая демо-история не различает месяц, квартал и год.
+ * События генератора заменяются целиком; чужие записи компании сохраняются,
+ * а к ним добавляется только хвост старше 40 дней.
+ */
+export function extendDemoAnalyticsHistory(events, now = Date.now()) {
+  const list = Array.isArray(events) ? events : [];
+  const demo = list.filter((event) => event && DEMO_ORG_IDS.has(event.orgId));
+  if (!demo.length) return list;
+  const stamps = demo.map((event) => Date.parse(event.at)).filter((stamp) => !Number.isNaN(stamp));
+  if (!stamps.length) return list;
+  if (Math.max(...stamps) - Math.min(...stamps) >= 100 * 24 * 60 * 60 * 1000) return list;
+  const fresh = buildDemoAnalyticsEvents();
+  const seedOnly = demo.every((event) => SEED_EVENT_ID.test(String(event.id || '')));
+  if (seedOnly) {
+    const others = list.filter((event) => !event || !DEMO_ORG_IDS.has(event.orgId));
+    return [...fresh, ...others].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  }
+  const ids = new Set(list.map((event) => event && event.id));
+  const older = fresh.filter((event) => {
+    const stamp = Date.parse(event?.at || '');
+    return event && !ids.has(event.id) && !Number.isNaN(stamp) && now - stamp > 40 * 24 * 60 * 60 * 1000;
+  });
+  if (!older.length) return list;
+  return [...older, ...list].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }

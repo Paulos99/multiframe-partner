@@ -7,7 +7,7 @@ import type {
   DrillRankingRow,
   StaffDrillResult,
 } from '../../../../packages/shared/staffDrill.js';
-import { fetchStaffDrill } from './analytics';
+import { fetchStaffDrill, rangeFromYmd, ymdLocal } from './analytics';
 import { Skeleton } from './Skeleton';
 import styles from './partner.module.css';
 
@@ -41,10 +41,19 @@ function activityLine(row: Pick<DrillRankingRow, 'problemomer' | 'calculator' | 
   return `Проблемомер ${row.problemomer} · расчёты ${row.calculator} · PDF ${row.pdf} · ${formatNum(row.areaM2)} м² · панели ${formatNum(row.panels)}`;
 }
 
+function presetRange(period: DrillPeriod, now = new Date()): { fromYmd: string; toYmd: string } {
+  const months = period === 'year' ? 12 : period === 'quarter' ? 3 : 1;
+  const from = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+  return { fromYmd: ymdLocal(from), toYmd: ymdLocal(now) };
+}
+
 export function StaffDrillDrawer({
   metric,
   mode,
   orgId,
+  from,
+  to,
+  onPeriodChange,
   onClose,
   onOpenRoom,
   children,
@@ -52,11 +61,14 @@ export function StaffDrillDrawer({
   metric: string;
   mode: 'admin' | 'partner';
   orgId?: string | null;
+  from?: string | null;
+  to?: string | null;
+  onPeriodChange?: (fromYmd: string, toYmd: string) => void;
   onClose: () => void;
   onOpenRoom?: (roomId: string) => void;
   children?: ReactNode;
 }) {
-  const [period, setPeriod] = useState<DrillPeriod>('month');
+  const [period, setPeriod] = useState<DrillPeriod | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [data, setData] = useState<StaffDrillResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,11 +83,24 @@ export function StaffDrillDrawer({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const preset = period ? presetRange(period) : null;
+  const activeRange = preset
+    ? rangeFromYmd(preset.fromYmd, preset.toYmd)
+    : { from: from ?? null, to: to ?? null };
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void fetchStaffDrill({ mode, metric, period, userId, orgId })
+    void fetchStaffDrill({
+      mode,
+      metric,
+      period: period ?? 'month',
+      userId,
+      orgId,
+      from: activeRange.from ?? (activeRange.to ? null : 'all'),
+      to: activeRange.to,
+    })
       .then((next) => {
         if (!cancelled) setData(next);
       })
@@ -91,7 +116,7 @@ export function StaffDrillDrawer({
     return () => {
       cancelled = true;
     };
-  }, [metric, mode, orgId, period, userId]);
+  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to]);
 
   const person = data?.ranking.find((row) => row.userId === userId) || null;
   const detail = data?.detail && data.detail.userId === userId ? data.detail : null;
@@ -137,14 +162,16 @@ export function StaffDrillDrawer({
               type="button"
               className={styles.ghost}
               aria-pressed={period === item.id}
-              onClick={() => setPeriod(item.id)}
+              onClick={() => {
+                const next = presetRange(item.id);
+                setPeriod(item.id);
+                onPeriodChange?.(next.fromYmd, next.toYmd);
+              }}
             >
               {item.label}
             </button>
           ))}
         </div>
-
-        {person ? null : children}
 
         {loading && !data ? <Skeleton kind="rows" count={4} label="Загрузка рейтинга" /> : null}
         {error ? (
@@ -181,6 +208,8 @@ export function StaffDrillDrawer({
             {data && !data.ranking.length ? <p className={styles.lead}>Пока нет активности</p> : null}
           </div>
         ) : null}
+
+        {person ? null : children}
 
         {person && detail ? (
           <div className={styles.drillDetail}>

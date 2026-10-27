@@ -73,8 +73,8 @@ export type DrillProject = {
 export type StaffDrillResult = {
   metric: DrillMetric;
   period: DrillPeriod;
-  from: string;
-  to: string;
+  from: string | null;
+  to: string | null;
   scope: 'company' | 'team';
   demoFilled: boolean;
   ranking: DrillRankingRow[];
@@ -104,5 +104,8 @@ export function buildStaffDrill(input: {
   userId?: string | null;
   orgId?: string | null;
   now?: Date | string;
+  from?: string | null;
+  to?: string | null;
+  unbounded?: boolean;
   demoFill?: boolean;
 }): StaffDrillResult;

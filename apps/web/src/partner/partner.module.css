@@ -943,6 +943,10 @@
   color: var(--cab-muted);
 }
 
+.seriesLegend span {
+  white-space: nowrap;
+}
+
 .seriesLegend span::before {
   content: '';
   display: inline-block;

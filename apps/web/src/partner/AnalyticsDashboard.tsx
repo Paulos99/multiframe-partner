@@ -239,8 +239,8 @@ function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
   return (
     <div className={styles.seriesWrap}>
       <div className={styles.seriesLegend}>
-        <span className={styles.legPm}>PM</span>
-        <span className={styles.legCalc}>Кальк.</span>
+        <span className={styles.legPm}>Проблемомер</span>
+        <span className={styles.legCalc}>Калькулятор</span>
         <span className={styles.legPdf}>PDF</span>
         <span className={styles.legLogin}>Входы</span>
       </div>
@@ -251,12 +251,12 @@ function SeriesChart({ series }: { series: AnalyticsSeriesPoint[] }) {
               <div
                 className={`${styles.seriesBar} ${styles.barPm}`}
                 style={{ height: `${(p.problemomer / max) * 100}%` }}
-                title={`PM: ${p.problemomer}`}
+                title={`Проблемомер: ${p.problemomer}`}
               />
               <div
                 className={`${styles.seriesBar} ${styles.barCalc}`}
                 style={{ height: `${(p.calculator / max) * 100}%` }}
-                title={`Кальк.: ${p.calculator}`}
+                title={`Калькулятор: ${p.calculator}`}
               />
               <div
                 className={`${styles.seriesBar} ${styles.barPdf}`}
@@ -692,6 +692,9 @@ export function AnalyticsDashboard({
           metric={openMetric}
           mode={mode}
           orgId={mode === 'partner' ? user.orgId : focusOrg || null}
+          from={rangeFromYmd(fromYmd, toYmd).from}
+          to={rangeFromYmd(fromYmd, toYmd).to}
+          onPeriodChange={(nextFrom, nextTo) => setAnalyticsPeriod(nextFrom, nextTo)}
           onOpenRoom={onOpenRoom}
           onClose={() => setOpenMetric(null)}
         >
@@ -700,7 +703,7 @@ export function AnalyticsDashboard({
             <FunnelBlock title="Проблемомер" steps={funnelStepsPm(dash.funnel)} />
             <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(dash.funnel)} />
           </div>
-          <h3 className={styles.dashSub}>Динамика</h3>
+          <h3 className={styles.dashSub}>Динамика по дням</h3>
           {dash.series.length ? (
             <SeriesChart series={dash.series} />
           ) : (

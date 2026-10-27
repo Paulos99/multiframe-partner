@@ -111,6 +111,15 @@ function daysAgo(n: number, _hour?: number, _minute?: number): string {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/** День отсчёта, а не день недели: одни и те же цифры в любой день календаря. */
+const DEMO_HISTORY_DAYS = 371;
+
+function includeDemoDay(day: number): boolean {
+  if (day < 28) return true;
+  if (day < 100) return day % 4 === 0;
+  return day % 14 === 0;
+}
+
 const DEMO_PEOPLE: Record<string, { login: string; name: string }> = {
   u_partner1: { login: 'partner1', name: 'Владелец · Потолки Столицы' },
   u_sales1: { login: 'sales1', name: 'Менеджер · Потолки Столицы' },
@@ -359,10 +368,9 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
     },
   ];
 
-  for (let day = 29; day >= 0; day -= 1) {
-    const d = new Date();
-    d.setDate(d.getDate() - day);
-    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+  for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 1) {
+    if (!includeDemoDay(day)) continue;
+    const isWeekend = day % 7 === 5 || day % 7 === 6;
     const intensity = isWeekend ? 0.35 : 1;
 
     for (const org of orgs) {

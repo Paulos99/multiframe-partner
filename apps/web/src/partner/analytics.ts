@@ -224,6 +224,8 @@ function localStaffDrill(opts: {
   period: DrillPeriod;
   userId?: string | null;
   orgId?: string | null;
+  from?: string | null;
+  to?: string | null;
 }): StaffDrillResult {
   const session = loadSession();
   const db = loadDb();
@@ -244,6 +246,9 @@ function localStaffDrill(opts: {
     period: opts.period,
     userId: opts.userId || null,
     orgId,
+    from: opts.from,
+    to: opts.to,
+    unbounded: opts.from === 'all',
     demoFill: (isDemoModeEnabled() || demoOrg) && focusDemo,
   });
 }
@@ -254,6 +259,8 @@ export async function fetchStaffDrill(opts: {
   period: DrillPeriod;
   userId?: string | null;
   orgId?: string | null;
+  from?: string | null;
+  to?: string | null;
 }): Promise<StaffDrillResult> {
   if (!API_BASE) return localStaffDrill(opts);
   const q = new URLSearchParams();
@@ -261,6 +268,12 @@ export async function fetchStaffDrill(opts: {
   q.set('period', opts.period);
   if (opts.userId) q.set('userId', opts.userId);
   if (opts.orgId) q.set('orgId', opts.orgId);
+  if (opts.from && opts.to) {
+    q.set('from', opts.from);
+    q.set('to', opts.to);
+  } else if (opts.from === 'all') {
+    q.set('from', 'all');
+  }
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/analytics/drill?${q.toString()}`, {

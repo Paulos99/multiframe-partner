@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { aggregateAnalyticsDashboard, type AnalyticsEvent } from '../../../../packages/shared/partner';
 import { buildStaffDrill, visibleStaff } from '../../../../packages/shared/staffDrill.js';
 
 const now = '2026-10-27T12:00:00.000Z';
@@ -181,4 +182,87 @@ test('пустая демо-компания получает примерные
   assert.ok((filled.detail?.averages.areaM2 || 0) > 0);
   assert.equal(filled.detail?.projects.length, 3);
   assert.equal(filled.detail?.projects[0]?.roomId, null);
+});
+
+function displayedSum(rows: Array<{ areaM2: number; panels: number }>, key: 'areaM2' | 'panels'): number {
+  const total = rows.reduce((sum, row) => sum + row[key], 0);
+  return key === 'panels' ? total : Math.round(total * 10) / 10;
+}
+
+test('сумма рейтинга владельца равна плиткам за тот же период', () => {
+  for (const period of ['month', 'quarter', 'year'] as const) {
+    const result = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { period, metric: 'area' });
+    const dash = aggregateAnalyticsDashboard(events as AnalyticsEvent[], {
+      source: 'local',
+      from: result.from,
+      to: result.to,
+      orgId: 'org_a',
+    });
+    assert.equal(displayedSum(result.ranking, 'areaM2'), dash.kpi.areaM2);
+    assert.equal(displayedSum(result.ranking, 'panels'), dash.kpi.panels);
+    assert.equal(
+      result.ranking.reduce((sum, row) => sum + row.problemomer, 0),
+      dash.kpi.problemomerResults,
+    );
+    assert.equal(
+      result.ranking.reduce((sum, row) => sum + row.calculator, 0),
+      dash.kpi.calculatorDone,
+    );
+    assert.equal(
+      result.ranking.reduce((sum, row) => sum + row.pdf, 0),
+      dash.kpi.pdf,
+    );
+  }
+});
+
+test('дробные м² и событие без карточки сотрудника сходятся с плиткой', () => {
+  const extra = [
+    event({ id: 'f1', userId: 'measurer', object: { areaM2: 1.14, panels: 1.4 } }),
+    event({ id: 'f2', userId: 'sales', object: { areaM2: 1.14, panels: 1.4 } }),
+    event({ id: 'f3', userId: 'owner', object: { areaM2: 1.14, panels: 1.4 } }),
+    event({
+      id: 'ghost',
+      userId: 'ghost',
+      login: 'ghost',
+      role: 'measurer',
+      object: { areaM2: 2.2, panels: 1 },
+    }),
+  ];
+  const all = [...events, ...extra];
+  const result = drill({ id: 'owner', role: 'owner', orgId: 'org_a' }, { metric: 'area', events: all });
+  const dash = aggregateAnalyticsDashboard(all as AnalyticsEvent[], {
+    source: 'local',
+    from: result.from,
+    to: result.to,
+    orgId: 'org_a',
+  });
+  assert.equal(result.ranking.some((row) => row.userId === 'ghost'), true);
+  assert.equal(displayedSum(result.ranking, 'areaM2'), dash.kpi.areaM2);
+  assert.equal(displayedSum(result.ranking, 'panels'), dash.kpi.panels);
+  assert.equal(
+    result.ranking.reduce((sum, row) => sum + row.problemomer, 0),
+    dash.kpi.problemomerResults,
+  );
+});
+
+test('месяц, квартал и год дают разную сумму рейтинга', () => {
+  const spanned = [
+    event({ id: 'near', userId: 'measurer', at: '2026-10-20T12:00:00.000Z', object: { areaM2: 10, panels: 1 } }),
+    event({ id: 'mid', userId: 'measurer', at: '2026-09-01T12:00:00.000Z', object: { areaM2: 20, panels: 1 } }),
+    event({ id: 'far', userId: 'measurer', at: '2026-04-01T12:00:00.000Z', object: { areaM2: 40, panels: 1 } }),
+  ];
+  const totals = (['month', 'quarter', 'year'] as const).map((period) => {
+    const result = buildStaffDrill({
+      viewer: { id: 'owner', role: 'owner', orgId: 'org_a' },
+      users,
+      events: spanned,
+      metric: 'area',
+      period,
+      orgId: 'org_a',
+      now,
+      demoFill: false,
+    });
+    return result.ranking.reduce((sum, row) => sum + row.areaM2, 0);
+  });
+  assert.ok(totals[0] < totals[1] && totals[1] < totals[2], totals.join(','));
 });

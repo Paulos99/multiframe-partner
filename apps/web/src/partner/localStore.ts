@@ -227,14 +227,33 @@ export function loadDb(): PartnerDb {
   }
 }
 
-/** One-shot local analytics month for offline demo dashboards. */
+function storedAnalyticsSpanMs(raw: string | null): number {
+  if (!raw || raw.length <= 2) return 0;
+  try {
+    const list = JSON.parse(raw) as Array<{ at?: string }>;
+    if (!Array.isArray(list) || list.length < 2) return 0;
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    for (const item of list) {
+      const stamp = Date.parse(item?.at || '');
+      if (Number.isNaN(stamp)) continue;
+      if (stamp < min) min = stamp;
+      if (stamp > max) max = stamp;
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return 0;
+    return max - min;
+  } catch {
+    return 0;
+  }
+}
+
+/** Демо-история на год. Короткая пачка пересобирается один раз: иначе месяц, квартал и год совпадают. */
 export function seedDemoAnalyticsOnce(force = false): void {
   try {
-    if (!force && localStorage.getItem(DEMO_ANALYTICS_SEED_KEY) === '1') {
-      const existing = localStorage.getItem(ANALYTICS_KEY);
-      // The one-shot history wipe removes events after the flag is set.
-      if (existing && existing.length > 2) return;
-    }
+    const existing = localStorage.getItem(ANALYTICS_KEY);
+    const seeded = localStorage.getItem(DEMO_ANALYTICS_SEED_KEY) === '1';
+    const span = storedAnalyticsSpanMs(existing);
+    if (!force && seeded && existing && existing.length > 2 && span >= 100 * 24 * 60 * 60 * 1000) return;
     const events = buildLocalDemoAnalytics() as AnalyticsEvent[];
     localStorage.setItem(ANALYTICS_KEY, JSON.stringify(events.slice(0, ANALYTICS_CAP)));
     localStorage.setItem(DEMO_ANALYTICS_SEED_KEY, '1');

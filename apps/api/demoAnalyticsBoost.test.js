@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { buildDemoAnalyticsEvents, buildDemoPlatform } from './demoSeed.js';
+import { buildDemoAnalyticsEvents, buildDemoPlatform, extendDemoAnalyticsHistory } from './demoSeed.js';
 import {
   applyCapitalDemoBoost,
   BOOST_RATIO,
@@ -35,6 +35,27 @@ const METRICS = [
 function target(value) {
   return Math.round(Number(value) * BOOST_RATIO);
 }
+
+test('демо-история детерминирована и длиннее года', () => {
+  const first = buildDemoAnalyticsEvents({ boostCapital: false });
+  const second = buildDemoAnalyticsEvents({ boostCapital: false });
+  assert.deepEqual(
+    first.map((event) => event.id).sort(),
+    second.map((event) => event.id).sort(),
+  );
+  const age = Date.now() - Math.min(...first.map((event) => Date.parse(event.at)));
+  assert.ok(age > 300 * 24 * 60 * 60 * 1000, String(age));
+  const results = (day) =>
+    first.filter((event) => new RegExp(`^ev_result_org_demo_${day}_\\d+$`).test(event.id)).length;
+  assert.ok(results(1) > results(5), `будний ${results(1)}, выходной ${results(5)}`);
+  const recent = first.filter((event) => Date.now() - Date.parse(event.at) < 20 * 24 * 60 * 60 * 1000);
+  const extended = extendDemoAnalyticsHistory(recent);
+  const span =
+    Math.max(...extended.map((event) => Date.parse(event.at))) -
+    Math.min(...extended.map((event) => Date.parse(event.at)));
+  assert.ok(span > 100 * 24 * 60 * 60 * 1000);
+  assert.equal(extendDemoAnalyticsHistory(extended), extended);
+});
 
 test('агрегаты Потолков Столицы в 1.3 раза выше Северного Потолка', () => {
   const platform = buildDemoPlatform({ withHashes: false });

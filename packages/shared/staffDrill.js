@@ -47,13 +47,33 @@ export function drillWindow(period, now = new Date()) {
   const end = now instanceof Date ? new Date(now.getTime()) : new Date(now);
   const safe = Number.isNaN(end.getTime()) ? new Date() : end;
   const months = period === 'year' ? 12 : period === 'quarter' ? 3 : 1;
-  const from = new Date(safe.getTime());
-  from.setMonth(from.getMonth() - months);
+  const from = new Date(Date.UTC(safe.getUTCFullYear(), safe.getUTCMonth(), safe.getUTCDate()));
+  from.setUTCMonth(from.getUTCMonth() - months);
+  const to = new Date(
+    Date.UTC(safe.getUTCFullYear(), safe.getUTCMonth(), safe.getUTCDate(), 23, 59, 59, 999),
+  );
   return {
     period: period === 'year' || period === 'quarter' ? period : 'month',
     from: from.toISOString(),
-    to: safe.toISOString(),
+    to: to.toISOString(),
   };
+}
+
+function parseBound(value) {
+  if (value == null || value === '') return null;
+  const stamp = Date.parse(value);
+  return Number.isNaN(stamp) ? null : new Date(stamp).toISOString();
+}
+
+function resolveWindow(input) {
+  const period = DRILL_PERIODS.includes(input.period) ? input.period : 'month';
+  if (input.from === 'all' || input.unbounded) return { period, from: null, to: null };
+  const from = parseBound(input.from);
+  const to = parseBound(input.to);
+  if (from && to) {
+    return { period, from: from <= to ? from : to, to: from <= to ? to : from };
+  }
+  return drillWindow(period, input.now ? new Date(input.now) : new Date());
 }
 
 function num(value) {
@@ -68,7 +88,10 @@ function round1(value) {
 function inWindow(at, from, to) {
   const stamp = Date.parse(at || '');
   if (Number.isNaN(stamp)) return false;
-  return stamp >= Date.parse(from) && stamp <= Date.parse(to);
+  if (!from && !to) return true;
+  if (from && stamp < Date.parse(from)) return false;
+  if (to && stamp > Date.parse(to)) return false;
+  return true;
 }
 
 function completed(event) {
@@ -134,30 +157,77 @@ function metricValue(row, metric) {
   return row.problemomer + row.calculator + row.pdf;
 }
 
-function applyDemoFill(rows) {
-  return rows.map((row, index) => {
-    const weight = DEMO_WEIGHTS[index % DEMO_WEIGHTS.length];
-    const problemomer = Math.max(1, Math.round(DEMO_BASE.problemomer * weight));
-    const calculator = Math.max(1, Math.round(DEMO_BASE.calculator * weight));
-    const pdf = Math.max(1, Math.round(DEMO_BASE.pdf * weight));
-    const areaM2 = round1(DEMO_BASE.areaM2 * weight);
-    const panels = Math.round(DEMO_BASE.panels * weight);
-    return {
-      ...row,
-      problemomer,
-      calculator,
-      pdf,
-      areaM2,
-      panels,
-      completed: problemomer + calculator,
-      withArea: problemomer + calculator,
-    };
-  });
+function periodScale(period) {
+  if (period === 'year') return 12;
+  if (period === 'quarter') return 3;
+  return 1;
 }
 
-function monthKeys(from, to) {
-  const start = new Date(from);
-  const end = new Date(to);
+function applyDemoFill(rows, period) {
+  const scale = periodScale(period);
+  return rows
+    .slice()
+    .sort((a, b) => String(a.userId).localeCompare(String(b.userId)))
+    .map((row, index) => {
+      const weight = DEMO_WEIGHTS[index % DEMO_WEIGHTS.length];
+      const problemomer = Math.max(1, Math.round(DEMO_BASE.problemomer * weight * scale));
+      const calculator = Math.max(1, Math.round(DEMO_BASE.calculator * weight * scale));
+      const pdf = Math.max(1, Math.round(DEMO_BASE.pdf * weight * scale));
+      const areaM2 = round1(DEMO_BASE.areaM2 * weight * scale);
+      const panels = Math.round(DEMO_BASE.panels * weight * scale);
+      return {
+        ...row,
+        problemomer,
+        calculator,
+        pdf,
+        areaM2,
+        panels,
+        completed: problemomer + calculator,
+        withArea: problemomer + calculator,
+      };
+    });
+}
+
+function absorbDrift(rows, key, target, roundFn) {
+  for (const row of rows) row[key] = roundFn(row[key]);
+  let drift = roundFn(target - rows.reduce((sum, row) => sum + row[key], 0));
+  const ordered = rows
+    .slice()
+    .sort((a, b) => b[key] - a[key] || String(a.userId).localeCompare(String(b.userId)));
+  for (const row of ordered) {
+    if (!drift) break;
+    const next = roundFn(row[key] + drift);
+    if (next < 0) {
+      drift = roundFn(drift + row[key]);
+      row[key] = 0;
+      continue;
+    }
+    row[key] = next;
+    drift = 0;
+  }
+}
+
+function reconcileTotals(rows) {
+  if (!rows.length) return;
+  const areaTarget = round1(rows.reduce((sum, row) => sum + row.areaM2, 0));
+  const panelTarget = Math.round(rows.reduce((sum, row) => sum + row.panels, 0));
+  absorbDrift(rows, 'areaM2', areaTarget, round1);
+  absorbDrift(rows, 'panels', panelTarget, (value) => Math.round(value));
+}
+
+function monthKeys(from, to, events) {
+  let startIso = from;
+  let endIso = to;
+  if (!startIso || !endIso) {
+    const stamps = (events || [])
+      .map((event) => Date.parse(event?.at || ''))
+      .filter((stamp) => !Number.isNaN(stamp));
+    const today = new Date().toISOString();
+    startIso = stamps.length ? new Date(Math.min(...stamps)).toISOString() : today;
+    endIso = stamps.length ? new Date(Math.max(...stamps)).toISOString() : today;
+  }
+  const start = new Date(startIso);
+  const end = new Date(endIso);
   const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
   const last = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
   const keys = [];
@@ -282,20 +352,38 @@ function publicRow(row, metric) {
 }
 
 export function buildStaffDrill(input) {
-  const period = DRILL_PERIODS.includes(input.period) ? input.period : 'month';
   const metric = DRILL_METRICS.includes(input.metric) ? input.metric : 'staff';
-  const window = drillWindow(period, input.now ? new Date(input.now) : new Date());
+  const window = resolveWindow(input);
   const orgId =
     input.viewer?.role === 'admin' ? input.orgId || null : input.viewer?.orgId || input.orgId || null;
   const staff = visibleStaff(input.viewer, input.users, orgId);
   const allowed = new Set(staff.map((user) => user.id));
+  const companyScope = input.viewer?.role !== 'sales';
+  const usersById = new Map((input.users || []).filter(Boolean).map((user) => [user.id, user]));
   const rows = new Map(staff.map((user) => [user.id, emptyRow(user)]));
 
+  function adopt(event) {
+    const id = event.userId || `login:${event.login || 'unknown'}`;
+    const existing = rows.get(id);
+    if (existing) return existing;
+    const row = emptyRow({
+      id,
+      login: event.login || '',
+      displayName: event.login || 'Без сотрудника',
+      role: event.role || 'measurer',
+    });
+    rows.set(id, row);
+    return row;
+  }
+
   for (const event of input.events || []) {
-    if (!event || !allowed.has(event.userId)) continue;
-    if (orgId && event.orgId && event.orgId !== orgId) continue;
+    if (!event) continue;
+    if (String(event.role || '') === 'admin') continue;
+    if (usersById.get(event.userId)?.role === 'admin') continue;
+    if (orgId && event.orgId !== orgId) continue;
     if (!inWindow(event.at, window.from, window.to)) continue;
-    const row = rows.get(event.userId);
+    if (!companyScope && !allowed.has(event.userId)) continue;
+    const row = rows.get(event.userId) || (companyScope ? adopt(event) : null);
     if (row) addEvent(row, event);
   }
 
@@ -306,7 +394,8 @@ export function buildStaffDrill(input) {
       (row) => row.problemomer + row.calculator + row.pdf + row.areaM2 + row.panels + row.completed === 0,
     );
   const demoFilled = Boolean(allZero && input.demoFill);
-  if (demoFilled) working = applyDemoFill(working);
+  if (demoFilled) working = applyDemoFill(working, window.period);
+  else reconcileTotals(working);
 
   const ranking = working
     .map((row) => publicRow(row, metric))
@@ -317,7 +406,7 @@ export function buildStaffDrill(input) {
   let detail = null;
   if (input.userId && allowed.has(input.userId)) {
     const person = working.find((row) => row.userId === input.userId);
-    const keys = monthKeys(window.from, window.to);
+    const keys = monthKeys(window.from, window.to, input.events);
     let months;
     if (!person) {
       months = keys.map((key) => emptyBucket(key));
@@ -327,7 +416,8 @@ export function buildStaffDrill(input) {
       const buckets = new Map(keys.map((key) => [key, emptyBucket(key)]));
       for (const event of input.events || []) {
         if (!event || event.userId !== input.userId) continue;
-        if (orgId && event.orgId && event.orgId !== orgId) continue;
+        if (String(event.role || '') === 'admin') continue;
+        if (orgId && event.orgId !== orgId) continue;
         if (!inWindow(event.at, window.from, window.to)) continue;
         const bucket = buckets.get(String(event.at).slice(0, 7));
         if (!bucket) continue;

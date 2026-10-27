@@ -262,9 +262,11 @@ for (const role of ['admin', 'owner', 'sales'] as const) {
     await drill.getByRole('button', { name: 'Квартал', exact: true }).click();
     await expect(drill.getByRole('button', { name: 'Квартал', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(drill.getByRole('heading', { name: 'Воронка', exact: true })).toBeVisible();
-    await expect(drill.getByRole('heading', { name: 'Динамика', exact: true })).toBeVisible();
+    await expect(drill.getByRole('heading', { name: 'Динамика по дням', exact: true })).toBeVisible();
+    await expect(drill.getByText('PM', { exact: true })).toHaveCount(0);
+    await expect(drill.getByText('Кальк.', { exact: true })).toHaveCount(0);
     await expect(drill.getByText('где остановились, в сумме 100%').first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'По месяцам', exact: true })).toHaveCount(0);
+    await expect(drill.getByRole('heading', { name: 'По месяцам', exact: true })).toBeVisible();
     if (role === 'owner') {
       await drill.getByRole('button', { name: /UI owner/ }).click();
       await expect(drill.getByRole('heading', { name: 'Среднемесячные показатели' })).toBeVisible();
