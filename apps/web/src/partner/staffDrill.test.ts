@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { aggregateAnalyticsDashboard, normalizeRole, type AnalyticsEvent } from '../../../../packages/shared/partner';
 import { buildStaffDrill, visibleStaff } from '../../../../packages/shared/staffDrill.js';
+import { buildLocalDemoObjects, buildLocalDemoUsers } from './demoSeed';
 
 const now = '2026-10-27T12:00:00.000Z';
 
@@ -565,6 +566,23 @@ test('старые id и роли: монтажники не нули, топ п
   function at(days: number) {
     return new Date(Date.parse(now) - days * 24 * 60 * 60 * 1000).toISOString();
   }
+  const installOld = {
+    ...install,
+    id: 'room_mount_old',
+    assignedTo: 'u_crew1',
+    updatedAt: at(120),
+    clientName: 'Старый монтаж',
+    room: { areaM2: 14 },
+    estimate: { panels: 30 },
+  };
+  const installSecond = {
+    ...install,
+    id: 'room_mount_b',
+    assignedTo: 'u_crew1b',
+    clientName: 'Вторая бригада',
+    room: { areaM2: 9 },
+    estimate: { panels: 12 },
+  };
   const saved = [1, 40, 200].map((day) => ({
     at: at(day),
     orgId: 'org_demo',
@@ -580,7 +598,7 @@ test('старые id и роли: монтажники не нули, топ п
       viewer: { id: 'u_partner1', role: 'owner', orgId: 'org_demo' },
       users: directory,
       events: saved,
-      objects: [room, install],
+      objects: [room, install, installSecond, installOld],
       projects: [],
       metric,
       period,
@@ -598,8 +616,8 @@ test('старые id и роли: монтажники не нули, топ п
     const manager = result.ranking.find((row) => row.userId === 'u_fresh_sales');
     assert.ok((manager?.projectCount || 0) > 0);
     assert.ok((result.detail?.projects.length || 0) > 0);
-    assert.equal(result.detail?.projects[0]?.roomId, 'room_click');
-    assert.equal(result.detail?.projects[0]?.name, 'Старая гостиная');
+    const opened = result.detail?.projects.find((project) => project.roomId === 'room_click');
+    assert.equal(opened?.name, 'Старая гостиная');
   }
   const mounted = (['month', 'quarter', 'year'] as const).map((period) => {
     const crew = run(period, 'panels').roles.find((role) => role.id === 'crew')?.ranking || [];
@@ -612,4 +630,77 @@ test('старые id и роли: монтажники не нули, топ п
     return crew.reduce((sum, row) => sum + row.value, 0);
   });
   assert.ok(mounted[2] > mounted[0]);
+});
+
+test('доска проектов: 11 комнат считаются монтажом и проектами менеджера', () => {
+  const directory = buildLocalDemoUsers().map((user) => ({
+    ...user,
+    id: `fresh_${user.login}`,
+    role: user.role === 'sales' ? 'manager' : user.role === 'measurer' ? 'executor' : user.role === 'crew' ? 'installer' : user.role,
+  }));
+  const sales = directory.find((user) => user.login === 'sales1');
+  const owner = directory.find((user) => user.login === 'partner1');
+  if (!sales || !owner) throw new Error('в демо нет менеджера или владельца');
+  const salesId = sales.id;
+  const ownerId = owner.id;
+  const wiped = buildLocalDemoObjects().map((object) => ({
+    ...object,
+    assignedTo: null,
+    createdBy: 'missing',
+  }));
+  const linked = buildLocalDemoObjects();
+  function run(
+    objects: ReturnType<typeof buildLocalDemoObjects>,
+    period: 'month' | 'quarter' | 'year',
+  ): ReturnType<typeof buildStaffDrill> {
+    return buildStaffDrill({
+      viewer: { id: ownerId, role: 'owner', orgId: 'org_demo' },
+      users: directory,
+      events: [
+        {
+          at: now,
+          orgId: 'org_demo',
+          userId: 'u_sales_old',
+          login: 'sales1',
+          role: 'sales',
+          tool: 'calculator',
+          action: 'calc_done',
+          object: { areaM2: 4, panels: 1 },
+        },
+      ],
+      objects,
+      projects: [],
+      metric: 'panels',
+      period,
+      userId: salesId,
+      orgId: 'org_demo',
+      now,
+      demoFill: false,
+    });
+  }
+  for (const objects of [wiped, linked]) {
+    for (const period of ['month', 'quarter', 'year'] as const) {
+      const result = run(objects, period);
+      const crew = result.roles.find((role) => role.id === 'crew')?.ranking || [];
+      assert.equal(crew.length, 2, period);
+      for (const row of crew) {
+        assert.ok(row.mountedRooms > 0, `${row.displayName} ${period}`);
+        assert.ok(row.mountedPanels > 0, `${row.displayName} ${period}`);
+        assert.equal(row.value, row.mountedPanels);
+      }
+      const salesRow = result.ranking.find((row) => row.userId === salesId);
+      assert.equal(salesRow?.projectCount, 11, period);
+      assert.ok((result.detail?.projects.length || 0) > 0);
+      assert.ok(result.detail?.projects.every((project) => project.roomId));
+      assert.equal(
+        result.detail?.projects.some((project) => project.name === 'Иванова А.'),
+        true,
+      );
+    }
+  }
+  const byName = new Map(
+    (run(linked, 'month').roles.find((role) => role.id === 'crew')?.ranking || []).map((row) => [row.displayName, row.mountedRooms]),
+  );
+  assert.equal(byName.get('Монтажник · Потолки Столицы'), 3);
+  assert.equal(byName.get('Монтажник 2 · Потолки Столицы'), 1);
 });

@@ -58,6 +58,14 @@ function staffByLogin(staff, login, orgId) {
   return matches.find((user) => user.orgId === orgId) || matches[0] || null;
 }
 
+function byStaffOrder(a, b) {
+  return String(a.login || '').localeCompare(String(b.login || '')) || String(a.id).localeCompare(String(b.id));
+}
+
+function demoOrg(orgId) {
+  return orgId === 'org_demo' || orgId === 'org_demo_spb';
+}
+
 function resolveStaffId(rawId, staff, orgId) {
   if (rawId == null || rawId === '') return null;
   const id = String(rawId);
@@ -68,6 +76,55 @@ function resolveStaffId(rawId, staff, orgId) {
   if (!login) return null;
   const legacy = staffByLogin(staff, login, orgId);
   return legacy ? legacy.id : null;
+}
+
+/**
+ * Кто отвечает за комнату с доски проектов.
+ * Сначала id или логин из карточки, затем старый демо-id.
+ * Если связи нет, демо-комнату получает текущий сотрудник той же роли:
+ * монтаж и закрытые — монтажникам, замер — замерщику, КП — менеджеру.
+ */
+function boardAssignees(objects, staff, orgId) {
+  const map = new Map();
+  const pending = [];
+  for (const object of objects || []) {
+    if (!object?.id) continue;
+    if (orgId && object.orgId && object.orgId !== orgId) continue;
+    const resolved = resolveStaffId(object.assignedTo, staff, object.orgId || orgId);
+    const mount = object.status === 'install' || object.status === 'closed';
+    const resolvedRole = resolved
+      ? (staff || []).find((user) => user && user.id === resolved)?.role
+      : null;
+    // Монтаж на доске не остаётся у менеджера или владельца: его получают монтажники.
+    if (resolved && !(mount && demoOrg(object.orgId || orgId) && resolvedRole !== 'crew')) {
+      map.set(object.id, resolved);
+    } else pending.push(object);
+  }
+  const byOrg = new Map();
+  for (const object of pending) {
+    const id = object.orgId || orgId;
+    if (!demoOrg(id)) continue;
+    if (!byOrg.has(id)) byOrg.set(id, []);
+    byOrg.get(id).push(object);
+  }
+  for (const [id, rooms] of byOrg) {
+    const people = (staff || []).filter((user) => user && user.orgId === id);
+    const crew = people.filter((user) => user.role === 'crew').sort(byStaffOrder);
+    const measurer = people.filter((user) => user.role === 'measurer').sort(byStaffOrder)[0];
+    const sales = people.filter((user) => user.role === 'sales').sort(byStaffOrder)[0];
+    rooms
+      .filter((room) => room.status === 'install' || room.status === 'closed')
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+      .forEach((room, index) => {
+        if (crew.length) map.set(room.id, crew[index % crew.length].id);
+      });
+    for (const room of rooms) {
+      if (map.has(room.id)) continue;
+      if (room.status === 'measured' && measurer) map.set(room.id, measurer.id);
+      if (room.status === 'quote_sent' && sales) map.set(room.id, sales.id);
+    }
+  }
+  return map;
 }
 const ROLE_LABELS = {
   sales: 'Менеджеры',
@@ -193,6 +250,8 @@ function emptyRow(user) {
     mountedAreaM2: 0,
     mountedPanels: 0,
     workKeys: new Set(),
+    boardProjectIds: new Set(),
+    boardRooms: [],
   };
 }
 
@@ -538,11 +597,14 @@ function demoMonths(keys, person) {
   }));
 }
 
-function collectProjects(userId, objects, projects, orgId, from, to, respectWindow) {
+function collectProjects(userId, objects, projects, orgId, from, to, respectWindow, assigneeOf) {
   const grouped = new Map();
   for (const object of objects || []) {
     if (!object || (orgId && object.orgId !== orgId)) continue;
-    if (object.createdBy !== userId && object.assignedTo !== userId) continue;
+    const ownerId = assigneeOf ? assigneeOf(object) : null;
+    if (ownerId) {
+      if (ownerId !== userId) continue;
+    } else if (object.createdBy !== userId && object.assignedTo !== userId) continue;
     const stamp = object.updatedAt || object.createdAt;
     if (respectWindow && !inWindow(stamp, from, to)) continue;
     const projectId = object.projectId || object.id;
@@ -553,7 +615,7 @@ function collectProjects(userId, objects, projects, orgId, from, to, respectWind
     if (!current) {
       grouped.set(projectId, {
         id: projectId,
-        name: project?.name || object.roomName || object.clientName || 'Комната',
+        name: project?.name || object.clientName || object.roomName || 'Комната',
         areaM2: area,
         panels,
         rooms: 1,
@@ -570,7 +632,7 @@ function collectProjects(userId, objects, projects, orgId, from, to, respectWind
       current.roomId = object.id;
     }
   }
-  return [...grouped.values()];
+  return finishProjects(grouped);
 }
 
 const DEMO_PROJECT_NAMES = ['Квартира на Тверской', 'Офис на Садовом', 'Спальня в Жуковке'];
@@ -602,7 +664,11 @@ function publicRow(row, metric) {
     mountedRooms: row.mountedRooms || 0,
     mountedAreaM2: round1(row.mountedAreaM2 || 0),
     mountedPanels: Math.round(row.mountedPanels || 0),
-    projectCount: row.workKeys ? row.workKeys.size : 0,
+    projectCount: row.boardProjectIds?.size
+      ? row.boardProjectIds.size
+      : row.workKeys
+        ? row.workKeys.size
+        : 0,
     value: displayValue(row, metric),
   };
 }
@@ -677,8 +743,8 @@ function projectsFromEvents(userId, events, projects, orgId, from, to, accept, o
 
 function mergeProjectLists(roomProjects, eventProjects) {
   const grouped = new Map();
-  for (const row of eventProjects) grouped.set(row.id, { ...row });
-  for (const row of roomProjects) {
+  for (const row of roomProjects) grouped.set(row.id, { ...row });
+  for (const row of eventProjects) {
     if (grouped.has(row.id)) continue;
     grouped.set(row.id, row);
   }
@@ -763,27 +829,36 @@ export function buildStaffDrill(input) {
     return null;
   }
 
-  const drillObjects = [
-    ...(input.objects || []),
-    ...demoMountedRooms(input.now ? new Date(input.now) : new Date(), staff),
-  ];
+  const board = input.objects || [];
+  const boardIds = new Set(board.map((object) => object?.id).filter(Boolean));
+  const orgHasBoardRooms = board.some(
+    (object) => object && (!orgId || !object.orgId || object.orgId === orgId),
+  );
+  const drillObjects = orgHasBoardRooms
+    ? board
+    : [...board, ...demoMountedRooms(input.now ? new Date(input.now) : new Date(), staff)];
+  const assigneeById = boardAssignees(drillObjects, staff, orgId);
+  const salesInOrg = staff.filter((user) => user.role === 'sales' && (!orgId || user.orgId === orgId));
+  const soleSalesId = salesInOrg.length === 1 ? salesInOrg[0].id : null;
   for (const object of drillObjects) {
     if (!object || (orgId && object.orgId !== orgId)) continue;
     if (!inWindow(object.updatedAt || object.createdAt, window.from, window.to)) continue;
-    const seen = new Set();
-    for (const rawId of [object.assignedTo, object.createdBy]) {
-      const userId = resolveStaffId(rawId, staff, object.orgId || orgId);
-      if (!userId || seen.has(userId)) continue;
-      seen.add(userId);
-      const row = rowForAssignee(userId);
-      if (!row) continue;
-      if (object.projectId) row.workKeys.add(String(object.projectId));
+    const assignee = assigneeById.get(object.id);
+    const row = assignee ? rowForAssignee(assignee) : null;
+    if (row) {
       if (row.role === 'measurer' && object.status && object.status !== 'draft') row.measuredRooms += 1;
       if (row.role === 'crew' && (object.status === 'install' || object.status === 'closed')) {
         row.mountedRooms += 1;
         row.mountedAreaM2 += num(object.room?.areaM2);
         row.mountedPanels += num(object.estimate?.panels);
       }
+    }
+    if (!boardIds.has(object.id)) continue;
+    const projectOwner = soleSalesId || (row && row.role === 'sales' ? row.userId : null);
+    const ownerRow = projectOwner ? rows.get(projectOwner) : null;
+    if (ownerRow) {
+      ownerRow.boardProjectIds.add(String(object.projectId || object.id));
+      ownerRow.boardRooms.push(object);
     }
   }
 
@@ -885,11 +960,25 @@ export function buildStaffDrill(input) {
         : (input.events || []).filter(
             (event) => eventMatchesUser(event, input.userId) && inWindow(event.at, window.from, window.to),
           );
+    const boardProjects = person?.boardRooms?.length
+      ? collectProjects(
+          input.userId,
+          person.boardRooms,
+          input.projects,
+          orgId,
+          null,
+          null,
+          false,
+          () => input.userId,
+        )
+      : collectProjects(input.userId, drillObjects, input.projects, orgId, window.from, window.to, true, (object) =>
+          assigneeById.get(object.id),
+        );
     let projects = mergeProjectLists(
-      collectProjects(input.userId, drillObjects, input.projects, orgId, window.from, window.to, true),
+      boardProjects,
       projectsFromEvents(input.userId, matchedEvents, input.projects, orgId, null, null, () => true, input.objects),
     );
-    projects = projects.map((project) => realRoom(project, input.objects, orgId));
+    projects = projects.map((project) => realRoom(project, input.objects?.length ? input.objects : drillObjects, orgId));
     if (!projects.length && person && (person.areaM2 > 0 || person.panels > 0)) {
       const rooms = (input.objects || []).filter((room) => room && room.id && (!orgId || room.orgId === orgId));
       const room = rooms.slice().sort((a, b) => num(b.room?.areaM2) - num(a.room?.areaM2) || String(a.id).localeCompare(String(b.id)))[0];

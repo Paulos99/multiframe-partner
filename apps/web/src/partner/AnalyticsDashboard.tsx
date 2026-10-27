@@ -754,6 +754,8 @@ export function AnalyticsDashboard({
           to={rangeFromYmd(fromYmd, toYmd).to}
           onPeriodChange={setPanelPeriod}
           onOpenRoom={onOpenRoom}
+          objects={api.objects as unknown as Array<Record<string, unknown>>}
+          projects={(api.projects || []) as unknown as Array<Record<string, unknown>>}
           onClose={() => setOpenMetric(null)}
         >
           {(() => {

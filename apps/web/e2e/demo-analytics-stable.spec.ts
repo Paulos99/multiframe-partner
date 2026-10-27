@@ -521,6 +521,37 @@ test('накопленное хранилище: старые id, без всп�
     room: { roomType: 'bedroom', areaM2: 22 },
     estimate: { panels: 54, dowels: 0, panelsCost: 0, installCost: 0, dowelsCost: 0, totalCost: 0 },
   };
+  const mountSecond = {
+    ...mount,
+    id: 'room_mount_b',
+    projectId: 'room_mount_b',
+    assignedTo: 'u_crew1b',
+    clientName: 'Вторая бригада',
+    clientSummary: 'Вторая бригада',
+    updatedAt: at(1),
+    room: { roomType: 'living', areaM2: 9 },
+    estimate: { panels: 12, dowels: 0, panelsCost: 0, installCost: 0, dowelsCost: 0, totalCost: 0 },
+  };
+  const mountQuarter = {
+    ...mount,
+    id: 'room_mount_quarter',
+    projectId: 'room_mount_quarter',
+    updatedAt: at(45),
+    clientName: 'Квартальный монтаж',
+    clientSummary: 'Квартальный монтаж',
+    room: { roomType: 'kitchen', areaM2: 11 },
+    estimate: { panels: 20, dowels: 0, panelsCost: 0, installCost: 0, dowelsCost: 0, totalCost: 0 },
+  };
+  const mountYear = {
+    ...mountSecond,
+    id: 'room_mount_year',
+    projectId: 'room_mount_year',
+    updatedAt: at(200),
+    clientName: 'Годовой монтаж',
+    clientSummary: 'Годовой монтаж',
+    room: { roomType: 'office', areaM2: 13 },
+    estimate: { panels: 18, dowels: 0, panelsCost: 0, installCost: 0, dowelsCost: 0, totalCost: 0 },
+  };
   const users = [
     { id: 'u_partner1', login: 'partner1', password: 'demo1234', role: 'owner', displayName: 'Владелец', orgId: 'org_demo', createdAt: at(40) },
     { id: 'u_fresh_sales', login: 'sales1', password: 'exec1234', role: 'manager', displayName: 'Менеджер', orgId: 'org_demo', createdAt: at(40) },
@@ -572,7 +603,7 @@ test('накопленное хранилище: старые id, без всп�
         orgs: [org('org_demo', 'Потолки Столицы', 'Москва'), org('org_demo_spb', 'Северный Потолок', 'Санкт-Петербург')],
         links: [],
         activity: [],
-        objects: [room, mount],
+        objects: [room, mount, mountSecond, mountQuarter, mountYear],
         projects: [],
       },
     },
@@ -628,4 +659,52 @@ test('накопленное хранилище: старые id, без всп�
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   await expect(page.getByRole('group', { name: 'Период аналитики' }).getByRole('button')).toHaveText(saved);
+});
+
+test('вход владельца через интерфейс: монтажники и топ проектов с доски', async ({ page }) => {
+  await page.route('**/auth/login', (route) => route.abort());
+  await page.route('**/auth/me', (route) => route.abort());
+
+  async function signIn(login: string, password: string) {
+    await page.getByLabel('Логин', { exact: true }).fill(login);
+    await page.getByLabel('Пароль', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
+  }
+
+  await page.goto('/');
+  await signIn('exec1', 'exec1234');
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await expect(page.getByLabel('Логин', { exact: true })).toBeVisible();
+  await signIn('partner1', 'demo1234');
+
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  await page.getByRole('button', { name: /Панели/ }).first().click();
+  const panels = page.getByRole('dialog', { name: 'Панели' });
+  await panels.getByRole('tab', { name: 'Монтажники' }).click();
+  const mounted = () => panels.getByRole('button').filter({ hasText: 'Смонтировано' });
+  await expect.poll(async () => mounted().count()).toBe(2);
+  for (const period of ['Месяц', 'Квартал', 'Год'] as const) {
+    await panels.getByRole('button', { name: period, exact: true }).click();
+    await expect.poll(async () => mounted().count()).toBe(2);
+    const lines = await mounted().allInnerTexts();
+    expect(lines.join('\n'), period).not.toContain('Смонтировано 0');
+    expect(lines.some((line) => line.includes('Монтажник 2'))).toBe(true);
+    expect(lines.some((line) => /Монтажник(?! 2)/.test(line))).toBe(true);
+  }
+  await panels.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-installers.png' });
+  await panels.getByRole('button', { name: 'Закрыть', exact: true }).click();
+
+  await page.getByRole('button', { name: /Площадь, м²/ }).first().click();
+  const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+  await drill.getByRole('tab', { name: 'Менеджеры' }).click();
+  await drill.getByRole('button', { name: 'Месяц', exact: true }).click();
+  await drill.getByRole('button', { name: /Менеджер · Потолки Столицы/ }).first().click();
+  await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
+  await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
+  await expect(drill.getByText(/проекты 0/)).toHaveCount(0);
+  await expect(drill.getByRole('button', { name: /Иванова А\./ })).toBeVisible();
+  await drill.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-manager-projects.png' });
+  await drill.getByRole('button', { name: /Иванова А\./ }).click();
+  await expect(page.getByRole('dialog', { name: 'Комната' }).getByRole('heading', { name: 'Иванова А.' })).toBeVisible();
 });

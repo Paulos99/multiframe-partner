@@ -84,6 +84,8 @@ export function StaffDrillDrawer({
   onPeriodChange,
   onClose,
   onOpenRoom,
+  objects,
+  projects,
   children,
 }: {
   metric: string;
@@ -94,6 +96,8 @@ export function StaffDrillDrawer({
   onPeriodChange?: (period: DrillPeriod) => void;
   onClose: () => void;
   onOpenRoom?: (roomId: string) => void;
+  objects?: Array<Record<string, unknown>>;
+  projects?: Array<Record<string, unknown>>;
   children?: ReactNode;
 }) {
   const [period, setPeriod] = useState<DrillPeriod | null>(null);
@@ -134,6 +138,8 @@ export function StaffDrillDrawer({
       orgId,
       from: activeRange.from ?? (activeRange.to ? null : 'all'),
       to: activeRange.to,
+      objects,
+      projects,
     })
       .then((next) => {
         if (!cancelled) setData(next);
@@ -150,7 +156,7 @@ export function StaffDrillDrawer({
     return () => {
       cancelled = true;
     };
-  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to]);
+  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to, objects, projects]);
 
   const roles = visibleRoles(data);
   const activeRole = roles.find((role) => role.id === roleId) || roles[0] || null;

@@ -236,12 +236,18 @@ function localStaffDrill(opts: {
   orgId?: string | null;
   from?: string | null;
   to?: string | null;
+  objects?: Array<Record<string, unknown>>;
+  projects?: Array<Record<string, unknown>>;
 }): StaffDrillResult {
   const session = loadSession();
   const db = loadDb();
   const orgId = opts.mode === 'admin' ? opts.orgId || null : session?.orgId || opts.orgId || null;
   const demoOrg = db.orgs.some((org) => org.id === 'org_demo' || org.id === 'org_demo_spb');
   const focusDemo = !orgId || orgId === 'org_demo' || orgId === 'org_demo_spb';
+  const boardObjects = opts.objects?.length ? opts.objects : (db.objects as unknown as Array<Record<string, unknown>>);
+  const boardProjects = opts.projects?.length
+    ? opts.projects
+    : ((db.projects || []) as unknown as Array<Record<string, unknown>>);
   return buildStaffDrill({
     viewer: {
       id: session?.id || '',
@@ -250,8 +256,8 @@ function localStaffDrill(opts: {
     },
     users: db.users,
     events: loadDemoAnalyticsEvents() as unknown as Array<Record<string, unknown>>,
-    objects: db.objects as unknown as Array<Record<string, unknown>>,
-    projects: (db.projects || []) as unknown as Array<Record<string, unknown>>,
+    objects: boardObjects,
+    projects: boardProjects,
     metric: opts.metric,
     period: opts.period,
     userId: opts.userId || null,
@@ -271,6 +277,8 @@ export async function fetchStaffDrill(opts: {
   orgId?: string | null;
   from?: string | null;
   to?: string | null;
+  objects?: Array<Record<string, unknown>>;
+  projects?: Array<Record<string, unknown>>;
 }): Promise<StaffDrillResult> {
   ensureDemoAnalyticsHistory();
   const focusOrg = opts.mode === 'admin' ? opts.orgId || null : loadSession()?.orgId || opts.orgId || null;
