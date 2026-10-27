@@ -404,7 +404,7 @@ export function AnalyticsDashboard({
     setLoading(true);
     const { from, to } = rangeFromYmd(fromYmd, toYmd);
     const orgId = mode === 'partner' ? user.orgId : focusOrg || null;
-    const objects = roomsForCabinet(api.objects as unknown as Array<Record<string, unknown>>);
+    const objects = roomsForCabinet(api.objects as unknown as Array<Record<string, unknown>>, orgId);
     const projects = (api.projects || []) as unknown as Array<Record<string, unknown>>;
     const users = api.partnerListStaff();
     void loadSharedAnalyticsEvents(orgId).then(async (events) => {

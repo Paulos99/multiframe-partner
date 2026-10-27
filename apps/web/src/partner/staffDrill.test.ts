@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { aggregateAnalyticsDashboard, normalizeRole, type AnalyticsEvent } from '../../../../packages/shared/partner';
 import { buildStaffDrill, visibleStaff } from '../../../../packages/shared/staffDrill.js';
-import { assignDemoRoomStaff, buildLocalDemoObjects, buildLocalDemoUsers } from './demoSeed';
+import { composeCabinetAnalytics, presetRange, rangeFromYmd } from './analytics';
+import { assignDemoRoomStaff, buildLocalDemoObjects, buildLocalDemoOrgs, buildLocalDemoUsers } from './demoSeed';
 
 const now = '2026-10-27T12:00:00.000Z';
 
@@ -996,4 +997,100 @@ test('события владельца попадают в «Без испол�
   assert.equal(displayedSum(result.ranking, 'panels'), dash.kpi.panels);
   assert.equal(displayedSum(result.ranking, 'areaM2'), dash.kpi.areaM2);
   assert.equal(result.ranking.find((row) => row.displayName === 'Без исполнителя')?.panels, 5206);
+});
+
+test('пустой снимок комнат не отрезает топ от строк рейтинга и абзаца', () => {
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+    configurable: true,
+  });
+  const db = {
+    users: buildLocalDemoUsers(),
+    orgs: buildLocalDemoOrgs(),
+    links: [],
+    activity: [],
+    objects: [],
+    projects: [],
+  };
+  storage.set('mf_partner_db_v5', JSON.stringify(db));
+  storage.set('mf_partner_objects_v1', JSON.stringify([{ id: 'blocked', orgId: 'org_demo' }]));
+  storage.set(
+    'mf_partner_session_v2',
+    JSON.stringify({ id: 'u_partner1', login: 'partner1', role: 'owner', displayName: 'Владелец', orgId: 'org_demo' }),
+  );
+  const events = [
+    event({
+      id: 'own',
+      orgId: 'org_demo',
+      userId: 'u_partner1',
+      login: 'partner1',
+      role: 'owner',
+      object: { areaM2: 969.5, panels: 4000 },
+    }),
+    event({
+      id: 'meas',
+      orgId: 'org_demo',
+      userId: 'u_exec1',
+      login: 'exec1',
+      role: 'measurer',
+      tool: 'calculator',
+      action: 'calc_done',
+      object: { areaM2: 1433.5, panels: 1206, label: 'Кухня' },
+    }),
+  ];
+  const company = buildLocalDemoObjects().filter((object) => object.orgId === 'org_demo');
+  const run = (period: 'month' | 'quarter' | 'year', userId?: string) => {
+    const bounds = presetRange(period, new Date(now));
+    const range = rangeFromYmd(bounds.fromYmd, bounds.toYmd);
+    return composeCabinetAnalytics({
+      events: events as AnalyticsEvent[],
+      objects: [],
+      users: buildLocalDemoUsers().map((user) => ({
+        id: user.id,
+        login: user.login,
+        displayName: user.displayName,
+        role: user.role,
+        orgId: user.orgId,
+      })),
+      from: range.from,
+      to: range.to,
+      orgId: 'org_demo',
+      mode: 'partner',
+      metric: 'staff',
+      period,
+      userId: userId || null,
+      kpi: { panels: 5206, areaM2: 2403 },
+    }).drill;
+  };
+  const opened = run('month', 'u_sales1');
+  const sales = opened.ranking.find((row) => row.userId === 'u_sales1');
+  const top = opened.detail?.projects || [];
+  assert.equal(opened.drops.rooms, company.length);
+  assert.ok(top.length > 0);
+  assert.ok((sales?.projectCount || 0) > 0);
+  assert.equal(sales?.projectCount, top.length);
+  assert.ok(top.some((project) => project.name === 'Никитин И.' && project.areaM2 === 24 && project.roomId === 'obj_a07'));
+  assert.ok(top.some((project) => project.name === 'Морозова Е.'));
+  assert.ok(top.some((project) => project.name === 'Вася' && project.roomId === 'obj_a05'));
+  const measurer = opened.ranking.find((row) => row.userId === 'u_exec1');
+  assert.equal(measurer?.areaM2, 1433.5);
+  assert.ok((measurer?.measuredRooms || 0) > 0);
+  assert.equal(opened.drops.events, 2);
+  for (const period of ['month', 'quarter', 'year'] as const) {
+    const result = run(period);
+    const installerPanels = result.ranking
+      .filter((row) => row.role === 'crew' || row.userId === 'unassigned')
+      .reduce((sum, row) => sum + (row.role === 'crew' ? row.mountedPanels : row.panels), 0);
+    assert.ok(installerPanels > 0, period);
+    assert.ok(
+      result.ranking.filter((row) => row.role === 'crew').every((row) => row.mountedRooms > 0),
+      period,
+    );
+    assert.equal(result.drops.rooms, company.length, period);
+  }
 });

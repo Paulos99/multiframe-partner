@@ -830,6 +830,19 @@ export function listLocalObjects(user: SessionUser): JobObject[] {
     .map((o) => presentObject(o));
 }
 
+/** Пустая демо-компания показывает ту же доску, что «Топ проектов»: Никитин, Морозова, Вася. */
+export function fillDemoCompanyRooms(objects: JobObject[], orgId?: string | null): JobObject[] {
+  const own = (objects || []).filter(
+    (obj) =>
+      obj &&
+      (obj.clientName || obj.room?.areaM2) &&
+      (!orgId || !obj.orgId || obj.orgId === orgId),
+  );
+  if (own.length) return objects;
+  if (orgId !== 'org_demo' && orgId !== 'org_demo_spb') return objects;
+  return buildLocalDemoObjects().filter((obj) => obj.orgId === orgId);
+}
+
 function projectVisibleLocal(user: SessionUser, project: Project, objects: JobObject[]): boolean {
   if (user.role === 'admin') return true;
   if (!user.orgId || project.orgId !== user.orgId) return false;

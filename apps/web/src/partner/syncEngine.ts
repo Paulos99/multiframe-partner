@@ -23,6 +23,7 @@ import {
   appendLocalObjectDocuments,
   cacheObjects,
   cacheProjects,
+  fillDemoCompanyRooms,
   deleteLocalObject,
   listLocalProjects,
   loadCachedObjects,
@@ -99,6 +100,7 @@ export async function loadVisibleObjects(user: SessionUser, remote: boolean): Pr
       }
     }
   }
+  base = fillDemoCompanyRooms(base, user.orgId);
   if (isDemoModeEnabled()) {
     return base
       .map((obj) => presentCachedObject(user, obj))

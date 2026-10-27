@@ -8,7 +8,7 @@ import type {
   DrillRoleId,
   StaffDrillResult,
 } from '../../../../packages/shared/staffDrill.js';
-import { analyticsSourceLabel, composeCabinetAnalytics, presetRange, rangeFromYmd, roomsForCabinet, type AnalyticsTileModel } from './analytics';
+import { analyticsSourceLabel, composeCabinetAnalytics, presetRange, rangeFromYmd, resolveCompanyRooms, type AnalyticsTileModel } from './analytics';
 import { isDemoModeEnabled } from './demoMode';
 import styles from './partner.module.css';
 
@@ -141,7 +141,7 @@ export function StaffDrillDrawer({
   try {
     data = composeCabinetAnalytics({
       events: model.events,
-      objects: roomsForCabinet(model.objects),
+      objects: resolveCompanyRooms(model.objects, orgId),
       projects: model.projects,
       users: model.users,
       from: activeRange.from ?? (activeRange.to ? null : 'all'),

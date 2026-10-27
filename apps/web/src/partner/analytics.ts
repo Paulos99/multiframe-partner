@@ -18,6 +18,7 @@ import {
   enqueueAnalyticsEvents,
   ensureActionHistoryCleared,
   ensureDemoAnalyticsHistory,
+  fillDemoCompanyRooms,
   loadCachedObjects,
   loadDemoAnalyticsEvents,
   loadDb,
@@ -191,9 +192,7 @@ export function composeCabinetAnalytics(input: {
     usersById.set(user.id, { ...prev, ...user, role: user.role || prev?.role || 'sales' });
   }
   const users = [...usersById.values()];
-  const cached = loadCachedObjects() as unknown as Array<Record<string, unknown>>;
-  const stored = db.objects as unknown as Array<Record<string, unknown>>;
-  const rooms = input.objects?.length ? input.objects : cached.length ? cached : stored;
+  const rooms = resolveCompanyRooms(input.objects, orgId);
   const projects = input.projects?.length
     ? input.projects
     : ((db.projects || []) as unknown as Array<Record<string, unknown>>);
@@ -275,12 +274,45 @@ export function shownTileNumbers(model: Pick<AnalyticsTileModel, 'dash'>): { pan
   };
 }
 
-/** Комнаты доски. Пустой хук не затирает кэш и mf_partner_db_v5. */
-export function roomsForCabinet(hookRooms?: Array<Record<string, unknown>> | null): Array<Record<string, unknown>> {
-  if (hookRooms?.length) return hookRooms;
+function roomBelongs(room: Record<string, unknown>, orgId?: string | null): boolean {
+  if (!orgId) return true;
+  const roomOrg = room.orgId ? String(room.orgId) : '';
+  return !roomOrg || roomOrg === orgId;
+}
+
+/** Комната, по которой топ может показать клиента и площадь. Заглушка без имени не считается. */
+function roomHasIdentity(room: Record<string, unknown> | null | undefined): boolean {
+  if (!room) return false;
+  if (room.clientName || room.roomName) return true;
+  const nested = room.room;
+  if (nested && typeof nested === 'object' && Number((nested as { areaM2?: unknown }).areaM2) > 0) return true;
+  const status = String(room.status || '');
+  return Boolean(status && status !== 'draft');
+}
+
+/**
+ * Тот же список, что у «Топ проектов».
+ * Пустой хук, пустой кэш и заглушка не затирают комнаты компании.
+ * У демо-компании без своих комнат это доска сида: Никитин, Морозова, Вася.
+ */
+export function resolveCompanyRooms(
+  passed?: Array<Record<string, unknown>> | null,
+  orgId?: string | null,
+): Array<Record<string, unknown>> {
+  const stored = loadDb().objects as unknown as Array<Record<string, unknown>>;
   const cached = loadCachedObjects() as unknown as Array<Record<string, unknown>>;
-  if (cached.length) return cached;
-  return loadDb().objects as unknown as Array<Record<string, unknown>>;
+  const merged = mergeStoredRooms(mergeStoredRooms(passed || [], cached), stored);
+  const company = merged.filter((room) => roomHasIdentity(room) && roomBelongs(room, orgId));
+  if (company.length) return company;
+  return fillDemoCompanyRooms([], orgId) as unknown as Array<Record<string, unknown>>;
+}
+
+/** Комнаты доски. Пустой хук и заглушка в кэше не затирают комнаты компании. */
+export function roomsForCabinet(
+  hookRooms?: Array<Record<string, unknown>> | null,
+  orgId?: string | null,
+): Array<Record<string, unknown>> {
+  return resolveCompanyRooms(hookRooms, orgId ?? loadSession()?.orgId ?? null);
 }
 
 function serverEvents(body: unknown): AnalyticsEvent[] {

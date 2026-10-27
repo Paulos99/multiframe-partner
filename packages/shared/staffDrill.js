@@ -131,6 +131,15 @@ function mountMark(entry) {
   return false;
 }
 
+/** Замер или сохранённый профиль комнаты: статус «замер» либо ответы карточки. */
+function roomHasMeasurement(object) {
+  const status = String(object?.status || object?.stage || '');
+  if (status === 'measured') return true;
+  if (object?.profile || object?.measurement) return true;
+  const answers = object?.room?.answers;
+  return Boolean(answers && typeof answers === 'object' && Object.keys(answers).length);
+}
+
 function isMounted(object) {
   const status = String(object?.status || object?.stage || object?.column || object?.state || '').toLowerCase();
   if (['install', 'closed', 'installed', 'mounted', 'done', 'complete', 'finished'].includes(status)) return true;
@@ -1043,13 +1052,13 @@ export function buildStaffDrill(input) {
   const companyRooms = [];
   for (const object of drillObjects) {
     if (!object) continue;
-    drops.rooms += 1;
     if (orgId && object.orgId && object.orgId !== orgId) {
       drops.company += 1;
       continue;
     }
     companyRooms.push(object);
   }
+  drops.rooms = companyRooms.length;
   for (const object of companyRooms) {
     const who = assigneeById.get(object.id) || object.assignedTo || '—';
     const bucket = object.status === 'closed' ? drops.closedByUser : object.status === 'install' ? drops.installByUser : null;
@@ -1078,7 +1087,7 @@ export function buildStaffDrill(input) {
       drops.assignee += 1;
       continue;
     }
-    if (row.role === 'measurer' && object.status && object.status !== 'draft') row.measuredRooms += 1;
+    if (row.role === 'measurer' && roomHasMeasurement(object)) row.measuredRooms += 1;
     if (row.role === 'crew' && isMounted(object)) {
       drops.mounted += 1;
       row.mountedRooms += 1;
@@ -1137,7 +1146,7 @@ export function buildStaffDrill(input) {
   drops.events = tileEvents.length;
   for (const row of working) {
     if (row.role !== 'measurer' || row.measuredRooms > 0) continue;
-    if (row.completed <= 0 && row.problemomer + row.calculator <= 0) continue;
+    if (row.areaM2 <= 0 && row.completed <= 0 && row.problemomer + row.calculator <= 0) continue;
     const roomsTouched = new Set();
     for (const event of row.seenEvents || []) {
       if (!completed(event)) continue;
