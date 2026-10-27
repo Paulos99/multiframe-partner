@@ -156,7 +156,7 @@ function SoundPressureHelpDialog({ highlightDb, onClose }: DialogProps) {
           </button>
         </header>
 
-        <div className={styles.tableScroll} ref={scrollRef}>
+        <div className={styles.tableScroll} ref={scrollRef} data-lenis-prevent>
           <table className={styles.table}>
             <thead>
               <tr>

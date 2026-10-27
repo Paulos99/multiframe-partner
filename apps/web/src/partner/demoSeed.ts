@@ -2,6 +2,7 @@
  * Client-side mirror of apps/api/demoSeed.js for offline / local fallback.
  */
 import { boostCapitalEvents } from '../../../../packages/shared/demoAnalyticsBoost.js';
+import { DEMO_PERSONAL_NAMES } from '../../../../packages/shared/personName.js';
 import {
   DEFAULT_DOWEL_PRICE_RUB,
   DEFAULT_INSTALL_PRICE_PER_M2,
@@ -299,16 +300,16 @@ function makeObject(
 export function buildLocalDemoUsers(): DemoUser[] {
   const now = new Date().toISOString();
   return [
-    { id: 'u_admin', login: 'admin', password: 'admin1234', role: 'admin', displayName: 'Администратор StP', orgId: null, createdAt: now },
-    { id: 'u_partner1', login: 'partner1', password: 'demo1234', role: 'owner', displayName: 'Владелец · Потолки Столицы', orgId: 'org_demo', createdAt: now },
-    { id: 'u_sales1', login: 'sales1', password: 'exec1234', role: 'sales', displayName: 'Менеджер · Потолки Столицы', orgId: 'org_demo', createdAt: now },
-    { id: 'u_exec1', login: 'exec1', password: 'exec1234', role: 'measurer', displayName: 'Замерщик · Потолки Столицы', orgId: 'org_demo', createdAt: now },
-    { id: 'u_crew1', login: 'crew1', password: 'exec1234', role: 'crew', displayName: 'Монтажник · Потолки Столицы', orgId: 'org_demo', createdAt: now },
-    { id: 'u_crew1b', login: 'crew1b', password: 'exec1234', role: 'crew', displayName: 'Монтажник 2 · Потолки Столицы', orgId: 'org_demo', createdAt: now },
-    { id: 'u_partner2', login: 'partner2', password: 'demo1234', role: 'owner', displayName: 'Владелец · Северный Потолок', orgId: 'org_demo_spb', createdAt: now },
-    { id: 'u_sales2', login: 'sales2', password: 'exec1234', role: 'sales', displayName: 'Менеджер · Северный Потолок', orgId: 'org_demo_spb', createdAt: now },
-    { id: 'u_exec2', login: 'exec2', password: 'exec1234', role: 'measurer', displayName: 'Замерщик · Северный Потолок', orgId: 'org_demo_spb', createdAt: now },
-    { id: 'u_crew2', login: 'crew2', password: 'exec1234', role: 'crew', displayName: 'Монтажник · Северный Потолок', orgId: 'org_demo_spb', createdAt: now },
+    { id: 'u_admin', login: 'admin', password: 'admin1234', role: 'admin', displayName: DEMO_PERSONAL_NAMES.u_admin, orgId: null, createdAt: now },
+    { id: 'u_partner1', login: 'partner1', password: 'demo1234', role: 'owner', displayName: DEMO_PERSONAL_NAMES.u_partner1, orgId: 'org_demo', createdAt: now },
+    { id: 'u_sales1', login: 'sales1', password: 'exec1234', role: 'sales', displayName: DEMO_PERSONAL_NAMES.u_sales1, orgId: 'org_demo', createdAt: now },
+    { id: 'u_exec1', login: 'exec1', password: 'exec1234', role: 'measurer', displayName: DEMO_PERSONAL_NAMES.u_exec1, orgId: 'org_demo', createdAt: now },
+    { id: 'u_crew1', login: 'crew1', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew1, orgId: 'org_demo', createdAt: now },
+    { id: 'u_crew1b', login: 'crew1b', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew1b, orgId: 'org_demo', createdAt: now },
+    { id: 'u_partner2', login: 'partner2', password: 'demo1234', role: 'owner', displayName: DEMO_PERSONAL_NAMES.u_partner2, orgId: 'org_demo_spb', createdAt: now },
+    { id: 'u_sales2', login: 'sales2', password: 'exec1234', role: 'sales', displayName: DEMO_PERSONAL_NAMES.u_sales2, orgId: 'org_demo_spb', createdAt: now },
+    { id: 'u_exec2', login: 'exec2', password: 'exec1234', role: 'measurer', displayName: DEMO_PERSONAL_NAMES.u_exec2, orgId: 'org_demo_spb', createdAt: now },
+    { id: 'u_crew2', login: 'crew2', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew2, orgId: 'org_demo_spb', createdAt: now },
   ];
 }
 

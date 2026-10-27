@@ -1,6 +1,14 @@
 /** Shared types — partner portal roles, org settings, job objects. */
 
 import { computeAnalyticsFunnel } from './funnel.ts';
+import {
+  PROJECT_STATUSES as PROJECT_STATUS_VALUES,
+  PROJECT_STATUS_LABELS as PROJECT_STATUS_LABEL_VALUES,
+  cleanProjectDate,
+  cleanProjectStatus,
+  estimateForRole,
+  roleSeesProjectMoney,
+} from './projectAccess.js';
 
 export type UserRole = 'admin' | 'owner' | 'sales' | 'measurer' | 'crew';
 
@@ -304,6 +312,12 @@ export type JobObject = {
 };
 
 /** Проект: клиент и адрес. Комнаты — объекты с этим projectId. Сумм и смет в записи нет. */
+export type ProjectStatus = 'new' | 'measure' | 'proposal' | 'install' | 'done';
+
+export const PROJECT_STATUSES = PROJECT_STATUS_VALUES as readonly ProjectStatus[];
+export const PROJECT_STATUS_LABELS = PROJECT_STATUS_LABEL_VALUES as Record<ProjectStatus, string>;
+export { cleanProjectDate, cleanProjectStatus, estimateForRole, roleSeesProjectMoney };
+
 export type Project = {
   id: string;
   orgId: string;
@@ -315,6 +329,19 @@ export type Project = {
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+  /** Текст для команды. Пусто, пока его не заполнили. */
+  description?: string;
+  /** Цепочка статуса. Пусто — на экране статус берётся по комнатам. */
+  status?: ProjectStatus;
+  managerUserId?: string | null;
+  measurerUserId?: string | null;
+  crewUserId?: string | null;
+  /** Дата начала, ГГГГ-ММ-ДД. */
+  startsAt?: string | null;
+  /** Срок, ГГГГ-ММ-ДД. */
+  dueAt?: string | null;
+  /** Момент архивации. Пусто — проект в работе. */
+  archivedAt?: string | null;
 };
 
 export type ProjectInput = {
@@ -324,6 +351,15 @@ export type ProjectInput = {
   clientPhone?: string;
   address?: string;
   city?: string;
+  description?: string;
+  status?: ProjectStatus | '';
+  managerUserId?: string | null;
+  measurerUserId?: string | null;
+  crewUserId?: string | null;
+  startsAt?: string | null;
+  dueAt?: string | null;
+  /** true — убрать с рабочей доски, false — вернуть. Дату архива клиент не присылает. */
+  archived?: boolean;
 };
 
 export type ActivityEvent = {

@@ -3,6 +3,11 @@
 .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .head h2 { margin: 0; }
 .fields { margin: 20px 0 0; padding: 0; border: 0; display: grid; gap: 18px; min-width: 0; }
+.nameForm { display: grid; gap: 12px; margin-top: 18px; }
+.nameForm label { display: grid; gap: 7px; font-size: .9rem; min-width: 0; }
+.nameForm input { box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid var(--cab-border); border-radius: 10px; padding: 10px; background: var(--cab-subtle); color: inherit; font: inherit; font-size: max(16px, 1rem); }
+.nameForm input:focus-visible { outline: 2px solid var(--cab-accent); outline-offset: 1px; }
+.nameHint { margin: 0; color: var(--cab-muted); font-size: .9rem; line-height: 1.4; }
 .fields form { display: grid; gap: 12px; border-top: 1px solid var(--cab-border); padding-top: 16px; }
 .fields label { display: grid; gap: 7px; font-size: .9rem; min-width: 0; }
 .fields input,

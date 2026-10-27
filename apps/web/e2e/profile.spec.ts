@@ -163,7 +163,7 @@ test('phone: profile sheet and confirm dialog fit, targets ≥44px, dark theme',
   const dialog = await openProfile(page);
   const box = await dialog.boundingBox();
   expect(box!.width).toBeGreaterThanOrEqual(390 - 16);
-  for (const name of ['Загрузить фото', 'Сохранить логин', 'Сменить пароль', 'Закрыть профиль']) {
+  for (const name of ['Загрузить фото', 'Сохранить имя', 'Сохранить логин', 'Сменить пароль', 'Закрыть профиль']) {
     const b = await dialog.getByRole('button', { name, exact: true }).boundingBox();
     expect(b!.height, name).toBeGreaterThanOrEqual(44);
   }
@@ -179,6 +179,64 @@ test('phone: profile sheet and confirm dialog fit, targets ≥44px, dark theme',
   expect(await page.evaluate(() => document.scrollingElement!.scrollWidth <= window.innerWidth)).toBe(true);
   await confirm.getByRole('button', { name: 'Отмена', exact: true }).click();
   await expect(confirm).toHaveCount(0);
+});
+
+function helloNow(): string {
+  const hour = new Date().getHours();
+  return hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
+}
+
+test('имя из профиля сразу в приветствии и шапке, без имени — приветствие без имени', async ({ page }) => {
+  await enter(page);
+  const hello = helloNow();
+  await expect(page.getByRole('heading', { level: 2, name: `${hello}, UI` })).toBeVisible();
+  const dialog = await openProfile(page);
+  await expect(dialog.getByLabel(/телефон/i)).toHaveCount(0);
+  await expect(dialog.getByText(/телефон/i)).toHaveCount(0);
+  await dialog.getByLabel('Имя', { exact: true }).fill('Светлана Орлова');
+  await dialog.getByRole('button', { name: 'Сохранить имя', exact: true }).click();
+  await expect(dialog.getByRole('status')).toHaveText('Имя обновлено');
+  await dialog.getByRole('button', { name: 'Закрыть профиль' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: `${hello}, Светлана` })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Мой профиль' })).toContainText('Светлана Орлова');
+
+  await page.getByRole('button', { name: 'Изменить имя', exact: true }).click();
+  const again = page.getByRole('dialog', { name: 'Мой профиль' });
+  await expect(again.getByLabel('Имя', { exact: true })).toHaveValue('Светлана Орлова');
+  await again.getByLabel('Имя', { exact: true }).fill('');
+  await again.getByRole('button', { name: 'Сохранить имя', exact: true }).click();
+  await expect(again.getByRole('status')).toHaveText('Имя обновлено');
+  await again.getByRole('button', { name: 'Закрыть профиль' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: hello, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Указать имя', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Мой профиль' })).toContainText('Укажите имя');
+});
+
+test('владелец сохраняет имя сотрудника, сотрудник видит его в приветствии', async ({ page }) => {
+  await enter(page);
+  await page.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
+  await page.getByRole('button', { name: /UI sales/ }).click();
+  const card = page.getByRole('region', { name: 'Сотрудник' });
+  await card.getByLabel('Имя сотрудника', { exact: true }).fill('Ольга Крылова');
+  await card.getByRole('button', { name: 'Сохранить имя', exact: true }).click();
+  await expect(card.getByRole('heading', { level: 1, name: 'Ольга Крылова' })).toBeVisible();
+  await card.getByRole('button', { name: 'К списку', exact: true }).click();
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await enter(page, 'ui.sales');
+  const hello = helloNow();
+  await expect(page.getByRole('heading', { level: 2, name: `${hello}, Ольга` })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Мой профиль' })).toContainText('Ольга Крылова');
+  await expect(page.getByRole('heading', { level: 2, name: /Менеджер/ })).toHaveCount(0);
+});
+
+test('замерщик, монтажник и админ видят имя, а не название роли', async ({ page }) => {
+  const hello = helloNow();
+  for (const login of ['ui.measurer', 'ui.crew', 'ui.admin']) {
+    await enter(page, login);
+    await expect(page.getByRole('heading', { level: 2, name: `${hello}, UI` })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: /Замерщик|Монтажник|Админ/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  }
 });
 
 /** На телефоне профиль — последняя вкладка нижней панели, настройки открываются оттуда; на шире — кнопка в шапке. */

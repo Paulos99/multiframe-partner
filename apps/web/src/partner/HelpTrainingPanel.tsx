@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
 import { MaterialsPanel } from './MaterialsPanel';
+import { OfflineGearSlot } from './offlineGearSlot';
 import styles from './HelpTrainingPanel.module.css';
 
 type HelpSection = {
@@ -53,8 +54,8 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
     steps: [
       '«Сегодня» показывает ближайшие комнаты и одну кнопку следующего шага.',
       'Вкладка «Компания» — название, город, РРЦ панели и м², монтаж, дюбели.',
-      '«Сотрудники» — создайте менеджера, замерщика и монтажников. У каждого монтажника свой логин.',
-      '«Проекты» — доска статусов. Карточка комнаты открывается рядом.',
+      '«Сотрудники» — создайте менеджера, замерщика и монтажников. Карточка сотрудника открывается своей страницей. У каждого монтажника свой логин.',
+      '«Проекты» — список и канбан. Комната открывается со страницы проекта.',
       'Назначьте комнату замерщику или бригаде в поле «Исполнитель».',
     ],
     cannot: [
@@ -68,8 +69,7 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
     lead: 'Проекты, комнаты и КП.',
     steps: [
       '«Сегодня» — ближайшие комнаты. «Собрать КП» открывает комнату в статусе «Замер».',
-      '«Проекты» — доска. Новая комната остаётся черновиком, пока вы сами не переставите её.',
-      '«Отправить КП» ставит статус «КП отправлено».',
+      '«Проекты» — список и канбан. Новая комната остаётся черновиком, пока статус не сменят на её странице.',
       'В карточке комнаты меняйте статус и назначайте исполнителя.',
       'Калькулятор считает только потолок MultiFrame по РРЦ компании.',
     ],
@@ -85,7 +85,7 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
     steps: [
       'На «Сегодня» откройте назначенную комнату.',
       '«Проблемомер» — вопросы для рекомендации по потолку. «Калькулятор» — панели и крепёж.',
-      '«Сохранить комнату» записывает профиль в уже созданную комнату.',
+      '«Сохранить» в Проблемомере записывает профиль в уже созданную комнату.',
       'Новый проект создаёт менеджер или владелец.',
     ],
     cannot: [
@@ -98,7 +98,7 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
     title: 'Ваша работа · Монтажник',
     lead: 'Только назначенные комнаты.',
     steps: [
-      'На «Сегодня» и в «Проектах» видны комнаты, назначенные вам.',
+      'На «Сегодня» — ближайшие комнаты. В «Проектах» список без канбана: адрес, комната, площадь, панели и статус. Комната открывается своей страницей.',
       'Откройте «Смету»: панели, крепёж и схема раскладки. «Профиль» — акустика комнаты.',
       'Статус меняет менеджер или владелец.',
       'После смены нажмите «Выйти», если планшет общий.',
@@ -144,10 +144,15 @@ function SectionBlock({ section, highlight }: { section: HelpSection; highlight?
 export function HelpTrainingPanel({ role }: { role: UserRole }) {
   const personal = useMemo(() => BY_ROLE[role], [role]);
   const [section, setSection] = useState<'materials' | 'cabinet'>('materials');
+  const [gearSlot, setGearSlot] = useState<HTMLElement | null>(null);
 
   return (
+    <OfflineGearSlot.Provider value={gearSlot}>
     <div className={styles.panel}>
-      <h2>Обучение</h2>
+      <div className={styles.head}>
+        <h2>Обучение</h2>
+        <div ref={setGearSlot} className={styles.gearSlot} />
+      </div>
       <div className={styles.tabs} role="tablist" aria-label="Разделы обучения">
         <button
           type="button"
@@ -184,5 +189,6 @@ export function HelpTrainingPanel({ role }: { role: UserRole }) {
         </div>
       )}
     </div>
+    </OfflineGearSlot.Provider>
   );
 }

@@ -176,7 +176,7 @@ test('чекаут 3ee8094 ?demo=1, клики и HEAD без очистки н�
     await drill.getByRole('tab', { name: 'Менеджеры' }).click();
     for (const period of ['Месяц', 'Квартал', 'Год'] as const) {
       await drill.getByRole('button', { name: period, exact: true }).click();
-      await drill.getByRole('button', { name: /Менеджер · Потолки Столицы/ }).first().click();
+      await drill.getByRole('button', { name: /Менеджер · Потолки Столицы|Елена Крылова/ }).first().click();
       await expect(drill.getByText(/проекты 0/)).toHaveCount(0);
       await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
       await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();

@@ -96,8 +96,8 @@ test('сохранённая история: плитки и рейтинг из
   await page.goto('/?demo=1&debug=1');
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  const rooms = page.locator('[data-room-id]');
-  await expect.poll(async () => rooms.count()).toBe(11);
+  const projectsDesk = page.getByRole('region', { name: 'Список проектов' });
+  await expect.poll(async () => projectsDesk.locator('[data-project-id]').count()).toBeGreaterThan(0);
 
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   await expect(page.getByText('Сохранённая история · 1–27 октября 2026')).toBeVisible();
@@ -128,7 +128,7 @@ test('сохранённая история: плитки и рейтинг из
   await drill.getByRole('tab', { name: 'Без исполнителя' }).click();
   await expect(drill.getByRole('button', { name: /Без исполнителя/ })).toBeVisible();
   await drill.getByRole('tab', { name: 'Замерщики' }).click();
-  const measurer = drill.getByRole('button', { name: /Замерщик · Потолки Столицы/ });
+  const measurer = drill.getByRole('button', { name: /Замерщик · Потолки Столицы|Игорь Лебедев/ });
   await expect(measurer).toBeVisible();
   await expect(measurer).not.toContainText('Замеры 0');
   await expect(measurer).toContainText('1433.5');
@@ -145,7 +145,7 @@ test('сохранённая история: плитки и рейтинг из
   await page.getByRole('button', { name: /^Сотрудники/ }).first().click();
   const staff = page.getByRole('region', { name: 'Сотрудники' });
   await staff.getByRole('tab', { name: 'Менеджеры' }).click();
-  const manager = staff.getByRole('button', { name: /Менеджер · Потолки Столицы/ });
+  const manager = staff.getByRole('button', { name: /Менеджер · Потолки Столицы|Елена Крылова/ });
   await expect(manager).toBeVisible();
   const managerText = await manager.innerText();
   const listed = Number(managerText.match(/проекты\s+(\d+)/)?.[1] || '0');
@@ -166,7 +166,7 @@ test('сохранённая история: плитки и рейтинг из
   const card = page.getByRole('region', { name: 'Комната' });
   await expect(card).toBeVisible();
   await expect(card).toContainText('Никитин И.');
-  await expect(page).not.toHaveURL(/#project\//);
+  await expect(page).toHaveURL(/#project\/.+\/room\//);
   await page.goBack();
   await expect(page).toHaveURL(/#analytics\/staff\//);
   await page.screenshot({

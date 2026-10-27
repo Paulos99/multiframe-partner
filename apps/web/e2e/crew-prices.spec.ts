@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openProjectRoom } from './open-room';
 
 const password = 'ui-fixture-password-only';
 
@@ -17,8 +18,7 @@ async function enter(page: Page) {
 test('монтажник не видит цены в комнате, калькуляторе и Проблемомере', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_crew_room"]').click();
-  const drawer = page.getByRole('region', { name: 'Комната' });
+  const { drawer } = await openProjectRoom(page, 'Гостиная');
   await expect(drawer).toBeVisible();
   await expect(drawer).not.toContainText('₽');
   await expect(drawer.getByText('Итого комнаты')).toHaveCount(0);
@@ -50,6 +50,6 @@ test('монтажник не видит цены в комнате, кальк�
   await expect(result).toBeVisible({ timeout: 20000 });
   await expect(page.locator('body')).not.toContainText('₽');
   await expect(page.getByText(/каркас/i).filter({ visible: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Сохранить в комнату', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toHaveCount(0);
 });

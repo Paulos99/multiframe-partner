@@ -228,12 +228,12 @@ test('сессия уже активна: reload, сразу Аналитика,
   const staffWhy = staff.getByTestId('why-zero');
   await expect(staffWhy).toContainText(`Комнат ${COMPANY_ROOMS}`);
   await staff.getByRole('tab', { name: 'Замерщики' }).click();
-  const measurer = staff.getByRole('button', { name: /Замерщик · Потолки Столицы/ });
+  const measurer = staff.getByRole('button', { name: /Замерщик · Потолки Столицы|Игорь Лебедев/ });
   await expect(measurer).toBeVisible();
   await expect(measurer).not.toContainText('Замеры 0');
   await expect(measurer).toContainText('1433.5');
   await staff.getByRole('tab', { name: 'Менеджеры' }).click();
-  const manager = staff.getByRole('button', { name: /Менеджер · Потолки Столицы/ });
+  const manager = staff.getByRole('button', { name: /Менеджер · Потолки Столицы|Елена Крылова/ });
   await expect(manager).toBeVisible();
   const listed = Number((await manager.innerText()).match(/проекты\s+(\d+)/)?.[1] || '0');
   expect(listed).toBeGreaterThan(0);
@@ -255,7 +255,7 @@ test('сессия уже активна: reload, сразу Аналитика,
   const card = page.getByRole('region', { name: 'Комната' });
   await expect(card).toBeVisible();
   await expect(card).toContainText('Никитин И.');
-  await expect(page).not.toHaveURL(/#project\//);
+  await expect(page).toHaveURL(/#project\/.+\/room\//);
   await page.goBack();
   await expect(page).toHaveURL(/#analytics\/staff\//);
   await context.close();

@@ -706,8 +706,8 @@ test('доска проектов: 11 комнат считаются монта
   const byName = new Map(
     (run(linked, 'month').roles.find((role) => role.id === 'crew')?.ranking || []).map((row) => [row.displayName, row.mountedRooms]),
   );
-  assert.equal(byName.get('Монтажник · Потолки Столицы'), 3);
-  assert.equal(byName.get('Монтажник 2 · Потолки Столицы'), 1);
+  assert.equal(byName.get('Павел Орлов'), 3);
+  assert.equal(byName.get('Дмитрий Волков'), 1);
 });
 
 test('старые комнаты без projectId и assignedTo: бригада, отметка и группировка доски', () => {

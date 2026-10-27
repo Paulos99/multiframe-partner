@@ -48,14 +48,14 @@ const SECTIONS = [
   'Нормы комфорта для жилья',
   'Эффективность и сравнение на слух',
   'Уникальность системы MultiFrame',
-  'Следующий шаг',
 ];
-const BUTTONS = [
+const GONE_BUTTONS = [
   'Рассчитать количество MultiFrame',
   'Запросить консультацию или подбор',
   'Скачать PDF',
   'Назад',
   'Пройти ещё раз',
+  'Отправить КП',
 ];
 
 async function expectFullResult(page: Page, withSave: boolean) {
@@ -83,21 +83,54 @@ async function expectFullResult(page: Page, withSave: boolean) {
   }
   await expect(page.getByRole('heading', { name: 'Эффективность MultiFrame' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Сравнить на слух' })).toBeVisible();
-  for (const name of BUTTONS) {
-    const btn = page.getByRole('button', { name, exact: true }).last();
-    await btn.scrollIntoViewIfNeeded();
-    await expect(btn, name).toBeVisible();
-    const op = await btn.evaluate((el) => {
-      let o = 1;
-      for (let n: Element | null = el; n; n = n.parentElement) o *= Number(getComputedStyle(n).opacity);
-      return o;
-    });
-    expect(op, name).toBe(1);
+  await expect(page.getByText('Сильный дискомфорт')).toHaveCount(0);
+  await expect(page.getByText('важно для вас')).toHaveCount(0);
+  for (const name of GONE_BUTTONS) {
+    await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
   }
-  if (!withSave) return;
-  // Смета для КП и «Сохранить объект» остаются у ролей, которые создают объекты.
+  if (!withSave) {
+    await expect(page.getByRole('region', { name: 'Следующий шаг', exact: true })).toHaveCount(0);
+    return;
+  }
+  const next = page.getByRole('region', { name: 'Следующий шаг', exact: true });
+  await next.scrollIntoViewIfNeeded();
+  await expect(next).toHaveCSS('opacity', '1', { timeout: 5000 });
+  // Смета для КП и «Сохранить» остаются у ролей, которые создают объекты.
   await expect(page.getByRole('heading', { name: 'Смета для КП' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Сохранить комнату', exact: true })).toBeVisible();
+  const save = page.getByRole('button', { name: 'Сохранить', exact: true });
+  await save.scrollIntoViewIfNeeded();
+  await expect(save).toBeVisible();
+}
+
+/** Колесо и жест листают колонку Проблемомера, а не пустое окно. */
+async function expectResultScrolls(page: Page, mode: 'wheel' | 'touch') {
+  const main = page.locator('main');
+  await expect.poll(async () => main.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeGreaterThan(80);
+  await main.evaluate((el) => {
+    el.scrollTop = 0;
+  });
+  const box = await main.boundingBox();
+  if (!box) throw new Error('нет области прокрутки');
+  const x = box.x + box.width / 2;
+  const y = box.y + Math.min(240, box.height / 2);
+  if (mode === 'wheel') {
+    await page.mouse.move(x, y);
+    await page.mouse.wheel(0, 1000);
+  } else {
+    const client = await page.context().newCDPSession(page);
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y, id: 1 }],
+    });
+    for (let i = 1; i <= 8; i += 1) {
+      await client.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: y - i * 55, id: 1 }],
+      });
+    }
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
+  await expect.poll(async () => main.evaluate((el) => el.scrollTop), { timeout: 4000 }).toBeGreaterThan(40);
 }
 
 for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {
@@ -109,6 +142,7 @@ for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {
     await page.waitForTimeout(800);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/${role}-top.png` });
     await expectFullResult(page, role === 'owner' || role === 'sales');
+    if (role === 'owner') await expectResultScrolls(page, 'wheel');
     if (SHOTS) {
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.waitForTimeout(300);
@@ -123,5 +157,7 @@ test('Итог Проблемомера на телефоне: блоки вид
   await enter(page, 'owner');
   await walkToResult(page);
   await expectFullResult(page, true);
+  await expectResultScrolls(page, 'wheel');
+  await expectResultScrolls(page, 'touch');
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/mobile-owner-full.png`, fullPage: true });
 });

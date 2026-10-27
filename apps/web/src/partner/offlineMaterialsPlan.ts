@@ -23,6 +23,15 @@ export type OfflineEntry = {
   thumb: boolean;
 };
 
+/** Где живут кнопки офлайна: предложение, прогресс или шестерёнка в шапке. */
+export type OfflineAccessMode = 'offer' | 'progress' | 'gear';
+
+export function offlineAccessMode(input: { enabled: boolean; running: boolean }): OfflineAccessMode {
+  if (input.running) return 'progress';
+  if (input.enabled) return 'gear';
+  return 'offer';
+}
+
 export function isOfflineFile(item: PublicMaterial): boolean {
   return item.kind === 'file' && item.hasFile;
 }

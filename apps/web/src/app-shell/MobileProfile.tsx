@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { UserIcon } from '../icons';
 import { apiProfile, hasRemoteApi } from '../partner/apiClient';
 import { ProfilePanel } from '../partner/ProfilePanel';
@@ -53,17 +53,23 @@ export function MobileProfileScreen({
   role,
   company,
   onLogout,
+  editToken = 0,
 }: {
   name: string;
   role: string;
   company?: string | null;
   onLogout: () => void;
+  editToken?: number;
 }) {
   const { user } = usePartner();
   const avatar = useAvatar();
   const [editing, setEditing] = useState(false);
   const meta = company ? `${role} · ${company}` : role;
   const subtitle = meta === name ? role : meta;
+  const shown = name.trim() ? name : 'Укажите имя';
+  useEffect(() => {
+    if (editToken > 0) setEditing(true);
+  }, [editToken]);
   return (
     <section className={styles.screen} aria-label="Профиль">
       <div className={styles.card}>
@@ -72,7 +78,7 @@ export function MobileProfileScreen({
             {avatar.url ? <img src={avatar.url} alt="" onError={avatar.onError} /> : initialsOf(name)}
           </span>
           <span className={styles.text}>
-            <strong>{name}</strong>
+            <strong>{shown}</strong>
             <span>{subtitle}</span>
             {user?.login ? <span className={styles.login}>Логин: {user.login}</span> : null}
           </span>
@@ -80,7 +86,7 @@ export function MobileProfileScreen({
         <Button variant="secondary" fullWidth onClick={() => setEditing(true)}>
           Настройки профиля
         </Button>
-        <p className={styles.hint}>Фото, логин и пароль.</p>
+        <p className={styles.hint}>Имя, фото, логин и пароль.</p>
       </div>
       <DemoSwitcherFab menu />
       <button type="button" className={styles.logout} onClick={onLogout}>

@@ -284,7 +284,7 @@ test('короткий архив остаётся в хранилище, а м�
   await expect.poll(async () => (await drill.locator('text=/Открыли:/').allInnerTexts()).join('\n')).not.toBe(monthFunnel);
 
   await drill.getByRole('tab', { name: 'Менеджеры' }).click();
-  await drill.getByRole('button', { name: /Менеджер · Потолки Столицы/ }).first().click();
+  await drill.getByRole('button', { name: /Менеджер · Потолки Столицы|Елена Крылова/ }).first().click();
   await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
   await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
   await expect.poll(async () => {
@@ -366,7 +366,7 @@ test('менеджер из старой истории видит топ про
   await expect(drill.getByText('Моя команда')).toBeVisible();
   await expect(drill.getByRole('tab', { name: 'Менеджеры' })).toBeVisible();
   await expect(drill.getByRole('tab', { name: 'Замерщики' })).toBeVisible();
-  await drill.getByRole('button', { name: /Менеджер · Потолки Столицы/ }).first().click();
+  await drill.getByRole('button', { name: /Менеджер · Потолки Столицы|Елена Крылова/ }).first().click();
   await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
   await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
   await expect(drill.getByText('Офис на Патриарших')).toBeVisible();
@@ -660,8 +660,10 @@ test('накопленное хранилище: старые id, без всп�
   await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
   await expect(drill.getByText(/проекты 0/)).toHaveCount(0);
   await drill.getByRole('button', { name: /Старая гостиная/ }).first().click();
-  await expect(page.getByRole('region', { name: 'Комната' }).getByRole('heading', { name: 'Старая гостиная' })).toBeVisible();
-  await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Комната' })).toContainText('Старая гостиная');
+  await expect(page).toHaveURL(/#project\/.+\/room\//);
+  await page.goBack();
+  await expect(page).toHaveURL(/#analytics\/staff\//);
 
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   const trigger = page.getByRole('group', { name: 'Период аналитики' }).getByRole('button');
@@ -704,8 +706,8 @@ test('вход владельца через интерфейс: монтажн�
     await expect.poll(async () => mounted().count()).toBe(2);
     const lines = await mounted().allInnerTexts();
     expect(lines.join('\n'), period).not.toContain('Смонтировано 0');
-    expect(lines.some((line) => line.includes('Монтажник 2'))).toBe(true);
-    expect(lines.some((line) => /Монтажник(?! 2)/.test(line))).toBe(true);
+    expect(lines.some((line) => line.includes('Дмитрий Волков'))).toBe(true);
+    expect(lines.some((line) => line.includes('Павел Орлов'))).toBe(true);
   }
   await panels.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-installers.png' });
   await page.goBack();
@@ -714,7 +716,7 @@ test('вход владельца через интерфейс: монтажн�
   const drill = page.getByRole('region', { name: 'Площадь, м²' });
   await drill.getByRole('tab', { name: 'Менеджеры' }).click();
   await drill.getByRole('button', { name: 'Месяц', exact: true }).click();
-  await drill.getByRole('button', { name: /Менеджер · Потолки Столицы/ }).first().click();
+  await drill.getByRole('button', { name: /Менеджер · Потолки Столицы|Елена Крылова/ }).first().click();
   await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
   await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
   await expect(drill.getByText(/проекты 0/)).toHaveCount(0);
@@ -723,5 +725,6 @@ test('вход владельца через интерфейс: монтажн�
   await expect(project).toBeVisible();
   await drill.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-manager-projects.png' });
   await project.click();
-  await expect(page.getByRole('region', { name: 'Комната' }).getByRole('heading', { name: 'Козлов Д.' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Комната' })).toContainText('Козлов Д.');
+  await expect(page).toHaveURL(/#project\/.+\/room\//);
 });

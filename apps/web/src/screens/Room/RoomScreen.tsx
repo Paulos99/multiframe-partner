@@ -161,14 +161,15 @@ export function RoomScreen() {
           ) : null}
 
           <Field
-            label="Площадь потолка, м²"
-            hint="Нужна, чтобы посчитать количество панелей"
+            label="Площадь комнаты, м²"
+            hint="Сохранится в комнату проекта и в калькулятор"
           >
             <TextInput
               type="number"
               inputMode="decimal"
               min={1}
               step={0.1}
+              aria-label="Площадь комнаты, м²"
               placeholder="Например, 18"
               value={room.ceilingAreaM2 ?? ''}
               onChange={(e) => {

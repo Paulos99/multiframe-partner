@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { normalizePersonName } from '../../packages/shared/personName.js';
 import {
   materialsBucket,
   materialsConfigError,
@@ -74,35 +75,41 @@ export async function handleProfile(ctx) {
     });
   if (method === 'PATCH' && path === '/me') {
     const body = ctx.getBody();
-    const login = String(body.login || '').trim();
-    if (!/^[a-zA-Z0-9_.@-]{3,80}$/.test(login))
-      fail('Логин: 3–80 латинских букв, цифр или символов _.@-');
-    if (
-      !(await bcrypt.compare(
-        String(body.currentPassword || ''),
-        user.passwordHash || '',
-      ))
-    )
-      fail('Текущий пароль неверен', 403);
-    if (
-      platform.users.some(
-        (u) =>
-          u.id !== user.id && u.login.toLowerCase() === login.toLowerCase(),
-      )
-    )
-      fail('Логин уже занят', 409);
+    const hasLogin = Object.prototype.hasOwnProperty.call(body, 'login');
+    const hasName = Object.prototype.hasOwnProperty.call(body, 'displayName');
+    if (!hasLogin && !hasName) fail('Укажите имя или логин');
     const next = {
       ...platform.users[index],
-      login,
       updatedAt: new Date().toISOString(),
-      sessionVersion: (user.sessionVersion || 0) + 1,
     };
+    if (hasName) next.displayName = normalizePersonName(body.displayName);
+    if (hasLogin) {
+      const login = String(body.login || '').trim();
+      if (!/^[a-zA-Z0-9_.@-]{3,80}$/.test(login))
+        fail('Логин: 3–80 латинских букв, цифр или символов _.@-');
+      if (
+        !(await bcrypt.compare(
+          String(body.currentPassword || ''),
+          user.passwordHash || '',
+        ))
+      )
+        fail('Текущий пароль неверен', 403);
+      if (
+        platform.users.some(
+          (u) =>
+            u.id !== user.id && u.login.toLowerCase() === login.toLowerCase(),
+        )
+      )
+        fail('Логин уже занят', 409);
+      next.login = login;
+      next.sessionVersion = (user.sessionVersion || 0) + 1;
+    }
+    delete next.phone;
     platform.users[index] = next;
     await ctx.savePlatform(platform);
-    return ctx.json(200, {
-      user: await profileWithAvatar(next, platform, ctx),
-      token: await ctx.signToken(next),
-    });
+    const payload = { user: await profileWithAvatar(next, platform, ctx) };
+    if (hasLogin) payload.token = await ctx.signToken(next);
+    return ctx.json(200, payload);
   }
   if (method === 'POST' && path === '/me/password') {
     const body = ctx.getBody();

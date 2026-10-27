@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openProjectRoom } from './open-room';
 
 const password = 'ui-fixture-password-only';
 
@@ -17,8 +18,7 @@ async function enter(page: Page) {
 test('из комнаты Проблемомер подставляет тип и площадь, «Далее» активно', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_room"]').click();
-  const drawer = page.getByRole('region', { name: 'Комната' });
+  const { drawer } = await openProjectRoom(page, 'Спальня');
   await expect(drawer.getByRole('button', { name: 'Проблемомер', exact: true })).toBeVisible();
   await drawer.getByRole('button', { name: 'Проблемомер', exact: true }).click();
   await page.locator('button[aria-label="Кабинет"]').click();
@@ -34,6 +34,8 @@ test('из комнаты Проблемомер подставляет тип �
   }
 
   await expect(question).toBeVisible();
+  await expect(page.getByLabel('Площадь комнаты, м²')).toBeVisible();
+  await expect(page.getByText('Сохранится в комнату проекта и в калькулятор')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Спальня', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByPlaceholder('Например, 18')).toHaveValue('24');
   await expect(page.getByText('выберите тип')).toHaveCount(0);
@@ -49,16 +51,14 @@ test('из комнаты Проблемомер подставляет тип �
   }
   await expect(result).toBeVisible({ timeout: 20000 });
   await expect(page.getByRole('region', { name: 'Параметры комнаты' })).toContainText('Спальня');
-  await expect(page.getByRole('button', { name: 'Сохранить в комнату', exact: true })).toBeVisible();
-  await expect(page.getByText('Другие действия', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeVisible();
+  await expect(page.getByText('Другие действия', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toHaveCount(0);
   await expect(page.getByText('без каркаса')).toHaveCount(0);
   await expect(page.getByLabel('Проект')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Сохранить комнату', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Отправить КП', exact: true })).toHaveCount(0);
-  await page.getByText('Другие действия', { exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Сохранить в комнату', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Пройти ещё раз', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
   const room = page.getByRole('region', { name: 'Комната' });
   await expect(room).toBeVisible();
   await expect(room).toContainText('Спальня');
@@ -67,8 +67,8 @@ test('из комнаты Проблемомер подставляет тип �
 test('калькулятор из комнаты сразу показывает одну сумму в смете и внизу', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_room"]').click();
-  await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Калькулятор', exact: true }).click();
+  const { drawer } = await openProjectRoom(page, 'Спальня');
+  await drawer.getByRole('button', { name: 'Калькулятор', exact: true }).click();
   const frame = page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]');
   await expect(frame.locator('#areaOnlyInput')).toHaveValue(/24/);
   const sideTotal = frame.locator('.rb-kv--total strong');
@@ -84,25 +84,27 @@ test('калькулятор из комнаты сразу показывает
 test('замерщик видит только назначенную комнату и её цену', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await page.locator('[data-room-id="ui_crew_room"]').click();
-  const drawer = page.getByRole('region', { name: 'Комната' });
+  const { drawer } = await openProjectRoom(page, 'Гостиная');
   const saved = page.waitForResponse(
     (res) => res.request().method() === 'PATCH' && res.url().includes('/objects/ui_crew_room') && res.ok(),
   );
   await drawer.getByLabel('Исполнитель').selectOption('ui_measurer');
   await saved;
   await expect(drawer.getByLabel('Исполнитель')).toHaveValue('ui_measurer');
-  await drawer.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await drawer.getByRole('button', { name: 'К проекту', exact: true }).click();
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
 
   await page.getByLabel('Логин', { exact: true }).fill('ui.measurer');
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  await expect(page.locator('[data-room-id="ui_crew_room"]')).toBeVisible();
-  await expect(page.locator('[data-room-id="ui_room"]')).toHaveCount(0);
-  await expect(page.locator('[data-room-id="ui_measured"]')).toHaveCount(0);
-  await page.locator('[data-room-id="ui_crew_room"]').click();
+  await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
+  const card = page.getByRole('region', { name: 'Проект' });
+  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Гостиная' })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Спальня' })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Кухня' })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Гостиная' }).click();
   const room = page.getByRole('region', { name: 'Комната' });
   await expect(room.getByText('Итого комнаты')).toBeVisible();
   await expect(room.getByText(/75[\s\u00a0\u202f]*261/)).toBeVisible();

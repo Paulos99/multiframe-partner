@@ -31,11 +31,15 @@ import {
   apiAdminResetPassword,
   apiAdminUpdatePartnerCity,
   apiBase,
+  apiCreateProject,
   apiCreateStaff,
   apiDeleteStaff,
   apiDeleteProject,
+  apiPatchObject,
   apiListStaff,
   apiLogin,
+  apiRenameStaff,
+  apiUpdateDisplayName,
   apiLogout,
   apiMe,
   apiResetStaffPassword,
@@ -58,6 +62,7 @@ import {
   persistPartnerCalcParams,
 } from './calcUrl';
 export { calcUrlFromOrg } from './calcUrl';
+import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { withDemoDocuments } from './demoDocuments';
 import { isDemoModeEnabled } from './demoMode';
 import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
@@ -75,6 +80,8 @@ import {
   deleteLocalProject,
   deleteStaffAccount,
   enqueueObjectDocuments,
+  renameStaffDisplayName,
+  updateOwnDisplayName,
   generatePassword,
   listActivity,
   listPartners,
@@ -178,6 +185,10 @@ type PartnerApi = {
   partnerResetStaffPassword: (staffUserId: string, password: string) => Promise<string>;
   partnerDeleteStaff: (staffUserId: string) => Promise<void>;
   partnerListStaff: () => StaffMember[];
+  renameStaff: (staffUserId: string, displayName: string) => Promise<{ id: string; displayName: string }>;
+  updateDisplayName: (displayName: string) => Promise<SessionUser>;
+  profileOpenToken: number;
+  requestOpenProfile: () => void;
   /** @deprecated */
   partnerCreateExecutor: (input: {
     login: string;
@@ -242,6 +253,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [profileOpenToken, setProfileOpenToken] = useState(0);
+  const requestOpenProfile = useCallback(() => setProfileOpenToken((n) => n + 1), []);
   const [objects, setObjects] = useState<JobObject[]>([]);
   const [objectsLoading, setObjectsLoading] = useState(false);
   const [staffLoading,setStaffLoading]=useState(false);
@@ -272,6 +285,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const remote = hasRemoteApi();
   const objectsEpoch = useRef(0);
   const projectsEpoch = useRef(0);
+  const groupedPosts = useRef(new Set<string>());
 
   const refreshObjects = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = Boolean(opts?.silent);
@@ -607,7 +621,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       } else {
         settings = updateOrgSettings(user.orgId, nextPatch, user);
       }
-      const next = { ...user, org: settings, displayName: settings.companyName || user.displayName };
+      const next = { ...user, org: settings };
       persistPartnerCalcParams(partnerCalcParamsFromOrg(settings));
       saveSession(next);
       setUser(next);
@@ -722,6 +736,47 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, remote],
   );
 
+  const updateDisplayName = useCallback(
+    async (displayName: string) => {
+      if (!user) throw new Error('Нет сессии');
+      if (remote && loadToken()) {
+        const next = await apiUpdateDisplayName(displayName);
+        saveSession(next);
+        setUser(next);
+        return next;
+      }
+      const next = updateOwnDisplayName(user, displayName);
+      setUser(next);
+      return next;
+    },
+    [user, remote],
+  );
+
+  const renameStaff = useCallback(
+    async (staffUserId: string, displayName: string) => {
+      if (!user) throw new Error('Нет сессии');
+      if (remote && loadToken()) {
+        const updated = await apiRenameStaff(staffUserId, displayName);
+        setStaffCache(await apiListStaff());
+        if (updated.id === user.id) {
+          const next = { ...user, displayName: updated.displayName };
+          saveSession(next);
+          setUser(next);
+        }
+        return { id: updated.id, displayName: updated.displayName };
+      }
+      const saved = renameStaffDisplayName(staffUserId, displayName, user);
+      if (staffUserId === user.id) {
+        const next = { ...user, displayName: saved };
+        saveSession(next);
+        setUser(next);
+      }
+      setTick((n) => n + 1);
+      return { id: staffUserId, displayName: saved };
+    },
+    [user, remote],
+  );
+
   const partnerDeleteStaff = useCallback(
     async (staffUserId: string) => {
       if (!user) throw new Error('Нет сессии');
@@ -756,6 +811,52 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     }
     return()=>{cancelled=true;};
   },[user,remote,tick]);
+
+  useEffect(() => {
+    const orphans = objects.filter((object) => !String(object.projectId || '').trim());
+    if (!user || !orphans.length) return;
+    const doc = {
+      projects: projects.map((project) => ({ ...project })),
+      objects: objects.map((object) => ({ ...object })),
+    };
+    if (!groupOrphanRooms(doc)) return;
+    const nextProjects = doc.projects as Project[];
+    const nextObjects = doc.objects as JobObject[];
+    setProjects(nextProjects);
+    setObjects(nextObjects);
+    if (!remote || !loadToken() || !canCreateObjects(user.role)) return;
+    const fresh = nextProjects.filter((project) => !projects.some((item) => item.id === project.id));
+    void (async () => {
+      for (const project of fresh) {
+        if (groupedPosts.current.has(project.id)) continue;
+        groupedPosts.current.add(project.id);
+        try {
+          await apiCreateProject({
+            id: project.id,
+            name: project.name,
+            clientName: project.clientName,
+            clientPhone: project.clientPhone,
+            address: project.address,
+            city: project.city,
+          });
+        } catch (err) {
+          groupedPosts.current.delete(project.id);
+          if (isApiError(err) && err.status === 403) return;
+        }
+      }
+      for (const object of nextObjects) {
+        if (!orphans.some((item) => item.id === object.id) || !object.projectId) continue;
+        const mark = `${object.id}:${object.projectId}`;
+        if (groupedPosts.current.has(mark)) continue;
+        groupedPosts.current.add(mark);
+        try {
+          await apiPatchObject(object.id, { projectId: object.projectId });
+        } catch {
+          groupedPosts.current.delete(mark);
+        }
+      }
+    })();
+  }, [objects, projects, remote, user]);
 
   const saveObject = useCallback(
     async (input: Partial<JobObject> & { id?: string }) => {
@@ -997,6 +1098,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerCreateStaff,
       partnerResetStaffPassword,
       partnerDeleteStaff,
+      renameStaff,
+      updateDisplayName,
+      profileOpenToken,
+      requestOpenProfile,
       partnerListStaff: () =>
         (staffCache.length
           ? staffCache
@@ -1072,6 +1177,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerCreateStaff,
       partnerResetStaffPassword,
       partnerDeleteStaff,
+      renameStaff,
+      updateDisplayName,
+      profileOpenToken,
+      requestOpenProfile,
       refreshObjects,
       projects,
       projectsLoading,

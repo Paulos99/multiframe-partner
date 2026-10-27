@@ -142,11 +142,11 @@ test('накопленное хранилище: сессия, v5 и истор�
   const staff = page.getByRole('region', { name: 'Сотрудники' });
   await expect(staff.getByTestId('why-zero')).toContainText('Почему 0. Источник:');
   await staff.getByRole('tab', { name: 'Замерщики' }).click();
-  const measurer = staff.getByRole('button', { name: /Замерщик · Потолки Столицы/ });
+  const measurer = staff.getByRole('button', { name: /Замерщик · Потолки Столицы|Игорь Лебедев/ });
   await expect(measurer).toBeVisible();
   await expect(measurer).not.toContainText('Замеры 0');
   await staff.getByRole('tab', { name: 'Менеджеры' }).click();
-  const manager = staff.getByRole('button', { name: /Менеджер · Потолки Столицы/ });
+  const manager = staff.getByRole('button', { name: /Менеджер · Потолки Столицы|Елена Крылова/ });
   const listed = Number((await manager.innerText()).match(/проекты\s+(\d+)/)?.[1] || '0');
   expect(listed).toBeGreaterThan(0);
   await manager.click();

@@ -1180,6 +1180,10 @@
   align-items: stretch;
 }
 
+.closeRowSingle {
+  grid-template-columns: 1fr;
+}
+
 .uniqGrid {
   list-style: none;
   margin: 0;

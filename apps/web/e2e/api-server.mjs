@@ -78,6 +78,7 @@ base.objects.push({
   id: 'ui_crew_room',
   roomName: 'Гостиная',
   status: 'install',
+  room: { areaM2: 24, classBefore: 'below', classAfter: 'V' },
   // Смета с ценами и старые документы: пара «смета + спецификация» и одиночная спецификация.
   estimate: { panels: 16, dowels: 37, panelsCost: 38336, installCost: 36000, dowelsCost: 925, totalCost: 75261 },
   documents: [
