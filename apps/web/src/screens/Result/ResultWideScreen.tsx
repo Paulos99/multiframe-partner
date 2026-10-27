@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Button } from '../../ui/Button';
+import { canCreateObjects } from '../../../../../packages/shared/partner';
 import { CompactAudio } from '../../ui/CompactAudio';
 import { EchoComfort, EchoComfortRings } from '../../ui/EchoComfort';
 import { SpectrumChart } from '../../ui/SpectrumChart';
-import { useSession } from '../../state/SessionContext';
 import type { ClassLabel } from '../../state/types';
 import {
   FeltScale,
@@ -148,9 +147,9 @@ function useScrollDrift() {
 }
 
 export function ResultWideScreen() {
-  const { diagnosisRequest, leaveToCabinet } = usePartner();
+  const { diagnosisRequest, user } = usePartner();
   const linkedRoom = Boolean(diagnosisRequest?.objectId);
-  const { goBack } = useSession();
+  const canSaveHere = Boolean(user && (canCreateObjects(user.role) || linkedRoom));
   const p = useResultProfile();
   const rootRef = useScrollDrift();
 
@@ -414,7 +413,7 @@ export function ResultWideScreen() {
 
       <PartnerEstimateCard areaM2={p.room.ceilingAreaM2} />
 
-      <div className={styles.closeRow}>
+      <div className={`${styles.closeRow} ${canSaveHere ? '' : styles.closeRowSingle}`}>
         <section className={styles.panel} data-reveal aria-label="Уникальность системы MultiFrame">
           <h2>Уникальность MultiFrame</h2>
           <ul className={styles.uniqGrid}>
@@ -430,86 +429,20 @@ export function ResultWideScreen() {
           </ul>
         </section>
 
-        <section
-          className={`${styles.panel} ${styles.nextPanel}`}
-          data-reveal
-          aria-label="Следующий шаг"
-        >
-          <h2>Следующий шаг</h2>
-          <p className={styles.panelLead}>
-            {linkedRoom
-              ? 'Результат запишется в эту комнату.'
-              : 'Сохраните комнату. Остальные шаги — по желанию.'}
-          </p>
-          <SaveObjectCard />
-          {linkedRoom ? (
-            <details className={styles.moreActions}>
-              <summary>Другие действия</summary>
-              <div className={styles.moreLinks}>
-                <button type="button" onClick={p.openCalc}>Рассчитать количество</button>
-                <button type="button" onClick={p.openConsultation}>Консультация</button>
-                <button type="button" disabled={p.pdfBusy} onClick={() => void p.onDownloadProfile()}>
-                  {p.pdfBusy ? 'Готовим PDF…' : 'PDF'}
-                </button>
-                <button type="button" onClick={() => void p.onShare()}>{p.shareLabel}</button>
-              </div>
-              {p.pdfError ? (
-                <p className={styles.pdfError} role="alert">
-                  Не удалось скачать. Разрешите всплывающие окна и нажмите ещё раз.
-                </p>
-              ) : null}
-            </details>
-          ) : (
-          <div className={styles.nextActions}>
-            <Button variant="ghost" fullWidth onClick={p.openCalc}>
-              Рассчитать количество MultiFrame
-            </Button>
-            <Button variant="ghost" fullWidth onClick={p.openConsultation}>
-              Запросить консультацию или подбор
-            </Button>
-            <div className={styles.splitActions}>
-              <Button
-                variant="ghost"
-                disabled={p.pdfBusy}
-                onClick={() => void p.onDownloadProfile()}
-              >
-                {p.pdfBusy ? 'Готовим PDF…' : 'Скачать PDF'}
-              </Button>
-              <Button variant="ghost" onClick={() => void p.onShare()}>
-                {p.shareLabel}
-              </Button>
-            </div>
-            {p.pdfError ? (
-              <p className={styles.pdfError} role="alert">
-                Не удалось скачать. Разрешите всплывающие окна и нажмите ещё раз.
-              </p>
-            ) : null}
-          </div>
-          )}
-        </section>
+        {canSaveHere ? (
+          <section
+            className={`${styles.panel} ${styles.nextPanel}`}
+            data-reveal
+            aria-label="Следующий шаг"
+          >
+            <h2>Следующий шаг</h2>
+            <p className={styles.panelLead}>
+              {linkedRoom ? 'Результат запишется в эту комнату.' : 'Запись останется в комнате проекта.'}
+            </p>
+            <SaveObjectCard />
+          </section>
+        ) : null}
       </div>
-
-      <nav className={styles.footerActions} aria-label="Действия после расчёта">
-        <button
-          type="button"
-          className={styles.footerBtn}
-          onClick={() => {
-            if (linkedRoom && diagnosisRequest?.objectId) {
-              leaveToCabinet(diagnosisRequest.objectId);
-              return;
-            }
-            goBack();
-          }}
-        >
-          <span className={styles.footerBtnIcon} aria-hidden>
-            ←
-          </span>
-          Назад
-        </button>
-        <button type="button" className={styles.footerBtnAccent} onClick={p.restart}>
-          Пройти ещё раз
-        </button>
-      </nav>
     </div>
   );
 }

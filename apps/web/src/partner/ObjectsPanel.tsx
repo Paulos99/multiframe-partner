@@ -686,6 +686,16 @@ export function ObjectsPanel({
             ) : (
               <p className={styles.hint}>{JOB_OBJECT_STATUS_LABELS[selected.status]}</p>
             )}
+            {selected.room.areaM2 == null ? (
+              <div className={styles.areaCallout}>
+                <p>
+                  Площадь комнаты не указана. Задайте её в Проблемомере — значение сохранится в эту комнату и попадёт в калькулятор.
+                </p>
+                <button type="button" className={styles.primary} onClick={() => api.requestDiagnosis(selected.id)}>
+                  Указать площадь в Проблемомере
+                </button>
+              </div>
+            ) : null}
             {selected.clientPhone ? (
               <a className={styles.callLink} href={telHref(selected.clientPhone)}>
                 Позвонить {selected.clientPhone}

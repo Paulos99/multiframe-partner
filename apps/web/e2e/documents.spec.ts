@@ -121,7 +121,7 @@ test('проблемомер: «Сохранить объект» приклад
   const save = page.getByRole('region', { name: 'Комната', exact: true });
   await expect(save).toBeVisible({ timeout: 30000 });
   await save.getByPlaceholder('Имя').fill('Профиль Тест');
-  await save.getByRole('button', { name: 'Сохранить комнату', exact: true }).click();
+  await save.getByRole('button', { name: 'Сохранить', exact: true }).click();
   await expect(page.getByTestId('profile-attach-note')).toHaveText('«Профиль» приложен к комнате', { timeout: 60000 });
 
   const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.owner', password } });
@@ -139,7 +139,7 @@ test('проблемомер: «Сохранить объект» приклад
   expect(pdf.length).toBeLessThan(2_000_000);
 
   // Повторное сохранение без правок не плодит второй профиль.
-  await page.getByRole('region', { name: 'Комната', exact: true }).getByRole('button', { name: 'Сохранить комнату', exact: true }).click();
+  await page.getByRole('region', { name: 'Комната', exact: true }).getByRole('button', { name: 'Сохранить', exact: true }).click();
   await page.waitForTimeout(1500);
   const again = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${auth}` } });
   const after = (await again.json()).objects.find((o: { id: string }) => o.id === saved.id);

@@ -222,7 +222,7 @@ export function roomNextHint(session: SessionState): string | null {
     session.answers.room.ceilingAreaM2 == null ||
     session.answers.room.ceilingAreaM2 <= 0
   ) {
-    return 'укажите площадь';
+    return 'укажите площадь комнаты';
   }
   return null;
 }
