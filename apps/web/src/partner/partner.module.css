@@ -3205,6 +3205,29 @@
   margin: 0;
 }
 
+.areaCallout {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(1, 100, 79, 0.28);
+  background: var(--cab-accent-softer, rgba(1, 100, 79, 0.08));
+}
+
+.areaCallout p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--cab-ink);
+}
+
+.areaCallout .primary {
+  width: 100%;
+}
+
 @media (max-width: 800px) {
   .todayHead {
     flex-direction: column;

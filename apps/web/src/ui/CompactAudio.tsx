@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useDemoPlayer, preloadDemoAudio } from '../audio/useDemoPlayer';
 import { buildRoomAudioShapeForPair } from '../audio/roomAudioShape';
 import type { AudioPair, DerivedSimulation, RoomWishOption } from '../state/types';
-import { wishAudioLead, wishAudioOrder, wishPrimaryGroup } from '../state/wish';
+import { wishAudioLead, wishAudioOrder } from '../state/wish';
 import { track } from '../analytics';
 import styles from './CompactAudio.module.css';
 
@@ -44,7 +44,6 @@ export function CompactAudio({
 }: Props) {
   const { activeId, progress, play, stop } = useDemoPlayer();
   const groups = wishAudioOrder(wish);
-  const primary = wishPrimaryGroup(wish);
 
   useEffect(() => {
     const urls = [...new Set(pairs.flatMap((p) => [p.beforeSrc, p.afterSrc]))];
@@ -67,23 +66,9 @@ export function CompactAudio({
         {groups.map((group) => {
           const groupPairs = pairs.filter((p) => p.group === group);
           if (!groupPairs.length) return null;
-          const featured =
-            group === primary &&
-            (wish === 'from_above' || wish === 'privacy_out' || wish === 'music_recording');
           return (
-            <div
-              key={group}
-              className={`${styles.group} ${featured ? styles.groupFeatured : ''}`}
-            >
-              <strong className={styles.groupTitle}>
-                {GROUP_TITLES[group]}
-                {featured ? (
-                  <>
-                    {' '}
-                    <span className={styles.groupBadge}>важно для вас</span>
-                  </>
-                ) : null}
-              </strong>
+            <div key={group} className={styles.group}>
+              <strong className={styles.groupTitle}>{GROUP_TITLES[group]}</strong>
 
               <div className={styles.examples}>
                 {groupPairs.map((pair) => {

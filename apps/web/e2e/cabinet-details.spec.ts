@@ -34,4 +34,7 @@ test('у новой комнаты написано, что площадь не 
   await expect(drawer.getByText('Кладовая')).toBeVisible();
   await expect(drawer.getByText(/площадь не указана/i).first()).toBeVisible();
   await expect(drawer.getByText('— м²')).toHaveCount(0);
+  await expect(drawer.getByText(/Задайте её в Проблемомере/)).toBeVisible();
+  await drawer.getByRole('button', { name: 'Указать площадь в Проблемомере', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Начать', exact: true })).toBeVisible();
 });

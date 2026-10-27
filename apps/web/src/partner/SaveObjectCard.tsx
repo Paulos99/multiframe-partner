@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { canCreateObjects, canMoveObjects, type JobObject } from '../../../../packages/shared/partner';
+import { canCreateObjects, type JobObject } from '../../../../packages/shared/partner';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { useSession } from '../state/SessionContext';
 import { buildClientSummary } from '../state/session';
@@ -29,9 +29,7 @@ export function SaveObjectCard() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sending, setSending] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-  const [sentFlash, setSentFlash] = useState(false);
   /** Keep one card: save / send update the same object instead of creating clones. */
   const [objectId, setObjectId] = useState<string | null>(null);
   const [projectChoice, setProjectChoice] = useState('new');
@@ -64,17 +62,13 @@ export function SaveObjectCard() {
   }, [diagnosisRequest, objects, user?.org?.city]);
 
   useEffect(() => {
-    if (!savedFlash && !sentFlash) return;
-    const t = window.setTimeout(() => {
-      setSavedFlash(false);
-      setSentFlash(false);
-    }, 1600);
+    if (!savedFlash) return;
+    const t = window.setTimeout(() => setSavedFlash(false), 1600);
     return () => window.clearTimeout(t);
-  }, [savedFlash, sentFlash]);
+  }, [savedFlash]);
 
   if (!user) return null;
   const canCreate = canCreateObjects(user.role);
-  const canMove = canMoveObjects(user.role);
   if (!canCreate && !objectId && !diagnosisRequest?.objectId) return null;
   const linkedId = diagnosisRequest?.objectId || objectId;
   const linked = Boolean(diagnosisRequest?.objectId);
@@ -108,9 +102,9 @@ export function SaveObjectCard() {
     };
   }
 
-  function objectFields(next: 'keep' | 'quote_sent', projectId?: string) {
+  function objectFields(projectId?: string) {
     const existing = linkedId ? objects.find((item) => item.id === linkedId) : undefined;
-    const status = next === 'quote_sent' ? 'quote_sent' : existing?.status || 'draft';
+    const status = existing?.status || 'draft';
     const chosen = projectId || (projectChoice !== 'new' ? projectChoice : existing?.projectId || undefined);
     const roomLabel = roomName.trim() || existing?.roomName || room.roomTypeCustom || '';
     return {
@@ -171,7 +165,7 @@ export function SaveObjectCard() {
     try {
       const updating = Boolean(linkedId);
       const linked = await projectForSave();
-      const obj = await saveObject(objectFields('keep', linked));
+      const obj = await saveObject(objectFields(linked));
       if (obj.projectId) setProjectChoice(obj.projectId);
       setObjectId(obj.id);
       setSavedFlash(true);
@@ -195,44 +189,6 @@ export function SaveObjectCard() {
     }
   }
 
-  async function onSendClient() {
-    setErr(null);
-    setSending(true);
-    setSentFlash(false);
-    try {
-      const text = [
-        summary,
-        address ? `\nАдрес: ${address}` : '',
-        clientName ? `\nКлиент: ${clientName}` : '',
-        est ? `\nОриентир КП: ${est.totalCost.toLocaleString('ru-RU')} ₽` : '',
-      ]
-        .filter(Boolean)
-        .join('');
-      const canShare = typeof navigator.share === 'function';
-      if (canShare) {
-        await navigator.share({ title: 'MultiFrame · сводка', text });
-      } else {
-        await navigator.clipboard.writeText(text);
-      }
-      const linked = await projectForSave();
-      const obj = await saveObject(objectFields('quote_sent', linked));
-      if (obj.projectId) setProjectChoice(obj.projectId);
-      setObjectId(obj.id);
-      void attachProfileTo(obj);
-      setSentFlash(true);
-      setMsg(
-        canShare
-          ? 'Отправлено клиенту · статус «КП отправлено»'
-          : 'Сводка скопирована · статус «КП отправлено»',
-      );
-    } catch (ex) {
-      if ((ex as Error)?.name === 'AbortError') return;
-      setErr(ex instanceof Error ? ex.message : 'Не удалось отправить');
-    } finally {
-      setSending(false);
-    }
-  }
-
   async function onSave(e: FormEvent) {
     e.preventDefault();
     await saveRoom();
@@ -241,8 +197,8 @@ export function SaveObjectCard() {
   if (linked) {
     return (
       <div className={styles.actionRow} aria-label="Комната">
-        <Button type="button" fullWidth loading={busy} success={savedFlash} disabled={busy || sending} onClick={() => void saveRoom()}>
-          {busy ? 'Сохраняем…' : 'Сохранить в комнату'}
+        <Button type="button" fullWidth loading={busy} success={savedFlash} disabled={busy} onClick={() => void saveRoom()}>
+          {busy ? 'Сохраняем…' : 'Сохранить'}
         </Button>
         {msg ? (
           <p className={styles.flash} role="status">
@@ -342,21 +298,9 @@ export function SaveObjectCard() {
           </p>
         ) : null}
         <div className={styles.actionRow}>
-          <Button type="submit" fullWidth loading={busy} success={savedFlash} disabled={busy || sending}>
-            {busy ? 'Сохраняем…' : 'Сохранить комнату'}
+          <Button type="submit" fullWidth loading={busy} success={savedFlash} disabled={busy}>
+            {busy ? 'Сохраняем…' : 'Сохранить'}
           </Button>
-          {canMove ? (
-          <Button
-            type="button"
-            variant="ghost"
-            loading={sending}
-            success={sentFlash}
-            disabled={busy || sending}
-            onClick={() => void onSendClient()}
-          >
-            {sending ? 'Отправляем…' : 'Отправить КП'}
-          </Button>
-          ) : null}
         </div>
       </form>
     </section>
