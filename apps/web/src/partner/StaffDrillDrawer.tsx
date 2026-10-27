@@ -9,7 +9,7 @@ import type {
   StaffDrillResult,
 } from '../../../../packages/shared/staffDrill.js';
 import type { AnalyticsEvent } from '../../../../packages/shared/partner';
-import { composeCabinetAnalytics, presetRange, rangeFromYmd } from './analytics';
+import { composeCabinetAnalytics, fetchAnalyticsDashboard, presetRange, rangeFromYmd } from './analytics';
 import { isDemoModeEnabled } from './demoMode';
 import { Skeleton } from './Skeleton';
 import styles from './partner.module.css';
@@ -97,6 +97,7 @@ export function StaffDrillDrawer({
   objects,
   projects,
   events,
+  users,
   children,
 }: {
   metric: string;
@@ -111,6 +112,8 @@ export function StaffDrillDrawer({
   projects?: Array<Record<string, unknown>>;
   /** Тот же массив, из которого посчитаны плитки на экране. */
   events?: AnalyticsEvent[];
+  /** Сотрудники того же кабинета, что и доска. */
+  users?: Array<{ id: string; login?: string; displayName?: string; role: string; orgId?: string | null }>;
   children?: ReactNode;
 }) {
   const [period, setPeriod] = useState<DrillPeriod | null>(null);
@@ -144,32 +147,44 @@ export function StaffDrillDrawer({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    try {
-      const { drill } = composeCabinetAnalytics({
-        events: events || [],
-        objects,
-        projects,
-        from: activeRange.from ?? (activeRange.to ? null : 'all'),
-        to: activeRange.to,
-        orgId,
-        metric,
-        period: period ?? 'month',
-        userId,
-        mode,
-      });
-      if (!cancelled) setData(drill);
-    } catch (reason: unknown) {
-      if (!cancelled) {
-        setData(null);
-        setError(reason instanceof Error ? reason.message : 'Не удалось открыть рейтинг');
+    const from = activeRange.from ?? (activeRange.to ? null : 'all');
+    const to = activeRange.to;
+    const localDemo = orgId === 'org_demo' || orgId === 'org_demo_spb';
+    void (async () => {
+      try {
+        // Демо уже держит полный архив. Чужой сервер отдаёт события выбранного окна, комнаты остаются из кабинета.
+        let list = events || [];
+        if (!localDemo) {
+          const remote = await fetchAnalyticsDashboard({ mode, from, to, orgId });
+          if (remote.source === 'api') list = remote.events || [];
+        }
+        const { drill } = composeCabinetAnalytics({
+          events: list,
+          objects,
+          projects,
+          users,
+          from,
+          to,
+          orgId,
+          metric,
+          period: period ?? 'month',
+          userId,
+          mode,
+        });
+        if (!cancelled) setData(drill);
+      } catch (reason: unknown) {
+        if (!cancelled) {
+          setData(null);
+          setError(reason instanceof Error ? reason.message : 'Не удалось открыть рейтинг');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } finally {
-      if (!cancelled) setLoading(false);
-    }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to, objects, projects, events]);
+  }, [metric, mode, orgId, period, userId, activeRange.from, activeRange.to, objects, projects, events, users]);
 
   const roles = visibleRoles(data);
   const activeRole = roles.find((role) => role.id === roleId) || roles[0] || null;

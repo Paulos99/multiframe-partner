@@ -902,6 +902,23 @@ function mergeProjectLists(roomProjects, eventProjects) {
   return finishProjects(grouped);
 }
 
+/** Тот же список, что уйдёт в топ: комнаты доски плюс события, без обрезки. */
+function listedProjects(roomProjects, eventProjects) {
+  const grouped = new Map();
+  for (const row of roomProjects || []) {
+    if (row?.id) grouped.set(row.id, { ...row });
+  }
+  for (const row of eventProjects || []) {
+    if (!row?.name || row.name === 'Расчёт') continue;
+    if ([...grouped.values()].some((item) => item.name === row.name)) continue;
+    const key = grouped.has(row.id) ? `${row.id}:${row.name}` : row.id;
+    grouped.set(key, { ...row, id: key });
+  }
+  return [...grouped.values()].sort(
+    (a, b) => b.areaM2 - a.areaM2 || b.panels - a.panels || String(a.name).localeCompare(String(b.name), 'ru'),
+  );
+}
+
 export function buildStaffDrill(input) {
   const metric = DRILL_METRICS.includes(input.metric) ? input.metric : 'staff';
   const window = resolveWindow(input);
@@ -1131,21 +1148,6 @@ export function buildStaffDrill(input) {
   }
   for (const row of working) {
     if (row.role !== 'sales') continue;
-    if (row.boardCards?.length) {
-      row.projectTotal = row.boardCards.length;
-      row.projectList = projectsFromCards(row.boardCards);
-      continue;
-    }
-    const fromBoard = collectProjects(
-      row.userId,
-      windowRooms.length ? windowRooms : companyRooms,
-      input.projects,
-      orgId,
-      null,
-      null,
-      false,
-      (object) => assigneeById.get(object.id),
-    );
     const fromEvents = projectsFromEvents(
       row.userId,
       row.seenEvents || [],
@@ -1156,7 +1158,19 @@ export function buildStaffDrill(input) {
       () => true,
       drillObjects,
     );
-    const list = mergeProjectLists(fromBoard, fromEvents);
+    const fromBoard = row.boardCards?.length
+      ? projectsFromCards(row.boardCards)
+      : collectProjects(
+          row.userId,
+          windowRooms.length ? windowRooms : companyRooms,
+          input.projects,
+          orgId,
+          null,
+          null,
+          false,
+          (object) => assigneeById.get(object.id),
+        );
+    const list = listedProjects(fromBoard, fromEvents);
     row.projectList = list;
     row.projectTotal = list.length;
   }

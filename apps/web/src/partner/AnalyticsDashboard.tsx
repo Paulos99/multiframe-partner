@@ -403,6 +403,7 @@ export function AnalyticsDashboard({
         events,
         objects: api.objects as unknown as Array<Record<string, unknown>>,
         projects: (api.projects || []) as unknown as Array<Record<string, unknown>>,
+        users: api.partnerListStaff(),
         from,
         to,
         orgId,
@@ -448,6 +449,7 @@ export function AnalyticsDashboard({
         events: sourceEvents,
         objects: api.objects as unknown as Array<Record<string, unknown>>,
         projects: (api.projects || []) as unknown as Array<Record<string, unknown>>,
+        users: api.partnerListStaff(),
         from,
         to,
         orgId,
@@ -781,6 +783,7 @@ export function AnalyticsDashboard({
           objects={api.objects as unknown as Array<Record<string, unknown>>}
           projects={(api.projects || []) as unknown as Array<Record<string, unknown>>}
           events={sourceEvents}
+          users={api.partnerListStaff()}
           onClose={() => setOpenMetric(null)}
         >
           {(() => {

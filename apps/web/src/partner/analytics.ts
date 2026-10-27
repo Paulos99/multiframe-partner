@@ -178,10 +178,19 @@ export function composeCabinetAnalytics(input: {
   userId?: string | null;
   mode?: 'admin' | 'partner';
   kpi?: { panels: number; areaM2: number } | null;
+  /** Сотрудники кабинета. На сервере это живой список, а не демо-сид. */
+  users?: Array<{ id: string; login?: string; displayName?: string; role: string; orgId?: string | null }>;
 }): { dash: AnalyticsDashboard; drill: StaffDrillResult } {
   const db = loadDb();
   const session = loadSession();
   const orgId = input.mode === 'admin' ? input.orgId || null : session?.orgId || input.orgId || null;
+  const usersById = new Map(db.users.map((user) => [user.id, user]));
+  for (const user of input.users || []) {
+    if (!user?.id) continue;
+    const prev = usersById.get(user.id);
+    usersById.set(user.id, { ...prev, ...user, role: user.role || prev?.role || 'sales' });
+  }
+  const users = [...usersById.values()];
   const cached = loadCachedObjects() as unknown as Array<Record<string, unknown>>;
   const stored = db.objects as unknown as Array<Record<string, unknown>>;
   const rooms = input.objects?.length ? input.objects : cached.length ? cached : stored;
@@ -215,7 +224,7 @@ export function composeCabinetAnalytics(input: {
       role: session?.role || (input.mode === 'admin' ? 'admin' : 'owner'),
       orgId: session?.orgId || orgId,
     },
-    users: db.users,
+    users,
     events: input.events as unknown as Array<Record<string, unknown>>,
     objects: rooms,
     projects,

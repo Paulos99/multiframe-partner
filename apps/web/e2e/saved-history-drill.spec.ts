@@ -153,8 +153,9 @@ test('сохранённая история: плитки и рейтинг из
   await expect(staff.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
   const top = staff.getByRole('button').filter({ hasText: /м²/ });
   await expect.poll(async () => top.count()).toBe(listed);
-  const projectsStat = staff.locator('div').filter({ hasText: /^Проекты$/ }).locator('strong');
-  await expect(projectsStat).toHaveText(String(listed));
+  await expect(staff.getByText('Проекты', { exact: true }).locator('xpath=following-sibling::strong')).toHaveText(
+    String(listed),
+  );
   await staff.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-manager-projects.png' });
   await top.filter({ hasText: 'Никитин И.' }).click();
   const card = page.getByRole('dialog', { name: 'Комната' });
