@@ -83,6 +83,18 @@ export type DrillProject = {
   roomId: string | null;
 };
 
+export type StaffDrillDrops = {
+  rooms: number;
+  company: number;
+  period: number;
+  assignee: number;
+  notMounted: number;
+  mounted: number;
+  cards: number;
+  /** Комнаты доски не попали в окно целиком — в рейтинг взята сама доска. */
+  boardInsteadOfEmptyPeriod: number;
+};
+
 export type StaffDrillResult = {
   metric: DrillMetric;
   period: DrillPeriod;
@@ -92,6 +104,7 @@ export type StaffDrillResult = {
   demoFilled: boolean;
   roles: DrillRoleRanking[];
   ranking: DrillRankingRow[];
+  drops: StaffDrillDrops;
   detail: {
     userId: string;
     months: DrillMonth[];

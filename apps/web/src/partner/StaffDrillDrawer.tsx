@@ -9,6 +9,7 @@ import type {
   StaffDrillResult,
 } from '../../../../packages/shared/staffDrill.js';
 import { fetchStaffDrill, presetRange, rangeFromYmd } from './analytics';
+import { isDemoModeEnabled } from './demoMode';
 import { Skeleton } from './Skeleton';
 import styles from './partner.module.css';
 
@@ -106,6 +107,8 @@ export function StaffDrillDrawer({
   const [data, setData] = useState<StaffDrillResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDrops, setShowDrops] = useState(false);
+  const explainZeros = import.meta.env.DEV || isDemoModeEnabled();
   const title = METRIC_LABELS[metric] || 'Рейтинг';
 
   useEffect(() => {
@@ -352,6 +355,23 @@ export function StaffDrillDrawer({
             ) : (
               <p className={styles.lead}>За период проектов нет</p>
             )}
+          </div>
+        ) : null}
+        {explainZeros ? (
+          <div>
+            <button type="button" className={styles.whyZero} onClick={() => setShowDrops((open) => !open)}>
+              чему 0
+            </button>
+            {showDrops && data?.drops ? (
+              <p className={styles.hint}>
+                Комнат {data.drops.rooms}. Отброшено: компания {data.drops.company}, период {data.drops.period},
+                исполнитель {data.drops.assignee}. Без отметки монтажа {data.drops.notMounted}. В рейтинге монтажа{' '}
+                {data.drops.mounted}, проектов {data.drops.cards}.
+                {data.drops.boardInsteadOfEmptyPeriod
+                  ? ` Пустой период заменён доской: ${data.drops.boardInsteadOfEmptyPeriod}.`
+                  : ''}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </aside>

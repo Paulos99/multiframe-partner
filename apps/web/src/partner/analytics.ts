@@ -248,7 +248,7 @@ function localStaffDrill(opts: {
   const boardProjects = opts.projects?.length
     ? opts.projects
     : ((db.projects || []) as unknown as Array<Record<string, unknown>>);
-  return buildStaffDrill({
+  const result = buildStaffDrill({
     viewer: {
       id: session?.id || '',
       role: session?.role || (opts.mode === 'admin' ? 'admin' : 'owner'),
@@ -267,6 +267,16 @@ function localStaffDrill(opts: {
     unbounded: opts.from === 'all',
     demoFill: (isDemoModeEnabled() || demoOrg) && focusDemo,
   });
+  if ((import.meta.env.DEV || isDemoModeEnabled()) && result.drops) {
+    const drops = result.drops;
+    const board = drops.boardInsteadOfEmptyPeriod
+      ? `, пустой период заменён доской ${drops.boardInsteadOfEmptyPeriod}`
+      : '';
+    console.info(
+      `[чему 0] комнат ${drops.rooms}, компания ${drops.company}, период ${drops.period}, исполнитель ${drops.assignee}, без монтажа ${drops.notMounted}, смонтировано ${drops.mounted}, проектов ${drops.cards}${board}`,
+    );
+  }
+  return result;
 }
 
 export async function fetchStaffDrill(opts: {

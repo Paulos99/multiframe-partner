@@ -989,26 +989,58 @@ export function buildStaffDrill(input) {
     : [...board, ...demoMountedRooms(input.now ? new Date(input.now) : new Date(), staff)];
   const assigneeById = boardAssignees(drillObjects, staff, orgId);
   const salesInOrg = staff.filter((user) => user.role === 'sales' && (!orgId || user.orgId === orgId));
-  const windowRooms = [];
+  const drops = {
+    rooms: 0,
+    company: 0,
+    period: 0,
+    assignee: 0,
+    notMounted: 0,
+    mounted: 0,
+    cards: 0,
+    boardInsteadOfEmptyPeriod: 0,
+  };
+  const companyRooms = [];
   for (const object of drillObjects) {
-    if (!object || (orgId && object.orgId && object.orgId !== orgId)) continue;
-    if (!roomInWindow(object, window.from, window.to)) continue;
+    if (!object) continue;
+    drops.rooms += 1;
+    if (orgId && object.orgId && object.orgId !== orgId) {
+      drops.company += 1;
+      continue;
+    }
+    companyRooms.push(object);
+  }
+  let attributable = companyRooms.filter((object) => roomInWindow(object, window.from, window.to));
+  // Доска живая, а метки комнат старше любого периода: иначе монтаж и проекты остаются 0 при ненулевых плитках.
+  if (companyRooms.length && attributable.length === 0) {
+    const onBoard = companyRooms.filter((object) => boardIds.has(object.id));
+    drops.period = companyRooms.length;
+    drops.boardInsteadOfEmptyPeriod = onBoard.length;
+    attributable = onBoard;
+  } else {
+    drops.period = companyRooms.length - attributable.length;
+  }
+  const windowRooms = [];
+  for (const object of attributable) {
     if (boardIds.has(object.id)) windowRooms.push(object);
     const assignee = assigneeById.get(object.id);
     const row = assignee ? rowForAssignee(assignee) : null;
-    if (row) {
-      if (row.role === 'measurer' && object.status && object.status !== 'draft') row.measuredRooms += 1;
-      if (row.role === 'crew' && isMounted(object)) {
-        row.mountedRooms += 1;
-        row.mountedAreaM2 += roomArea(object);
-        row.mountedPanels += roomPanels(object);
-      }
+    if (!row) {
+      drops.assignee += 1;
+      continue;
     }
+    if (row.role === 'measurer' && object.status && object.status !== 'draft') row.measuredRooms += 1;
+    if (row.role === 'crew' && isMounted(object)) {
+      drops.mounted += 1;
+      row.mountedRooms += 1;
+      row.mountedAreaM2 += roomArea(object);
+      row.mountedPanels += roomPanels(object);
+    } else if (row.role === 'crew') drops.notMounted += 1;
   }
   const cards = buildProjectCards(
     (input.projects || []).filter((project) => project && (!orgId || !project.orgId || project.orgId === orgId)),
     windowRooms,
   ).filter((card) => card.rooms?.length);
+  drops.cards = cards.length;
   for (const user of salesInOrg) {
     const row = rows.get(user.id);
     if (row && cards.length) row.boardCards = cards;
@@ -1163,5 +1195,6 @@ export function buildStaffDrill(input) {
     roles,
     ranking,
     detail,
+    drops,
   };
 }

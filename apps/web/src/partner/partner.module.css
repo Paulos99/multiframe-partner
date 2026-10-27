@@ -1817,6 +1817,19 @@
   border: 0;
 }
 
+.whyZero {
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cab-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .metaLine,
 .reminder {
   margin: 0;

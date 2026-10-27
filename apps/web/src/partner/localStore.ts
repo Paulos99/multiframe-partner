@@ -194,18 +194,64 @@ export function ensureActionHistoryCleared(): boolean {
   }
 }
 
+function readStoredDb(key: string): PartnerDb | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PartnerDb;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (!Array.isArray(parsed.users) && !Array.isArray(parsed.objects)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function dropLegacyKeys(): void {
+  try {
+    localStorage.removeItem(DB_KEY_LEGACY);
+    localStorage.removeItem('mf_partner_db_v3');
+    localStorage.removeItem('mf_partner_db_v2');
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Ключ v5 ещё не создан, а комнаты уже лежат в v4.
+ * Переносим их, а не заменяем свежим сидом: сид стирал бы клики проблемомера и монтажа.
+ * Недостающую вторую демо-компанию добавляем рядом, объекты не трогаем.
+ */
+function adoptLegacyDb(legacy: PartnerDb): PartnerDb {
+  const migrated = migrateDb(legacy);
+  const fresh = defaultDb();
+  const hasSpb = migrated.orgs.some((org) => org.id === 'org_demo_spb');
+  if (migrated.users.length && hasSpb) return migrated;
+  const orgIds = new Set(migrated.orgs.map((org) => org.id));
+  const logins = new Set(migrated.users.map((user) => user.login));
+  return {
+    ...migrated,
+    users: [...migrated.users, ...fresh.users.filter((user) => !logins.has(user.login))],
+    orgs: [...migrated.orgs, ...fresh.orgs.filter((org) => !orgIds.has(org.id))],
+    objects: migrated.objects.length ? migrated.objects : fresh.objects,
+    projects: migrated.projects?.length ? migrated.projects : fresh.projects,
+  };
+}
+
 export function loadDb(): PartnerDb {
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (!raw) {
-      // Fresh seed. Drop prior local DBs so старые демо-часы не остаются.
-      try {
-        localStorage.removeItem(DB_KEY_LEGACY);
-        localStorage.removeItem('mf_partner_db_v3');
-        localStorage.removeItem('mf_partner_db_v2');
-      } catch {
-        /* ignore */
+      const legacy =
+        readStoredDb(DB_KEY_LEGACY) || readStoredDb('mf_partner_db_v3') || readStoredDb('mf_partner_db_v2');
+      if (legacy && ((legacy.users && legacy.users.length) || (legacy.objects && legacy.objects.length))) {
+        const db = adoptLegacyDb(legacy);
+        saveDb(db);
+        dropLegacyKeys();
+        seedDemoAnalyticsOnce();
+        return db;
       }
+      dropLegacyKeys();
       const db = defaultDb();
       saveDb(db);
       seedDemoAnalyticsOnce();

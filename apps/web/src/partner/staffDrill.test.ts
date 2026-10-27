@@ -787,3 +787,107 @@ test('старые комнаты без projectId и assignedTo: бригада
   const second = result.detail?.projects.find((project) => project.roomId === 'legacy_b');
   assert.equal(second?.name, 'Вторая');
 });
+
+test('комната с клика проблемомера: площадь в room, панели в estimate, автор статуса не бригада', () => {
+  const clicked = {
+    id: 'obj_clicked',
+    orgId: 'org_demo',
+    status: 'install',
+    assignedTo: null,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: 'u_partner1',
+    projectId: 'prj_clicked',
+    roomName: 'Кухня',
+    clientName: 'Клиент',
+    pendingSync: true,
+    stageOrder: -1,
+    room: {
+      areaM2: 18,
+      roomType: 'kitchen',
+      roomTypeCustom: null,
+      answers: { ceilingAreaM2: 18, roomType: 'kitchen' },
+    },
+    estimate: { panels: 12, dowels: 40, panelsCost: 1, installCost: 1, dowelsCost: 1, totalCost: 3 },
+    history: [
+      { at: now, userId: 'u_partner1', login: 'partner1', action: 'status', detail: 'measured→install' },
+      { at: now, userId: 'u_partner1', login: 'partner1', action: 'create', detail: 'measured' },
+    ],
+  };
+  const directory = [
+    { id: 'u_partner1', login: 'partner1', role: 'owner', orgId: 'org_demo', displayName: 'Владелец' },
+    { id: 'u_sales1', login: 'sales1', role: 'sales', orgId: 'org_demo', displayName: 'Менеджер' },
+    { id: 'u_crew1', login: 'crew1', role: 'crew', orgId: 'org_demo', displayName: 'Монтажник' },
+    { id: 'u_crew1b', login: 'crew1b', role: 'crew', orgId: 'org_demo', displayName: 'Монтажник 2' },
+  ];
+  const result = buildStaffDrill({
+    viewer: { id: 'u_partner1', role: 'owner', orgId: 'org_demo' },
+    users: directory,
+    events: [{ at: now, orgId: 'org_demo', userId: 'u_sales1', login: 'sales1', role: 'sales', tool: 'calculator', action: 'calc_done', object: { areaM2: 18, panels: 12 } }],
+    objects: [clicked],
+    projects: [{ id: 'prj_clicked', orgId: 'org_demo', name: 'Клиент' }],
+    metric: 'staff',
+    period: 'month',
+    userId: 'u_sales1',
+    orgId: 'org_demo',
+    now,
+    demoFill: false,
+  });
+  const mounted = (result.roles.find((role) => role.id === 'crew')?.ranking || []).reduce((sum, row) => sum + row.mountedRooms, 0);
+  assert.equal(mounted, 1);
+  assert.equal(result.ranking.find((row) => row.userId === 'u_sales1')?.projectCount, 1);
+  assert.equal(result.detail?.projects.length, 1);
+  assert.equal(result.drops.period, 0);
+  assert.equal(result.drops.mounted, 1);
+  assert.equal(result.drops.boardInsteadOfEmptyPeriod, 0);
+});
+
+test('вся доска старше года не обнуляет монтаж и проекты', () => {
+  const stale = {
+    id: 'stale1',
+    orgId: 'org_a',
+    status: 'install',
+    assignedTo: 'crew',
+    createdAt: '2024-06-01T00:00:00.000Z',
+    updatedAt: '2024-06-01T00:00:00.000Z',
+    projectId: 'prj_stale',
+    roomName: 'Кухня',
+    clientName: 'Клиент',
+    room: { areaM2: 18, answers: { ceilingAreaM2: 18 } },
+    estimate: { panels: 12, dowels: 40, panelsCost: 1, installCost: 1, dowelsCost: 1, totalCost: 3 },
+    history: [{ at: '2024-06-01T00:00:00.000Z', userId: 'owner', login: 'owner', action: 'status', detail: 'quote_sent→install' }],
+  };
+  const result = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_a' },
+    users,
+    events: [event({ id: 'tile', userId: 'sales', tool: 'calculator', action: 'calc_done', object: { areaM2: 2403, panels: 5206 } })],
+    objects: [stale],
+    projects: [{ id: 'prj_stale', name: 'Клиент', orgId: 'org_a' }],
+    metric: 'panels',
+    period: 'month',
+    userId: 'sales',
+    orgId: 'org_a',
+    now,
+    demoFill: false,
+  });
+  assert.equal(result.drops.boardInsteadOfEmptyPeriod, 1);
+  assert.equal(result.drops.period, 1);
+  assert.equal(result.ranking.find((row) => row.userId === 'crew')?.mountedRooms, 1);
+  assert.equal(result.ranking.find((row) => row.userId === 'crew')?.mountedPanels, 12);
+  assert.equal(result.ranking.find((row) => row.userId === 'sales')?.projectCount, 1);
+  assert.ok((result.detail?.projects.length || 0) > 0);
+  const mixed = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_a' },
+    users,
+    events: [],
+    objects: [stale, { ...objects[0], status: 'install', assignedTo: 'crew' }],
+    projects,
+    metric: 'panels',
+    period: 'month',
+    orgId: 'org_a',
+    now,
+    demoFill: false,
+  });
+  assert.equal(mixed.drops.boardInsteadOfEmptyPeriod, 0);
+  assert.equal(mixed.ranking.find((row) => row.userId === 'crew')?.mountedRooms, 1);
+});
