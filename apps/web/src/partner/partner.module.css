@@ -3291,40 +3291,14 @@
   }
 }
 
-.drawerBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  border: 0;
-  background: rgba(22, 48, 40, 0.28);
-  cursor: pointer;
-}
-
-.drawer {
-  position: fixed;
-  top: var(--cab-top, 72px);
-  right: 0;
-  z-index: 41;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: min(440px, 100%);
-  height: calc(100dvh - var(--cab-top, 72px));
-  overflow: auto;
-  padding: 16px 20px calc(28px + env(safe-area-inset-bottom));
-  background: var(--cab-card);
-  border-left: 1px solid var(--cab-border);
-  box-shadow: -16px 0 48px rgba(16, 40, 32, 0.12);
-}
-
-.drawerHead {
+.blockHead {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.drawerHead h3 {
+.blockHead h3 {
   margin: 0;
 }
 
@@ -3368,9 +3342,5 @@
   .todayActions .primary,
   .todayActions .ghost {
     width: 100%;
-  }
-
-  .drawer {
-    padding-bottom: calc(108px + env(safe-area-inset-bottom));
   }
 }

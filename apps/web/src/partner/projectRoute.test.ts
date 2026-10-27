@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseProjectHash, projectHash } from './projectRoute.ts';
+import { parseProjectHash, parseStaffHash, projectHash, staffHash } from './projectRoute.ts';
 
 test('адрес проекта: вкладка по умолчанию «Обзор», комната отдельно', () => {
   assert.deepEqual(parseProjectHash(''), { kind: 'desk' });
@@ -30,4 +30,8 @@ test('адрес проекта: вкладка по умолчанию «Обз
     projectHash({ kind: 'room', projectId: 'ui_project', roomId: 'ui_room' }),
     '#project/ui_project/room/ui_room',
   );
+  assert.deepEqual(parseStaffHash('#project/ui_project/overview'), { kind: 'list' });
+  assert.deepEqual(parseStaffHash('#staff/ui%20sales'), { kind: 'person', staffId: 'ui sales' });
+  assert.equal(staffHash({ kind: 'person', staffId: 'ui sales' }), '#staff/ui%20sales');
+  assert.equal(staffHash({ kind: 'list' }), '');
 });

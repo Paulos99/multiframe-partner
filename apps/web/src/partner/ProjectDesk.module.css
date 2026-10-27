@@ -225,33 +225,6 @@
   font-size: 14px;
 }
 
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 32;
-  border: 0;
-  background: rgba(22, 48, 40, 0.28);
-  cursor: pointer;
-}
-
-.drawer {
-  position: fixed;
-  top: var(--cab-top, 72px);
-  right: 0;
-  z-index: 33;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: min(720px, 100%);
-  height: calc(100dvh - var(--cab-top, 72px));
-  overflow: clip;
-  padding: 16px 20px calc(28px + env(safe-area-inset-bottom));
-  background: var(--cab-card, #fff);
-  border-left: 1px solid var(--cab-border);
-  box-shadow: -16px 0 48px rgba(16, 40, 32, 0.12);
-  color: var(--cab-ink);
-}
-
 .chrome {
   position: relative;
   z-index: 2;
@@ -655,11 +628,6 @@
 @media (max-width: 800px) {
   .pair {
     grid-template-columns: 1fr;
-  }
-
-  .drawer {
-    width: 100%;
-    padding-bottom: calc(108px + env(safe-area-inset-bottom));
   }
 
   .board {

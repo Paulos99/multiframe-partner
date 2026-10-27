@@ -216,12 +216,11 @@ test('владелец сохраняет имя сотрудника, сотр�
   await enter(page);
   await page.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
   await page.getByRole('button', { name: /UI sales/ }).click();
-  const card = page.getByRole('dialog', { name: 'UI sales' });
+  const card = page.getByRole('region', { name: 'Сотрудник' });
   await card.getByLabel('Имя сотрудника', { exact: true }).fill('Ольга Крылова');
   await card.getByRole('button', { name: 'Сохранить имя', exact: true }).click();
-  const renamed = page.getByRole('dialog', { name: 'Ольга Крылова' });
-  await expect(renamed.getByRole('heading', { name: 'Ольга Крылова' })).toBeVisible();
-  await renamed.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await expect(card.getByRole('heading', { level: 1, name: 'Ольга Крылова' })).toBeVisible();
+  await card.getByRole('button', { name: 'К списку', exact: true }).click();
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await enter(page, 'ui.sales');
   const hello = helloNow();

@@ -561,7 +561,7 @@ export function ObjectsPanel({
         ? createPortal(
             <div className={styles.modalBackdrop}>
               <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Новый проект">
-                <div className={styles.drawerHead}>
+                <div className={styles.blockHead}>
                   <h3>Новый проект</h3>
                   <button type="button" className={styles.ghost} onClick={() => setCreating(false)}>
                     Закрыть
@@ -614,7 +614,7 @@ export function ObjectsPanel({
             <span aria-hidden="true">/</span>
             <span>{roomTitle(selected)}</span>
           </nav>
-            <div className={styles.drawerHead}>
+            <div className={styles.blockHead}>
               <div>
                 <p className={styles.eyebrow}>Комната</p>
                 <h1>{roomTitle(selected)}</h1>

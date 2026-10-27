@@ -35,13 +35,41 @@ export function projectHash(route: ProjectRoute): string {
   return `#project/${projectId}/${route.tab}`;
 }
 
-export function navigateProject(route: ProjectRoute, mode: 'push' | 'replace' = 'push') {
+export type StaffRoute = { kind: 'list' } | { kind: 'person'; staffId: string };
+
+/** #staff/<id>. Чужой адрес — список сотрудников. */
+export function parseStaffHash(hash: string): StaffRoute {
+  const raw = hash.replace(/^#/, '').replace(/^\/+/, '');
+  const parts = raw.split('/').filter(Boolean).map((part) => {
+    try {
+      return decodeURIComponent(part);
+    } catch {
+      return part;
+    }
+  });
+  if (parts[0] !== 'staff' || !parts[1]) return { kind: 'list' };
+  return { kind: 'person', staffId: parts[1] };
+}
+
+export function staffHash(route: StaffRoute): string {
+  if (route.kind === 'list') return '';
+  return `#staff/${encodeURIComponent(route.staffId)}`;
+}
+
+export function navigateHash(hash: string, mode: 'push' | 'replace' = 'push') {
   if (typeof window === 'undefined') return;
-  const hash = projectHash(route);
   const next = `${window.location.pathname}${window.location.search}${hash}`;
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (next === current) return;
   if (mode === 'replace') window.history.replaceState(null, '', next);
   else window.history.pushState(null, '', next);
   window.dispatchEvent(new HashChangeEvent('hashchange'));
+}
+
+export function navigateProject(route: ProjectRoute, mode: 'push' | 'replace' = 'push') {
+  navigateHash(projectHash(route), mode);
+}
+
+export function navigateStaff(route: StaffRoute, mode: 'push' | 'replace' = 'push') {
+  navigateHash(staffHash(route), mode);
 }

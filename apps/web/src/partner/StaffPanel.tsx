@@ -1,7 +1,6 @@
 import { Skeleton } from './Skeleton';
 import { m, AnimatePresence, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { useEffect, useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import {
   canManageStaff,
   ROLE_LABELS,
@@ -11,6 +10,7 @@ import {
 import { Button } from '../ui/Button';
 import { NewPasswordButton } from './NewPasswordButton';
 import { generatePassword, usePartner } from './PartnerContext';
+import { navigateStaff, parseStaffHash, type StaffRoute } from './projectRoute';
 import styles from './partner.module.css';
 
 /** Один экран сотрудников для владельца и менеджера компании. */
@@ -25,23 +25,23 @@ export function StaffPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [savingStaff, setSavingStaff] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [route, setRoute] = useState<StaffRoute>(() =>
+    parseStaffHash(typeof window === 'undefined' ? '' : window.location.hash),
+  );
   const [staffName, setStaffName] = useState('');
   const [nameErr, setNameErr] = useState<string | null>(null);
   const [nameSaving, setNameSaving] = useState(false);
   const staff = api.partnerListStaff();
 
   useEffect(() => {
-    if (!openId) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
-      setOpenId(null);
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [openId]);
-
-  if (!user || !canManageStaff(user.role)) return null;
+    const sync = () => setRoute(parseStaffHash(window.location.hash));
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, []);
 
   async function onCreateStaff(e: FormEvent) {
     e.preventDefault();
@@ -66,13 +66,106 @@ export function StaffPanel() {
     }
   }
 
-  const open = staff.find((member) => member.id === openId) || null;
+  const open = route.kind === 'person' ? staff.find((member) => member.id === route.staffId) || null : null;
+  const openId = open?.id ?? null;
+  const openName = open?.displayName ?? null;
+
+  useEffect(() => {
+    if (!openId || openName == null) return;
+    setStaffName(openName);
+    setNameErr(null);
+  }, [openId, openName]);
+
+  if (!user || !canManageStaff(user.role)) return null;
+
+  if (route.kind === 'person') {
+    return (
+      <section className={styles.roomPage} aria-label="Сотрудник">
+        <nav className={styles.crumbs} aria-label="Путь">
+          <button type="button" onClick={() => navigateStaff({ kind: 'list' }, 'replace')}>
+            Сотрудники
+          </button>
+          <span aria-hidden="true">/</span>
+          <span>{open?.displayName || 'Карточка'}</span>
+        </nav>
+        {api.staffLoading && !open ? <p className={styles.lead}>Открываем карточку…</p> : null}
+        {!api.staffLoading && !open ? (
+          <>
+            <h1>Сотрудник не найден</h1>
+            <button type="button" className={styles.ghost} onClick={() => navigateStaff({ kind: 'list' }, 'replace')}>
+              К списку
+            </button>
+          </>
+        ) : null}
+        {open ? (
+          <>
+            <div className={styles.blockHead}>
+              <div>
+                <p className={styles.eyebrow}>Сотрудники</p>
+                <h1>{open.displayName}</h1>
+                <p className={styles.lead}>
+                  {open.login} · {ROLE_LABELS[open.role] || open.role}
+                </p>
+              </div>
+              <button type="button" className={styles.ghost} onClick={() => navigateStaff({ kind: 'list' }, 'replace')}>
+                К списку
+              </button>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                setNameErr(null);
+                setNameSaving(true);
+                void api
+                  .renameStaff(open.id, staffName)
+                  .then((saved) => setStaffName(saved.displayName))
+                  .catch((ex) => setNameErr(ex instanceof Error ? ex.message : 'Не удалось сохранить имя'))
+                  .finally(() => setNameSaving(false));
+              }}
+            >
+              <label className={styles.field}>
+                Имя
+                <input
+                  aria-label="Имя сотрудника"
+                  value={staffName}
+                  maxLength={80}
+                  onChange={(event) => setStaffName(event.target.value)}
+                />
+              </label>
+              {nameErr ? (
+                <p className={styles.error} role="alert">
+                  {nameErr}
+                </p>
+              ) : null}
+              <Button type="submit" loading={nameSaving} disabled={nameSaving || staffName.trim() === open.displayName.trim()}>
+                Сохранить имя
+              </Button>
+            </form>
+            <NewPasswordButton staffId={open.id} staffName={open.displayName} />
+            {open.id === user.id ? null : (
+              <button
+                type="button"
+                className={styles.danger}
+                onClick={() => {
+                  if (confirm(`Удалить сотрудника «${open.displayName}» (${open.login})?`)) {
+                    void api.partnerDeleteStaff(open.id).then(() => navigateStaff({ kind: 'list' }, 'replace'));
+                  }
+                }}
+              >
+                Удалить
+              </button>
+            )}
+          </>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section className={`${styles.card} ${styles.panelCard}`}>
       <h2>Сотрудники</h2>
       <p className={styles.lead}>
-        {staff.length ? `${staff.length} в команде` : 'Пока никого нет'}. Карточка открывается по нажатию.
+        {staff.length ? `${staff.length} в команде` : 'Пока никого нет'}. Карточка открывается своей страницей.
       </p>
       <button type="button" className={styles.primary} onClick={() => setAdding((open) => !open)}>
         {adding ? 'Закрыть' : 'Добавить'}
@@ -135,12 +228,7 @@ export function StaffPanel() {
             <button
               type="button"
               className={styles.ghost}
-              aria-expanded={openId === ex.id}
-              onClick={() => {
-                setStaffName(ex.displayName);
-                setNameErr(null);
-                setOpenId(ex.id);
-              }}
+              onClick={() => navigateStaff({ kind: 'person', staffId: ex.id })}
             >
               <strong>{ex.displayName}</strong>
               <div className={styles.hint}>
@@ -151,70 +239,6 @@ export function StaffPanel() {
         ))}</AnimatePresence>
         {!api.staffLoading && !staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
       </div>
-      {open ? createPortal(
-        <>
-          <button type="button" className={styles.drawerBackdrop} aria-label="Закрыть карточку" onClick={() => setOpenId(null)} />
-          <aside className={styles.drawer} role="dialog" aria-label={open.displayName}>
-            <div className={styles.drawerHead}>
-              <div>
-                <h3>{open.displayName}</h3>
-                <p className={styles.lead}>
-                  {open.login} · {ROLE_LABELS[open.role] || open.role}
-                </p>
-              </div>
-              <button type="button" className={styles.ghost} onClick={() => setOpenId(null)}>
-                Закрыть
-              </button>
-            </div>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                setNameErr(null);
-                setNameSaving(true);
-                void api
-                  .renameStaff(open.id, staffName)
-                  .then((saved) => setStaffName(saved.displayName))
-                  .catch((ex) => setNameErr(ex instanceof Error ? ex.message : 'Не удалось сохранить имя'))
-                  .finally(() => setNameSaving(false));
-              }}
-            >
-              <label className={styles.field}>
-                Имя
-                <input
-                  aria-label="Имя сотрудника"
-                  value={staffName}
-                  maxLength={80}
-                  onChange={(event) => setStaffName(event.target.value)}
-                />
-              </label>
-              {nameErr ? (
-                <p className={styles.error} role="alert">
-                  {nameErr}
-                </p>
-              ) : null}
-              <Button type="submit" loading={nameSaving} disabled={nameSaving || staffName.trim() === open.displayName.trim()}>
-                Сохранить имя
-              </Button>
-            </form>
-            <NewPasswordButton staffId={open.id} staffName={open.displayName} />
-            {open.id === user.id ? null : (
-              <button
-                type="button"
-                className={styles.danger}
-                onClick={() => {
-                  if (confirm(`Удалить сотрудника «${open.displayName}» (${open.login})?`)) {
-                    void api.partnerDeleteStaff(open.id);
-                    setOpenId(null);
-                  }
-                }}
-              >
-                Удалить
-              </button>
-            )}
-          </aside>
-        </>,
-        document.body,
-      ) : null}
     </section>
   );
 }

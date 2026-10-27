@@ -22,7 +22,7 @@ import { SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
-import { navigateProject, parseProjectHash } from './projectRoute';
+import { navigateHash, navigateProject, parseProjectHash, parseStaffHash } from './projectRoute';
 import { consumeReturnToTools } from './toolsReturn';
 import styles from './partner.module.css';
 import addStyles from './AdminPartners.module.css';
@@ -32,7 +32,24 @@ function projectHashOpen(): boolean {
 }
 
 function leaveProjectHash() {
-  if (projectHashOpen()) navigateProject({ kind: 'desk' }, 'replace');
+  if (typeof window === 'undefined' || !window.location.hash) return;
+  const hash = window.location.hash;
+  if (parseProjectHash(hash).kind === 'desk' && parseStaffHash(hash).kind === 'list') return;
+  navigateHash('', 'replace');
+}
+
+function useFollowStaffHash(openStaff: () => void) {
+  useEffect(() => {
+    const sync = () => {
+      if (parseStaffHash(window.location.hash).kind === 'person') openStaff();
+    };
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, [openStaff]);
 }
 
 function useFollowProjectHash(openProjects: () => void) {
@@ -417,10 +434,13 @@ function OwnerCabinet({
   const user = api.user!;
   const [tab, setTab] = useState<OwnerTab>(() => {
     consumeReturnToTools();
+    if (typeof window !== 'undefined' && parseStaffHash(window.location.hash).kind === 'person') return 'staff';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setTab('projects'), []);
+  const showStaff = useMemo(() => () => setTab('staff'), []);
   useFollowProjectHash(showProjects);
+  useFollowStaffHash(showStaff);
   const [createToken, setCreateToken] = useState(0);
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
   const [city, setCity] = useState(user.org?.city || '');

@@ -15,14 +15,22 @@ async function enter(page: Page) {
   await expect(page.getByRole('tab', { name: 'Проекты', exact: true })).toBeVisible();
 }
 
-test('карточка сотрудника закрывается по Esc', async ({ page }) => {
+test('карточка сотрудника открывается страницей и возвращается назад', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
   await page.getByRole('button', { name: /UI sales/ }).click();
-  const card = page.getByRole('dialog', { name: 'UI sales' });
-  await expect(card).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(card).toHaveCount(0);
+  await expect(page).toHaveURL(/#staff\//);
+  const card = page.getByRole('region', { name: 'Сотрудник' });
+  await expect(card.getByRole('heading', { level: 1, name: 'UI sales' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'UI sales' })).toHaveCount(0);
+  await expect(page.locator('[class*="drawer" i]')).toHaveCount(0);
+  await page.reload();
+  await expect(page).toHaveURL(/#staff\//);
+  await expect(card.getByRole('heading', { level: 1, name: 'UI sales' })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Сотрудники', exact: true })).toBeVisible();
+  await expect(page).not.toHaveURL(/#staff\//);
+  await expect(page.getByRole('tab', { name: 'Сотрудники', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('у новой комнаты написано, что площадь не указана', async ({ page }) => {
