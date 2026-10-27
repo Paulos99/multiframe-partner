@@ -3,6 +3,7 @@ import { Button } from '../../ui/Button';
 import { CompactAudio } from '../../ui/CompactAudio';
 import { EchoComfort, EchoComfortRings } from '../../ui/EchoComfort';
 import { SpectrumChart } from '../../ui/SpectrumChart';
+import { noiseKpiLines } from '../../state/noiseKpi';
 import { useSession } from '../../state/SessionContext';
 import type { ClassLabel } from '../../state/types';
 import {
@@ -20,8 +21,6 @@ import styles from './ResultWideScreen.module.css';
 export const SHOW_FREQUENCY_CHARTS = false;
 
 function KpiRow({
-  deltaRw,
-  deltaLnw,
   quieterAir,
   quieterImpact,
   echoBefore,
@@ -31,8 +30,6 @@ function KpiRow({
   lnwBefore,
   lnwAfter,
 }: {
-  deltaRw: number;
-  deltaLnw: number;
   quieterAir: number;
   quieterImpact: number;
   echoBefore: number;
@@ -42,10 +39,8 @@ function KpiRow({
   lnwBefore: number;
   lnwAfter: number;
 }) {
-  const airNow = Math.round(rwBefore);
-  const airAfter = Math.round(rwAfter);
-  const impactNow = Math.round(lnwBefore);
-  const impactAfter = Math.round(lnwAfter);
+  const air = noiseKpiLines('air', rwBefore, rwAfter, quieterAir);
+  const impact = noiseKpiLines('impact', lnwBefore, lnwAfter, quieterImpact);
   return (
     <section
       className={`${styles.kpiRow} ${styles.driftSoft}`}
@@ -55,30 +50,18 @@ function KpiRow({
       <article className={styles.kpiCard}>
         <span className={styles.kpiLabel}>Воздушный шум</span>
         <div className={styles.kpiMain}>
-          <strong className={styles.kpiValue}>
-            {airNow} → {airAfter}
-            <em>дБ</em>
-          </strong>
+          <strong className={styles.kpiValue}>{air.primary}</strong>
           <DeltaBars before={rwBefore} after={rwAfter} />
         </div>
-        <span className={styles.kpiDbHint}>
-          изоляция лучше на {deltaRw} дБ · примерно на {quieterAir}% тише
-          <em>чем больше децибел, тем лучше изоляция · Rw</em>
-        </span>
+        <span className={styles.kpiDbHint}>{air.secondary}</span>
       </article>
       <article className={styles.kpiCard}>
         <span className={styles.kpiLabel}>Ударный шум</span>
         <div className={styles.kpiMain}>
-          <strong className={styles.kpiValue}>
-            {impactNow} → {impactAfter}
-            <em>дБ</em>
-          </strong>
+          <strong className={styles.kpiValue}>{impact.primary}</strong>
           <DeltaBars before={lnwBefore} after={lnwAfter} invert />
         </div>
-        <span className={styles.kpiDbHint}>
-          удар сверху тише на {deltaLnw} дБ · примерно на {quieterImpact}% тише
-          <em>чем меньше децибел, тем тише шаги · Lnw</em>
-        </span>
+        <span className={styles.kpiDbHint}>{impact.secondary}</span>
       </article>
       <article className={styles.kpiCard}>
         <span className={styles.kpiLabel}>Акустический комфорт</span>
@@ -154,8 +137,6 @@ export function ResultWideScreen() {
   const p = useResultProfile();
   const rootRef = useScrollDrift();
 
-  const deltaRw = Math.abs(Math.round(p.sim.delta.Rw));
-  const deltaLnw = Math.abs(Math.round(p.sim.delta.Lnw));
   const quieterAir = p.sim.perceivedAirPct;
   const quieterImpact = p.sim.perceivedImpactPct;
   const classNow = p.hybridBefore as ClassLabel;
@@ -197,8 +178,6 @@ export function ResultWideScreen() {
       </section>
 
       <KpiRow
-        deltaRw={deltaRw}
-        deltaLnw={deltaLnw}
         quieterAir={quieterAir}
         quieterImpact={quieterImpact}
         echoBefore={p.sim.reverb.echoInRoomBefore}

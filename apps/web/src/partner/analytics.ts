@@ -5,8 +5,10 @@ import type {
   AnalyticsObject,
   AnalyticsTool,
 } from '../../../../packages/shared/partner';
+import { buildStaffDrill, type DrillPeriod, type StaffDrillResult } from '../../../../packages/shared/staffDrill.js';
 import { getAnalyticsSessionId } from '../analytics/sessionId';
 import { cacheAnalyticsEvents, loadCachedAnalyticsEvents, rememberCalculation } from './offlineDb';
+import { isDemoModeEnabled } from './demoMode';
 import {
   appendAnalyticsEvent,
   buildLocalDashboard,
@@ -14,6 +16,8 @@ import {
   clearAllActionHistory,
   enqueueAnalyticsEvents,
   ensureActionHistoryCleared,
+  loadAnalyticsEvents,
+  loadDb,
   loadSession,
   peekAnalyticsQueue,
 } from './localStore';
@@ -195,6 +199,82 @@ export async function fetchAnalyticsDashboard(opts: {
     void cacheAnalyticsEvents(toCache).catch(() => undefined);
     return dash;
   } catch {
+    return local;
+  }
+}
+
+function authHeaders(mode: 'admin' | 'partner', orgId?: string | null): Record<string, string> {
+  const headers: Record<string, string> = {
+    'X-Analytics-Role': mode === 'admin' ? 'admin' : 'owner',
+    'Content-Type': 'application/json',
+  };
+  try {
+    const token = localStorage.getItem('mf_partner_token_v1');
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    /* ignore */
+  }
+  if (orgId) headers['X-Analytics-Org'] = orgId;
+  return headers;
+}
+
+function localStaffDrill(opts: {
+  mode: 'admin' | 'partner';
+  metric: string;
+  period: DrillPeriod;
+  userId?: string | null;
+  orgId?: string | null;
+}): StaffDrillResult {
+  const session = loadSession();
+  const db = loadDb();
+  const orgId = opts.mode === 'admin' ? opts.orgId || null : session?.orgId || opts.orgId || null;
+  const demoOrg = db.orgs.some((org) => org.id === 'org_demo' || org.id === 'org_demo_spb');
+  const focusDemo = !orgId || orgId === 'org_demo' || orgId === 'org_demo_spb';
+  return buildStaffDrill({
+    viewer: {
+      id: session?.id || '',
+      role: session?.role || (opts.mode === 'admin' ? 'admin' : 'owner'),
+      orgId: session?.orgId || orgId,
+    },
+    users: db.users,
+    events: loadAnalyticsEvents() as unknown as Array<Record<string, unknown>>,
+    objects: db.objects as unknown as Array<Record<string, unknown>>,
+    projects: (db.projects || []) as unknown as Array<Record<string, unknown>>,
+    metric: opts.metric,
+    period: opts.period,
+    userId: opts.userId || null,
+    orgId,
+    demoFill: (isDemoModeEnabled() || demoOrg) && focusDemo,
+  });
+}
+
+export async function fetchStaffDrill(opts: {
+  mode: 'admin' | 'partner';
+  metric: string;
+  period: DrillPeriod;
+  userId?: string | null;
+  orgId?: string | null;
+}): Promise<StaffDrillResult> {
+  const local = localStaffDrill(opts);
+  if (!API_BASE) return local;
+  try {
+    const q = new URLSearchParams();
+    q.set('metric', opts.metric);
+    q.set('period', opts.period);
+    if (opts.userId) q.set('userId', opts.userId);
+    if (opts.orgId) q.set('orgId', opts.orgId);
+    const res = await fetch(`${API_BASE}/analytics/drill?${q.toString()}`, {
+      headers: authHeaders(opts.mode, opts.orgId),
+    });
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('Аналитика недоступна');
+    }
+    if (!res.ok) throw new Error(String(res.status));
+    const data = (await res.json()) as StaffDrillResult;
+    if (!Array.isArray(data.ranking)) return local;
+    return data;
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Аналитика недоступна') throw error;
     return local;
   }
 }

@@ -3205,6 +3205,118 @@
   margin: 0;
 }
 
+.drawerWide {
+  width: min(720px, 100%);
+}
+
+.crumbBtn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--cab-accent);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.drillPeriods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.drillPeriods button[aria-pressed='true'] {
+  background: var(--cab-accent);
+  color: var(--cab-on-accent);
+  border-color: var(--cab-accent);
+}
+
+.drillRank {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drillPerson {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--cab-border);
+  background: var(--cab-subtle);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+div.drillPerson {
+  cursor: default;
+}
+
+.drillPersonHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.drillValue {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.drillStats {
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--cab-muted);
+}
+
+.drillAvg {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.drillAvgItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--cab-border);
+  background: var(--cab-card);
+}
+
+.drillAvgItem span {
+  font-size: 0.75rem;
+  color: var(--cab-muted);
+}
+
+.drillMonths {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drillMonths li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85rem;
+}
+
+.drillMonths li span:first-child {
+  font-weight: 750;
+}
+
 @media (max-width: 800px) {
   .todayHead {
     flex-direction: column;

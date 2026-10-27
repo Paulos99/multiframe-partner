@@ -243,13 +243,11 @@ test('diagnostic and calculator open without runtime regressions', async ({page}
  await page.getByRole('button',{name:'Кабинет',exact:true}).click();await page.getByRole('button',{name:'Калькулятор',exact:true}).click();await expect(page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]').getByRole('heading',{name:'Что вы знаете о помещении?'})).toBeVisible();expect(errors).toEqual([]);
 });
 
-for (const role of ['admin', 'owner'] as const) {
+for (const role of ['admin', 'owner', 'sales'] as const) {
   test(`${role}: сводка аналитики без «Объёма», «Отправок», «Входов» и «По дням месяца»`, async ({ page }) => {
     await enter(page, role);
     await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: /Площадь, м²/ }).click();
-    await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toBeVisible();
     for (const label of ['Средняя м²', 'Готовых расчётов', 'Площадь, м²', 'Панели']) {
       await expect(page.getByText(label, { exact: true })).toHaveCount(1);
     }
@@ -258,6 +256,30 @@ for (const role of ['admin', 'owner'] as const) {
     }
     await expect(page.getByText('Отправки', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Сумма м²', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: /Площадь, м²/ }).click();
+    const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+    await expect(drill).toBeVisible();
+    await drill.getByRole('button', { name: 'Квартал', exact: true }).click();
+    await expect(drill.getByRole('button', { name: 'Квартал', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('heading', { name: 'Динамика', exact: true })).toHaveCount(0);
+    if (role === 'owner') {
+      await drill.getByRole('button', { name: /UI owner/ }).click();
+      await expect(drill.getByRole('heading', { name: 'Среднемесячные показатели' })).toBeVisible();
+      await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
+      await drill.getByRole('button', { name: 'Назад', exact: true }).click();
+      await expect(drill.getByRole('button', { name: /UI owner/ })).toBeVisible();
+      await drill.getByRole('button', { name: /UI owner/ }).click();
+      await drill.getByRole('button', { name: /Тестовая квартира/ }).click();
+      await expect(page.getByRole('dialog', { name: 'Комната' })).toBeVisible();
+    }
+  });
+}
+
+for (const role of ['measurer', 'crew'] as const) {
+  test(`${role} не видит раздел аналитики`, async ({ page }) => {
+    await enter(page, role);
+    await expect(page.getByRole('tab', { name: 'Аналитика', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Аналитика команды', exact: true })).toHaveCount(0);
   });
 }
 

@@ -601,7 +601,13 @@ function OwnerCabinet({
 
       {tab === 'analytics' ? (
         <TabPanel>
-          <AnalyticsDashboard mode="partner" />
+          <AnalyticsDashboard
+            mode="partner"
+            onOpenRoom={(id) => {
+              api.openObject(id);
+              setTab('projects');
+            }}
+          />
         </TabPanel>
       ) : null}
 
@@ -676,7 +682,13 @@ function SalesCabinet({
       ) : null}
       {tab === 'analytics' ? (
         <TabPanel>
-          <AnalyticsDashboard mode="partner" />
+          <AnalyticsDashboard
+            mode="partner"
+            onOpenRoom={(id) => {
+              api.openObject(id);
+              setTab('projects');
+            }}
+          />
         </TabPanel>
       ) : null}
 

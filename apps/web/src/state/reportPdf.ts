@@ -25,6 +25,7 @@ import {
   NORMS,
   officialComfortLabel,
 } from './simulation';
+import { noiseKpiLines } from './noiseKpi';
 import { buildLeadHandoff, withDerived } from './session';
 import { buildAirSpectrum, buildImpactSpectrum } from './spectrum';
 import { comfortRingSvg, spectrumChartSvg } from './chartSvg';
@@ -269,6 +270,8 @@ function buildReportDocument(
 
   const deltaRw = Math.abs(Math.round(sim.delta.Rw));
   const deltaLnw = Math.abs(Math.round(sim.delta.Lnw));
+  const airKpi = noiseKpiLines('air', b.Rw, a.Rw, sim.perceivedAirPct);
+  const impactKpi = noiseKpiLines('impact', b.Lnw, a.Lnw, sim.perceivedImpactPct);
   const noiseKindCell =
     shouldAskNoiseKind(room.noisyNeighbors) && room.noiseKind !== 'unknown'
       ? `<div><dt>Тип шума</dt><dd>${escapeHtml(optLabel(NOISE_KIND_OPTIONS, room.noiseKind))}</dd></div>`
@@ -527,6 +530,10 @@ function buildReportDocument(
   .kpi .v {
     font-size: 28px; font-weight: 850; letter-spacing: -.04em; line-height: 1;
     font-variant-numeric: tabular-nums; color: #0f1c16;
+  }
+  .kpi .v-phrase {
+    font-size: 22px; font-weight: 850; letter-spacing: -.03em; line-height: 1.1;
+    color: #0f1c16;
   }
   .kpi .v em {
     font-style: normal; font-size: 12px; font-weight: 700;
@@ -802,13 +809,13 @@ function buildReportDocument(
     <div class="kpi-row">
       <article class="kpi">
         <span class="k">Воздушный шум</span>
-        <span class="v">${Math.round(b.Rw)} → ${Math.round(a.Rw)}<em>дБ</em></span>
-        <span class="db-hint">изоляция лучше на ${deltaRw} дБ · примерно на ${sim.perceivedAirPct}% тише · Rw</span>
+        <span class="v-phrase">${escapeHtml(airKpi.primary)}</span>
+        <span class="db-hint">${escapeHtml(airKpi.secondary)}</span>
       </article>
       <article class="kpi">
         <span class="k">Ударный шум</span>
-        <span class="v">${Math.round(b.Lnw)} → ${Math.round(a.Lnw)}<em>дБ</em></span>
-        <span class="db-hint">удар сверху тише на ${deltaLnw} дБ · примерно на ${sim.perceivedImpactPct}% тише · Lnw</span>
+        <span class="v-phrase">${escapeHtml(impactKpi.primary)}</span>
+        <span class="db-hint">${escapeHtml(impactKpi.secondary)}</span>
       </article>
       <article class="kpi">
         <span class="k">Акустический комфорт</span>

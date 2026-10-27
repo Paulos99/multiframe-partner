@@ -21,6 +21,7 @@ import {
 } from './platformStore.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
+import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -1573,6 +1574,45 @@ export async function handler(event = {}) {
       // Bare DELETE used to be fired once from the cabinet and wiped analytics-events.json.
       // Refuse it. Events are only appended via POST /analytics/events.
       return json(405, { message: 'Очистка аналитики отключена' });
+    }
+
+    if (method === 'GET' && path.endsWith('/analytics/drill')) {
+      const auth = await requireAuth(event);
+      const role = auth.user.role;
+      if (!['admin', 'owner', 'sales'].includes(role)) {
+        return json(403, { message: 'Аналитика недоступна' });
+      }
+      const query = getQuery(event);
+      let orgId = role === 'admin' ? query.orgId || null : auth.user.orgId;
+      if (role === 'admin') {
+        const key = header(event, 'X-Analytics-Key');
+        if (key && key !== ANALYTICS_ADMIN_KEY()) {
+          return json(403, { message: 'Admin key required' });
+        }
+      }
+      const platform = auth.platform;
+      const events = await loadEvents();
+      const demoOrg = (platform.orgs || []).some((org) => org.id === 'org_demo' || org.id === 'org_demo_spb');
+      const focusDemo = !orgId || orgId === 'org_demo' || orgId === 'org_demo_spb';
+      const drill = buildStaffDrill({
+        viewer: { id: auth.user.id, role, orgId: auth.user.orgId },
+        users: (platform.users || []).map((user) => ({
+          id: user.id,
+          login: user.login,
+          displayName: user.displayName,
+          role: normalizeRole(user.role),
+          orgId: user.orgId,
+        })),
+        events,
+        objects: platform.objects || [],
+        projects: platform.projects || [],
+        metric: query.metric,
+        period: query.period,
+        userId: query.userId || null,
+        orgId,
+        demoFill: demoOrg && focusDemo,
+      });
+      return json(200, drill);
     }
 
     if (method === 'GET' && path.endsWith('/analytics/dashboard')) {
