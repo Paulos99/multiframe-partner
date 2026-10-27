@@ -10,6 +10,7 @@ import {
 } from '../../../../packages/shared/partner';
 import { Button } from '../ui/Button';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { useCabinetSection } from './analyticsRoute';
 import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
@@ -71,7 +72,7 @@ type AdminTab = 'today' | 'partners' | 'analytics' | 'help';
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const partners = useMemo(() => api.adminListPartners(), [api]);
-  const [tab, setTab] = useState<AdminTab>(() => {
+  const [tab, setTab] = useCabinetSection<AdminTab>('analytics', () => {
     consumeReturnToTools();
     return 'today';
   });
@@ -391,7 +392,7 @@ function OwnerCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [tab, setTab] = useState<OwnerTab>(() => {
+  const [tab, setTab] = useCabinetSection<OwnerTab>('analytics', () => {
     consumeReturnToTools();
     return api.openedObjectId ? 'projects' : 'today';
   });
@@ -631,7 +632,7 @@ function SalesCabinet({
   const api = usePartner();
   const user = api.user!;
   const [createToken, setCreateToken] = useState(0);
-  const [tab, setTab] = useState<'today' | 'projects' | 'analytics' | 'help'>(() => {
+  const [tab, setTab] = useCabinetSection<'today' | 'projects' | 'analytics' | 'help'>('analytics', () => {
     consumeReturnToTools();
     return api.openedObjectId ? 'projects' : 'today';
   });

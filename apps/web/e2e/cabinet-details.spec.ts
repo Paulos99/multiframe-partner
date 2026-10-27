@@ -18,7 +18,7 @@ test('карточка сотрудника закрывается по Esc', as
   await enter(page);
   await page.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
   await page.getByRole('button', { name: /UI sales/ }).click();
-  const card = page.getByRole('dialog', { name: 'UI sales' });
+  const card = page.getByRole('region', { name: 'UI sales' });
   await expect(card).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(card).toHaveCount(0);
@@ -28,7 +28,7 @@ test('у новой комнаты написано, что площадь не 
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.locator('[data-room-id="ui_room"]').click();
-  const drawer = page.getByRole('dialog', { name: 'Комната' });
+  const drawer = page.getByRole('region', { name: 'Комната' });
   await drawer.getByLabel('Новая комната').fill('Кладовая');
   await drawer.getByRole('button', { name: 'Добавить комнату', exact: true }).click();
   await expect(drawer.getByText('Кладовая')).toBeVisible();

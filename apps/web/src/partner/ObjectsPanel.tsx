@@ -2,7 +2,6 @@ import { roomCountLabel, roomRank } from './kanban';
 import { KanbanBoard } from './KanbanBoard';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import {
   JOB_OBJECT_STATUS_LABELS,
   ROLE_LABELS,
@@ -204,9 +203,21 @@ export function ObjectsPanel({
     const room = api.objects.find((obj) => obj.id === api.openedObjectId);
     if (!room) return;
     setQuery('');
+    setCreating(false);
     setSelectedKey(room.projectId || `room:${room.id}`);
     setSelectedId(room.id);
   }, [api.openedObjectId, api.objects]);
+
+  useEffect(() => {
+    function onPop() {
+      if (!window.location.hash.startsWith('#analytics/')) return;
+      setSelectedId(null);
+      setSelectedKey(null);
+      api.openObject(null);
+    }
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [api]);
 
   const counts = useMemo(() => {
     const map = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<JobObjectStatus, number>;
@@ -486,6 +497,7 @@ export function ObjectsPanel({
   function closeDrawer() {
     setSelectedId(null);
     setSelectedKey(null);
+    api.openObject(null);
   }
 
   return (
@@ -494,7 +506,7 @@ export function ObjectsPanel({
         <div>
           <h2>Проекты</h2>
           <p className={styles.lead}>
-            Проект — это клиент и адрес. Комната внутри считается отдельно. Карточка открывается рядом, доска остаётся на месте.
+            Проект — это клиент и адрес. Комната внутри считается отдельно.
           </p>
         </div>
         {canCreate ? (
@@ -523,6 +535,8 @@ export function ObjectsPanel({
         </p>
       ) : null}
 
+      {creating || (selected && selectedCard) ? null : (
+      <>
       <label className={styles.searchField}>
         <span className={styles.srOnly}>Поиск проекта</span>
         <input
@@ -571,19 +585,30 @@ export function ObjectsPanel({
           onMove={moveRoom}
           onDelete={canDelete ? setToDelete : undefined}
           onOpen={(room) => {
+            setCreating(false);
             setSelectedKey(room.projectId || `room:${room.id}`);
             setSelectedId(room.id);
           }}
         />
       )}
+      </>
+      )}
 
-      {creating && canCreate
-        ? createPortal(
-            <>
-              <button type="button" className={styles.drawerBackdrop} aria-label="Закрыть форму" onClick={() => setCreating(false)} />
-              <aside className={styles.drawer} role="dialog" aria-label="Новый проект">
+      {creating && canCreate ? (
+              <section className={styles.sheet} role="region" aria-label="Новый проект">
                 <div className={styles.drawerHead}>
-                  <h3>Новый проект</h3>
+                  <div>
+                    <nav className={styles.crumbs} aria-label="Путь">
+                      <button type="button" className={styles.crumbBtn} onClick={() => setCreating(false)}>
+                        Проекты
+                      </button>
+                      <span className={styles.crumb}>
+                        <span aria-hidden>/</span>
+                        <span>Новый проект</span>
+                      </span>
+                    </nav>
+                    <h3>Новый проект</h3>
+                  </div>
                   <button type="button" className={styles.ghost} onClick={() => setCreating(false)}>
                     Закрыть
                   </button>
@@ -615,19 +640,22 @@ export function ObjectsPanel({
                     </button>
                   </div>
                 </form>
-              </aside>
-            </>,
-            document.body,
-          )
-        : null}
+              </section>
+      ) : null}
 
-      {selected && selectedCard
-        ? createPortal(
-        <>
-          <button type="button" className={styles.drawerBackdrop} aria-label="Закрыть карточку" onClick={closeDrawer} />
-          <aside className={styles.drawer} role="dialog" aria-label="Комната">
+      {selected && selectedCard && !creating ? (
+          <section className={styles.sheet} role="region" aria-label="Комната">
             <div className={styles.drawerHead}>
               <div>
+                <nav className={styles.crumbs} aria-label="Путь">
+                  <button type="button" className={styles.crumbBtn} onClick={closeDrawer}>
+                    Проекты
+                  </button>
+                  <span className={styles.crumb}>
+                    <span aria-hidden>/</span>
+                    <span>{selected.clientName || selectedCard.project?.clientName || selectedCard.title}</span>
+                  </span>
+                </nav>
                 <h3>{selected.clientName || selectedCard.project?.clientName || selectedCard.title}</h3>
                 <p className={styles.lead}>
                   {[
@@ -836,11 +864,8 @@ export function ObjectsPanel({
                 ) : null}
               </div>
             ) : null}
-          </aside>
-        </>,
-        document.body,
-      )
-        : null}
+          </section>
+      ) : null}
 
       {msg ? (
         <p className={styles.toast} role="status">

@@ -93,7 +93,8 @@ test('накопленное хранилище: сессия, v5 и истор�
   expect(areaOnTile).toBeGreaterThan(0);
 
   await panelsTile.click();
-  const drill = page.getByRole('dialog', { name: 'Панели' });
+  await expect(page).toHaveURL(/#analytics\/rating\/panels/);
+  const drill = page.getByRole('region', { name: 'Панели' });
   const why = drill.getByTestId('why-zero');
   await expect(why).toBeVisible();
   const report = await why.innerText();
@@ -104,14 +105,14 @@ test('накопленное хранилище: сессия, v5 и истор�
   expect(paragraphTile(report, 'площадь')).toBe(areaOnTile);
   const paragraphFits = await why.evaluate((el) => {
     const rect = el.getBoundingClientRect();
-    const dialog = el.closest('[role="dialog"]')?.getBoundingClientRect();
+    const pageBox = el.closest('[role="region"]')?.getBoundingClientRect();
     const style = getComputedStyle(el);
     const clamp = style.getPropertyValue('-webkit-line-clamp');
     return Boolean(
-      dialog &&
-        rect.top >= dialog.top - 1 &&
-        rect.left >= dialog.left - 1 &&
-        rect.bottom <= dialog.bottom + 1 &&
+      pageBox &&
+        rect.top >= pageBox.top - 1 &&
+        rect.left >= pageBox.left - 1 &&
+        rect.bottom <= pageBox.bottom + 1 &&
         rect.height > 24 &&
         (clamp === '' || clamp === 'none'),
     );
@@ -133,10 +134,12 @@ test('накопленное хранилище: сессия, v5 и истор�
   await drill.screenshot({
     path: '/opt/cursor/artifacts/screenshots/analytics-accumulated-why-zero.png',
   });
-  await drill.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.goBack();
+  await expect(page).not.toHaveURL(/#analytics\//);
+  await expect(page.getByRole('button', { name: /^Панели/ }).first()).toBeVisible();
 
   await page.getByRole('button', { name: /^Сотрудники/ }).first().click();
-  const staff = page.getByRole('dialog', { name: 'Сотрудники' });
+  const staff = page.getByRole('region', { name: 'Сотрудники' });
   await expect(staff.getByTestId('why-zero')).toContainText('Почему 0. Источник:');
   await staff.getByRole('tab', { name: 'Замерщики' }).click();
   const measurer = staff.getByRole('button', { name: /Замерщик · Потолки Столицы/ });
@@ -147,6 +150,7 @@ test('накопленное хранилище: сессия, v5 и истор�
   const listed = Number((await manager.innerText()).match(/проекты\s+(\d+)/)?.[1] || '0');
   expect(listed).toBeGreaterThan(0);
   await manager.click();
+  await expect(page).toHaveURL(/#analytics\/staff\//);
   const top = staff.getByRole('button').filter({ hasText: /м²/ });
   await expect.poll(async () => top.count()).toBe(listed);
   await expect(top.filter({ hasText: 'Никитин И.' })).toBeVisible();

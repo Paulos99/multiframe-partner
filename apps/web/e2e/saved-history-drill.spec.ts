@@ -111,7 +111,8 @@ test('сохранённая история: плитки и рейтинг из
   });
 
   await panelsTile.click();
-  const drill = page.getByRole('dialog', { name: 'Панели' });
+  await expect(page).toHaveURL(/#analytics\/rating\/panels/);
+  const drill = page.getByRole('region', { name: 'Панели' });
   const why = drill.getByTestId('why-zero');
   await expect(why).toBeVisible();
   await expect(why).toContainText('Источник: локально');
@@ -139,9 +140,10 @@ test('сохранённая история: плитки и рейтинг из
     await expect.poll(async () => (await mounted.allInnerTexts()).join('\n')).not.toContain('Смонтировано 0');
   }
 
-  await drill.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.goBack();
+  await expect(page).not.toHaveURL(/#analytics\//);
   await page.getByRole('button', { name: /^Сотрудники/ }).first().click();
-  const staff = page.getByRole('dialog', { name: 'Сотрудники' });
+  const staff = page.getByRole('region', { name: 'Сотрудники' });
   await staff.getByRole('tab', { name: 'Менеджеры' }).click();
   const manager = staff.getByRole('button', { name: /Менеджер · Потолки Столицы/ });
   await expect(manager).toBeVisible();
@@ -149,6 +151,7 @@ test('сохранённая история: плитки и рейтинг из
   const listed = Number(managerText.match(/проекты\s+(\d+)/)?.[1] || '0');
   expect(listed).toBeGreaterThan(0);
   await manager.click();
+  await expect(page).toHaveURL(/#analytics\/staff\//);
   await expect(staff.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
   const top = staff.getByRole('button').filter({ hasText: /м²/ });
   await expect.poll(async () => top.count()).toBe(listed);
@@ -157,9 +160,12 @@ test('сохранённая история: плитки и рейтинг из
   );
   await staff.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-manager-projects.png' });
   await top.filter({ hasText: 'Никитин И.' }).click();
-  const card = page.getByRole('dialog', { name: 'Комната' });
+  const card = page.getByRole('region', { name: 'Комната' });
   await expect(card).toBeVisible();
   await expect(card).toContainText('Никитин И.');
+  await expect(page).not.toHaveURL(/#project\//);
+  await page.goBack();
+  await expect(page).toHaveURL(/#analytics\/staff\//);
   await page.screenshot({
     path: '/opt/cursor/artifacts/screenshots/analytics-room-card.png',
     fullPage: true,

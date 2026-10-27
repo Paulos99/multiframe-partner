@@ -18,12 +18,12 @@ test('из комнаты Проблемомер подставляет тип �
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.locator('[data-room-id="ui_room"]').click();
-  const drawer = page.getByRole('dialog', { name: 'Комната' });
+  const drawer = page.getByRole('region', { name: 'Комната' });
   await expect(drawer.getByRole('button', { name: 'Проблемомер', exact: true })).toBeVisible();
   await drawer.getByRole('button', { name: 'Проблемомер', exact: true }).click();
   await page.locator('button[aria-label="Кабинет"]').click();
-  await expect(page.getByRole('dialog', { name: 'Комната' })).toBeVisible();
-  await page.getByRole('dialog', { name: 'Комната' }).getByRole('button', { name: 'Проблемомер', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Комната' })).toBeVisible();
+  await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Проблемомер', exact: true }).click();
   await page.getByRole('button', { name: 'Начать', exact: true }).click();
 
   const question = page.getByRole('heading', { name: 'Укажите тип комнаты и площадь' });
@@ -59,7 +59,7 @@ test('из комнаты Проблемомер подставляет тип �
   await page.getByText('Другие действия', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Сохранить в комнату', exact: true }).click();
-  const room = page.getByRole('dialog', { name: 'Комната' });
+  const room = page.getByRole('region', { name: 'Комната' });
   await expect(room).toBeVisible();
   await expect(room).toContainText('Спальня');
 });
@@ -68,7 +68,7 @@ test('калькулятор из комнаты сразу показывает
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.locator('[data-room-id="ui_room"]').click();
-  await page.getByRole('dialog', { name: 'Комната' }).getByRole('button', { name: 'Калькулятор', exact: true }).click();
+  await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Калькулятор', exact: true }).click();
   const frame = page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]');
   await expect(frame.locator('#areaOnlyInput')).toHaveValue(/24/);
   const sideTotal = frame.locator('.rb-kv--total strong');
@@ -85,7 +85,7 @@ test('замерщик видит только назначенную комна
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.locator('[data-room-id="ui_crew_room"]').click();
-  const drawer = page.getByRole('dialog', { name: 'Комната' });
+  const drawer = page.getByRole('region', { name: 'Комната' });
   const saved = page.waitForResponse(
     (res) => res.request().method() === 'PATCH' && res.url().includes('/objects/ui_crew_room') && res.ok(),
   );
@@ -103,7 +103,7 @@ test('замерщик видит только назначенную комна
   await expect(page.locator('[data-room-id="ui_room"]')).toHaveCount(0);
   await expect(page.locator('[data-room-id="ui_measured"]')).toHaveCount(0);
   await page.locator('[data-room-id="ui_crew_room"]').click();
-  const room = page.getByRole('dialog', { name: 'Комната' });
+  const room = page.getByRole('region', { name: 'Комната' });
   await expect(room.getByText('Итого комнаты')).toBeVisible();
   await expect(room.getByText(/75[\s\u00a0\u202f]*261/)).toBeVisible();
 });

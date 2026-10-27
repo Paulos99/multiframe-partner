@@ -183,25 +183,26 @@ test('сессия уже активна: reload, сразу Аналитика,
   const panelsTile = page.getByRole('button', { name: /^Панели/ }).first();
   const areaTile = page.getByRole('button', { name: /Площадь, м²/ }).first();
   await expect.poll(async () => tileNumber(await panelsTile.innerText())).toBe(5206);
+  const panelsOnTile = tileNumber(await panelsTile.innerText());
   const areaOnTile = tileNumber(await areaTile.innerText());
   expect(areaOnTile).toBe(2403);
 
   await panelsTile.click();
-  const why = page.getByRole('dialog', { name: 'Панели' }).getByTestId('why-zero');
+  await expect(page).toHaveURL(/#analytics\/rating\/panels/);
+  const why = page.getByRole('region', { name: 'Панели' }).getByTestId('why-zero');
   await expect(why).toBeVisible();
   await expect(why).toContainText('Почему 0. Источник:');
   const report = await why.innerText();
   expect(report.startsWith('Почему 0.')).toBe(true);
   const panelsInReport = paragraphTile(report, 'Плитка панелей');
   const areaInReport = paragraphTile(report, 'площадь');
-  const tileNow = tileNumber(await panelsTile.innerText());
-  expect(panelsInReport).toBe(tileNow);
+  expect(panelsInReport).toBe(panelsOnTile);
   expect(areaInReport).toBe(areaOnTile);
-  expect(tileNow).toBe(5206);
+  expect(panelsOnTile).toBe(5206);
   expect(paragraphTile(report, 'Комнат')).toBe(COMPANY_ROOMS);
   expect(paragraphTile(report, 'Событий')).toBeGreaterThan(0);
 
-  const drill = page.getByRole('dialog', { name: 'Панели' });
+  const drill = page.getByRole('region', { name: 'Панели' });
   async function panelsOfInstallers() {
     await drill.getByRole('tab', { name: 'Монтажники' }).click();
     const crew = await drill.getByRole('button').filter({ hasText: 'Смонтировано' }).allInnerTexts();
@@ -219,10 +220,11 @@ test('сессия уже активна: reload, сразу Аналитика,
   await drill.screenshot({
     path: '/opt/cursor/artifacts/screenshots/analytics-reload-straight-why-zero.png',
   });
-  await drill.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.goBack();
+  await expect(page).not.toHaveURL(/#analytics\//);
 
   await page.getByRole('button', { name: /^Сотрудники/ }).first().click();
-  const staff = page.getByRole('dialog', { name: 'Сотрудники' });
+  const staff = page.getByRole('region', { name: 'Сотрудники' });
   const staffWhy = staff.getByTestId('why-zero');
   await expect(staffWhy).toContainText(`Комнат ${COMPANY_ROOMS}`);
   await staff.getByRole('tab', { name: 'Замерщики' }).click();
@@ -236,6 +238,7 @@ test('сессия уже активна: reload, сразу Аналитика,
   const listed = Number((await manager.innerText()).match(/проекты\s+(\d+)/)?.[1] || '0');
   expect(listed).toBeGreaterThan(0);
   await manager.click();
+  await expect(page).toHaveURL(/#analytics\/staff\//);
   await expect(staff.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
   const top = staff.getByRole('button').filter({ hasText: /м²/ });
   await expect.poll(async () => top.count()).toBe(listed);
@@ -249,8 +252,11 @@ test('сессия уже активна: reload, сразу Аналитика,
     path: '/opt/cursor/artifacts/screenshots/analytics-reload-straight-top.png',
   });
   await top.filter({ hasText: 'Никитин И.' }).click();
-  const card = page.getByRole('dialog', { name: 'Комната' });
+  const card = page.getByRole('region', { name: 'Комната' });
   await expect(card).toBeVisible();
   await expect(card).toContainText('Никитин И.');
+  await expect(page).not.toHaveURL(/#project\//);
+  await page.goBack();
+  await expect(page).toHaveURL(/#analytics\/staff\//);
   await context.close();
 });

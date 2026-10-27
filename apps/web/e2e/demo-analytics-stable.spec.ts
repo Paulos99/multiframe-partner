@@ -140,7 +140,7 @@ test('схема до заморозки: владелец видит роли, 
   }).toBe(true);
   const tileText = await tile.innerText();
   await tile.click();
-  const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+  const drill = page.getByRole('region', { name: 'Площадь, м²' });
   await expect(drill.getByRole('tab', { name: 'Менеджеры' })).toBeVisible();
   await expect(drill.getByRole('tab', { name: 'Замерщики' })).toBeVisible();
   await expect(drill.getByRole('tab', { name: 'Монтажники' })).toBeVisible();
@@ -167,11 +167,11 @@ test('схема до заморозки: владелец видит роли, 
   const quarterText = (await periodRows()).join('\n');
   await drill.getByRole('button', { name: 'Год', exact: true }).click();
   await expect.poll(async () => (await periodRows()).join('\n')).not.toBe(quarterText);
-  await expect.poll(async () => tile.innerText()).toBe(tileText);
 
-  await drill.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.goBack();
+  await expect.poll(async () => tile.innerText()).toBe(tileText);
   await page.getByRole('button', { name: /Панели/ }).first().click();
-  const panels = page.getByRole('dialog', { name: 'Панели' });
+  const panels = page.getByRole('region', { name: 'Панели' });
   await panels.getByRole('tab', { name: 'Монтажники' }).click();
   const mounted = panels.getByRole('button').filter({ hasText: 'Смонтировано' });
   await expect.poll(async () => mounted.count()).toBeGreaterThan(0);
@@ -257,14 +257,21 @@ test('короткий архив остаётся в хранилище, а м�
 
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   const tile = page.getByRole('button', { name: /Площадь, м²/ }).first();
+  let settled = '';
+  await expect.poll(async () => {
+    const text = await tile.innerText();
+    const ready = text.length > 0 && text === settled && tileNumber(text) > 0;
+    settled = text;
+    return ready;
+  }).toBe(true);
+  const tileText = settled;
   await tile.click();
-  const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+  const drill = page.getByRole('region', { name: 'Площадь, м²' });
   await drill.getByRole('button', { name: 'Месяц', exact: true }).click();
   await expect(drill.getByRole('button', { name: 'Месяц', exact: true })).toHaveAttribute('aria-pressed', 'true');
   const monthRows = () => drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
   await expect.poll(async () => (await monthRows()).length).toBeGreaterThan(0);
   const monthText = (await monthRows()).join('\n');
-  const tileText = await tile.innerText();
   const monthFunnel = (await drill.locator('text=/Открыли:/').allInnerTexts()).join('\n');
   await drill.getByRole('button', { name: 'Квартал', exact: true }).click();
   await expect.poll(async () => (await monthRows()).join('\n')).not.toBe(monthText);
@@ -272,7 +279,6 @@ test('короткий архив остаётся в хранилище, а м�
   await drill.getByRole('button', { name: 'Год', exact: true }).click();
   await expect.poll(async () => (await monthRows()).join('\n')).not.toBe(quarterText);
   await expect.poll(async () => (await drill.locator('text=/Открыли:/').allInnerTexts()).join('\n')).not.toBe(monthFunnel);
-  await expect.poll(async () => tile.innerText()).toBe(tileText);
 
   await drill.getByRole('tab', { name: 'Менеджеры' }).click();
   await drill.getByRole('button', { name: /Менеджер · Потолки Столицы/ }).first().click();
@@ -286,9 +292,10 @@ test('короткий архив остаётся в хранилище, а м�
   }).toBe(true);
 
   await drill.getByRole('button', { name: 'Назад', exact: true }).click();
-  await drill.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.goBack();
+  await expect.poll(async () => tile.innerText()).toBe(tileText);
   await page.getByRole('button', { name: /Панели/ }).first().click();
-  const panels = page.getByRole('dialog', { name: 'Панели' });
+  const panels = page.getByRole('region', { name: 'Панели' });
   await panels.getByRole('tab', { name: 'Монтажники' }).click();
   await panels.getByRole('button', { name: 'Месяц', exact: true }).click();
   const mounted = panels.getByRole('button').filter({ hasText: 'Смонтировано' });
@@ -352,7 +359,7 @@ test('менеджер из старой истории видит топ про
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   await page.getByRole('button', { name: /Площадь, м²/ }).first().click();
-  const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+  const drill = page.getByRole('region', { name: 'Площадь, м²' });
   await expect(drill.getByText('Моя команда')).toBeVisible();
   await expect(drill.getByRole('tab', { name: 'Менеджеры' })).toBeVisible();
   await expect(drill.getByRole('tab', { name: 'Замерщики' })).toBeVisible();
@@ -446,7 +453,7 @@ test('сервер: реальные события с чужими id попа�
   const tile = page.getByRole('button', { name: /Площадь, м²/ }).first();
   await expect.poll(async () => tileNumber(await tile.innerText())).toBe(31);
   await tile.click();
-  const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+  const drill = page.getByRole('region', { name: 'Площадь, м²' });
   await expect(drill.getByRole('tab', { name: 'Менеджеры' })).toBeVisible();
   await expect(drill.getByRole('tab', { name: 'Замерщики' })).toBeVisible();
   await expect(drill.getByRole('tab', { name: 'Монтажники' })).toBeVisible();
@@ -469,10 +476,10 @@ test('сервер: реальные события с чужими id попа�
   const quarterText = (await periodRows()).join('\n');
   await drill.getByRole('button', { name: 'Год', exact: true }).click();
   await expect.poll(async () => (await periodRows()).join('\n')).not.toBe(quarterText);
+  await page.goBack();
   await expect.poll(async () => tileNumber(await tile.innerText())).toBe(31);
-  await drill.getByRole('button', { name: 'Закрыть', exact: true }).click();
   await page.getByRole('button', { name: /Панели/ }).first().click();
-  const panels = page.getByRole('dialog', { name: 'Панели' });
+  const panels = page.getByRole('region', { name: 'Панели' });
   await panels.getByRole('tab', { name: 'Монтажники' }).click();
   const crew = panels.getByRole('button', { name: /UI crew/ });
   await expect(crew).toContainText('Смонтировано');
@@ -483,7 +490,7 @@ test('сервер: реальные события с чужими id попа�
   await enter('ui.sales');
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   await page.getByRole('button', { name: /Площадь, м²/ }).first().click();
-  const team = page.getByRole('dialog', { name: 'Площадь, м²' });
+  const team = page.getByRole('region', { name: 'Площадь, м²' });
   await expect(team.getByText('Моя команда')).toBeVisible();
   await team.getByRole('button', { name: /UI sales/ }).click();
   await expect(team.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
@@ -622,7 +629,7 @@ test('накопленное хранилище: старые id, без всп�
   expect(await tile.innerText()).toBe(firstTile);
 
   await page.getByRole('button', { name: /Панели/ }).first().click();
-  const panels = page.getByRole('dialog', { name: 'Панели' });
+  const panels = page.getByRole('region', { name: 'Панели' });
   await panels.getByRole('tab', { name: 'Монтажники' }).click();
   const mounted = () => panels.getByRole('button').filter({ hasText: 'Смонтировано' });
   await expect.poll(async () => mounted().count()).toBe(2);
@@ -636,10 +643,10 @@ test('накопленное хранилище: старые id, без всп�
   await panels.getByRole('button', { name: 'Год', exact: true }).click();
   await expect.poll(async () => lines()).not.toBe(quarterText);
   expect(await lines()).not.toContain('Смонтировано 0');
-  await panels.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.goBack();
 
   await tile.click();
-  const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+  const drill = page.getByRole('region', { name: 'Площадь, м²' });
   await drill.getByRole('tab', { name: 'Менеджеры' }).click();
   await drill.getByRole('button', { name: 'Год', exact: true }).click();
   await drill.getByRole('button', { name: /Менеджер/ }).first().click();
@@ -647,8 +654,8 @@ test('накопленное хранилище: старые id, без всп�
   await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
   await expect(drill.getByText(/проекты 0/)).toHaveCount(0);
   await drill.getByRole('button', { name: /Старая гостиная/ }).first().click();
-  await expect(page.getByRole('dialog', { name: 'Комната' }).getByRole('heading', { name: 'Старая гостиная' })).toBeVisible();
-  await page.getByRole('dialog', { name: 'Комната' }).getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Комната' }).getByRole('heading', { name: 'Старая гостиная' })).toBeVisible();
+  await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Закрыть', exact: true }).click();
 
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   const trigger = page.getByRole('group', { name: 'Период аналитики' }).getByRole('button');
@@ -682,7 +689,7 @@ test('вход владельца через интерфейс: монтажн�
 
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   await page.getByRole('button', { name: /Панели/ }).first().click();
-  const panels = page.getByRole('dialog', { name: 'Панели' });
+  const panels = page.getByRole('region', { name: 'Панели' });
   await panels.getByRole('tab', { name: 'Монтажники' }).click();
   const mounted = () => panels.getByRole('button').filter({ hasText: 'Смонтировано' });
   await expect.poll(async () => mounted().count()).toBe(2);
@@ -695,10 +702,10 @@ test('вход владельца через интерфейс: монтажн�
     expect(lines.some((line) => /Монтажник(?! 2)/.test(line))).toBe(true);
   }
   await panels.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-installers.png' });
-  await panels.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.goBack();
 
   await page.getByRole('button', { name: /Площадь, м²/ }).first().click();
-  const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+  const drill = page.getByRole('region', { name: 'Площадь, м²' });
   await drill.getByRole('tab', { name: 'Менеджеры' }).click();
   await drill.getByRole('button', { name: 'Месяц', exact: true }).click();
   await drill.getByRole('button', { name: /Менеджер · Потолки Столицы/ }).first().click();
@@ -710,5 +717,5 @@ test('вход владельца через интерфейс: монтажн�
   await expect(project).toBeVisible();
   await drill.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-manager-projects.png' });
   await project.click();
-  await expect(page.getByRole('dialog', { name: 'Комната' }).getByRole('heading', { name: 'Козлов Д.' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Комната' }).getByRole('heading', { name: 'Козлов Д.' })).toBeVisible();
 });

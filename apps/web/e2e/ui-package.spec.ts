@@ -228,13 +228,16 @@ test('failed stage save keeps the original card and shows the error', async ({
     page.locator('[data-kanban-stage="draft"] [data-room-id="ui_room"]'),
   ).toBeVisible();
 });
-test('owner opens a room in the side panel and stays on the board', async ({ page }) => {
+test('owner opens a room as a page in the projects area', async ({ page }) => {
   await enter(page, 'owner');
   await openProjects(page);
   await page.locator('[data-room-id="ui_room"]').click();
-  await expect(page.getByRole('dialog', { name: 'Комната' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Комната' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Спальня.*Черновик/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
+  await expect(page.locator('[data-kanban-stage]')).toHaveCount(0);
+  await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await expect(page.locator('[data-kanban-stage]')).not.toHaveCount(0);
 });
 
 test('diagnostic and calculator open without runtime regressions', async ({page}) => {
@@ -295,11 +298,11 @@ for (const role of ['admin', 'owner', 'sales'] as const) {
     }).toBe(true);
     const periodText = await periodBtn.innerText();
     await tile.click();
-    const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+    const drill = page.getByRole('region', { name: 'Площадь, м²' });
     await expect(drill).toBeVisible();
+    await expect(page).toHaveURL(/#analytics\/rating\/area/);
     await drill.getByRole('button', { name: 'Квартал', exact: true }).click();
     await expect(drill.getByRole('button', { name: 'Квартал', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(async () => tile.innerText()).toBe(tileText);
     await expect(periodBtn).toHaveText(periodText);
     await expect(drill.getByRole('heading', { name: 'Воронка', exact: true })).toBeVisible();
     await expect(drill.getByRole('heading', { name: 'Динамика по месяцам', exact: true })).toBeVisible();
@@ -310,14 +313,25 @@ for (const role of ['admin', 'owner', 'sales'] as const) {
     if (role === 'owner') {
       await drill.getByRole('tab', { name: 'Менеджеры', exact: true }).click();
       await drill.getByRole('button', { name: /UI sales/ }).click();
+      await expect(page).toHaveURL(/#analytics\/staff\//);
       await expect(drill.getByRole('heading', { name: 'Среднемесячные показатели' })).toBeVisible();
       await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
       await drill.getByRole('button', { name: 'Назад', exact: true }).click();
+      await expect(page).toHaveURL(/#analytics\/rating\/area/);
       await expect(drill.getByRole('button', { name: /UI sales/ })).toBeVisible();
       await drill.getByRole('button', { name: /UI sales/ }).click();
       await drill.getByRole('button', { name: /Тестовая квартира/ }).click();
-      await expect(page.getByRole('dialog', { name: 'Комната' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Комната' })).toBeVisible();
+      await expect(page).not.toHaveURL(/#project\//);
     }
+    for (let step = 0; step < 6; step += 1) {
+      const nested = await page.evaluate(() => location.hash.startsWith('#analytics/'));
+      const room = await page.getByRole('region', { name: 'Комната' }).count();
+      if (!nested && room === 0) break;
+      await page.goBack();
+    }
+    await expect.poll(async () => tile.innerText()).toBe(tileText);
+    await expect(periodBtn).toHaveText(periodText);
   });
 }
 

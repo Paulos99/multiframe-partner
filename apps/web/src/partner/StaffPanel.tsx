@@ -1,7 +1,6 @@
 import { Skeleton } from './Skeleton';
 import { m, AnimatePresence, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { useEffect, useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import {
   canManageStaff,
   ROLE_LABELS,
@@ -69,7 +68,7 @@ export function StaffPanel() {
     <section className={`${styles.card} ${styles.panelCard}`}>
       <h2>Сотрудники</h2>
       <p className={styles.lead}>
-        {staff.length ? `${staff.length} в команде` : 'Пока никого нет'}. Карточка открывается по нажатию.
+        {staff.length ? `${staff.length} в команде` : 'Пока никого нет'}. Нажатие открывает карточку сотрудника.
       </p>
       <button type="button" className={styles.primary} onClick={() => setAdding((open) => !open)}>
         {adding ? 'Закрыть' : 'Добавить'}
@@ -124,6 +123,46 @@ export function StaffPanel() {
           </Button>
         </form>
       ) : null}
+      {open ? (
+        <section className={styles.sheet} role="region" aria-label={open.displayName}>
+          <div className={styles.drawerHead}>
+            <div>
+              <nav className={styles.crumbs} aria-label="Путь">
+                <button type="button" className={styles.crumbBtn} onClick={() => setOpenId(null)}>
+                  Сотрудники
+                </button>
+                <span className={styles.crumb}>
+                  <span aria-hidden>/</span>
+                  <span>{open.displayName}</span>
+                </span>
+              </nav>
+              <h3>{open.displayName}</h3>
+              <p className={styles.lead}>
+                {open.login} · {ROLE_LABELS[open.role] || open.role}
+              </p>
+            </div>
+            <button type="button" className={styles.ghost} onClick={() => setOpenId(null)}>
+              Закрыть
+            </button>
+          </div>
+          <NewPasswordButton staffId={open.id} staffName={open.displayName} />
+          {open.id === user.id ? null : (
+            <button
+              type="button"
+              className={styles.danger}
+              onClick={() => {
+                if (confirm(`Удалить сотрудника «${open.displayName}» (${open.login})?`)) {
+                  void api.partnerDeleteStaff(open.id);
+                  setOpenId(null);
+                }
+              }}
+            >
+              Удалить
+            </button>
+          )}
+        </section>
+      ) : (
+      <>
       {api.staffLoading && !staff.length ? <Skeleton count={3} label="Загрузка сотрудников"/> : null}
       <div className={styles.table}><AnimatePresence initial={false}>
         {staff.map((ex) => (
@@ -143,40 +182,8 @@ export function StaffPanel() {
         ))}</AnimatePresence>
         {!api.staffLoading && !staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
       </div>
-      {open ? createPortal(
-        <>
-          <button type="button" className={styles.drawerBackdrop} aria-label="Закрыть карточку" onClick={() => setOpenId(null)} />
-          <aside className={styles.drawer} role="dialog" aria-label={open.displayName}>
-            <div className={styles.drawerHead}>
-              <div>
-                <h3>{open.displayName}</h3>
-                <p className={styles.lead}>
-                  {open.login} · {ROLE_LABELS[open.role] || open.role}
-                </p>
-              </div>
-              <button type="button" className={styles.ghost} onClick={() => setOpenId(null)}>
-                Закрыть
-              </button>
-            </div>
-            <NewPasswordButton staffId={open.id} staffName={open.displayName} />
-            {open.id === user.id ? null : (
-              <button
-                type="button"
-                className={styles.danger}
-                onClick={() => {
-                  if (confirm(`Удалить сотрудника «${open.displayName}» (${open.login})?`)) {
-                    void api.partnerDeleteStaff(open.id);
-                    setOpenId(null);
-                  }
-                }}
-              >
-                Удалить
-              </button>
-            )}
-          </aside>
-        </>,
-        document.body,
-      ) : null}
+      </>
+      )}
     </section>
   );
 }

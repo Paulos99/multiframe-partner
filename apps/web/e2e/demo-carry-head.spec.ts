@@ -149,7 +149,7 @@ test('чекаут 3ee8094 ?demo=1, клики и HEAD без очистки н�
 
     await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
     await page.getByRole('button', { name: /Панели/ }).first().click();
-    const panels = page.getByRole('dialog', { name: 'Панели' });
+    const panels = page.getByRole('region', { name: 'Панели' });
     const report = panels.getByTestId('why-zero');
     await expect(report).toBeVisible();
     await expect(report).toContainText('Хранилище mf_partner_db_v5');
@@ -168,10 +168,11 @@ test('чекаут 3ee8094 ?demo=1, клики и HEAD без очистки н�
       const lines = await mounted().allInnerTexts();
       expect(lines.join('\n'), period).not.toContain('Смонтировано 0');
     }
-    await panels.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await page.goBack();
+    await expect(page).not.toHaveURL(/#analytics\//);
 
     await page.getByRole('button', { name: /Площадь, м²/ }).first().click();
-    const drill = page.getByRole('dialog', { name: 'Площадь, м²' });
+    const drill = page.getByRole('region', { name: 'Площадь, м²' });
     await drill.getByRole('tab', { name: 'Менеджеры' }).click();
     for (const period of ['Месяц', 'Квартал', 'Год'] as const) {
       await drill.getByRole('button', { name: period, exact: true }).click();

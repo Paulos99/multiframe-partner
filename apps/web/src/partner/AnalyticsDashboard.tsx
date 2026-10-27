@@ -18,6 +18,7 @@ import {
 import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
 import { funnelStopCounts, funnelStopPercents } from '../../../../packages/shared/funnel';
 import type { DrillPeriod } from '../../../../packages/shared/staffDrill.js';
+import { goAnalytics, useAnalyticsRoute } from './analyticsRoute';
 import {
   applyDashboardProbe,
   composeCabinetAnalytics,
@@ -380,9 +381,9 @@ export function AnalyticsDashboard({
   const focusOrg = useSyncExternalStore(subscribeAnalyticsFocusOrg, getAnalyticsFocusOrg, getAnalyticsFocusOrg);
   const fromYmd = period.fromYmd;
   const toYmd = period.toYmd;
+  const route = useAnalyticsRoute();
   const [section, setSection] = useState<AnalyticsTab>('overview');
-  const [openMetric, setOpenMetric] = useState<string | null>(null);
-  const [panelPeriod, setPanelPeriod] = useState<DrillPeriod | null>(null);
+  const panelPeriod = route.page === 'overview' ? null : route.period;
   const [panelData, setPanelData] = useState<{ period: DrillPeriod; dash: DashData } | null>(null);
   const [model, setModel] = useState<AnalyticsTileModel | null>(null);
   const [loading, setLoading] = useState(true);
@@ -444,18 +445,14 @@ export function AnalyticsDashboard({
   }, [mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section, api.objects, api.projects, staffKey]);
 
   useEffect(() => {
-    if (openMetric) return;
-    setPanelPeriod(null);
-    setPanelData(null);
-  }, [openMetric]);
-
-  useEffect(() => {
-    if (!openMetric || !panelPeriod) return;
+    if (!panelPeriod || !model) {
+      setPanelData(null);
+      return;
+    }
     let cancelled = false;
     const bounds = presetRange(panelPeriod);
     const { from, to } = rangeFromYmd(bounds.fromYmd, bounds.toYmd);
     const orgId = mode === 'partner' ? user.orgId : focusOrg || null;
-    if (!model) return;
     try {
       const next = composeCabinetAnalytics({
         events: model.events,
@@ -474,7 +471,7 @@ export function AnalyticsDashboard({
     return () => {
       cancelled = true;
     };
-  }, [openMetric, panelPeriod, mode, user.orgId, focusOrg, model]);
+  }, [panelPeriod, mode, user.orgId, focusOrg, model]);
 
   const inactivePartners = useMemo(() => {
     if (mode !== 'admin' || !data) return [];
@@ -556,6 +553,52 @@ export function AnalyticsDashboard({
         </label>
       ) : null}
 
+      {route.page !== 'overview' && model ? (
+        <StaffDrillDrawer
+          metric={route.metric || 'staff'}
+          mode={mode}
+          orgId={mode === 'partner' ? user.orgId : focusOrg || null}
+          from={rangeFromYmd(fromYmd, toYmd).from}
+          to={rangeFromYmd(fromYmd, toYmd).to}
+          onOpenRoom={onOpenRoom}
+          model={model}
+          tilePanels={tilePanels}
+          tileArea={tileArea}
+        >
+          {(() => {
+            const panelReady = Boolean(panelPeriod && panelData?.period === panelPeriod);
+            const view = panelReady && panelData ? panelData.dash : dash;
+            const monthlyAxis = panelReady && (panelPeriod === 'quarter' || panelPeriod === 'year');
+            const chartTitle = monthlyAxis ? 'Динамика по месяцам' : 'Динамика по дням';
+            const chartSeries = monthlyAxis ? seriesByMonth(view.series) : view.series;
+            const bounds = panelPeriod ? presetRange(panelPeriod) : { fromYmd, toYmd };
+            return (
+              <>
+                <h3 className={styles.dashSub}>Воронка</h3>
+                <div className={styles.funnelGrid}>
+                  <FunnelBlock title="Проблемомер" steps={funnelStepsPm(view.funnel)} />
+                  <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(view.funnel)} />
+                </div>
+                <h3 className={styles.dashSub}>{chartTitle}</h3>
+                {chartSeries.length ? (
+                  <SeriesChart series={chartSeries} title={chartTitle} />
+                ) : (
+                  <p className={styles.lead}>Пока нет точек для графика</p>
+                )}
+                {spansMoreThanTwoMonths(bounds.fromYmd, bounds.toYmd, view.series) ? (
+                  <>
+                    <h3 className={styles.dashSub}>По месяцам</h3>
+                    <MonthSlice rows={monthsFromSeries(view.series)} />
+                  </>
+                ) : null}
+              </>
+            );
+          })()}
+        </StaffDrillDrawer>
+      ) : null}
+
+      {route.page === 'overview' ? (
+      <>
       <div className={styles.tabs} role="tablist" aria-label="Разделы аналитики">
         {sectionTabs.map((t) => (
           <button
@@ -602,19 +645,21 @@ export function AnalyticsDashboard({
                 value={tile.value}
                 prev={tile.prev}
                 showDelta={tile.showDelta}
-                pressed={openMetric === tile.id}
+                pressed={false}
                 onSelect={
                   DRILL_METRICS.has(tile.id)
-                    ? () => setOpenMetric(openMetric === tile.id ? null : tile.id)
+                    ? () =>
+                        goAnalytics(
+                          { page: 'rating', metric: tile.id, role: null, userId: null, period: null },
+                          'push',
+                        )
                     : undefined
                 }
               />
             ))}
           </FadeRise>
           )}
-          {openMetric ? null : (
-            <p className={styles.hint}>Нажмите показатель — откроются воронка и динамика.</p>
-          )}
+          <p className={styles.hint}>Нажмите показатель — откроются воронка и динамика.</p>
         </div>
       ) : null}
 
@@ -785,50 +830,7 @@ export function AnalyticsDashboard({
           )}
         </div>
       ) : null}
-      {openMetric && model ? (
-        <StaffDrillDrawer
-          metric={openMetric}
-          mode={mode}
-          orgId={mode === 'partner' ? user.orgId : focusOrg || null}
-          from={rangeFromYmd(fromYmd, toYmd).from}
-          to={rangeFromYmd(fromYmd, toYmd).to}
-          onPeriodChange={setPanelPeriod}
-          onOpenRoom={onOpenRoom}
-          model={model}
-          tilePanels={tilePanels}
-          tileArea={tileArea}
-          onClose={() => setOpenMetric(null)}
-        >
-          {(() => {
-            const panelReady = Boolean(panelPeriod && panelData?.period === panelPeriod);
-            const view = panelReady && panelData ? panelData.dash : dash;
-            const monthlyAxis = panelReady && (panelPeriod === 'quarter' || panelPeriod === 'year');
-            const chartTitle = monthlyAxis ? 'Динамика по месяцам' : 'Динамика по дням';
-            const chartSeries = monthlyAxis ? seriesByMonth(view.series) : view.series;
-            const bounds = panelPeriod ? presetRange(panelPeriod) : { fromYmd, toYmd };
-            return (
-              <>
-                <h3 className={styles.dashSub}>Воронка</h3>
-                <div className={styles.funnelGrid}>
-                  <FunnelBlock title="Проблемомер" steps={funnelStepsPm(view.funnel)} />
-                  <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(view.funnel)} />
-                </div>
-                <h3 className={styles.dashSub}>{chartTitle}</h3>
-                {chartSeries.length ? (
-                  <SeriesChart series={chartSeries} title={chartTitle} />
-                ) : (
-                  <p className={styles.lead}>Пока нет точек для графика</p>
-                )}
-                {spansMoreThanTwoMonths(bounds.fromYmd, bounds.toYmd, view.series) ? (
-                  <>
-                    <h3 className={styles.dashSub}>По месяцам</h3>
-                    <MonthSlice rows={monthsFromSeries(view.series)} />
-                  </>
-                ) : null}
-              </>
-            );
-          })()}
-        </StaffDrillDrawer>
+      </>
       ) : null}
     </div>
   );

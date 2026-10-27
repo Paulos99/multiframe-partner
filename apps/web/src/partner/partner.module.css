@@ -3186,6 +3186,15 @@
   margin-top: 14px;
 }
 
+.sheet {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: min-content;
+}
+
 .drawerBackdrop {
   position: fixed;
   inset: 0;

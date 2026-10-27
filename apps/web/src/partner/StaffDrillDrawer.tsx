@@ -1,5 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, type ReactNode } from 'react';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
 import type {
   DrillPeriod,
@@ -8,6 +7,7 @@ import type {
   DrillRoleId,
   StaffDrillResult,
 } from '../../../../packages/shared/staffDrill.js';
+import { goAnalytics, useAnalyticsRoute } from './analyticsRoute';
 import { analyticsSourceLabel, composeCabinetAnalytics, presetRange, rangeFromYmd, resolveCompanyRooms, type AnalyticsTileModel } from './analytics';
 import { isDemoModeEnabled } from './demoMode';
 import styles from './partner.module.css';
@@ -89,8 +89,6 @@ export function StaffDrillDrawer({
   orgId,
   from,
   to,
-  onPeriodChange,
-  onClose,
   onOpenRoom,
   model,
   tilePanels,
@@ -102,8 +100,6 @@ export function StaffDrillDrawer({
   orgId?: string | null;
   from?: string | null;
   to?: string | null;
-  onPeriodChange?: (period: DrillPeriod) => void;
-  onClose: () => void;
   onOpenRoom?: (roomId: string) => void;
   /** Тот же объект, из которого нарисованы плитки. Второй запрос сюда не ходит. */
   model: AnalyticsTileModel;
@@ -112,24 +108,18 @@ export function StaffDrillDrawer({
   tileArea: number;
   children?: ReactNode;
 }) {
-  const [period, setPeriod] = useState<DrillPeriod | null>(null);
-  const [roleId, setRoleId] = useState<DrillRoleId | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const route = useAnalyticsRoute();
+  const period = route.period;
   const explainZeros = import.meta.env.DEV || isDemoModeEnabled();
   const title = METRIC_LABELS[metric] || 'Рейтинг';
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') window.history.back();
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    setRoleId(null);
-    setUserId(null);
-  }, [metric]);
+  }, []);
 
   const preset = period ? presetRange(period) : null;
   const activeRange = preset
@@ -149,7 +139,7 @@ export function StaffDrillDrawer({
       orgId,
       metric,
       period: period ?? 'month',
-      userId,
+      userId: route.userId,
       mode,
       kpi: period ? undefined : { panels: tilePanels, areaM2: tileArea },
     }).drill;
@@ -158,212 +148,265 @@ export function StaffDrillDrawer({
   }
 
   const roles = visibleRoles(data);
-  const activeRole = roles.find((role) => role.id === roleId) || roles[0] || null;
+  const activeRole = roles.find((role) => role.id === route.role) || roles[0] || null;
+  const activeRoleId = activeRole?.id ?? null;
   const ranking = activeRole?.ranking || [];
-  const person = ranking.find((row) => row.userId === userId) || data?.ranking.find((row) => row.userId === userId) || null;
-  const detail = data?.detail && data.detail.userId === userId ? data.detail : null;
+  const person = route.userId
+    ? ranking.find((row) => row.userId === route.userId) || data?.ranking.find((row) => row.userId === route.userId) || null
+    : null;
+  const detail = data?.detail && data.detail.userId === route.userId ? data.detail : null;
+
+  useEffect(() => {
+    if (!activeRoleId) return;
+    if (route.role === activeRoleId) return;
+    goAnalytics(
+      {
+        page: route.page === 'staff' ? 'staff' : 'rating',
+        metric,
+        role: activeRoleId,
+        userId: route.page === 'staff' ? route.userId : null,
+        period: route.period,
+      },
+      'replace',
+    );
+  }, [activeRoleId, metric, route.page, route.period, route.role, route.userId]);
 
   function openProject(project: DrillProject) {
     if (!project.roomId || !onOpenRoom) return;
     onOpenRoom(project.roomId);
-    onClose();
   }
 
-  return createPortal(
-    <>
-      <button type="button" className={styles.drawerBackdrop} aria-label="Закрыть рейтинг" onClick={onClose} />
-      <aside className={`${styles.drawer} ${styles.drawerWide}`} role="dialog" aria-label={title}>
-        <div className={styles.drawerHead}>
-          <div>
-            <nav className={styles.crumbs} aria-label="Путь">
-              <button type="button" className={styles.crumbBtn} onClick={() => setUserId(null)}>
-                Рейтинг
-              </button>
+  function selectPeriod(next: DrillPeriod) {
+    goAnalytics(
+      {
+        page: 'rating',
+        metric,
+        role: activeRole?.id ?? route.role,
+        userId: null,
+        period: next,
+      },
+      'replace',
+    );
+  }
+
+  return (
+    <section className={styles.sheet} role="region" aria-label={title}>
+      <div className={styles.drawerHead}>
+        <div>
+          <nav className={styles.crumbs} aria-label="Путь">
+            <button type="button" className={styles.crumbBtn} onClick={() => window.history.back()}>
+              Аналитика
+            </button>
+            <span className={styles.crumb}>
+              <span aria-hidden>/</span>
               {person ? (
-                <span className={styles.crumb}>
-                  <span aria-hidden>·</span>
-                  <span>{person.displayName}</span>
-                </span>
-              ) : null}
-            </nav>
-            <h3>{person ? person.displayName : title}</h3>
-            <p className={styles.lead}>
-              {data?.scope === 'team' ? 'Моя команда' : 'Вся компания'}
-              {person ? ` · ${roleLabel(person.role)}` : ''}
-            </p>
-          </div>
-          <button type="button" className={styles.ghost} onClick={() => (userId ? setUserId(null) : onClose())}>
-            {userId ? 'Назад' : 'Закрыть'}
-          </button>
-        </div>
-
-        {explainZeros && data ? (
-          <p className={styles.whyZeroReport} data-testid="why-zero">
-            Почему 0. Источник: {analyticsSourceLabel(model.source)}. Хранилище mf_partner_db_v5. Комнат{' '}
-            {data.drops?.rooms ?? 0}. Событий {data.drops?.events ?? 0}.
-            Отсечено: компания {data.drops?.company ?? 0}, период {data.drops?.period ?? 0}, исполнитель{' '}
-            {data.drops?.assignee ?? 0}. Монтаж: {assignmentLine(data.drops?.installByUser)}. Закрыто:{' '}
-            {assignmentLine(data.drops?.closedByUser)}. Плитка панелей {tilePanels}, площадь {tileArea}.
+                <button type="button" className={styles.crumbBtn} onClick={() => window.history.back()}>
+                  {title}
+                </button>
+              ) : (
+                <span>{title}</span>
+              )}
+            </span>
+            {person ? (
+              <span className={styles.crumb}>
+                <span aria-hidden>/</span>
+                <span>{person.displayName}</span>
+              </span>
+            ) : null}
+          </nav>
+          <h3>{person ? person.displayName : title}</h3>
+          <p className={styles.lead}>
+            {data?.scope === 'team' ? 'Моя команда' : 'Вся компания'}
+            {person ? ` · ${roleLabel(person.role)}` : ''}
           </p>
+        </div>
+        {person ? (
+          <button type="button" className={styles.ghost} onClick={() => window.history.back()}>
+            Назад
+          </button>
         ) : null}
+      </div>
 
-        <div className={styles.drillPeriods} role="group" aria-label="Период рейтинга">
-          {PERIODS.map((item) => (
+      {explainZeros && data ? (
+        <p className={styles.whyZeroReport} data-testid="why-zero">
+          Почему 0. Источник: {analyticsSourceLabel(model.source)}. Хранилище mf_partner_db_v5. Комнат{' '}
+          {data.drops?.rooms ?? 0}. Событий {data.drops?.events ?? 0}.
+          Отсечено: компания {data.drops?.company ?? 0}, период {data.drops?.period ?? 0}, исполнитель{' '}
+          {data.drops?.assignee ?? 0}. Монтаж: {assignmentLine(data.drops?.installByUser)}. Закрыто:{' '}
+          {assignmentLine(data.drops?.closedByUser)}. Плитка панелей {tilePanels}, площадь {tileArea}.
+        </p>
+      ) : null}
+
+      <div className={styles.drillPeriods} role="group" aria-label="Период рейтинга">
+        {PERIODS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={styles.ghost}
+            aria-pressed={period === item.id}
+            onClick={() => selectPeriod(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {roles.length ? (
+        <div className={styles.drillPeriods} role="tablist" aria-label="Роли">
+          {roles.map((role) => (
             <button
-              key={item.id}
+              key={role.id}
               type="button"
+              role="tab"
               className={styles.ghost}
-              aria-pressed={period === item.id}
+              aria-selected={activeRole?.id === role.id}
+              aria-pressed={activeRole?.id === role.id}
               onClick={() => {
-                setPeriod(item.id);
-                setUserId(null);
-                onPeriodChange?.(item.id);
+                goAnalytics(
+                  {
+                    page: 'rating',
+                    metric,
+                    role: role.id,
+                    userId: null,
+                    period: route.period,
+                  },
+                  'replace',
+                );
               }}
             >
-              {item.label}
+              {role.label}
             </button>
           ))}
         </div>
+      ) : null}
 
-        {roles.length ? (
-          <div className={styles.drillPeriods} role="tablist" aria-label="Роли">
-            {roles.map((role) => (
-              <button
-                key={role.id}
-                type="button"
-                role="tab"
-                className={styles.ghost}
-                aria-selected={activeRole?.id === role.id}
-                aria-pressed={activeRole?.id === role.id}
-                onClick={() => {
-                  setRoleId(role.id);
-                  setUserId(null);
-                }}
-              >
-                {role.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
+      {error ? (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      ) : null}
+      {data?.demoFilled ? (
+        <p className={styles.hint}>Пока нет своей активности — показаны примерные цифры.</p>
+      ) : null}
 
-        {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
-        ) : null}
-        {data?.demoFilled ? (
-          <p className={styles.hint}>Пока нет своей активности — показаны примерные цифры.</p>
-        ) : null}
+      {!person ? (
+        <div className={styles.drillRank}>
+          {ranking.map((row, index) => (
+            <button
+              key={row.userId}
+              type="button"
+              className={styles.drillPerson}
+              onClick={() => {
+                goAnalytics(
+                  {
+                    page: 'staff',
+                    metric,
+                    role: activeRole?.id ?? route.role,
+                    userId: row.userId,
+                    period: route.period,
+                  },
+                  'push',
+                );
+              }}
+            >
+              <span className={styles.drillPersonHead}>
+                <strong>
+                  {index + 1}. {row.displayName}
+                </strong>
+                <span className={styles.drillValue}>{formatNum(row.value)}</span>
+              </span>
+              <span className={styles.hint}>
+                {roleLabel(row.role)}
+                {metric === 'staff' ? '' : ` · ${title}`}
+              </span>
+              <span className={styles.drillStats}>{activityLine(row)}</span>
+            </button>
+          ))}
+          {data && !ranking.length ? <p className={styles.lead}>Пока нет активности</p> : null}
+        </div>
+      ) : null}
 
-        {!person ? (
-          <div className={styles.drillRank}>
-            {ranking.map((row, index) => (
-              <button
-                key={row.userId}
-                type="button"
-                className={styles.drillPerson}
-                onClick={() => setUserId(row.userId)}
-              >
-                <span className={styles.drillPersonHead}>
-                  <strong>
-                    {index + 1}. {row.displayName}
-                  </strong>
-                  <span className={styles.drillValue}>{formatNum(row.value)}</span>
-                </span>
-                <span className={styles.hint}>
-                  {roleLabel(row.role)}
-                  {metric === 'staff' ? '' : ` · ${title}`}
-                </span>
-                <span className={styles.drillStats}>{activityLine(row)}</span>
-              </button>
-            ))}
-            {data && !ranking.length ? <p className={styles.lead}>Пока нет активности</p> : null}
-          </div>
-        ) : null}
+      {person ? null : children}
 
-        {person ? null : children}
-
-        {person && detail ? (
-          <div className={styles.drillDetail}>
-            <h4 className={styles.dashSub}>
-              {person.role === 'crew' ? 'За период' : 'Среднемесячные показатели'}
-            </h4>
-            <div className={styles.drillAvg}>
-              {(person.role === 'crew'
+      {person && detail ? (
+        <div className={styles.drillDetail}>
+          <h4 className={styles.dashSub}>
+            {person.role === 'crew' ? 'За период' : 'Среднемесячные показатели'}
+          </h4>
+          <div className={styles.drillAvg}>
+            {(person.role === 'crew'
+              ? ([
+                  ['Смонтировано комнат', person.mountedRooms],
+                  ['Площадь, м²', person.mountedAreaM2],
+                  ['Панели', person.mountedPanels],
+                ] as Array<[string, number]>)
+              : person.role === 'measurer'
                 ? ([
-                    ['Смонтировано комнат', person.mountedRooms],
-                    ['Площадь, м²', person.mountedAreaM2],
-                    ['Панели', person.mountedPanels],
+                    ['Замеры', person.measuredRooms],
+                    ['Площадь, м²', detail.averages.areaM2],
+                    ['Расчёты', detail.averages.problemomer + detail.averages.calculator],
                   ] as Array<[string, number]>)
-                : person.role === 'measurer'
-                  ? ([
-                      ['Замеры', person.measuredRooms],
-                      ['Площадь, м²', detail.averages.areaM2],
-                      ['Расчёты', detail.averages.problemomer + detail.averages.calculator],
-                    ] as Array<[string, number]>)
-                  : ([
-                      ['Проблемомер', detail.averages.problemomer],
-                      ['Расчёты', detail.averages.calculator],
-                      ['PDF', detail.averages.pdf],
-                      ['Проекты', person.projectCount],
-                      ['Площадь, м²', detail.averages.areaM2],
-                    ] as Array<[string, number]>)).map(([label, value]) => (
-                <div key={label} className={styles.drillAvgItem}>
-                  <span>{label}</span>
-                  <strong>{formatNum(value)}</strong>
-                </div>
-              ))}
-            </div>
-
-            <h4 className={styles.dashSub}>По месяцам</h4>
-            <ul className={styles.drillMonths}>
-              {detail.months.map((month) => (
-                <li key={month.key}>
-                  <span>{month.label}</span>
-                  <span>{monthLine(month)}</span>
-                </li>
-              ))}
-            </ul>
-
-            <h4 className={styles.dashSub}>Топ проектов</h4>
-            {detail.projects.length ? (
-              <div className={styles.drillRank}>
-                {detail.projects.map((project) => {
-                  const openable = Boolean(project.roomId && onOpenRoom);
-                  const body = (
-                    <>
-                      <span className={styles.drillPersonHead}>
-                        <strong>{project.name}</strong>
-                        <span className={styles.drillValue}>{formatNum(project.areaM2)} м²</span>
-                      </span>
-                      <span className={styles.hint}>
-                        панели {formatNum(project.panels)} · комнат {project.rooms}
-                      </span>
-                    </>
-                  );
-                  return openable ? (
-                    <button
-                      key={project.id}
-                      type="button"
-                      className={styles.drillPerson}
-                      onClick={() => openProject(project)}
-                    >
-                      {body}
-                    </button>
-                  ) : (
-                    <div key={project.id} className={styles.drillPerson}>
-                      {body}
-                    </div>
-                  );
-                })}
+                : ([
+                    ['Проблемомер', detail.averages.problemomer],
+                    ['Расчёты', detail.averages.calculator],
+                    ['PDF', detail.averages.pdf],
+                    ['Проекты', person.projectCount],
+                    ['Площадь, м²', detail.averages.areaM2],
+                  ] as Array<[string, number]>)).map(([label, value]) => (
+              <div key={label} className={styles.drillAvgItem}>
+                <span>{label}</span>
+                <strong>{formatNum(value)}</strong>
               </div>
-            ) : (
-              <p className={styles.lead}>За период проектов нет</p>
-            )}
+            ))}
           </div>
-        ) : null}
-      </aside>
-    </>,
-    document.body,
+
+          <h4 className={styles.dashSub}>По месяцам</h4>
+          <ul className={styles.drillMonths}>
+            {detail.months.map((month) => (
+              <li key={month.key}>
+                <span>{month.label}</span>
+                <span>{monthLine(month)}</span>
+              </li>
+            ))}
+          </ul>
+
+          <h4 className={styles.dashSub}>Топ проектов</h4>
+          {detail.projects.length ? (
+            <div className={styles.drillRank}>
+              {detail.projects.map((project) => {
+                const openable = Boolean(project.roomId && onOpenRoom);
+                const body = (
+                  <>
+                    <span className={styles.drillPersonHead}>
+                      <strong>{project.name}</strong>
+                      <span className={styles.drillValue}>{formatNum(project.areaM2)} м²</span>
+                    </span>
+                    <span className={styles.hint}>
+                      панели {formatNum(project.panels)} · комнат {project.rooms}
+                    </span>
+                  </>
+                );
+                return openable ? (
+                  <button
+                    key={project.id}
+                    type="button"
+                    className={styles.drillPerson}
+                    onClick={() => openProject(project)}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <div key={project.id} className={styles.drillPerson}>
+                    {body}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className={styles.lead}>За период проектов нет</p>
+          )}
+        </div>
+      ) : null}
+    </section>
   );
 }
