@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ROLE_LABELS, type UserRole } from '../../../../packages/shared/partner';
 import { MaterialsPanel } from './MaterialsPanel';
+import { OfflineGearSlot } from './offlineGearSlot';
 import styles from './HelpTrainingPanel.module.css';
 
 type HelpSection = {
@@ -69,7 +70,6 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
     steps: [
       '«Сегодня» — ближайшие комнаты. «Собрать КП» открывает комнату в статусе «Замер».',
       '«Проекты» — список и канбан. Новая комната остаётся черновиком, пока статус не сменят в её карточке.',
-      '«Отправить КП» ставит статус «КП отправлено».',
       'В карточке комнаты меняйте статус и назначайте исполнителя.',
       'Калькулятор считает только потолок MultiFrame по РРЦ компании.',
     ],
@@ -85,7 +85,7 @@ const BY_ROLE: Record<UserRole, HelpSection> = {
     steps: [
       'На «Сегодня» откройте назначенную комнату.',
       '«Проблемомер» — вопросы для рекомендации по потолку. «Калькулятор» — панели и крепёж.',
-      '«Сохранить комнату» записывает профиль в уже созданную комнату.',
+      '«Сохранить» в Проблемомере записывает профиль в уже созданную комнату.',
       'Новый проект создаёт менеджер или владелец.',
     ],
     cannot: [
@@ -144,10 +144,15 @@ function SectionBlock({ section, highlight }: { section: HelpSection; highlight?
 export function HelpTrainingPanel({ role }: { role: UserRole }) {
   const personal = useMemo(() => BY_ROLE[role], [role]);
   const [section, setSection] = useState<'materials' | 'cabinet'>('materials');
+  const [gearSlot, setGearSlot] = useState<HTMLElement | null>(null);
 
   return (
+    <OfflineGearSlot.Provider value={gearSlot}>
     <div className={styles.panel}>
-      <h2>Обучение</h2>
+      <div className={styles.head}>
+        <h2>Обучение</h2>
+        <div ref={setGearSlot} className={styles.gearSlot} />
+      </div>
       <div className={styles.tabs} role="tablist" aria-label="Разделы обучения">
         <button
           type="button"
@@ -184,5 +189,6 @@ export function HelpTrainingPanel({ role }: { role: UserRole }) {
         </div>
       )}
     </div>
+    </OfflineGearSlot.Provider>
   );
 }

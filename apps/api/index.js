@@ -23,6 +23,7 @@ import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } f
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { estimateForRole } from '../../packages/shared/projectAccess.js';
+import { applyDemoPersonalNames, normalizePersonName } from '../../packages/shared/personName.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -286,11 +287,13 @@ async function loadPlatformFallback() {
 
 async function loadPlatform() {
   const platform = await loadStoredDocument(platformDocumentSpec());
-  if (groupOrphanRooms(platform)) {
+  const names = Boolean(platform?.users && applyDemoPersonalNames(platform.users));
+  const grouped = groupOrphanRooms(platform);
+  if (names || grouped) {
     try {
       await savePlatform(platform);
     } catch (error) {
-      console.warn('project grouping save failed', error?.message || error);
+      console.warn('platform save failed', error?.message || error);
     }
   }
   return platform;
@@ -1247,6 +1250,48 @@ export async function handler(event = {}) {
       });
       await savePlatform(platform);
       return json(200, { password: pw });
+    }
+
+    if (method === 'PATCH' && /^\/org\/staff\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['owner']);
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const staffUserId = decodeURIComponent(path.split('/').pop() || '');
+      const target = platform.users.find((u) => u.id === staffUserId);
+      if (!target) return json(404, { message: 'Сотрудник не найден' });
+      if (target.orgId !== user.orgId) return json(403, { message: 'Недостаточно прав' });
+      const targetRole = normalizeRole(target.role);
+      if (!STAFF_ROLES.includes(targetRole)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      const body = getBody(event);
+      if (!Object.prototype.hasOwnProperty.call(body, 'displayName')) {
+        return json(400, { message: 'Укажите имя' });
+      }
+      const displayName = normalizePersonName(body.displayName);
+      const idx = platform.users.findIndex((u) => u.id === staffUserId);
+      const nextUser = {
+        ...platform.users[idx],
+        displayName,
+        updatedAt: new Date().toISOString(),
+      };
+      delete nextUser.phone;
+      delete nextUser.password;
+      platform.users[idx] = nextUser;
+      pushActivity(platform, {
+        orgId: user.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'rename_staff',
+        detail: `${nextUser.login} · ${displayName || '—'}`,
+      });
+      await savePlatform(platform);
+      return json(200, {
+        id: nextUser.id,
+        login: nextUser.login,
+        role: targetRole,
+        displayName,
+      });
     }
 
     if (method === 'DELETE' && /\/org\/staff\/[^/]+$/.test(path)) {

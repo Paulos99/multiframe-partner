@@ -34,6 +34,8 @@ test('из комнаты Проблемомер подставляет тип �
   }
 
   await expect(question).toBeVisible();
+  await expect(page.getByLabel('Площадь комнаты, м²')).toBeVisible();
+  await expect(page.getByText('Сохранится в комнату проекта и в калькулятор')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Спальня', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByPlaceholder('Например, 18')).toHaveValue('24');
   await expect(page.getByText('выберите тип')).toHaveCount(0);
@@ -49,16 +51,14 @@ test('из комнаты Проблемомер подставляет тип �
   }
   await expect(result).toBeVisible({ timeout: 20000 });
   await expect(page.getByRole('region', { name: 'Параметры комнаты' })).toContainText('Спальня');
-  await expect(page.getByRole('button', { name: 'Сохранить в комнату', exact: true })).toBeVisible();
-  await expect(page.getByText('Другие действия', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeVisible();
+  await expect(page.getByText('Другие действия', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toHaveCount(0);
   await expect(page.getByText('без каркаса')).toHaveCount(0);
   await expect(page.getByLabel('Проект')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Сохранить комнату', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Отправить КП', exact: true })).toHaveCount(0);
-  await page.getByText('Другие действия', { exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Сохранить в комнату', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Пройти ещё раз', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
   const room = page.getByRole('dialog', { name: 'Комната' });
   await expect(room).toBeVisible();
   await expect(room).toContainText('Спальня');

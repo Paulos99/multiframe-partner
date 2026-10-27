@@ -86,8 +86,15 @@ export function optionLabel<T extends string>(
   return options.find((o) => o.id === id)?.label ?? 'не указано';
 }
 
+/** Шкала без ступени «сильный дискомфорт»: и подпись, и отметка сняты. */
+const SCALE_STEPS = FELT_STEPS.filter((step) => step !== 'danger');
+
+function shownStep(step: FeltStep): Exclude<FeltStep, 'danger'> {
+  return step === 'danger' ? 'uncomfortable' : step;
+}
+
 function feltIndex(step: FeltStep): number {
-  return FELT_STEPS.indexOf(step);
+  return SCALE_STEPS.indexOf(shownStep(step));
 }
 
 export function FeltScale({
@@ -112,9 +119,11 @@ export function FeltScale({
   nowIndex: number;
   afterIndex?: number;
 }) {
+  const nowShown = shownStep(now);
+  const afterShown = after ? shownStep(after) : undefined;
   const nowIdx = feltIndex(now);
   const afterIdx = after ? feltIndex(after) : -1;
-  const same = mode === 'nowAndAfter' && after && now === after;
+  const same = mode === 'nowAndAfter' && Boolean(afterShown) && nowShown === afterShown;
   const nowVal = Math.round(nowIndex);
   const afterVal = afterIndex != null ? Math.round(afterIndex) : null;
   const direction =
@@ -127,9 +136,9 @@ export function FeltScale({
       role="img"
       aria-label={
         mode === 'nowOnly'
-          ? `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexWord} ≈ ${nowVal} дБ`
-          : `${title}: сейчас ${FELT_STEP_LABELS[now]}, ${indexWord} ≈ ${nowVal} дБ; с MultiFrame ${
-              after ? FELT_STEP_LABELS[after] : ''
+          ? `${title}: сейчас ${FELT_STEP_LABELS[nowShown]}, ${indexWord} ≈ ${nowVal} дБ`
+          : `${title}: сейчас ${FELT_STEP_LABELS[nowShown]}, ${indexWord} ≈ ${nowVal} дБ; с MultiFrame ${
+              afterShown ? FELT_STEP_LABELS[afterShown] : ''
             }${afterVal != null ? `, ${indexWord} ≈ ${afterVal} дБ` : ''}${
               quieterPct != null ? `, в комнате примерно на ${quieterPct}% тише` : ''
             }`
@@ -169,17 +178,17 @@ export function FeltScale({
 
       <div className={styles.feltTrack} aria-hidden>
         <span className={styles.feltLine} />
-        {FELT_STEPS.map((step, i) => {
+        {SCALE_STEPS.map((step, i) => {
           const isNow = i === nowIdx;
           const isAfter = mode === 'nowAndAfter' && i === afterIdx;
           const both = same && isNow;
-          const edge = i === 0 ? 'start' : i === FELT_STEPS.length - 1 ? 'end' : 'mid';
+          const edge = i === 0 ? 'start' : i === SCALE_STEPS.length - 1 ? 'end' : 'mid';
           return (
             <span
               key={step}
               className={`${styles.feltStep} ${isNow || isAfter || both ? styles.feltStepActive : ''}`}
               data-edge={edge}
-              style={{ left: `${(i / (FELT_STEPS.length - 1)) * 100}%` }}
+              style={{ left: `${(i / (SCALE_STEPS.length - 1)) * 100}%` }}
             >
               {both ? (
                 <span className={`${styles.feltMark} ${styles.feltMarkBoth}`}>Сейчас · После</span>
@@ -191,7 +200,7 @@ export function FeltScale({
                   ) : null}
                 </>
               )}
-              <span className={styles.feltDot} data-danger={step === 'danger' ? '' : undefined} />
+              <span className={styles.feltDot} />
               <span className={styles.feltLabel}>{FELT_STEP_LABELS[step]}</span>
             </span>
           );

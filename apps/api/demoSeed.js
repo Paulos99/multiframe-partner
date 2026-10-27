@@ -7,6 +7,7 @@
 import bcrypt from 'bcryptjs';
 import { boostCapitalEvents, boostCapitalStaff } from '../../packages/shared/demoAnalyticsBoost.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
+import { DEMO_PERSONAL_NAMES } from '../../packages/shared/personName.js';
 import { sealDisabledDemoUsers } from './sealDemoUsers.js';
 
 const OFFICIAL_PANEL = 2396;
@@ -303,7 +304,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'admin',
       password: 'admin1234',
       role: 'admin',
-      displayName: 'Администратор StP',
+      displayName: DEMO_PERSONAL_NAMES.u_admin,
       orgId: null,
     }),
     user({
@@ -311,7 +312,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'partner1',
       password: 'demo1234',
       role: 'owner',
-      displayName: 'Владелец · Потолки Столицы',
+      displayName: DEMO_PERSONAL_NAMES.u_partner1,
       orgId: 'org_demo',
     }),
     user({
@@ -319,7 +320,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'sales1',
       password: 'exec1234',
       role: 'sales',
-      displayName: 'Менеджер · Потолки Столицы',
+      displayName: DEMO_PERSONAL_NAMES.u_sales1,
       orgId: 'org_demo',
     }),
     user({
@@ -327,7 +328,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'exec1',
       password: 'exec1234',
       role: 'measurer',
-      displayName: 'Замерщик · Потолки Столицы',
+      displayName: DEMO_PERSONAL_NAMES.u_measurer1,
       orgId: 'org_demo',
     }),
     user({
@@ -335,7 +336,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'crew1',
       password: 'exec1234',
       role: 'crew',
-      displayName: 'Монтажник · Потолки Столицы',
+      displayName: DEMO_PERSONAL_NAMES.u_crew1,
       orgId: 'org_demo',
     }),
     user({
@@ -343,7 +344,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'partner2',
       password: 'demo1234',
       role: 'owner',
-      displayName: 'Владелец · Северный Потолок',
+      displayName: DEMO_PERSONAL_NAMES.u_partner2,
       orgId: 'org_demo_spb',
     }),
     user({
@@ -351,7 +352,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'sales2',
       password: 'exec1234',
       role: 'sales',
-      displayName: 'Менеджер · Северный Потолок',
+      displayName: DEMO_PERSONAL_NAMES.u_sales2,
       orgId: 'org_demo_spb',
     }),
     user({
@@ -359,7 +360,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'exec2',
       password: 'exec1234',
       role: 'measurer',
-      displayName: 'Замерщик · Северный Потолок',
+      displayName: DEMO_PERSONAL_NAMES.u_measurer2,
       orgId: 'org_demo_spb',
     }),
     user({
@@ -367,7 +368,7 @@ export function buildDemoPlatform(opts = {}) {
       login: 'crew2',
       password: 'exec1234',
       role: 'crew',
-      displayName: 'Монтажник · Северный Потолок',
+      displayName: DEMO_PERSONAL_NAMES.u_crew2,
       orgId: 'org_demo_spb',
     }),
   ];

@@ -4,6 +4,7 @@ import {
   type JobObject,
   type UserRole,
 } from '../../../../packages/shared/partner';
+import { greetingLine, greetingName } from '../../../../packages/shared/personName.js';
 import { roomDisplayName } from './kanban';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
@@ -15,13 +16,6 @@ const NEXT_RANK: Record<JobObject['status'], number> = {
   install: 3,
   closed: 4,
 };
-
-function greeting(name: string): string {
-  const hour = new Date().getHours();
-  const hello = hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
-  const first = name.trim().split(/\s+/)[0] || name;
-  return `${hello}, ${first}`;
-}
 
 function roomTitle(room: JobObject): string {
   return roomDisplayName(room);
@@ -97,13 +91,21 @@ export function TodayHome({
         : 'Пока нет проектов. Создайте проект с первой комнатой — она откроется в карточке.';
 
   const partners = role === 'admin' ? api.adminListPartners() : [];
+  const named = Boolean(greetingName(user.displayName));
 
   return (
     <section className={styles.today} aria-label="Сегодня">
       <p className={styles.eyebrow}>Сегодня</p>
       <div className={styles.todayHead}>
         <div>
-          <h2>{greeting(user.displayName)}</h2>
+          <h2>{greetingLine(user.displayName)}</h2>
+          <button
+            type="button"
+            className={named ? styles.todayNameQuiet : styles.todayName}
+            onClick={() => api.requestOpenProfile()}
+          >
+            {named ? 'Изменить имя' : 'Указать имя'}
+          </button>
           <p className={styles.lead}>
             {role === 'admin'
               ? 'Сеть партнёров. Следующий шаг — компания, которой ещё нет в списке.'

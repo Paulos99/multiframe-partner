@@ -1,5 +1,6 @@
 import { PageTransition } from '../partner/motionBits';
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { usePartner } from '../partner/PartnerContext';
 import { CabinetBrand } from '../partner/CabinetBrand';
 import { MobileProfileScreen, ProfileTabIcon } from './MobileProfile';
 import { ProfileMenu } from './ProfileMenu';
@@ -35,7 +36,11 @@ export function CabinetChrome({
   children: ReactNode;
 }) {
   const phone = usePhoneLayout();
+  const { profileOpenToken } = usePartner();
   const [profileOpen, setProfileOpen] = useState(false);
+  useEffect(() => {
+    if (profileOpenToken > 0) setProfileOpen(true);
+  }, [profileOpenToken]);
   const frameRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
@@ -108,6 +113,7 @@ export function CabinetChrome({
               role={profile.role}
               company={profile.company}
               onLogout={profile.onLogout}
+              editToken={profileOpenToken}
             />
           ) : (
             children

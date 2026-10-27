@@ -26,6 +26,9 @@ export function StaffPanel() {
   const [savingStaff, setSavingStaff] = useState(false);
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [staffName, setStaffName] = useState('');
+  const [nameErr, setNameErr] = useState<string | null>(null);
+  const [nameSaving, setNameSaving] = useState(false);
   const staff = api.partnerListStaff();
 
   useEffect(() => {
@@ -78,11 +81,12 @@ export function StaffPanel() {
         <form onSubmit={(e) => void onCreateStaff(e)}>
           <div className={styles.grid2}>
             <label className={styles.field}>
-              Имя / подпись
+              Имя
               <input
                 value={execName}
                 onChange={(e) => setExecName(e.target.value)}
-                placeholder="Например, Иван · замер"
+                placeholder="Например, Иван Петров"
+                maxLength={80}
               />
             </label>
             <label className={styles.field}>
@@ -132,7 +136,11 @@ export function StaffPanel() {
               type="button"
               className={styles.ghost}
               aria-expanded={openId === ex.id}
-              onClick={() => setOpenId(ex.id)}
+              onClick={() => {
+                setStaffName(ex.displayName);
+                setNameErr(null);
+                setOpenId(ex.id);
+              }}
             >
               <strong>{ex.displayName}</strong>
               <div className={styles.hint}>
@@ -158,6 +166,36 @@ export function StaffPanel() {
                 Закрыть
               </button>
             </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                setNameErr(null);
+                setNameSaving(true);
+                void api
+                  .renameStaff(open.id, staffName)
+                  .then((saved) => setStaffName(saved.displayName))
+                  .catch((ex) => setNameErr(ex instanceof Error ? ex.message : 'Не удалось сохранить имя'))
+                  .finally(() => setNameSaving(false));
+              }}
+            >
+              <label className={styles.field}>
+                Имя
+                <input
+                  aria-label="Имя сотрудника"
+                  value={staffName}
+                  maxLength={80}
+                  onChange={(event) => setStaffName(event.target.value)}
+                />
+              </label>
+              {nameErr ? (
+                <p className={styles.error} role="alert">
+                  {nameErr}
+                </p>
+              ) : null}
+              <Button type="submit" loading={nameSaving} disabled={nameSaving || staffName.trim() === open.displayName.trim()}>
+                Сохранить имя
+              </Button>
+            </form>
             <NewPasswordButton staffId={open.id} staffName={open.displayName} />
             {open.id === user.id ? null : (
               <button
