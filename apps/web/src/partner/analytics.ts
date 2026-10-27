@@ -4,6 +4,7 @@ import type {
   AnalyticsEvent,
   AnalyticsObject,
   AnalyticsTool,
+  UserRole,
 } from '../../../../packages/shared/partner';
 import { aggregateAnalyticsDashboard, isStaffRole, networkAdminScope } from '../../../../packages/shared/partner';
 import { buildStaffDrill, type DrillPeriod, type StaffDrillResult } from '../../../../packages/shared/staffDrill.js';
@@ -189,7 +190,7 @@ export function composeCabinetAnalytics(input: {
   for (const user of input.users || []) {
     if (!user?.id) continue;
     const prev = usersById.get(user.id);
-    usersById.set(user.id, { ...prev, ...user, role: user.role || prev?.role || 'sales' });
+    usersById.set(user.id, { ...prev, ...user, role: (user.role || prev?.role || 'sales') as UserRole } as typeof prev & object);
   }
   const users = [...usersById.values()];
   const rooms = resolveCompanyRooms(input.objects, orgId);

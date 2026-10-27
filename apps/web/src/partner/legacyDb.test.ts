@@ -70,7 +70,7 @@ test('v4 с кликом проблемомера переезжает в v5, а
   const { loadDb } = await import('./localStore');
   const db = loadDb();
   assert.equal(db.objects.some((object) => object.id === 'obj_clicked'), true);
-  assert.equal(db.projects.some((project) => project.id === 'prj_clicked'), true);
+  assert.equal((db.projects || []).some((project) => project.id === 'prj_clicked'), true);
   assert.equal(db.orgs.some((org) => org.id === 'org_demo_spb'), true);
   assert.equal(storage.getItem('mf_partner_db_v4'), null);
   assert.ok(storage.getItem('mf_partner_db_v5'));
