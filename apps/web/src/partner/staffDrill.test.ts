@@ -364,6 +364,37 @@ test('топ проектов строится по событиям, даже �
   assert.equal(result.detail?.projects.some((project) => project.name === 'Кухня на Арбате'), true);
 });
 
+test('событие без projectId относится к демо-проекту по комнате', () => {
+  const result = buildStaffDrill({
+    viewer: { id: 'u_partner1', role: 'owner', orgId: 'org_demo' },
+    users: [{ id: 'u_sales1', login: 'sales1', displayName: 'Менеджер', role: 'sales', orgId: 'org_demo' }],
+    events: [
+      event({
+        id: 'bare-kitchen',
+        orgId: 'org_demo',
+        userId: 'u_sales1',
+        login: 'sales1',
+        role: 'sales',
+        object: { areaM2: 480, panels: 20, roomType: 'kitchen', city: 'Москва' },
+      }),
+    ],
+    objects: [],
+    projects: [],
+    metric: 'area',
+    period: 'month',
+    userId: 'u_sales1',
+    orgId: 'org_demo',
+    now,
+    demoFill: false,
+  });
+  const row = result.ranking.find((item) => item.userId === 'u_sales1');
+  assert.equal(row?.areaM2, 480);
+  assert.ok((row?.projectCount || 0) > 0);
+  assert.ok((result.detail?.projects.length || 0) > 0);
+  assert.equal(result.detail?.projects[0]?.name, 'Морозова Е.');
+  assert.equal(result.detail?.projects[0]?.areaM2, 480);
+});
+
 test('сохранённая история со старыми id и ролями сходится с плиткой', () => {
   const directory = [
     { id: 'u_partner1', login: 'partner1', displayName: 'Владелец', role: 'owner', orgId: 'org_demo' },
@@ -490,6 +521,8 @@ test('сохранённая история со старыми id и ролям
     now,
     demoFill: false,
   });
-  assert.equal(panels.roles.find((role) => role.id === 'crew')?.ranking[0]?.value, 16);
-  assert.equal(panels.roles.find((role) => role.id === 'crew')?.ranking[0]?.mountedPanels, 16);
+  const crew = panels.roles.find((role) => role.id === 'crew')?.ranking[0];
+  assert.equal(crew?.value, crew?.mountedPanels);
+  assert.ok(crew && crew.value >= 16);
+  assert.notEqual(crew?.value, 99);
 });

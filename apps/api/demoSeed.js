@@ -6,6 +6,7 @@
  */
 import bcrypt from 'bcryptjs';
 import { boostCapitalEvents, boostCapitalStaff } from '../../packages/shared/demoAnalyticsBoost.js';
+import { demoHistoryReady, supplementDemoHistory } from '../../packages/shared/demoHistory.js';
 import { sealDisabledDemoUsers } from './sealDemoUsers.js';
 
 const OFFICIAL_PANEL = 2396;
@@ -658,10 +659,6 @@ export function buildDemoAnalyticsEvents(opts = {}) {
 }
 
 const DEMO_ORG_IDS = new Set(['org_demo', 'org_demo_spb']);
-const SEED_EVENT_ID =
-  /^(ev_(login|open|result|pdf|share|calc|calcpdf|admin)_|ev_boost_capital_)/;
-
-const YEAR_SPAN_MS = 300 * 24 * 60 * 60 * 1000;
 
 export function demoHistorySchema(events) {
   const list = Array.isArray(events) ? events : [];
@@ -670,35 +667,13 @@ export function demoHistorySchema(events) {
   return Number.isFinite(schema) ? schema : 0;
 }
 
-function demoHistoryReady(events) {
-  const list = Array.isArray(events) ? events : [];
-  if (demoHistorySchema(list) < DEMO_HISTORY_SCHEMA) return false;
-  const stamps = list
-    .filter((event) => event && DEMO_ORG_IDS.has(event.orgId) && event.id !== 'ev_demo_history_schema')
-    .map((event) => Date.parse(event.at))
-    .filter((stamp) => !Number.isNaN(stamp));
-  if (stamps.length < 2) return false;
-  return Math.max(...stamps) - Math.min(...stamps) >= YEAR_SPAN_MS;
-}
-
 /**
- * Демо-история дополняется до года, пока события без маркера не покрывают год.
- * Маркер на короткой пачке не замораживает её. Готовая пачка возвращается как есть.
+ * При чтении добирает только ту часть года, которой нет в сохранённой пачке.
+ * Недавние события остаются как есть: от них не зависит запись в хранилище.
  */
 export function extendDemoAnalyticsHistory(events) {
   const list = Array.isArray(events) ? events : [];
+  if (!list.some((event) => event && DEMO_ORG_IDS.has(event.orgId))) return list;
   if (demoHistoryReady(list)) return list;
-  const demo = list.filter((event) => event && DEMO_ORG_IDS.has(event.orgId));
-  if (!demo.length) return list;
-  const fresh = buildDemoAnalyticsEvents();
-  const freshIds = new Set(fresh.map((event) => event.id));
-  const kept = list.filter((event) => {
-    if (!event) return false;
-    if (!DEMO_ORG_IDS.has(event.orgId)) return true;
-    const id = String(event.id || '');
-    if (id === 'ev_demo_history_schema') return false;
-    if (SEED_EVENT_ID.test(id)) return false;
-    return !freshIds.has(id);
-  });
-  return [...fresh, ...kept].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return supplementDemoHistory(list, buildDemoAnalyticsEvents());
 }

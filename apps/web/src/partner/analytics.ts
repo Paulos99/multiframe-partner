@@ -14,12 +14,10 @@ import {
   buildLocalDashboard,
   clearAnalyticsQueue,
   clearAllActionHistory,
-  DEMO_ANALYTICS_VERSION,
-  demoAnalyticsVersion,
   enqueueAnalyticsEvents,
   ensureActionHistoryCleared,
   ensureDemoAnalyticsHistory,
-  loadAnalyticsEvents,
+  loadDemoAnalyticsEvents,
   loadDb,
   loadSession,
   peekAnalyticsQueue,
@@ -138,10 +136,10 @@ export function bootstrapHistoryReset(): void {
   ensureDemoAnalyticsHistory();
 }
 
-const FROZEN_DEMO_ORGS = new Set(['org_demo', 'org_demo_spb']);
+const LOCAL_DEMO_ORGS = new Set(['org_demo', 'org_demo_spb']);
 
-function frozenDemoOrg(orgId?: string | null): boolean {
-  return Boolean(orgId && FROZEN_DEMO_ORGS.has(orgId) && demoAnalyticsVersion() === DEMO_ANALYTICS_VERSION);
+function readsLocalDemo(orgId?: string | null): boolean {
+  return Boolean(orgId && LOCAL_DEMO_ORGS.has(orgId));
 }
 
 async function cachedEvents(): Promise<AnalyticsEvent[]> {
@@ -161,8 +159,8 @@ export async function fetchAnalyticsDashboard(opts: {
   journal?: boolean;
 }): Promise<AnalyticsDashboard> {
   ensureDemoAnalyticsHistory();
-  const frozen = frozenDemoOrg(opts.orgId);
-  const extra = frozen ? [] : await cachedEvents();
+  const demoLocal = readsLocalDemo(opts.orgId);
+  const extra = demoLocal ? [] : await cachedEvents();
   const local = buildLocalDashboard(
     {
       from: opts.from,
@@ -173,7 +171,7 @@ export async function fetchAnalyticsDashboard(opts: {
     extra,
   );
 
-  if (!API_BASE || frozen) return local;
+  if (!API_BASE || demoLocal) return local;
 
   try {
     const q = new URLSearchParams();
@@ -251,7 +249,7 @@ function localStaffDrill(opts: {
       orgId: session?.orgId || orgId,
     },
     users: db.users,
-    events: loadAnalyticsEvents() as unknown as Array<Record<string, unknown>>,
+    events: loadDemoAnalyticsEvents() as unknown as Array<Record<string, unknown>>,
     objects: db.objects as unknown as Array<Record<string, unknown>>,
     projects: (db.projects || []) as unknown as Array<Record<string, unknown>>,
     metric: opts.metric,
@@ -276,7 +274,7 @@ export async function fetchStaffDrill(opts: {
 }): Promise<StaffDrillResult> {
   ensureDemoAnalyticsHistory();
   const focusOrg = opts.mode === 'admin' ? opts.orgId || null : loadSession()?.orgId || opts.orgId || null;
-  if (!API_BASE || frozenDemoOrg(focusOrg)) return localStaffDrill(opts);
+  if (!API_BASE || readsLocalDemo(focusOrg)) return localStaffDrill(opts);
   const q = new URLSearchParams();
   q.set('metric', opts.metric);
   q.set('period', opts.period);

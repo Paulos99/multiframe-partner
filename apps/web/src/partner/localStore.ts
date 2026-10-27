@@ -37,6 +37,7 @@ import {
   STAFF_ROLES,
 } from '../../../../packages/shared/partner';
 import { carriedObjectLink } from './objectLink';
+import { supplementDemoHistory } from '../../../../packages/shared/demoHistory.js';
 import {
   buildLocalDemoAnalytics,
   buildLocalDemoObjects,
@@ -60,9 +61,6 @@ const DEMO_ANALYTICS_SEED_KEY = 'mf_partner_demo_analytics_seed_v2';
 const DEMO_ANALYTICS_VERSION_KEY = 'mf_partner_demo_analytics_version';
 export const DEMO_ANALYTICS_VERSION = '3';
 const ANALYTICS_CAP = 2000;
-const DEMO_ORG_IDS = new Set(['org_demo', 'org_demo_spb']);
-const SEED_EVENT_ID =
-  /^(ev_(login|open|result|pdf|share|calc|calcpdf|admin)_|ev_boost_capital_)/;
 
 export type StoredUser = {
   id: string;
@@ -241,65 +239,18 @@ export function demoAnalyticsVersion(): string | null {
   }
 }
 
-function capWithSchemaMarker<T extends { id?: string }>(events: T[]): T[] {
-  if (events.length <= ANALYTICS_CAP) return events;
-  const marker = events.find((event) => event.id === 'ev_demo_history_schema');
-  const rest = events.filter((event) => event.id !== 'ev_demo_history_schema');
-  const head = rest.slice(0, marker ? ANALYTICS_CAP - 1 : ANALYTICS_CAP);
-  return marker ? [...head, marker] : head;
-}
-
-const YEAR_SPAN_MS = 300 * 24 * 60 * 60 * 1000;
-
-function storedDemoReady(events: Array<{ id?: string; orgId?: string | null; at?: string; schema?: number }>): boolean {
-  const marker = events.find((event) => event?.id === 'ev_demo_history_schema');
-  if (!(Number(marker?.schema) >= Number(DEMO_ANALYTICS_VERSION))) return false;
-  const stamps = events
-    .filter((event) => event && DEMO_ORG_IDS.has(String(event.orgId || '')) && event.id !== 'ev_demo_history_schema')
-    .map((event) => Date.parse(event.at || ''))
-    .filter((stamp) => !Number.isNaN(stamp));
-  if (stamps.length < 2) return false;
-  return Math.max(...stamps) - Math.min(...stamps) >= YEAR_SPAN_MS;
-}
-
 /**
- * Короткая демо-история один раз заменяется годом, чужие id остаются.
- * Уже покрытый год не пересобирается: плитки не прыгают между загрузками.
+ * Хранилище не пересобирается. Недостающий год считается при чтении,
+ * иначе короткая пачка либо не влезает в localStorage, либо затирает принятую неделю.
  */
 export function ensureDemoAnalyticsHistory(): void {
   try {
     const raw = localStorage.getItem(ANALYTICS_KEY);
-    let existing: Array<{ id?: string; orgId?: string | null; at?: string; schema?: number }> = [];
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) existing = parsed as typeof existing;
-      } catch {
-        existing = [];
-      }
+    if (!raw || !raw.includes('org_demo')) return;
+    if (localStorage.getItem(DEMO_ANALYTICS_VERSION_KEY) !== DEMO_ANALYTICS_VERSION) {
+      localStorage.setItem(DEMO_ANALYTICS_VERSION_KEY, DEMO_ANALYTICS_VERSION);
     }
-    if (storedDemoReady(existing)) {
-      if (localStorage.getItem(DEMO_ANALYTICS_VERSION_KEY) !== DEMO_ANALYTICS_VERSION) {
-        localStorage.setItem(DEMO_ANALYTICS_VERSION_KEY, DEMO_ANALYTICS_VERSION);
-      }
-      return;
-    }
-    if (existing.length && !existing.some((event) => DEMO_ORG_IDS.has(String(event.orgId || '')))) return;
-    const fresh = buildLocalDemoAnalytics();
-    const freshIds = new Set(fresh.map((event) => event.id));
-    const kept = existing.filter((event) => {
-      if (!event) return false;
-      const orgId = event.orgId || '';
-      if (!DEMO_ORG_IDS.has(orgId)) return true;
-      const id = String(event.id || '');
-      if (id === 'ev_demo_history_schema') return false;
-      if (SEED_EVENT_ID.test(id)) return false;
-      return !freshIds.has(id);
-    });
-    const merged = [...fresh, ...kept].sort((a, b) => Date.parse(b.at || '') - Date.parse(a.at || ''));
-    localStorage.setItem(ANALYTICS_KEY, JSON.stringify(capWithSchemaMarker(merged)));
     localStorage.setItem(DEMO_ANALYTICS_SEED_KEY, '1');
-    localStorage.setItem(DEMO_ANALYTICS_VERSION_KEY, DEMO_ANALYTICS_VERSION);
   } catch {
     /* ignore */
   }
@@ -1094,6 +1045,12 @@ export function loadAnalyticsEvents(): AnalyticsEvent[] {
   return readJsonArray<AnalyticsEvent>(ANALYTICS_KEY);
 }
 
+/** Сохранённые события плюс недостающий хвост демо-года. Хранилище не пишется. */
+export function loadDemoAnalyticsEvents(): AnalyticsEvent[] {
+  const stored = loadAnalyticsEvents();
+  return supplementDemoHistory(stored, buildLocalDemoAnalytics() as AnalyticsEvent[]);
+}
+
 export function appendAnalyticsEvent(event: AnalyticsEvent): void {
   const list = [event, ...loadAnalyticsEvents()].slice(0, ANALYTICS_CAP);
   localStorage.setItem(ANALYTICS_KEY, JSON.stringify(list));
@@ -1142,7 +1099,7 @@ export function buildLocalDashboard(
       orgId: u.orgId,
       role: u.role,
     }));
-  return aggregateAnalyticsDashboard(dedupeEvents([...extra, ...loadAnalyticsEvents()]), {
+  return aggregateAnalyticsDashboard(dedupeEvents([...extra, ...loadDemoAnalyticsEvents()]), {
     source: 'local',
     from: opts.from,
     to: opts.to,

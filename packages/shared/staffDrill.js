@@ -159,7 +159,131 @@ function emptyRow(user) {
   };
 }
 
-function addEvent(row, event) {
+const PANEL_AREA_M2 = 0.75 * 0.55;
+
+/** Комнаты демо, если в сохранённой базе нет своих проектов. */
+const DEMO_ROOMS = [
+  { id: 'obj_a01', orgId: 'org_demo', projectId: 'obj_a01', clientName: 'Иванова А.', address: 'ул. Арбат, 12', city: 'Москва', room: { roomType: 'living', areaM2: 18 } },
+  { id: 'obj_a02', orgId: 'org_demo', projectId: 'obj_a02', clientName: 'Петров С.', address: 'Ленинский пр., 45', city: 'Москва', room: { roomType: 'bedroom', areaM2: 22 } },
+  { id: 'obj_a03', orgId: 'org_demo', projectId: 'obj_a03', clientName: 'Сидорова М.', address: 'ул. Тверская, 8', city: 'Москва', room: { roomType: 'kids', areaM2: 16 } },
+  { id: 'obj_a04', orgId: 'org_demo', projectId: 'obj_a04', clientName: 'Козлов Д.', address: 'пр. Мира, 70', city: 'Москва', room: { roomType: 'living', areaM2: 28 } },
+  { id: 'obj_a06', orgId: 'org_demo', projectId: 'obj_a06', clientName: 'Морозова Е.', address: 'ул. Покровка, 3', city: 'Москва', room: { roomType: 'kitchen', areaM2: 20 } },
+  { id: 'obj_a07', orgId: 'org_demo', projectId: 'obj_a07', clientName: 'Никитин И.', address: 'ул. Ордынка, 19', city: 'Москва', room: { roomType: 'office', areaM2: 24 } },
+  { id: 'obj_b01', orgId: 'org_demo_spb', projectId: 'obj_b01', clientName: 'Смирнов В.', address: 'Невский пр., 28', city: 'Санкт-Петербург', room: { roomType: 'living', areaM2: 21 } },
+  { id: 'obj_b03', orgId: 'org_demo_spb', projectId: 'obj_b03', clientName: 'Орлов К.', address: 'ул. Рубинштейна, 9', city: 'Санкт-Петербург', room: { roomType: 'bedroom', areaM2: 26 } },
+  { id: 'obj_b04', orgId: 'org_demo_spb', projectId: 'obj_b04', clientName: 'Павлова Т.', address: 'Васильевский остр., 7-я линия, 22', city: 'Санкт-Петербург', room: { roomType: 'kids', areaM2: 18 } },
+];
+
+const DEMO_MOUNTS = [
+  { userId: 'u_crew1', orgId: 'org_demo', day: 5, area: 18, client: 'Сидорова М.', address: 'ул. Тверская, 8' },
+  { userId: 'u_crew1', orgId: 'org_demo', day: 40, area: 22, client: 'Иванова А.', address: 'ул. Арбат, 12' },
+  { userId: 'u_crew1', orgId: 'org_demo', day: 130, area: 16, client: 'Петров С.', address: 'Ленинский пр., 45' },
+  { userId: 'u_crew1', orgId: 'org_demo', day: 250, area: 20, client: 'Козлов Д.', address: 'пр. Мира, 70' },
+  { userId: 'u_crew1b', orgId: 'org_demo', day: 3, area: 14, client: 'Морозова Е.', address: 'ул. Покровка, 3' },
+  { userId: 'u_crew1b', orgId: 'org_demo', day: 50, area: 24, client: 'Никитин И.', address: 'ул. Ордынка, 19' },
+  { userId: 'u_crew1b', orgId: 'org_demo', day: 170, area: 12, client: 'Белова Н.', address: 'ул. Солянка, 2' },
+  { userId: 'u_crew2', orgId: 'org_demo_spb', day: 8, area: 19, client: 'Орлов К.', address: 'ул. Рубинштейна, 9' },
+  { userId: 'u_crew2', orgId: 'org_demo_spb', day: 80, area: 15, client: 'Павлова Т.', address: 'Васильевский остр., 7-я линия, 22' },
+  { userId: 'u_crew2', orgId: 'org_demo_spb', day: 220, area: 21, client: 'Смирнов В.', address: 'Невский пр., 28' },
+];
+
+function noonDaysBefore(day, now) {
+  const date = now instanceof Date ? new Date(now.getTime()) : new Date(now || Date.now());
+  if (Number.isNaN(date.getTime())) date.setTime(Date.now());
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - day);
+  return date.toISOString();
+}
+
+function demoMountedRooms(now) {
+  return DEMO_MOUNTS.map((spec) => ({
+    id: `demo_mount_${spec.userId}_${spec.day}`,
+    orgId: spec.orgId,
+    status: 'install',
+    assignedTo: spec.userId,
+    createdBy: null,
+    updatedAt: noonDaysBefore(spec.day, now),
+    createdAt: noonDaysBefore(spec.day, now),
+    clientName: spec.client,
+    address: spec.address,
+    room: { areaM2: spec.area, roomType: 'living' },
+    estimate: { panels: Math.ceil(spec.area / PANEL_AREA_M2) },
+  }));
+}
+
+function stableIndex(seed, size) {
+  let hash = 0;
+  const text = String(seed || '');
+  for (let index = 0; index < text.length; index += 1) hash = (hash * 33 + text.charCodeAt(index)) >>> 0;
+  return size ? hash % size : 0;
+}
+
+function roomProject(room, projects) {
+  const projectId = room.projectId || room.id;
+  const project = (projects || []).find((item) => item && item.id === projectId);
+  return {
+    projectId: String(projectId),
+    roomId: room.id || null,
+    name: project?.name || room.clientName || room.roomName || room.address || 'Комната',
+  };
+}
+
+function roomsForEvent(event, objects) {
+  const own = (objects || []).filter((room) => room && (!event?.orgId || room.orgId === event.orgId));
+  if (own.length) return own;
+  if (event?.orgId === 'org_demo' || event?.orgId === 'org_demo_spb') {
+    return DEMO_ROOMS.filter((room) => room.orgId === event.orgId);
+  }
+  return [];
+}
+
+/** Событие без projectId цепляется к комнате по клиенту, подписи или типу. */
+function linkWork(event, projects, objects) {
+  const object = event?.object || {};
+  if (object.projectId) {
+    const project = (projects || []).find((item) => item && item.id === object.projectId);
+    return {
+      projectId: String(object.projectId),
+      roomId: object.objectId || object.roomId || null,
+      name: project?.name || projectTitle(object, project),
+    };
+  }
+  const rooms = roomsForEvent(event, objects);
+  const byId = rooms.find((room) => room.id && (room.id === object.objectId || room.id === object.roomId));
+  if (byId) return roomProject(byId, projects);
+  const client = String(object.clientName || object.client || '').trim();
+  if (client) {
+    const room = rooms.find((item) => item.clientName === client);
+    if (room) return roomProject(room, projects);
+    const project = (projects || []).find(
+      (item) => item && (item.clientName === client || item.name === client) && (!event.orgId || !item.orgId || item.orgId === event.orgId),
+    );
+    if (project) return { projectId: String(project.id), roomId: null, name: project.name || client };
+  }
+  const label = String(object.label || object.roomName || '').trim();
+  if (label) {
+    const room = rooms.find((item) => item.roomName === label || item.clientName === label || item.address === label);
+    if (room) return roomProject(room, projects);
+    return { projectId: `label:${label}`, roomId: object.objectId || object.roomId || null, name: label };
+  }
+  const roomType = object.roomType;
+  if (roomType && rooms.length) {
+    const typed = rooms.filter((item) => (item.room?.roomType || item.roomType) === roomType);
+    const pool = typed.length ? typed : rooms;
+    const ranked = pool.slice().sort((a, b) => {
+      const left = Math.abs(num(a.room?.areaM2 ?? a.areaM2) - num(object.areaM2));
+      const right = Math.abs(num(b.room?.areaM2 ?? b.areaM2) - num(object.areaM2));
+      return left - right || String(a.id).localeCompare(String(b.id));
+    });
+    return roomProject(ranked[0], projects);
+  }
+  if ((event?.orgId === 'org_demo' || event?.orgId === 'org_demo_spb') && rooms.length) {
+    return roomProject(rooms[stableIndex(event.id || event.at, rooms.length)], projects);
+  }
+  return null;
+}
+
+function addEvent(row, event, projects, objects) {
   if (event.tool === 'problemomer' && event.action === 'result') row.problemomer += 1;
   if (event.tool === 'calculator' && event.action === 'calc_done') row.calculator += 1;
   if (event.action === 'pdf') row.pdf += 1;
@@ -173,8 +297,11 @@ function addEvent(row, event) {
   }
   if (panels > 0) row.panels += panels;
   const object = event.object || {};
-  const key = object.projectId || object.objectId || object.roomId || event.id;
+  const linked = linkWork(event, projects, objects);
+  const key = linked?.projectId || object.projectId || object.objectId || object.roomId || event.id;
   if (key) row.workKeys.add(String(key));
+  if (!row.seenEvents) row.seenEvents = [];
+  row.seenEvents.push(event);
 }
 
 function eventMetric(row, metric) {
@@ -421,7 +548,7 @@ function finishProjects(grouped) {
     .slice(0, 8);
 }
 
-function projectsFromEvents(userId, events, projects, orgId, from, to, accept) {
+function projectsFromEvents(userId, events, projects, orgId, from, to, accept, objects) {
   const same = accept || ((event) => event.userId === userId);
   const grouped = new Map();
   for (const event of events || []) {
@@ -431,13 +558,15 @@ function projectsFromEvents(userId, events, projects, orgId, from, to, accept) {
     if (!inWindow(event.at, from, to)) continue;
     if (!completed(event)) continue;
     const object = event.object || {};
-    const projectId = object.projectId || null;
-    const objectId = object.objectId || object.roomId || null;
-    const key = String(projectId || objectId || event.id);
+    const linked = linkWork(event, projects, objects);
+    const projectId = linked?.projectId || object.projectId || null;
+    const objectId = linked?.roomId || object.objectId || object.roomId || null;
+    const key = String(projectId || objectId || event.id || '');
+    if (!key) continue;
     const project = projectId ? (projects || []).find((item) => item && item.id === projectId) : null;
     const area = num(object.areaM2);
     const panels = num(object.panels);
-    const name = projectTitle(object, project);
+    const name = linked?.name || projectTitle(object, project);
     const current = grouped.get(key);
     if (!current) {
       grouped.set(key, {
@@ -465,8 +594,8 @@ function projectsFromEvents(userId, events, projects, orgId, from, to, accept) {
 
 function mergeProjectLists(roomProjects, eventProjects) {
   const grouped = new Map();
-  for (const row of roomProjects) grouped.set(row.id, { ...row });
-  for (const row of eventProjects) {
+  for (const row of eventProjects) grouped.set(row.id, { ...row });
+  for (const row of roomProjects) {
     if (grouped.has(row.id)) continue;
     grouped.set(row.id, row);
   }
@@ -537,17 +666,29 @@ export function buildStaffDrill(input) {
     const staffId = known && canonicalRankRole(known.role) === role ? known.id : null;
     if (!companyScope && !(staffId && allowed.has(staffId))) continue;
     const row = (staffId && rows.get(staffId)) || (companyScope ? adopt(event, role) : null);
-    if (row) addEvent(row, event);
+    if (row) addEvent(row, event, input.projects, input.objects);
   }
 
-  for (const object of input.objects || []) {
+  function rowForAssignee(userId) {
+    if (!userId) return null;
+    if (rows.has(userId)) return rows.get(userId);
+    const known = usersById.get(userId);
+    if (known && rows.has(known.id)) return rows.get(known.id);
+    for (const row of rows.values()) {
+      if (row.login && row.login === userId) return row;
+    }
+    return null;
+  }
+
+  const drillObjects = [...(input.objects || []), ...demoMountedRooms(input.now ? new Date(input.now) : new Date())];
+  for (const object of drillObjects) {
     if (!object || (orgId && object.orgId !== orgId)) continue;
     if (!inWindow(object.updatedAt || object.createdAt, window.from, window.to)) continue;
     const seen = new Set();
     for (const userId of [object.assignedTo, object.createdBy]) {
       if (!userId || seen.has(userId)) continue;
       seen.add(userId);
-      const row = rows.get(userId);
+      const row = rowForAssignee(userId);
       if (!row) continue;
       if (object.projectId) row.workKeys.add(String(object.projectId));
       if (row.role === 'measurer' && object.status && object.status !== 'draft') row.measuredRooms += 1;
@@ -651,17 +792,18 @@ export function buildStaffDrill(input) {
           completed: 0,
         };
     let projects = mergeProjectLists(
-      collectProjects(input.userId, input.objects, input.projects, orgId, window.from, window.to, true),
+      collectProjects(input.userId, drillObjects, input.projects, orgId, window.from, window.to, true),
       demoFilled
         ? []
         : projectsFromEvents(
             input.userId,
-            input.events,
+            person?.seenEvents || [],
             input.projects,
             orgId,
-            window.from,
-            window.to,
-            (event) => eventMatchesUser(event, input.userId),
+            null,
+            null,
+            () => true,
+            input.objects,
           ),
     );
     if (!projects.length && demoFilled) {

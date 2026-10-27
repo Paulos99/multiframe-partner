@@ -123,8 +123,6 @@ test('схема до заморозки: владелец видит роли, 
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
   const migrated = await page.evaluate((key) => localStorage.getItem(key), ANALYTICS);
   const parsed = JSON.parse(migrated || '[]') as Array<{ id?: string; at?: string }>;
-  const stamps = parsed.map((event) => Date.parse(event.at || '')).filter((stamp) => !Number.isNaN(stamp));
-  expect(Math.max(...stamps) - Math.min(...stamps)).toBeGreaterThan(300 * 24 * 60 * 60 * 1000);
   expect(parsed.some((event) => event.id === 'ae_legacy_measurer')).toBe(true);
   expect(parsed.some((event) => event.id === 'ae_legacy_year')).toBe(true);
 
@@ -186,7 +184,7 @@ test('схема до заморозки: владелец видит роли, 
   expect(ranked.some((row) => row.value > 0)).toBe(true);
 });
 
-test('короткая демо-история один раз дополняется до года и больше не меняется', async ({ page }) => {
+test('короткий архив остаётся в хранилище, а месяц, квартал и год расходятся при чтении', async ({ page }) => {
   const short = [
     {
       id: 'ev_result_org_demo_0_0',
@@ -198,23 +196,11 @@ test('короткая демо-история один раз дополняе�
       companyName: 'Потолки Столицы',
       tool: 'problemomer',
       action: 'result',
-      object: { areaM2: 10, panels: 4 },
-    },
-    {
-      id: 'ev_result_org_demo_200_0',
-      at: noonDaysAgo(200),
-      orgId: 'org_demo',
-      userId: 'u_sales1',
-      login: 'sales1',
-      role: 'sales',
-      companyName: 'Потолки Столицы',
-      tool: 'problemomer',
-      action: 'result',
-      object: { areaM2: 12, panels: 5 },
+      object: { areaM2: 10, panels: 4, roomType: 'kitchen' },
     },
     {
       id: 'ae_kept_custom',
-      at: noonDaysAgo(1),
+      at: noonDaysAgo(2),
       orgId: 'org_demo',
       userId: 'u_sales1',
       login: 'sales1',
@@ -261,7 +247,7 @@ test('короткая демо-история один раз дополняе�
     { versionKey: VERSION, analyticsKey: ANALYTICS },
   );
   expect(migrated.version).toBe('3');
-  expect(migrated.span).toBeGreaterThan(300 * 24 * 60 * 60 * 1000);
+  expect(migrated.span).toBeLessThan(40 * 24 * 60 * 60 * 1000);
   expect(migrated.kept).toBe(true);
 
   await page.reload();
@@ -279,9 +265,39 @@ test('короткая демо-история один раз дополняе�
   await expect.poll(async () => (await monthRows()).length).toBeGreaterThan(0);
   const monthText = (await monthRows()).join('\n');
   const tileText = await tile.innerText();
-  await drill.getByRole('button', { name: 'Год', exact: true }).click();
+  const monthFunnel = (await drill.locator('text=/Открыли:/').allInnerTexts()).join('\n');
+  await drill.getByRole('button', { name: 'Квартал', exact: true }).click();
   await expect.poll(async () => (await monthRows()).join('\n')).not.toBe(monthText);
+  const quarterText = (await monthRows()).join('\n');
+  await drill.getByRole('button', { name: 'Год', exact: true }).click();
+  await expect.poll(async () => (await monthRows()).join('\n')).not.toBe(quarterText);
+  await expect.poll(async () => (await drill.locator('text=/Открыли:/').allInnerTexts()).join('\n')).not.toBe(monthFunnel);
   await expect.poll(async () => tile.innerText()).toBe(tileText);
+
+  await drill.getByRole('tab', { name: 'Менеджеры' }).click();
+  await drill.getByRole('button', { name: /Менеджер · Потолки Столицы/ }).first().click();
+  await expect(drill.getByRole('heading', { name: 'Топ проектов' })).toBeVisible();
+  await expect(drill.getByText('За период проектов нет')).toHaveCount(0);
+  await expect.poll(async () => {
+    const text = await drill.innerText();
+    return ['Иванова А.', 'Петров С.', 'Сидорова М.', 'Козлов Д.', 'Морозова Е.', 'Никитин И.'].some((name) =>
+      text.includes(name),
+    );
+  }).toBe(true);
+
+  await drill.getByRole('button', { name: 'Назад', exact: true }).click();
+  await drill.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.getByRole('button', { name: /Панели/ }).first().click();
+  const panels = page.getByRole('dialog', { name: 'Панели' });
+  await panels.getByRole('tab', { name: 'Монтажники' }).click();
+  const mounted = panels.getByRole('button').filter({ hasText: 'Смонтировано' });
+  await expect.poll(async () => mounted.count()).toBeGreaterThan(1);
+  const ranked = (await mounted.allInnerTexts()).map((row) => {
+    const value = rowNumber(row);
+    const panelsInLine = Number(row.match(/панели\s+(\d+(?:[.,]\d+)?)/)?.[1]?.replace(',', '.') || '');
+    return { value, panelsInLine };
+  });
+  expect(ranked.every((row) => row.value === row.panelsInLine && row.value > 0)).toBe(true);
 });
 
 test('менеджер из старой истории видит топ проектов своей команды', async ({ page }) => {

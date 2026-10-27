@@ -121,6 +121,7 @@ test('маркер схемы на короткой пачке не мешает
   ];
   const extended = extendDemoAnalyticsHistory(short);
   assert.notEqual(extended, short);
+  assert.equal(extended.find((event) => event.id === 'ev_result_org_demo_0_0')?.object?.areaM2, 10);
   assert.equal(extended.some((event) => event.id === 'ae_kept_short'), true);
   assert.ok(extended.length > short.length + 50);
   const stamps = extended
