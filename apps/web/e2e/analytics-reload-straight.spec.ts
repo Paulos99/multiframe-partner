@@ -172,7 +172,7 @@ test('сессия уже активна: reload, сразу Аналитика,
   });
   const page = await context.newPage();
 
-  await page.goto('/?demo=1');
+  await page.goto('/?demo=1&debug=1');
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();

@@ -74,7 +74,7 @@ test('накопленное хранилище: сессия, v5 и истор�
     },
   });
   const page = await context.newPage();
-  await page.goto('/?demo=1');
+  await page.goto('/?demo=1&debug=1');
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible({ timeout: 15000 });
   await page.reload();
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();

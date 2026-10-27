@@ -149,13 +149,16 @@ test('схема до заморозки: владелец видит роли, 
     const count = await tabs.count();
     let sum = 0;
     for (let index = 0; index < count; index += 1) {
+      // У монтажников главное число — смонтированные м², а не расчёты: в плитку они не входят.
+      if ((await tabs.nth(index).innerText()).trim() === 'Монтажники') continue;
       await tabs.nth(index).click();
       const rows = await drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
       if (!rows.length) return 0;
       sum += rows.reduce((total, row) => total + rowNumber(row), 0);
     }
     return Math.round(sum * 10) / 10;
-  }).toBe(tileNumber(tileText));
+    // Плитка = рейтинг без монтажников + 6 м² из их расчётов (событие ae_legacy_crew).
+  }).toBe(Math.round((tileNumber(tileText) - 6) * 10) / 10);
 
   const periodRows = () => drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
   await drill.getByRole('tab', { name: 'Менеджеры' }).click();
@@ -461,11 +464,14 @@ test('сервер: реальные события с чужими id попа�
   const count = await tabs.count();
   let sum = 0;
   for (let index = 0; index < count; index += 1) {
+    // У монтажников главное число — смонтированные м², а не расчёты: в плитку они не входят.
+    if ((await tabs.nth(index).innerText()).trim() === 'Монтажники') continue;
     await tabs.nth(index).click();
     const rows = await drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
     sum += rows.reduce((total, row) => total + rowNumber(row), 0);
   }
-  expect(Math.round(sum * 10) / 10).toBe(31);
+  // Плитка 31 = рейтинг без монтажников + 7 м² из расчётов монтажника.
+  expect(Math.round(sum * 10) / 10).toBe(24);
   const periodRows = () => drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
   await drill.getByRole('tab', { name: 'Менеджеры' }).click();
   await drill.getByRole('button', { name: 'Месяц', exact: true }).click();

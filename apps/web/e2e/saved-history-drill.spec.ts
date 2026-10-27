@@ -93,7 +93,7 @@ test('сохранённая история: плитки и рейтинг из
     if (request.url().includes('/analytics/drill')) drillRequests.push(request.url());
   });
 
-  await page.goto('/?demo=1');
+  await page.goto('/?demo=1&debug=1');
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   const rooms = page.locator('[data-room-id]');
@@ -158,6 +158,9 @@ test('сохранённая история: плитки и рейтинг из
   await expect(staff.getByText('Проекты', { exact: true }).locator('xpath=following-sibling::strong')).toHaveText(
     String(listed),
   );
+  const topNames = await top.locator('strong').allInnerTexts();
+  const roomOnly = ['Гостиная', 'Спальня', 'Детская', 'Кухня', 'Кабинет', 'Комната', 'Расчёт', 'Клиент'];
+  expect(topNames.filter((name) => roomOnly.includes(name.trim()))).toEqual([]);
   await staff.screenshot({ path: '/opt/cursor/artifacts/screenshots/analytics-manager-projects.png' });
   await top.filter({ hasText: 'Никитин И.' }).click();
   const card = page.getByRole('region', { name: 'Комната' });
@@ -172,4 +175,22 @@ test('сохранённая история: плитки и рейтинг из
   });
   expect(dashboardStatuses).toContain(200);
   expect(drillRequests).toEqual([]);
+
+  // Без ?debug=1 служебного абзаца нет, у рейтинга площади главное число своё, с единицей.
+  await page.goto('/?demo=1');
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  await page.getByRole('button', { name: /Площадь, м²/ }).first().click();
+  const plain = page.getByRole('region', { name: 'Площадь, м²' });
+  await expect(plain).toBeVisible();
+  await expect(page.getByTestId('why-zero')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText('Почему 0');
+  await expect(page.locator('body')).not.toContainText('mf_partner_db_v5');
+  await plain.getByRole('tab', { name: 'Монтажники' }).click();
+  const installers = plain.getByRole('button').filter({ hasText: 'Смонтировано' });
+  await expect.poll(async () => installers.count()).toBeGreaterThan(0);
+  for (const text of await installers.allInnerTexts()) {
+    const main = text.match(/\d+(?:\.\d+)? м²/)?.[0];
+    const mounted = text.match(/Смонтировано \d+ · (\d+(?:\.\d+)?) м²/)?.[1];
+    expect(main).toBe(`${mounted} м²`);
+  }
 });

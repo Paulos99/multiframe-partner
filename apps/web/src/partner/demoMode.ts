@@ -12,3 +12,15 @@ export function isDemoModeEnabled(): boolean {
   }
   return false;
 }
+
+/** Служебные подробности для разработчика: только при ?debug=1 в адресе. */
+export function isDebugMode(): boolean {
+  try {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('debug') === '1';
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}

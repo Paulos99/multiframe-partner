@@ -137,14 +137,14 @@ test('чекаут 3ee8094 ?demo=1, клики и HEAD без очистки н�
   try {
     vite = startVite(path.join(MID, 'apps/web'));
     await waitUp(vite);
-    await page.goto(`${ORIGIN}/?demo=1`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${ORIGIN}/?demo=1&debug=1`, { waitUntil: 'domcontentloaded' });
     await clickThrough(page);
 
     await stopVite(vite);
     vite = null;
     vite = startVite(path.join(ROOT, 'apps/web'));
     await waitUp(vite);
-    await page.goto(`${ORIGIN}/?demo=1`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${ORIGIN}/?demo=1&debug=1`, { waitUntil: 'domcontentloaded' });
     await signIn(page);
 
     await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();

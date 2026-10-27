@@ -1180,3 +1180,74 @@ test('накопленная история: топ, проекты, замер�
     assert.ok((drill.drops.events || 0) > 0, period);
   }
 });
+
+test('рейтинг «Площадь» у монтажников считает смонтированные м², а не чужие расчёты', () => {
+  const crewUsers = [
+    { id: 'own', login: 'own', displayName: 'Владелец', role: 'owner', orgId: 'org_a' },
+    { id: 'crewA', login: 'crewA', displayName: 'Монтажник', role: 'crew', orgId: 'org_a' },
+    { id: 'crewB', login: 'crewB', displayName: 'Монтажник 2', role: 'crew', orgId: 'org_a' },
+  ];
+  const rooms = [
+    { id: 'r1', orgId: 'org_a', projectId: 'p1', roomName: 'Гостиная', status: 'install', assignedTo: 'crewA', updatedAt: now, room: { areaM2: 56 }, estimate: { panels: 40 } },
+    { id: 'r2', orgId: 'org_a', projectId: 'p2', roomName: 'Спальня', status: 'install', assignedTo: 'crewB', updatedAt: now, room: { areaM2: 28 }, estimate: { panels: 68 } },
+  ];
+  const calc = [
+    // Чужие расчёты монтажника в событиях не должны попасть в главное число.
+    event({ id: 'c1', userId: 'crewA', tool: 'calculator', action: 'calc_done', object: { areaM2: 16, panels: 5 } }),
+  ];
+  const run = (metric: string) =>
+    buildStaffDrill({
+      viewer: { id: 'own', role: 'owner', orgId: 'org_a' },
+      users: crewUsers,
+      events: calc,
+      objects: rooms,
+      projects: [],
+      metric,
+      period: 'month',
+      orgId: 'org_a',
+      now,
+      demoFill: false,
+    });
+  const area = run('area').roles.find((role) => role.id === 'crew')?.ranking || [];
+  const a = area.find((row) => row.userId === 'crewA');
+  const b = area.find((row) => row.userId === 'crewB');
+  assert.equal(a?.value, 56);
+  assert.equal(a?.value, a?.mountedAreaM2);
+  assert.equal(b?.value, 28);
+  assert.equal(b?.value, b?.mountedAreaM2);
+  const panels = run('panels').roles.find((role) => role.id === 'crew')?.ranking || [];
+  assert.equal(panels.find((row) => row.userId === 'crewB')?.value, 68);
+  assert.equal(panels.find((row) => row.userId === 'crewA')?.value, 40);
+});
+
+test('«Топ проектов» не показывает названия комнат как проекты', () => {
+  const mgrUsers = [
+    { id: 'own', login: 'own', displayName: 'Владелец', role: 'owner', orgId: 'org_a' },
+    { id: 'mgr', login: 'mgr', displayName: 'Менеджер', role: 'sales', orgId: 'org_a' },
+  ];
+  const rooms = [
+    { id: 'k1', orgId: 'org_a', projectId: 'pk', clientName: 'Никитин И.', roomName: 'Гостиная', createdBy: 'mgr', assignedTo: 'mgr', updatedAt: now, room: { areaM2: 24 }, estimate: { panels: 10 } },
+    { id: 'k2', orgId: 'org_a', roomName: 'Спальня', createdBy: 'mgr', assignedTo: 'mgr', updatedAt: now, room: { areaM2: 12 }, estimate: { panels: 5 } },
+    { id: 'k3', orgId: 'org_a', roomName: 'Гостиная', createdBy: 'mgr', assignedTo: 'mgr', updatedAt: now, room: { areaM2: 9 }, estimate: { panels: 3 } },
+  ];
+  const result = buildStaffDrill({
+    viewer: { id: 'own', role: 'owner', orgId: 'org_a' },
+    users: mgrUsers,
+    events: [],
+    objects: rooms,
+    projects: [],
+    metric: 'staff',
+    period: 'month',
+    orgId: 'org_a',
+    userId: 'mgr',
+    now,
+    demoFill: false,
+  });
+  const names = (result.detail?.projects || []).map((project) => project.name);
+  assert.ok(names.length > 0);
+  assert.ok(names.includes('Никитин И.'));
+  assert.ok(names.includes('Без проекта · Спальня'));
+  assert.ok(names.includes('Без проекта · Гостиная'));
+  assert.ok(!names.includes('Спальня'));
+  assert.ok(!names.includes('Гостиная'));
+});

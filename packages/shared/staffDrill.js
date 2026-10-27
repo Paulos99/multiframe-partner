@@ -593,9 +593,10 @@ function eventMetric(row, metric) {
   return row.problemomer + row.calculator + row.pdf;
 }
 
-/** Монтажники на плитке «Панели» ранжируются по смонтированному, не по чужим расчётам. */
+/** Монтажники на плитках «Площадь» и «Панели» ранжируются по смонтированному, не по чужим расчётам. */
 function displayValue(row, metric) {
-  if (row.role === 'crew' && metric === 'panels') return Math.round(row.mountedPanels);
+  if (row.role === 'crew' && metric === 'panels') return Math.round(row.mountedPanels || 0);
+  if (row.role === 'crew' && metric === 'area') return round1(row.mountedAreaM2 || 0);
   return eventMetric(row, metric);
 }
 
@@ -824,6 +825,33 @@ function projectTitle(object, project) {
   return 'Расчёт';
 }
 
+const GENERIC_ROOM_TITLES = ['Комната', 'Расчёт'];
+
+/** Название для «Топ проектов»: клиент или проект. Название комнаты проектом не считается. */
+function namedProjects(list, projects, rooms) {
+  const real = new Set();
+  for (const project of projects || []) {
+    if (project?.name) real.add(String(project.name).trim());
+    if (project?.clientName) real.add(String(project.clientName).trim());
+  }
+  for (const room of rooms || []) {
+    if (room?.clientName) real.add(String(room.clientName).trim());
+  }
+  const roomish = new Set([...Object.values(ROOM_LABELS), ...GENERIC_ROOM_TITLES]);
+  for (const room of rooms || []) {
+    if (room?.roomName) roomish.add(String(room.roomName).trim());
+  }
+  return (list || []).map((item) => {
+    const name = String(item.name || '').trim();
+    if (!name) return item;
+    if (name.startsWith('Без проекта')) return item;
+    if (real.has(name) || !roomish.has(name)) return item;
+    const room = item.roomId ? (rooms || []).find((candidate) => candidate?.id === item.roomId) : null;
+    const roomTitle = GENERIC_ROOM_TITLES.includes(name) && room?.roomName ? String(room.roomName).trim() : name;
+    return { ...item, name: `Без проекта · ${roomTitle}` };
+  });
+}
+
 function finishProjects(grouped) {
   return [...grouped.values()]
     .map((row) => ({
@@ -882,6 +910,19 @@ function projectsFromEvents(userId, events, projects, orgId, from, to, accept, o
   return [...grouped.values()];
 }
 
+function roomTitle(room) {
+  const type = room?.room?.roomType || room?.roomType;
+  return String(room?.roomName || (type && ROOM_LABELS[type]) || 'Комната').trim();
+}
+
+/** Клиент или проект. Нет ни того, ни другого: «Без проекта · комната». */
+function cardName(card, best) {
+  const client = card.project?.clientName || card.project?.name || (card.rooms || []).find((room) => room?.clientName)?.clientName;
+  if (client) return client;
+  if (card.title && card.title !== 'Клиент') return card.title;
+  return `Без проекта · ${roomTitle(best)}`;
+}
+
 function projectsFromCards(cards) {
   return (cards || []).map((card) => {
     const rooms = card.rooms || [];
@@ -890,7 +931,7 @@ function projectsFromCards(cards) {
       .sort((a, b) => roomArea(b) - roomArea(a) || String(a.id).localeCompare(String(b.id)))[0];
     return {
       id: String(card.key),
-      name: card.title || best?.clientName || best?.roomName || 'Комната',
+      name: cardName(card, best),
       areaM2: round1(rooms.reduce((sum, room) => sum + roomArea(room), 0)),
       panels: Math.round(rooms.reduce((sum, room) => sum + roomPanels(room), 0)),
       rooms: Math.max(1, rooms.length),
@@ -1196,7 +1237,7 @@ export function buildStaffDrill(input) {
       }
     }
     if (!projects.length && demoFilled) projects = demoProjects(row.userId);
-    return projects;
+    return namedProjects(projects, input.projects, companyRooms);
   }
 
   for (const row of working) {

@@ -9,7 +9,7 @@ import type {
 } from '../../../../packages/shared/staffDrill.js';
 import { goAnalytics, useAnalyticsRoute } from './analyticsRoute';
 import { analyticsSourceLabel, composeCabinetAnalytics, presetRange, rangeFromYmd, resolveCompanyRooms, type AnalyticsTileModel } from './analytics';
-import { isDemoModeEnabled } from './demoMode';
+import { isDebugMode } from './demoMode';
 import styles from './partner.module.css';
 
 const METRIC_LABELS: Record<string, string> = {
@@ -22,6 +22,18 @@ const METRIC_LABELS: Record<string, string> = {
   avg: 'Средняя м²',
   done: 'Готовых расчётов',
 };
+
+const NO_DATA_TEXT = 'За период нет данных по этому показателю';
+
+const METRIC_UNITS: Record<string, string> = {
+  area: ' м²',
+  avg: ' м²',
+  panels: ' пан.',
+};
+
+function valueWithUnit(value: number, metric: string): string {
+  return `${formatNum(value)}${METRIC_UNITS[metric] || ''}`;
+}
 
 const PERIODS: Array<{ id: DrillPeriod; label: string }> = [
   { id: 'month', label: 'Месяц' },
@@ -110,7 +122,7 @@ export function StaffDrillDrawer({
 }) {
   const route = useAnalyticsRoute();
   const period = route.period;
-  const explainZeros = import.meta.env.DEV || isDemoModeEnabled();
+  const explainZeros = isDebugMode();
   const title = METRIC_LABELS[metric] || 'Рейтинг';
 
   useEffect(() => {
@@ -285,6 +297,11 @@ export function StaffDrillDrawer({
           {error}
         </p>
       ) : null}
+      {!explainZeros && data && !error && metric !== 'staff' && ranking.every((row) => row.value === 0) ? (
+        <p className={styles.hint} data-testid="no-data">
+          {NO_DATA_TEXT}
+        </p>
+      ) : null}
       {data?.demoFilled ? (
         <p className={styles.hint}>Пока нет своей активности — показаны примерные цифры.</p>
       ) : null}
@@ -313,13 +330,14 @@ export function StaffDrillDrawer({
                 <strong>
                   {index + 1}. {row.displayName}
                 </strong>
-                <span className={styles.drillValue}>{formatNum(row.value)}</span>
+                <span className={styles.drillValue}>{valueWithUnit(row.value, metric)}</span>
               </span>
               <span className={styles.hint}>
                 {roleLabel(row.role)}
                 {metric === 'staff' ? '' : ` · ${title}`}
               </span>
               <span className={styles.drillStats}>{activityLine(row)}</span>
+              {row.value === 0 ? <span className={styles.hint}>{NO_DATA_TEXT}</span> : null}
             </button>
           ))}
           {data && !ranking.length ? <p className={styles.lead}>Пока нет активности</p> : null}
