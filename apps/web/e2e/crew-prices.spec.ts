@@ -35,8 +35,8 @@ test('монтажник не видит цены в комнате, кальк�
   await expect(calc.locator('body')).not.toContainText(/93\s*444|24\s*000|119\s*694/);
 
   await page.locator('button[aria-label="Кабинет"]').click();
-  await expect(page.getByRole('dialog', { name: 'Комната' })).toBeVisible();
-  await page.getByRole('dialog', { name: 'Комната' }).getByRole('button', { name: 'Проблемомер', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Комната' })).toBeVisible();
+  await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Проблемомер', exact: true }).click();
   await page.getByRole('button', { name: 'Начать', exact: true }).click();
 
   const result = page.getByRole('heading', { name: 'Акустический профиль помещения' });

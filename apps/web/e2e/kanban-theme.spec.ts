@@ -23,7 +23,7 @@ test('projects page has no room stage board', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Фильтры' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Сортировка/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
-  const card = page.getByRole('dialog', { name: 'Карточка проекта' });
+  const card = page.getByRole('region', { name: 'Проект' });
   await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Спальня' })).toBeVisible();
 });

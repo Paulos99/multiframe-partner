@@ -147,7 +147,7 @@ test('owner opens a room from the project card and stays on projects', async ({ 
   await openProjects(page);
   const { drawer } = await openProjectRoom(page, 'Спальня');
   await expect(drawer.getByRole('heading', { name: /Спальня.*Черновик/ })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Проекты', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('[aria-label="Доска проектов"]')).toHaveCount(0);
 });
 

@@ -36,16 +36,26 @@ test('список и канбан запоминаются, карточка о
   );
 
   await page.locator('[data-project-id="ui_project"]').click();
-  const card = page.getByRole('dialog', { name: 'Карточка проекта' });
-  await expect(card).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/#project\/ui_project\/overview$/);
+  const card = page.getByRole('region', { name: 'Проект' });
+  await expect(card.getByRole('heading', { level: 1, name: 'Тестовая квартира' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Карточка проекта' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Комната' })).toHaveCount(0);
+  await page.goBack();
+  await expect(page.getByRole('region', { name: 'Список проектов' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByRole('button', { name: 'Список', exact: true }).click();
+  await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await expect(page).toHaveURL(/#project\/ui_project\/work$/);
   await expect(card.getByRole('button', { name: 'Спальня' })).toBeVisible();
   await card.getByRole('button', { name: 'Спальня' }).click();
-  const room = page.getByRole('dialog', { name: 'Комната' });
-  await expect(room).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(room).toHaveCount(0);
+  const room = page.getByRole('region', { name: 'Комната' });
+  await expect(page).toHaveURL(/#project\/ui_project\/room\/ui_room$/);
+  await expect(room.getByRole('heading', { level: 1, name: 'Спальня' })).toBeVisible();
+  await room.getByRole('button', { name: 'К проекту', exact: true }).click();
+  await expect(page).toHaveURL(/#project\/ui_project\/work$/);
   await expect(card).toBeVisible();
   for (const name of ['Обзор', 'Рабочая информация', 'Команда', 'Задачи', 'Отчёты', 'Документы', 'Настройки']) {
     await card.getByRole('tab', { name, exact: true }).click();
@@ -58,26 +68,26 @@ test('список и канбан запоминаются, карточка о
   await save.click();
   await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
   const overview = card.getByRole('tab', { name: 'Обзор', exact: true });
-  const box = await overview.boundingBox();
-  if (!box) throw new Error('вкладка Обзор не видна');
-  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-  await expect
-    .poll(() =>
-      page.evaluate(
-        ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="tab"]')?.textContent?.trim() ?? '',
-        point,
-      ),
-    )
-    .toBe('Обзор');
-  await page.mouse.click(point.x, point.y);
+  await overview.click();
+  await expect(page).toHaveURL(/#project\/ui_project\/overview$/);
   await expect(overview).toHaveAttribute('aria-selected', 'true');
   await expect(card.getByText('Тихая квартира')).toBeVisible();
+  await page.reload();
+  await expect(page).toHaveURL(/#project\/ui_project\/overview$/);
+  await expect(card.getByText('Тихая квартира')).toBeVisible();
+  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Список проектов' })).toBeVisible();
+  await expect(page).not.toHaveURL(/#project\//);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Путь' })).toBeHidden();
 });
 
 test('замерщик читает описание, бригада не видит сумму', async ({ page }) => {
   await enter(page);
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
-  const card = page.getByRole('dialog', { name: 'Карточка проекта' });
+  const card = page.getByRole('region', { name: 'Проект' });
   await expect(card.getByText('₽').first()).toBeVisible();
   await card.getByRole('button', { name: 'Настройки проекта', exact: true }).click();
   const measurer = card.getByRole('combobox', { name: 'Замерщик', exact: true });
@@ -90,7 +100,8 @@ test('замерщик читает описание, бригада не вид
 
   await enter(page, 'measurer');
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
-  const read = page.getByRole('dialog', { name: 'Карточка проекта' });
+  const read = page.getByRole('region', { name: 'Проект' });
+  await expect(read.getByRole('button', { name: 'Настройки проекта', exact: true })).toHaveCount(0);
   await expect(read.getByText('Текст для бригады замера')).toBeVisible();
   await read.getByRole('tab', { name: 'Настройки', exact: true }).click();
   await expect(read.getByRole('button', { name: 'Сохранить', exact: true })).toHaveCount(0);
@@ -115,9 +126,44 @@ test('замерщик читает описание, бригада не вид
   await expect(desk.getByText('75261')).toHaveCount(0);
   await expect(desk.getByText(/^Готовые/)).toHaveCount(0);
   await living.click();
-  const room = page.getByRole('dialog', { name: 'Комната' });
-  await expect(room.getByRole('heading', { name: /Гостиная/ })).toBeVisible();
+  const room = page.getByRole('region', { name: 'Комната' });
+  await expect(page).toHaveURL(/#project\/ui_project\/room\/ui_crew_room$/);
+  await expect(page.getByRole('dialog', { name: 'Комната' })).toHaveCount(0);
+  await expect(room.getByRole('heading', { level: 1, name: 'Гостиная' })).toBeVisible();
   await expect(room.getByText('Панели', { exact: true })).toBeVisible();
   await expect(room.getByText('Итого комнаты')).toHaveCount(0);
   await expect(room).not.toContainText('₽');
+});
+
+test('менеджер открывает проект страницей и видит настройки', async ({ page }) => {
+  await enter(page, 'sales');
+  await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
+  await expect(page).toHaveURL(/#project\/ui_project\/overview$/);
+  const card = page.getByRole('region', { name: 'Проект' });
+  await expect(card.getByRole('heading', { level: 1, name: 'Тестовая квартира' })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Настройки проекта', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Карточка проекта' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Комната' })).toHaveCount(0);
+  await card.getByRole('tab', { name: 'Команда', exact: true }).click();
+  await expect(page).toHaveURL(/#project\/ui_project\/team$/);
+});
+
+test('узкий экран 700px: разделы под кнопкой «Меню»', async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 900 });
+  await page.goto('/');
+  await page.getByLabel('Логин', { exact: true }).fill('ui.owner');
+  await page.getByLabel('Пароль', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  const menu = page.getByRole('button', { name: 'Меню', exact: true });
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  const aside = page.locator('aside[aria-label="Разделы кабинета"]');
+  const closed = await aside.boundingBox();
+  expect(closed).not.toBeNull();
+  expect(closed!.x + closed!.width).toBeLessThanOrEqual(0);
+  await menu.click();
+  await expect(menu).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
 });

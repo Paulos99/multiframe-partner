@@ -332,18 +332,81 @@
 
 .tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border-bottom: 1px solid var(--cab-border);
+  scrollbar-width: thin;
 }
 
 .tab {
   flex: none;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 10px 14px;
   background: transparent;
   color: var(--cab-muted);
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.tab[aria-selected='true'] {
+  border-bottom-color: var(--cab-accent, #01644f);
+  background: transparent;
+  color: var(--cab-accent-text, #01644f);
+}
+
+.page {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--cab-muted);
+  font-size: 13px;
+}
+
+.crumbs button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--cab-accent-text, #01644f);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pageHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.pageHead h1 {
+  margin: 2px 0 6px;
+  font-size: 32px;
+  line-height: 1.15;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--cab-muted);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pageBody {
+  min-width: 0;
 }
 
 .badge {
@@ -568,6 +631,25 @@
 
 .done .crewList {
   margin-top: 4px;
+}
+
+@media (max-width: 760px) {
+  .crumbs {
+    display: none;
+  }
+
+  .pageHead {
+    flex-direction: column;
+  }
+
+  .pageHead h1 {
+    font-size: 26px;
+  }
+
+  .facts,
+  .pair {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 800px) {

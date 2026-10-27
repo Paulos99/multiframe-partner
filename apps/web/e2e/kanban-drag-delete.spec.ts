@@ -24,7 +24,7 @@ test('owner deletes a room from its card; it is gone after reload', async ({ pag
   await expect(dialog).toContainText('Действие нельзя отменить');
   await dialog.getByRole('button', { name: 'Отмена' }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(drawer.getByRole('heading', { name: /Спальня/ })).toBeVisible();
+  await expect(drawer.getByRole('heading', { level: 1, name: 'Спальня' })).toBeVisible();
 
   await drawer.getByRole('button', { name: 'Удалить комнату', exact: true }).click();
   const del = page.waitForRequest(

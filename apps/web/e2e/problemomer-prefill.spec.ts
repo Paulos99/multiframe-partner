@@ -22,8 +22,8 @@ test('из комнаты Проблемомер подставляет тип �
   await expect(drawer.getByRole('button', { name: 'Проблемомер', exact: true })).toBeVisible();
   await drawer.getByRole('button', { name: 'Проблемомер', exact: true }).click();
   await page.locator('button[aria-label="Кабинет"]').click();
-  await expect(page.getByRole('dialog', { name: 'Комната' })).toBeVisible();
-  await page.getByRole('dialog', { name: 'Комната' }).getByRole('button', { name: 'Проблемомер', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Комната' })).toBeVisible();
+  await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Проблемомер', exact: true }).click();
   await page.getByRole('button', { name: 'Начать', exact: true }).click();
 
   const question = page.getByRole('heading', { name: 'Укажите тип комнаты и площадь' });
@@ -59,7 +59,7 @@ test('из комнаты Проблемомер подставляет тип �
   await expect(page.getByRole('button', { name: 'Отправить КП', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Пройти ещё раз', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
-  const room = page.getByRole('dialog', { name: 'Комната' });
+  const room = page.getByRole('region', { name: 'Комната' });
   await expect(room).toBeVisible();
   await expect(room).toContainText('Спальня');
 });
@@ -91,7 +91,7 @@ test('замерщик видит только назначенную комна
   await drawer.getByLabel('Исполнитель').selectOption('ui_measurer');
   await saved;
   await expect(drawer.getByLabel('Исполнитель')).toHaveValue('ui_measurer');
-  await drawer.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await drawer.getByRole('button', { name: 'К проекту', exact: true }).click();
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
 
   await page.getByLabel('Логин', { exact: true }).fill('ui.measurer');
@@ -99,13 +99,13 @@ test('замерщик видит только назначенную комна
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
-  const card = page.getByRole('dialog', { name: 'Карточка проекта' });
+  const card = page.getByRole('region', { name: 'Проект' });
   await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Гостиная' })).toBeVisible();
   await expect(card.getByRole('button', { name: 'Спальня' })).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Кухня' })).toHaveCount(0);
   await card.getByRole('button', { name: 'Гостиная' }).click();
-  const room = page.getByRole('dialog', { name: 'Комната' });
+  const room = page.getByRole('region', { name: 'Комната' });
   await expect(room.getByText('Итого комнаты')).toBeVisible();
   await expect(room.getByText(/75[\s\u00a0\u202f]*261/)).toBeVisible();
 });

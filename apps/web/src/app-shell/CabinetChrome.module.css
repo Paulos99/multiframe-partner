@@ -113,6 +113,39 @@
   }
 }
 
+/* 641–760 px: рельс спрятан, разделы открываются кнопкой «Меню». */
+@media (min-width: 641px) and (max-width: 760px) {
+  .frame {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-sm);
+  background: var(--cab-card);
+  color: var(--cab-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.menuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  border: 0;
+  padding: 0;
+  background: rgba(20, 28, 36, 0.35);
+  cursor: pointer;
+}
+
 @media (max-width: 640px) {
   .frame {
     grid-template-columns: 1fr;

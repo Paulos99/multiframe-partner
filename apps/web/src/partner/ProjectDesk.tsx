@@ -14,7 +14,6 @@ import {
   type ProjectStatus,
   type UserRole,
 } from '../../../../packages/shared/partner';
-import { SettingsIcon } from '../icons';
 import { formatRub } from './estimate';
 import {
   areaSum,
@@ -35,6 +34,7 @@ import {
   type CrewProjectGroup,
   type ProjectDeskView,
 } from './projectDesk';
+import type { ProjectTab } from './projectRoute';
 import { preliminaryRoomTotal } from './projectSummary';
 import styles from './ProjectDesk.module.css';
 
@@ -66,6 +66,10 @@ export function ProjectDesk({
   staff,
   actor,
   query,
+  page,
+  onOpenProject,
+  onDesk,
+  onTab,
   onSave,
   onOpenRoom,
 }: {
@@ -75,6 +79,10 @@ export function ProjectDesk({
   staff: Person[];
   actor?: Person;
   query: string;
+  page: { projectId: string; tab: ProjectTab } | null;
+  onOpenProject: (id: string) => void;
+  onDesk: () => void;
+  onTab: (tab: ProjectTab) => void;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
   onOpenRoom: (room: JobObject) => void;
 }) {
@@ -82,8 +90,6 @@ export function ProjectDesk({
     readProjectView(typeof localStorage === 'undefined' ? null : localStorage),
   );
   const [archive, setArchive] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabId>('overview');
   const seesMoney = roleSeesProjectMoney(role);
   const canEdit = canCreateObjects(role);
   const archiveCount = projects.filter((project) => project.archivedAt).length;
@@ -106,10 +112,10 @@ export function ProjectDesk({
   );
 
   const open = useMemo(() => {
-    if (!openId) return null;
-    const visible = rows.find((row) => row.project.id === openId);
+    if (!page) return null;
+    const visible = rows.find((row) => row.project.id === page.projectId);
     if (visible) return visible;
-    const project = projects.find((item) => item.id === openId);
+    const project = projects.find((item) => item.id === page.projectId);
     if (!project) return null;
     const own = projectRooms(project, rooms);
     return {
@@ -118,16 +124,38 @@ export function ProjectDesk({
       status: effectiveProjectStatus(project, own),
       archived: Boolean(project.archivedAt),
     };
-  }, [openId, rows, projects, rooms]);
+  }, [page, rows, projects, rooms]);
 
   function choose(next: ProjectDeskView) {
     setView(next);
     writeProjectView(typeof localStorage === 'undefined' ? null : localStorage, next);
   }
 
-  function show(id: string) {
-    setOpenId(id);
-    setTab('overview');
+  if (page) {
+    if (!open) {
+      return (
+        <section className={styles.page} aria-label="Проект">
+          <p className={styles.empty}>Проект не найден или вам его не назначили.</p>
+          <button type="button" className={styles.ghost} onClick={onDesk}>
+            К проектам
+          </button>
+        </section>
+      );
+    }
+    return (
+      <ProjectPage
+        row={open}
+        staff={staff}
+        actor={actor}
+        seesMoney={seesMoney}
+        canEdit={canEdit}
+        tab={page.tab}
+        onTab={onTab}
+        onDesk={onDesk}
+        onSave={onSave}
+        onOpenRoom={onOpenRoom}
+      />
+    );
   }
 
   if (role === 'crew') {
@@ -157,24 +185,10 @@ export function ProjectDesk({
           {query ? 'По этому запросу проектов нет.' : archive ? 'В архиве пусто.' : 'Пока нет проектов. Новый проект создаётся вместе с первой комнатой.'}
         </p>
       ) : view === 'list' ? (
-        <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={show} />
+        <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} />
       ) : (
-        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={show} />
+        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} />
       )}
-      {open ? (
-        <ProjectCard
-          row={open}
-          staff={staff}
-          actor={actor}
-          seesMoney={seesMoney}
-          canEdit={canEdit}
-          tab={tab}
-          onTab={setTab}
-          onClose={() => setOpenId(null)}
-          onSave={onSave}
-          onOpenRoom={onOpenRoom}
-        />
-      ) : null}
     </section>
   );
 }
@@ -375,7 +389,7 @@ function ProjectBoard({
   );
 }
 
-function ProjectCard({
+function ProjectPage({
   row,
   staff,
   actor,
@@ -383,7 +397,7 @@ function ProjectCard({
   canEdit,
   tab,
   onTab,
-  onClose,
+  onDesk,
   onSave,
   onOpenRoom,
 }: {
@@ -394,7 +408,7 @@ function ProjectCard({
   canEdit: boolean;
   tab: TabId;
   onTab: (tab: TabId) => void;
-  onClose: () => void;
+  onDesk: () => void;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
   onOpenRoom: (room: JobObject) => void;
 }) {
@@ -403,59 +417,47 @@ function ProjectCard({
   const area = areaSum(rooms);
   const money = preliminaryRoomTotal(rooms);
   const steps = nextSteps(rooms);
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
-      if (document.querySelector('[role="dialog"][aria-label="Комната"]')) return;
-      onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  const subtitle =
+    [project.clientName, [project.address, project.city].filter(Boolean).join(', '), projectStatusLabel(status)]
+      .filter(Boolean)
+      .join(' · ') || 'Контакт и адрес пока не заполнены';
 
-  return createPortal(
-    <>
-      <button type="button" className={styles.backdrop} aria-label="Закрыть карточку проекта" onClick={onClose} />
-      <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label="Карточка проекта">
-        <div className={styles.chrome}>
-          <div className={styles.head}>
-            <div>
-              <h3>{project.name}</h3>
-              <p className={styles.lead}>
-                {[project.clientName, project.address, project.city].filter(Boolean).join(' · ') || 'Контакт и адрес пока не заполнены'}
-              </p>
-            </div>
-            <div className={styles.headActions}>
-              <button
-                type="button"
-                className={styles.iconBtn}
-                aria-label="Настройки проекта"
-                aria-pressed={tab === 'settings'}
-                onClick={() => onTab('settings')}
-              >
-                <SettingsIcon size={22} />
-              </button>
-              <button type="button" className={styles.ghost} onClick={onClose}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-          <div className={styles.tabs} role="tablist" aria-label="Разделы карточки">
-            {TABS.map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={styles.tab}
-                role="tab"
-                aria-selected={tab === id}
-                onClick={() => onTab(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+  return (
+    <section className={styles.page} aria-label="Проект">
+      <nav className={styles.crumbs} aria-label="Путь">
+        <button type="button" onClick={onDesk}>
+          Проекты
+        </button>
+        <span aria-hidden="true">/</span>
+        <span>{project.name}</span>
+      </nav>
+      <header className={styles.pageHead}>
+        <div>
+          <p className={styles.eyebrow}>Проекты</p>
+          <h1>{project.name}</h1>
+          <p className={styles.lead}>{subtitle}</p>
         </div>
-        <div className={styles.body}>
+        {canEdit ? (
+          <button type="button" className={styles.ghost} aria-pressed={tab === 'settings'} onClick={() => onTab('settings')}>
+            Настройки проекта
+          </button>
+        ) : null}
+      </header>
+      <div className={styles.tabs} role="tablist" aria-label="Разделы проекта">
+        {TABS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={styles.tab}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => onTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className={styles.pageBody}>
         {tab === 'overview' ? (
           <Overview
             project={project}
@@ -478,10 +480,8 @@ function ProjectCard({
         {tab === 'settings' ? (
           <Settings project={project} status={status} staff={people} actor={actor} canEdit={canEdit} onSave={onSave} />
         ) : null}
-        </div>
-      </aside>
-    </>,
-    document.body,
+      </div>
+    </section>
   );
 }
 

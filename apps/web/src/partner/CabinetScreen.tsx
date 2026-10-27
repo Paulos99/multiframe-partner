@@ -22,9 +22,32 @@ import { SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
+import { navigateProject, parseProjectHash } from './projectRoute';
 import { consumeReturnToTools } from './toolsReturn';
 import styles from './partner.module.css';
 import addStyles from './AdminPartners.module.css';
+
+function projectHashOpen(): boolean {
+  return typeof window !== 'undefined' && parseProjectHash(window.location.hash).kind !== 'desk';
+}
+
+function leaveProjectHash() {
+  if (projectHashOpen()) navigateProject({ kind: 'desk' }, 'replace');
+}
+
+function useFollowProjectHash(openProjects: () => void) {
+  useEffect(() => {
+    const sync = () => {
+      if (parseProjectHash(window.location.hash).kind !== 'desk') openProjects();
+    };
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, [openProjects]);
+}
 
 function roleHeading(role: UserRole, user: SessionUser): string {
   const company = user.org?.companyName?.trim();
@@ -394,8 +417,10 @@ function OwnerCabinet({
   const user = api.user!;
   const [tab, setTab] = useState<OwnerTab>(() => {
     consumeReturnToTools();
-    return api.openedObjectId ? 'projects' : 'today';
+    return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
+  const showProjects = useMemo(() => () => setTab('projects'), []);
+  useFollowProjectHash(showProjects);
   const [createToken, setCreateToken] = useState(0);
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
   const [city, setCity] = useState(user.org?.city || '');
@@ -441,12 +466,12 @@ function OwnerCabinet({
   }
 
   const ownerNav: SideItem[] = [
-    { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => setTab('today') },
-    { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => setTab('projects') },
-    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => setTab('company') },
-    { id: 'staff', label: 'Сотрудники', active: tab === 'staff', onSelect: () => setTab('staff') },
-    { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => setTab('analytics') },
-    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => setTab('help') },
+    { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
+    { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
+    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { leaveProjectHash(); setTab('company'); } },
+    { id: 'staff', label: 'Сотрудники', active: tab === 'staff', onSelect: () => { leaveProjectHash(); setTab('staff'); } },
+    { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
+    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
 
   return (
@@ -467,12 +492,18 @@ function OwnerCabinet({
         <TabPanel>
           <TodayHome
             onOpenRoom={(id) => {
-              api.openObject(id);
+              const room = api.objects.find((item) => item.id === id);
+              if (room?.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: id });
+              else api.openObject(id);
               setTab('projects');
             }}
-            onProjects={() => setTab('projects')}
+            onProjects={() => {
+              navigateProject({ kind: 'desk' }, 'replace');
+              setTab('projects');
+            }}
             onCreateProject={() => {
               setCreateToken((n) => n + 1);
+              navigateProject({ kind: 'desk' }, 'replace');
               setTab('projects');
             }}
             onProblemomer={() => onNavigate('problemomer')}
@@ -628,14 +659,16 @@ function SalesCabinet({
   const [createToken, setCreateToken] = useState(0);
   const [tab, setTab] = useState<'today' | 'projects' | 'analytics' | 'help'>(() => {
     consumeReturnToTools();
-    return api.openedObjectId ? 'projects' : 'today';
+    return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
+  const showProjects = useMemo(() => () => setTab('projects'), []);
+  useFollowProjectHash(showProjects);
 
   const salesNav: SideItem[] = [
-    { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => setTab('today') },
-    { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => setTab('projects') },
-    { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => setTab('analytics') },
-    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => setTab('help') },
+    { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
+    { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
+    { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
+    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
 
   return (
@@ -656,12 +689,18 @@ function SalesCabinet({
         <TabPanel>
           <TodayHome
             onOpenRoom={(id) => {
-              api.openObject(id);
+              const room = api.objects.find((item) => item.id === id);
+              if (room?.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: id });
+              else api.openObject(id);
               setTab('projects');
             }}
-            onProjects={() => setTab('projects')}
+            onProjects={() => {
+              navigateProject({ kind: 'desk' }, 'replace');
+              setTab('projects');
+            }}
             onCreateProject={() => {
               setCreateToken((n) => n + 1);
+              navigateProject({ kind: 'desk' }, 'replace');
               setTab('projects');
             }}
             onProblemomer={() => onNavigate('problemomer')}
@@ -704,17 +743,19 @@ function FieldCabinet({
   const user = api.user!;
   const [view, setView] = useState<'today' | 'projects' | 'help'>(() => {
     consumeReturnToTools();
-    return api.openedObjectId ? 'projects' : 'today';
+    return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
+  const showProjects = useMemo(() => () => setView('projects'), []);
+  useFollowProjectHash(showProjects);
 
   return (
     <CabinetChrome
       title={roleHeading(role, user)}
       lead={role === 'crew' ? 'Монтаж назначенных комнат' : 'Замер назначенных комнат'}
       items={[
-        { id: 'today', label: 'Сегодня', active: view === 'today', onSelect: () => setView('today') },
-        { id: 'projects', label: 'Проекты', active: view === 'projects', onSelect: () => setView('projects') },
-        { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => setView('help') },
+        { id: 'today', label: 'Сегодня', active: view === 'today', onSelect: () => { leaveProjectHash(); setView('today'); } },
+        { id: 'projects', label: 'Проекты', active: view === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setView('projects'); } },
+        { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => { leaveProjectHash(); setView('help'); } },
       ]}
       extra={
         <>
@@ -732,10 +773,15 @@ function FieldCabinet({
         ) : (
           <TodayHome
             onOpenRoom={(id) => {
-              api.openObject(id);
+              const room = api.objects.find((item) => item.id === id);
+              if (room?.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: id });
+              else api.openObject(id);
               setView('projects');
             }}
-            onProjects={() => setView('projects')}
+            onProjects={() => {
+              navigateProject({ kind: 'desk' }, 'replace');
+              setView('projects');
+            }}
             onProblemomer={() => onNavigate('problemomer')}
             onCalculator={onOpenCalc}
             onTraining={() => setView('help')}

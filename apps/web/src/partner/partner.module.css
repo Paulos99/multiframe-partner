@@ -3204,6 +3204,93 @@
   margin-top: 14px;
 }
 
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(22, 48, 40, 0.28);
+}
+
+.modal {
+  width: min(480px, 100%);
+  max-height: min(92dvh, 760px);
+  overflow: auto;
+  padding: 16px 20px 24px;
+  border-radius: 16px;
+  background: var(--cab-card, #fff);
+  color: var(--cab-ink);
+  box-shadow: 0 24px 60px rgba(16, 40, 32, 0.2);
+}
+
+.roomPage {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.roomPage h1 {
+  margin: 2px 0 6px;
+  font-size: 32px;
+  line-height: 1.15;
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--cab-muted);
+  font-size: 13px;
+}
+
+.crumbs button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--cab-accent-text, #01644f);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--cab-muted);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .modalBackdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .crumbs {
+    display: none;
+  }
+
+  .roomPage h1 {
+    font-size: 26px;
+  }
+
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
 .drawerBackdrop {
   position: fixed;
   inset: 0;

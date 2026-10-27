@@ -385,3 +385,70 @@
     white-space: nowrap;
   }
 }
+
+/*
+ * Узкий планшет (641–760 px): не иконки слева, а выезжающая панель по кнопке «Меню».
+ * Нижняя панель телефона (≤640) и рельс планшета (761–1024) остаются прежними.
+ */
+@media (min-width: 641px) and (max-width: 760px) {
+  .side[data-sheet] {
+    position: fixed;
+    z-index: 60;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(280px, 88vw);
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 16px 12px calc(20px + var(--safe-bottom));
+    gap: 12px;
+    transform: translateX(-105%);
+    box-shadow: none;
+    transition: transform 0.2s ease;
+  }
+
+  .side[data-sheet][data-open] {
+    transform: none;
+    box-shadow: 16px 0 40px rgba(20, 28, 36, 0.16);
+  }
+
+  .side[data-sheet] .brand {
+    display: block;
+  }
+
+  .side[data-sheet] .scroll {
+    gap: 16px;
+  }
+
+  .side[data-sheet] .item,
+  .side[data-sheet] .itemOn {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .side[data-sheet] .full {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+
+  .side[data-sheet] .short {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side[data-sheet] {
+    transition: none;
+  }
+}
