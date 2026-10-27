@@ -26,10 +26,13 @@ import {
   problemomerLine,
   projectMatches,
   projectRooms,
+  panelLabel,
   projectStatusLabel,
   roomTitle,
   readProjectView,
   writeProjectView,
+  crewProjectLists,
+  type CrewProjectGroup,
   type ProjectDeskView,
 } from './projectDesk';
 import { preliminaryRoomTotal } from './projectSummary';
@@ -127,6 +130,10 @@ export function ProjectDesk({
     setTab('overview');
   }
 
+  if (role === 'crew') {
+    return <CrewJobs projects={projects} rooms={rooms} query={query} onOpenRoom={onOpenRoom} />;
+  }
+
   return (
     <section className={styles.desk} aria-label="Список проектов">
       <div className={styles.bar}>
@@ -169,6 +176,99 @@ export function ProjectDesk({
         />
       ) : null}
     </section>
+  );
+}
+
+function CrewJobs({
+  projects,
+  rooms,
+  query,
+  onOpenRoom,
+}: {
+  projects: Project[];
+  rooms: JobObject[];
+  query: string;
+  onOpenRoom: (room: JobObject) => void;
+}) {
+  const { active, done } = useMemo(() => crewProjectLists(projects, rooms, query), [projects, rooms, query]);
+  return (
+    <section className={styles.desk} aria-label="Список проектов">
+      <p className={styles.lead}>Ваши комнаты: адрес, площадь, панели и статус.</p>
+      {!active.length && !done.length ? (
+        <p className={styles.empty}>
+          {query ? 'По этому запросу проектов нет.' : 'Пока нет назначенных комнат.'}
+        </p>
+      ) : (
+        <>
+          {active.length ? (
+            <div className={styles.crewList}>
+              {active.map((group) => (
+                <CrewProject key={group.project.id} group={group} onOpenRoom={onOpenRoom} />
+              ))}
+            </div>
+          ) : (
+            <p className={styles.empty}>Незакрытых комнат нет.</p>
+          )}
+          {done.length ? (
+            <details className={styles.done}>
+              <summary>Готовые · {done.length}</summary>
+              <div className={styles.crewList}>
+                {done.map((group) => (
+                  <CrewProject key={group.project.id} group={group} onOpenRoom={onOpenRoom} />
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+function roomPlace(project: Project, room: JobObject): string {
+  const address = room.address?.trim() || project.address?.trim();
+  const city = room.city?.trim() || project.city?.trim();
+  return [address, city].filter(Boolean).join(', ') || 'Адрес не заполнен';
+}
+
+function CrewProject({
+  group,
+  onOpenRoom,
+}: {
+  group: CrewProjectGroup;
+  onOpenRoom: (room: JobObject) => void;
+}) {
+  const { project, rooms } = group;
+  return (
+    <article className={styles.crewProject} data-project-id={project.id}>
+      <h3>{project.name || project.clientName || 'Проект'}</h3>
+      <div className={styles.rooms}>
+        {rooms.map((room) => {
+          const title = roomTitle(room);
+          const place = roomPlace(project, room);
+          const facts = [
+            room.room?.areaM2 != null ? formatArea(room.room.areaM2) : 'Площадь не указана',
+            panelLabel(room.estimate?.panels),
+            JOB_OBJECT_STATUS_LABELS[room.status as JobObjectStatus] || room.status,
+          ].join(' · ');
+          return (
+            <button
+              key={room.id}
+              type="button"
+              className={styles.roomBtn}
+              aria-label={`${title}, ${place}, ${facts}`}
+              onClick={() => onOpenRoom(room)}
+            >
+              <span>
+                <strong>{title}</strong>
+                <span>{place}</span>
+                <span>{facts}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </article>
   );
 }
 

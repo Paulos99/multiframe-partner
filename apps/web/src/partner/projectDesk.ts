@@ -162,3 +162,37 @@ export function personName(
 export function formatArea(value: number): string {
   return `${value.toLocaleString('ru-RU')} м²`;
 }
+
+export function panelLabel(count: number | null | undefined): string {
+  if (typeof count !== 'number' || !Number.isFinite(count)) return 'Панели не посчитаны';
+  const n = Math.max(0, Math.round(count));
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11 ? 'панель' : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? 'панели' : 'панелей';
+  return `${n.toLocaleString('ru-RU')} ${word}`;
+}
+
+export type CrewProjectGroup = {
+  project: Project;
+  rooms: JobObject[];
+};
+
+/** Проекты с незакрытой комнатой сверху. Полностью закрытые — отдельно, архив не показываем. */
+export function crewProjectLists(projects: Project[], rooms: JobObject[], query: string): {
+  active: CrewProjectGroup[];
+  done: CrewProjectGroup[];
+} {
+  const active: CrewProjectGroup[] = [];
+  const done: CrewProjectGroup[] = [];
+  for (const project of projects) {
+    if (project.archivedAt) continue;
+    const own = projectRooms(project, rooms);
+    if (!own.length || !projectMatches(project, own, query)) continue;
+    const ordered = [...own].sort((a, b) => Number(a.status === 'closed') - Number(b.status === 'closed'));
+    const group = { project, rooms: ordered };
+    if (ordered.some((room) => room.status !== 'closed')) active.push(group);
+    else done.push(group);
+  }
+  return { active, done };
+}

@@ -4,8 +4,10 @@ import type { JobObject, Project } from '../../../../packages/shared/partner';
 import { estimateForRole, roleSeesProjectMoney } from '../../../../packages/shared/partner';
 import {
   areaSum,
+  crewProjectLists,
   effectiveProjectStatus,
   nextSteps,
+  panelLabel,
   projectMatches,
   readProjectView,
   writeProjectView,
@@ -87,6 +89,40 @@ test('ближайшие шаги и площадь не выдумывают с
   assert.deepEqual(areaSum(rooms), { known: 2, total: 20, missing: 1 });
   assert.equal(projectMatches(project, rooms, 'лесная'), true);
   assert.equal(projectMatches(project, rooms, 'нет такого'), false);
+});
+
+test('монтажнику: сначала проекты с незакрытыми комнатами, готовые отдельно', () => {
+  const open = {
+    ...project,
+    id: 'open',
+    name: 'Тверская',
+    address: 'ул. Тверская, 8',
+  };
+  const finished = {
+    ...project,
+    id: 'done',
+    name: 'Арбат',
+    address: 'ул. Арбат, 12',
+  };
+  const empty = { ...project, id: 'empty', name: 'Пустой', archivedAt: '2026-01-01' };
+  const rooms = [
+    room({ id: 'closed-room', projectId: 'open', status: 'closed', roomName: 'Кладовая', estimate: { panels: 2, dowels: 0 } }),
+    room({ id: 'install-room', projectId: 'open', status: 'install', roomName: 'Детская', room: { areaM2: 16 }, estimate: { panels: 39, dowels: 0 } }),
+    room({ id: 'done-room', projectId: 'done', status: 'closed', roomName: 'Гостиная', room: { areaM2: 18 }, estimate: { panels: 1, dowels: 0 } }),
+    room({ id: 'other', projectId: 'elsewhere', status: 'install', roomName: 'Чужая' }),
+  ];
+  const lists = crewProjectLists([finished, open, empty], rooms, '');
+  assert.deepEqual(lists.active.map((item) => item.project.id), ['open']);
+  assert.deepEqual(
+    lists.active[0]?.rooms.map((item) => item.id),
+    ['install-room', 'closed-room'],
+  );
+  assert.deepEqual(lists.done.map((item) => item.project.id), ['done']);
+  assert.equal(crewProjectLists([open], rooms, 'арбат').active.length, 0);
+  assert.equal(crewProjectLists([finished], rooms, 'арбат').done.length, 1);
+  assert.equal(panelLabel(1), '1 панель');
+  assert.equal(panelLabel(39), '39 панелей');
+  assert.equal(panelLabel(undefined), 'Панели не посчитаны');
 });
 
 test('бригада не получает суммы, замерщик получает', () => {

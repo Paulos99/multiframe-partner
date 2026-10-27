@@ -95,16 +95,33 @@ test('демо ?demo=1 группирует комнаты и открывает
   await page.screenshot({ path: `${shots}/07-mobile.png` });
 });
 
-test('демо-бригада не видит суммы', async ({ page }) => {
+test('демо-бригада видит список комнат без канбана и без сумм', async ({ page }) => {
   await enterCapital(page, 'Монтажник');
   const desk = page.getByRole('region', { name: 'Список проектов' });
-  await expect(desk.getByText('Пока нет проектов')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Вид проектов' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-project-stage]')).toHaveCount(0);
   await expect(desk.getByRole('columnheader', { name: 'Сумма' })).toHaveCount(0);
-  await desk.getByRole('button', { name: 'Иванова А.', exact: true }).click();
-  const card = page.getByRole('dialog', { name: 'Карточка проекта' });
-  await expect(card).toBeVisible();
-  await expect(card).not.toContainText('₽');
-  await expect(card.getByText('Сумма', { exact: true })).toHaveCount(0);
-  await card.getByRole('tab', { name: 'Настройки', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Сохранить', exact: true })).toHaveCount(0);
+  await expect(desk).not.toContainText('₽');
+
+  const open = desk.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Сидорова М.', exact: true }) });
+  await expect(open.getByRole('button', { name: 'Детская' })).toContainText('ул. Тверская, 8');
+  await expect(open.getByRole('button', { name: 'Детская' })).toContainText('16 м²');
+  await expect(open.getByRole('button', { name: 'Детская' })).toContainText('39 панелей');
+  await expect(open.getByRole('button', { name: 'Детская' })).toContainText('Монтаж');
+
+  const done = desk.locator('details').filter({ hasText: 'Готовые' });
+  await expect(done).not.toHaveAttribute('open', '');
+  await expect(done.getByRole('heading', { name: 'Иванова А.', exact: true })).toBeHidden();
+  await done.locator('summary').click();
+  await expect(done.getByRole('heading', { name: 'Иванова А.', exact: true })).toBeVisible();
+  await expect(done.getByRole('button', { name: 'Гостиная' })).toContainText('Закрыто');
+  await expect(done.getByRole('heading', { name: 'Петров С.', exact: true })).toBeVisible();
+
+  await open.getByRole('button', { name: 'Детская' }).click();
+  const room = page.getByRole('dialog', { name: 'Комната' });
+  await expect(room).toBeVisible();
+  await expect(room).not.toContainText('₽');
+  await expect(room.getByText('Итого комнаты')).toHaveCount(0);
+  await expect(room.getByText('Панели', { exact: true })).toBeVisible();
 });
