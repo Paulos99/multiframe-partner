@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { scoreStep } from './scoring';
 import { testContent } from './testContent';
 import { MemoryStore } from './store';
 import { buildDrillAttempt, buildQuizAttempt, buildScenarioAttempt, defaultSettings, type Who } from './attempts';
@@ -17,6 +18,8 @@ import {
   highlightRanges,
   isCorrectAnswer,
   needsNote,
+  calibrate,
+  evaluateDrill,
   objectionsForRole,
   scenariosForRole,
   seededShuffle,
@@ -104,6 +107,27 @@ test('обещание тишины: итог не выше 2,4 и попытк�
   assert.ok(built.attempt.total <= 2.4);
   assert.equal(built.attempt.passed, false);
   assert.ok(built.attempt.flags.some((f) => f.severity === 'critical'));
+});
+
+test('подсказка «Слышу клиента» не выше разбора: без названных пунктов не больше 2, при малом охвате не больше 3', () => {
+  const b1 = 'Понятно, давайте сегодня спокойно обсудим погоду и выходные дни.';
+  const b2 = 'Согласен, погода хорошая, выходные дни обсудим отдельно потом.';
+  let sawGenerous = false;
+  for (const o of content.objections.objections) {
+    const raw = scoreStep(b1, b2, o, 0, content.scoring);
+    if (raw.matchedPointIds.length) continue;
+    const ev = evaluateDrill(o, 0, b1, b2, content, false);
+    assert.equal(ev.matchedPointIds.length, 0);
+    assert.ok((ev.autoScores.listening ?? 9) <= 2, o.id);
+    if (raw.scores.listening >= 3) sawGenerous = true;
+  }
+  assert.ok(sawGenerous, 'эталонный подсчёт здесь щедрее, поправка нужна');
+  assert.equal(calibrate({ listening: 5 }, 0.3).listening, 3);
+  assert.equal(calibrate({ listening: 5 }, 0.8).listening, 5);
+  assert.equal(calibrate({ listening: 1 }, 0).listening, 1);
+  const o = content.objections.objections[0];
+  const good = evaluateDrill(o, 0, o.referenceAnswer, o.pushbackReferenceAnswer, content, false);
+  assert.ok((good.autoScores.listening ?? 0) >= 3);
 });
 
 test('пометка нужна при изменении самооценки больше чем на балл', () => {

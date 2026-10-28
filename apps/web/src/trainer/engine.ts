@@ -232,6 +232,18 @@ export function finalOf(auto: Scores, self: Scores | null): Scores {
 
 export const ALL_ONES: Scores = { discovery: 1, listening: 1, objection: 1, value: 1, honesty: 1, nextstep: 1 };
 
+/**
+ * Подсказка самооценки не должна быть щедрее разбора. «Слышу клиента» в эталонном подсчёте
+ * растёт от вежливого начала и повтора слов клиента, даже если ни один пункт не назван.
+ * Поэтому: ни одного названного пункта — не больше 2, меньше половины — не больше 3.
+ * Подсчёт в scoring.ts остаётся как в эталоне; поправка только здесь, в автооценке тренажёра.
+ */
+export function calibrate<T extends Partial<Record<CriterionId, number>>>(scores: T, cov: number): T {
+  if (scores.listening === undefined) return scores;
+  const cap = cov <= 0 ? 2 : cov < 0.5 ? 3 : 5;
+  return { ...scores, listening: Math.min(scores.listening, cap) };
+}
+
 /* ---------- быстрая отработка ---------- */
 
 export type DrillEvaluation = {
@@ -256,7 +268,7 @@ export function evaluateDrill(o: Objection, phrasing: number, beat1: string, bea
   }
   const r = scoreStep(beat1, beat2, o, phrasing, content.scoring);
   return {
-    autoScores: r.scores,
+    autoScores: calibrate(r.scores, r.cov),
     flags: r.hits,
     cov: r.cov,
     matchedPointIds: r.matchedPointIds.map((p) => `${o.id}:${p}`),
@@ -304,7 +316,7 @@ export function evaluateScenario(
     const b2 = answers.find((a) => a.stepId === step.id && a.beat === 2)?.text ?? '';
     const r = scoreStep(b1, b2, o, step.clientPhrasingIndex, content.scoring);
     const usedHint = hintsUsed.includes(step.id);
-    const scores = { ...r.scores };
+    const scores = { ...calibrate(r.scores, r.cov) };
     if (usedHint) scores.objection = Math.max(1, scores.objection - 1);
     const critical = r.hits.some((h) => h.severity === 'critical');
     steps.push({

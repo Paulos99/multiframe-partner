@@ -127,6 +127,7 @@ test('быстрая отработка: короткий ответ не ухо
   await page.getByRole('button', { name: 'Сохранить оценку', exact: true }).click();
   const result = page.getByRole('region', { name: 'Итог карточки' });
   await expect(result).toBeVisible();
+  await expect(result.getByRole('status').filter({ hasText: 'Оценка сохранена' })).toBeVisible();
   await expect(result).toContainText('Не засчитано');
   await expect(result).toContainText('сохранены отдельно');
 
@@ -147,6 +148,21 @@ test('быстрая отработка: короткий ответ не ухо
   await page.reload();
   await expect(page.getByRole('heading', { level: 3, name: 'Мой прогресс' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'История' }).getByRole('listitem')).toHaveCount(2);
+});
+
+test('подсказка самооценки не щедрее разбора: «Слышу клиента» без названных пунктов не выше 2', async ({ page }) => {
+  await enter(page, 'sales');
+  await openTrainer(page);
+  await page.goto('/#trainer/drill/obj-cheaper-membrane');
+  await expect(page.getByText('Возражение 1 из 1')).toBeVisible();
+  await page.getByLabel('Ваш ответ клиенту').fill('Понятно, давайте сегодня спокойно обсудим погоду и выходные дни.');
+  await page.getByRole('button', { name: 'Ответить', exact: true }).click();
+  await page.getByLabel('Ваш ответ клиенту').fill('Согласен, погода хорошая, выходные дни обсудим отдельно потом.');
+  await page.getByRole('button', { name: 'Ответить', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 3, name: 'Разбор ответа' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Пункты ответа' }).getByText('Названо', { exact: true })).toHaveCount(0);
+  const checked = page.getByRole('radiogroup', { name: /Слышу клиента/ }).getByRole('radio', { checked: true });
+  expect(Number(await checked.getAttribute('value'))).toBeLessThanOrEqual(2);
 });
 
 test('«Не знаю» ставит один балл и сразу показывает эталон', async ({ page }) => {

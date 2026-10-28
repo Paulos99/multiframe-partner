@@ -4,7 +4,7 @@ import { ROLEPLAY_CRITERIA, answerError, evaluateScenario, scenariosForRole, wor
 import { draftKey } from './store';
 import { scoreStep } from './scoring';
 import { useTrainer } from './TrainerContext';
-import { Flags, Page, Score, SelfAssess, go } from './ui';
+import { Flags, Page, SavedNote, Score, SelfAssess, go } from './ui';
 import type { AttemptAnswer, CriterionId, LearningAttempt, Scenario, Scores } from './types';
 import styles from './Trainer.module.css';
 
@@ -404,6 +404,7 @@ export function ScenarioResult({ id, session, setSession }: { id: string; sessio
       </section>
       {attempt ? (
         <section className={styles.result} aria-label="Итог разговора" aria-live="polite">
+          <SavedNote />
           <p className={styles.bigScore}>
             <Score value={attempt.total} /> <span>из 5</span>
           </p>

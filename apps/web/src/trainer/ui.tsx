@@ -228,8 +228,21 @@ export function SelfAssess({
         </p>
       ) : null}
       <button type="submit" className={styles.primary} disabled={busy}>
-        {submitLabel}
+        {busy ? 'Сохраняем…' : submitLabel}
       </button>
     </form>
+  );
+}
+
+/** Короткое подтверждение после сохранения оценки; сам выезжает в видимую часть экрана. */
+export function SavedNote({ children }: { children?: ReactNode }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, []);
+  return (
+    <p ref={ref} className={styles.savedNote} role="status">
+      <span aria-hidden>✔</span> {children ?? 'Оценка сохранена. В итог пошла ваша оценка.'}
+    </p>
   );
 }

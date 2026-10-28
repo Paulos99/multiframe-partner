@@ -768,3 +768,12 @@
     font-size: 16px;
   }
 }
+
+.savedNote {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--cab-radius-md);
+  background: color-mix(in srgb, var(--cab-accent) 14%, var(--cab-card));
+  border: 1px solid var(--cab-accent);
+  font-weight: 650;
+}

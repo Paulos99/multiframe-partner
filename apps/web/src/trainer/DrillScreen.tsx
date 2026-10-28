@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildDrillAttempt, drillPhrasing } from './attempts';
 import { DRILL_CRITERIA, answerError, buildDeck, evaluateDrill, wordCount, MIN_WORDS } from './engine';
-import { Flags, Highlighted, Page, Points, Quotes, Score, SelfAssess, go } from './ui';
+import { Flags, Highlighted, Page, Points, Quotes, SavedNote, Score, SelfAssess, go } from './ui';
 import { useTrainer } from './TrainerContext';
 import type { CriterionId, LearningAttempt, Objection, Scores } from './types';
 import styles from './Trainer.module.css';
@@ -322,6 +322,7 @@ function Card({
           ) : null}
           {phase === 'saved' && attempt ? (
             <section className={styles.result} aria-label="Итог карточки" aria-live="polite">
+              {attempt.selfScores ? <SavedNote /> : <SavedNote>Попытка сохранена.</SavedNote>}
               <h4>Итог по карточке</h4>
               <p className={styles.bigScore}>
                 <Score value={attempt.total} /> <span>из 5</span>
