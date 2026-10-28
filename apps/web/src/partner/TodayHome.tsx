@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   JOB_OBJECT_STATUS_LABELS,
   canCreateObjects,
@@ -6,6 +7,7 @@ import {
 } from '../../../../packages/shared/partner';
 import { greetingLine, greetingName } from '../../../../packages/shared/personName.js';
 import { roomDisplayName } from './kanban';
+import { projectStatusLabel, roomProjectStatuses } from './projectDesk';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
 
@@ -21,10 +23,11 @@ function roomTitle(room: JobObject): string {
   return roomDisplayName(room);
 }
 
-function roomMeta(room: JobObject): string {
+/** Стадия проекта, как на доске «Проекты». Своя стадия комнаты — только если проекта нет. */
+export function roomMeta(room: JobObject, projectStatus?: Parameters<typeof projectStatusLabel>[0]): string {
   const place = [room.clientName, room.address].filter(Boolean).join(' · ');
   const area = room.room?.areaM2 != null ? `${room.room.areaM2} м²` : '';
-  return [JOB_OBJECT_STATUS_LABELS[room.status], place, area].filter(Boolean).join(' · ');
+  return [projectStatus ? projectStatusLabel(projectStatus) : JOB_OBJECT_STATUS_LABELS[room.status], place, area].filter(Boolean).join(' · ');
 }
 
 function nearest(rooms: JobObject[], role: UserRole): JobObject[] {
@@ -61,6 +64,7 @@ export function TodayHome({
   const user = api.user!;
   const role = user.role;
   const tasks = nearest(api.objects, role);
+  const stages = useMemo(() => roomProjectStatuses(api.projects, api.objects), [api.projects, api.objects]);
   const first = tasks[0];
   const canCreate = canCreateObjects(role);
   const showTools = true;
@@ -155,7 +159,7 @@ export function TodayHome({
                 <li key={room.id}>
                   <button type="button" className={styles.todayTask} onClick={() => onOpenRoom?.(room.id)}>
                     <strong>{roomTitle(room)}</strong>
-                    <span>{roomMeta(room)}</span>
+                    <span>{roomMeta(room, stages[room.id])}</span>
                   </button>
                 </li>
               ))}
