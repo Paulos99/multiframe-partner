@@ -18,13 +18,22 @@ import { trainerHashOpen } from '../trainer/route';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { AnimatePresence, FadeRise, m, motionPresets } from './motionBits';
 import { ObjectsPanel } from './ObjectsPanel';
-import { StaffPanel } from './StaffPanel';
+import { CompanySection } from './CompanySection';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
+import { ToolsPanel } from './ToolsPanel';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
-import { navigateHash, navigateProject, parseProjectHash, parseStaffHash } from './projectRoute';
+import {
+  isLegacyStaffList,
+  navigateCompany,
+  navigateHash,
+  navigateProject,
+  parseCompanyHash,
+  parseProjectHash,
+  parseStaffHash,
+} from './projectRoute';
 import { consumeReturnToTools } from './toolsReturn';
 import styles from './partner.module.css';
 import addStyles from './AdminPartners.module.css';
@@ -40,14 +49,26 @@ function leaveProjectHash() {
     navigateHash('', 'replace');
     return;
   }
-  if (parseProjectHash(hash).kind === 'desk' && parseStaffHash(hash).kind === 'list') return;
+  if (
+    parseProjectHash(hash).kind === 'desk' &&
+    parseStaffHash(hash).kind === 'list' &&
+    parseCompanyHash(hash) === null &&
+    !isLegacyStaffList(hash)
+  ) {
+    return;
+  }
   navigateHash('', 'replace');
 }
 
-function useFollowStaffHash(openStaff: () => void) {
+/** Адреса раздела «Компания»: вкладки, карточка сотрудника и старый «#staff». */
+function companyHashOpen(hash: string): boolean {
+  return parseCompanyHash(hash) !== null || parseStaffHash(hash).kind === 'person' || isLegacyStaffList(hash);
+}
+
+function useFollowCompanyHash(openCompany: () => void) {
   useEffect(() => {
     const sync = () => {
-      if (parseStaffHash(window.location.hash).kind === 'person') openStaff();
+      if (companyHashOpen(window.location.hash)) openCompany();
     };
     window.addEventListener('hashchange', sync);
     window.addEventListener('popstate', sync);
@@ -55,7 +76,7 @@ function useFollowStaffHash(openStaff: () => void) {
       window.removeEventListener('hashchange', sync);
       window.removeEventListener('popstate', sync);
     };
-  }, [openStaff]);
+  }, [openCompany]);
 }
 
 function useFollowProjectHash(openProjects: () => void) {
@@ -113,13 +134,13 @@ function profileOf(user: SessionUser, onLogout: () => void) {
   };
 }
 
-type AdminTab = 'today' | 'partners' | 'analytics' | 'help';
+type AdminTab = 'today' | 'partners' | 'tools' | 'analytics' | 'help';
 
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const partners = useMemo(() => api.adminListPartners(), [api]);
   const [tab, setTab] = useCabinetSection<AdminTab>('analytics', () => {
-    consumeReturnToTools();
+    if (consumeReturnToTools()) return 'tools';
     if (trainerHashOpen()) return 'help';
     return 'today';
   });
@@ -181,6 +202,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const adminNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'partners', label: 'Партнёры', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
+    { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
@@ -418,6 +440,15 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         </TabPanel>
       ) : null}
 
+      {tab === 'tools' ? (
+        <TabPanel>
+          <ToolsPanel
+            onProblemomer={() => onNavigate('problemomer')}
+            onCalculator={() => onNavigate('calculator')}
+          />
+        </TabPanel>
+      ) : null}
+
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="admin" />
@@ -428,7 +459,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   );
 }
 
-type OwnerTab = 'today' | 'projects' | 'company' | 'staff' | 'analytics' | 'help';
+type OwnerTab = 'today' | 'projects' | 'tools' | 'company' | 'analytics' | 'help';
 
 function OwnerCabinet({
   onNavigate,
@@ -440,15 +471,15 @@ function OwnerCabinet({
   const api = usePartner();
   const user = api.user!;
   const [tab, setTab] = useCabinetSection<OwnerTab>('analytics', () => {
-    consumeReturnToTools();
-    if (typeof window !== 'undefined' && parseStaffHash(window.location.hash).kind === 'person') return 'staff';
+    if (consumeReturnToTools()) return 'tools';
+    if (typeof window !== 'undefined' && companyHashOpen(window.location.hash)) return 'company';
     if (trainerHashOpen()) return 'help';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setTab('projects'), []);
-  const showStaff = useMemo(() => () => setTab('staff'), []);
+  const showCompany = useMemo(() => () => setTab('company'), []);
   useFollowProjectHash(showProjects);
-  useFollowStaffHash(showStaff);
+  useFollowCompanyHash(showCompany);
   const [createToken, setCreateToken] = useState(0);
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
   const [city, setCity] = useState(user.org?.city || '');
@@ -496,57 +527,14 @@ function OwnerCabinet({
   const ownerNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
-    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { leaveProjectHash(); setTab('company'); } },
-    { id: 'staff', label: 'Сотрудники', active: tab === 'staff', onSelect: () => { leaveProjectHash(); setTab('staff'); } },
+    { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
+    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { navigateCompany('about', 'replace'); setTab('company'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
 
-  return (
-    <CabinetChrome
-      title={roleHeading('owner', user)}
-      lead={user.org?.city ? `Компания · ${user.org.city}` : 'Компания'}
-      items={ownerNav}
-      extra={
-        <>
-          <SyncBadge />
-          <InstallAppButton />
-        </>
-      }
-      profile={profileOf(user, api.logout)}
-    >
-      <FrameBody>
-      {tab === 'today' ? (
-        <TabPanel>
-          <TodayHome
-            onOpenRoom={(id) => {
-              const room = api.objects.find((item) => item.id === id);
-              if (room?.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: id });
-              else api.openObject(id);
-              setTab('projects');
-            }}
-            onProjects={() => {
-              navigateProject({ kind: 'desk' }, 'replace');
-              setTab('projects');
-            }}
-            onCreateProject={() => {
-              setCreateToken((n) => n + 1);
-              navigateProject({ kind: 'desk' }, 'replace');
-              setTab('projects');
-            }}
-            onProblemomer={() => onNavigate('problemomer')}
-            onCalculator={onOpenCalc}
-          />
-        </TabPanel>
-      ) : null}
-      {tab === 'projects' ? (
-        <TabPanel>
-          <ObjectsPanel openCreateToken={createToken} onCreate={() => onNavigate('problemomer')} />
-        </TabPanel>
-      ) : null}
-
-      {tab === 'company' ? (
-        <TabPanel>
+  const aboutPanel = (
+    <>
           {!companyEdit ? (
             <section className={`${styles.card} ${styles.panelCard}`}>
               <h2>Компания</h2>
@@ -650,12 +638,55 @@ function OwnerCabinet({
           </form>
           )}
           <InstallHint />
+    </>
+  );
+
+  return (
+    <CabinetChrome
+      title={roleHeading('owner', user)}
+      lead={user.org?.city ? `Компания · ${user.org.city}` : 'Компания'}
+      items={ownerNav}
+      extra={
+        <>
+          <SyncBadge />
+          <InstallAppButton />
+        </>
+      }
+      profile={profileOf(user, api.logout)}
+    >
+      <FrameBody>
+      {tab === 'today' ? (
+        <TabPanel>
+          <TodayHome
+            onOpenRoom={(id) => {
+              const room = api.objects.find((item) => item.id === id);
+              if (room?.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: id });
+              else api.openObject(id);
+              setTab('projects');
+            }}
+            onProjects={() => {
+              navigateProject({ kind: 'desk' }, 'replace');
+              setTab('projects');
+            }}
+            onCreateProject={() => {
+              setCreateToken((n) => n + 1);
+              navigateProject({ kind: 'desk' }, 'replace');
+              setTab('projects');
+            }}
+            onProblemomer={() => onNavigate('problemomer')}
+            onCalculator={onOpenCalc}
+          />
+        </TabPanel>
+      ) : null}
+      {tab === 'projects' ? (
+        <TabPanel>
+          <ObjectsPanel openCreateToken={createToken} onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}
 
-      {tab === 'staff' ? (
+      {tab === 'company' ? (
         <TabPanel>
-          <StaffPanel />
+          <CompanySection about={aboutPanel} />
         </TabPanel>
       ) : null}
 
@@ -669,6 +700,15 @@ function OwnerCabinet({
               else api.openObject(id);
               setTab('projects');
             }}
+          />
+        </TabPanel>
+      ) : null}
+
+      {tab === 'tools' ? (
+        <TabPanel>
+          <ToolsPanel
+            onProblemomer={() => onNavigate('problemomer')}
+            onCalculator={onOpenCalc}
           />
         </TabPanel>
       ) : null}
@@ -693,8 +733,8 @@ function SalesCabinet({
   const api = usePartner();
   const user = api.user!;
   const [createToken, setCreateToken] = useState(0);
-  const [tab, setTab] = useCabinetSection<'today' | 'projects' | 'analytics' | 'help'>('analytics', () => {
-    consumeReturnToTools();
+  const [tab, setTab] = useCabinetSection<'today' | 'projects' | 'tools' | 'analytics' | 'help'>('analytics', () => {
+    if (consumeReturnToTools()) return 'tools';
     if (trainerHashOpen()) return 'help';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
@@ -704,6 +744,7 @@ function SalesCabinet({
   const salesNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
+    { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
@@ -765,6 +806,15 @@ function SalesCabinet({
         </TabPanel>
       ) : null}
 
+      {tab === 'tools' ? (
+        <TabPanel>
+          <ToolsPanel
+            onProblemomer={() => onNavigate('problemomer')}
+            onCalculator={onOpenCalc}
+          />
+        </TabPanel>
+      ) : null}
+
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="sales" />
@@ -786,8 +836,8 @@ function FieldCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [view, setView] = useState<'today' | 'projects' | 'help'>(() => {
-    consumeReturnToTools();
+  const [view, setView] = useState<'today' | 'projects' | 'tools' | 'help'>(() => {
+    if (consumeReturnToTools()) return 'tools';
     if (trainerHashOpen()) return 'help';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
@@ -801,6 +851,7 @@ function FieldCabinet({
       items={[
         { id: 'today', label: 'Сегодня', active: view === 'today', onSelect: () => { leaveProjectHash(); setView('today'); } },
         { id: 'projects', label: 'Проекты', active: view === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setView('projects'); } },
+        { id: 'tools', label: 'Инструменты', active: view === 'tools', onSelect: () => { leaveProjectHash(); setView('tools'); } },
         { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => { leaveProjectHash(); setView('help'); } },
       ]}
       extra={
@@ -812,7 +863,9 @@ function FieldCabinet({
       profile={profileOf(user, api.logout)}
     >
       <FrameBody>
-        {view === 'help' ? (
+        {view === 'tools' ? (
+          <ToolsPanel onProblemomer={() => onNavigate('problemomer')} onCalculator={onOpenCalc} />
+        ) : view === 'help' ? (
           <HelpTrainingPanel role={role} />
         ) : view === 'projects' ? (
           <ObjectsPanel onCreate={() => onNavigate('problemomer')} />

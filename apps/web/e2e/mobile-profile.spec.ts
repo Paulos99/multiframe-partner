@@ -119,8 +119,8 @@ test('360px · admin: все шесть вкладок помещаются бе
   await pinPhoneFont(page);
   await enter(page, 'admin');
   const tabs = nav(page).getByRole('tab');
-  await expect(tabs).toHaveCount(5);
-  for (let i = 0; i < 5; i += 1) await expect(tabs.nth(i)).toBeInViewport({ ratio: 1 });
+  await expect(tabs).toHaveCount(6);
+  for (let i = 0; i < 6; i += 1) await expect(tabs.nth(i)).toBeInViewport({ ratio: 1 });
 });
 
 test('360px · admin: вкладки стоят ровно, без прокрутки и затухания', async ({ page }) => {

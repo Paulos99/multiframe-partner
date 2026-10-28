@@ -10,7 +10,7 @@ import {
 import { Button } from '../ui/Button';
 import { NewPasswordButton } from './NewPasswordButton';
 import { generatePassword, usePartner } from './PartnerContext';
-import { navigateStaff, parseStaffHash, type StaffRoute } from './projectRoute';
+import { navigateCompany, navigateStaff, parseStaffHash, type StaffRoute } from './projectRoute';
 import styles from './partner.module.css';
 
 /** Один экран сотрудников для владельца и менеджера компании. */
@@ -82,6 +82,10 @@ export function StaffPanel() {
     return (
       <section className={styles.roomPage} aria-label="Сотрудник">
         <nav className={styles.crumbs} aria-label="Путь">
+          <button type="button" onClick={() => navigateCompany('about', 'replace')}>
+            Компания
+          </button>
+          <span aria-hidden="true">/</span>
           <button type="button" onClick={() => navigateStaff({ kind: 'list' }, 'replace')}>
             Сотрудники
           </button>

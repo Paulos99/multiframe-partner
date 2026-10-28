@@ -32,7 +32,7 @@ import { ObjectHistory } from './ObjectHistory';
 import listStyles from './ProjectList.module.css';
 import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
 import { ProjectDesk } from './ProjectDesk';
-import { roomTitle } from './projectDesk';
+import { deleteProjectWarning, roomTitle } from './projectDesk';
 import { navigateProject, parseProjectHash, PROJECT_TABS, type ProjectRoute } from './projectRoute';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import styles from './partner.module.css';
@@ -186,7 +186,7 @@ export function ObjectsPanel({
   const hideMoney = user.role === 'crew';
   const staff = api.partnerListStaff();
   const [toDelete, setToDelete] = useState<JobObject | null>(null);
-  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string; rooms: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [route, setRoute] = useState<ProjectRoute>(() =>
     parseProjectHash(typeof window === 'undefined' ? '' : window.location.hash),
@@ -553,7 +553,7 @@ export function ObjectsPanel({
           if (projectId) navigateProject({ kind: 'room', projectId, roomId: room.id });
         }}
         onAddRoom={canCreate ? addRoom : undefined}
-        onDeleteProject={canDelete ? (project) => setProjectToDelete({ id: project.id, name: project.name }) : undefined}
+        onDeleteProject={canDelete ? (project) => setProjectToDelete({ id: project.id, name: project.name, rooms: api.objects.filter((room) => room.projectId === project.id).length }) : undefined}
       />
       )}
 
@@ -869,7 +869,7 @@ export function ObjectsPanel({
       <ConfirmDialog
         open={!!projectToDelete}
         title={projectToDelete ? `Удалить проект «${projectToDelete.name}»?` : ''}
-        message="Вместе с проектом удалятся его комнаты."
+        message={projectToDelete ? deleteProjectWarning(projectToDelete.rooms) : undefined}
         confirmLabel="Удалить проект"
         busy={deleting}
         onCancel={() => setProjectToDelete(null)}

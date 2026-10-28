@@ -17,20 +17,72 @@ async function enter(page: Page) {
 
 test('карточка сотрудника открывается страницей и возвращается назад', async ({ page }) => {
   await enter(page);
+  await page.getByRole('tab', { name: 'Компания', exact: true }).click();
   await page.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
+  await expect(page).toHaveURL(/#company\/staff$/);
   await page.getByRole('button', { name: /UI sales/ }).click();
   await expect(page).toHaveURL(/#staff\//);
   const card = page.getByRole('region', { name: 'Сотрудник' });
   await expect(card.getByRole('heading', { level: 1, name: 'UI sales' })).toBeVisible();
+  // Путь: Компания / Сотрудники / имя.
+  const crumbs = card.getByRole('navigation', { name: 'Путь' });
+  await expect(crumbs.getByRole('button', { name: 'Компания', exact: true })).toBeVisible();
+  await expect(crumbs.getByRole('button', { name: 'Сотрудники', exact: true })).toBeVisible();
+  await expect(crumbs).toContainText('UI sales');
   await expect(page.getByRole('dialog', { name: 'UI sales' })).toHaveCount(0);
   await expect(page.locator('[class*="drawer" i]')).toHaveCount(0);
   await page.reload();
   await expect(page).toHaveURL(/#staff\//);
   await expect(card.getByRole('heading', { level: 1, name: 'UI sales' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Компания', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.goBack();
+  await expect(page).toHaveURL(/#company\/staff$/);
   await expect(page.getByRole('heading', { name: 'Сотрудники', exact: true })).toBeVisible();
-  await expect(page).not.toHaveURL(/#staff\//);
   await expect(page.getByRole('tab', { name: 'Сотрудники', exact: true })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('владелец: «Компания» — одна вкладка меню с вкладками «О компании» и «Сотрудники»', async ({ page }) => {
+  await enter(page);
+  const nav = page.getByRole('complementary', { name: 'Разделы кабинета' });
+  await expect(nav.getByRole('tab', { name: 'Сотрудники', exact: true })).toHaveCount(0);
+  await nav.getByRole('tab', { name: 'Компания', exact: true }).click();
+  await expect(page).toHaveURL(/#company\/about$/);
+  const section = page.getByRole('region', { name: 'Компания' });
+  const tabs = section.getByRole('tablist', { name: 'Разделы компании' });
+  await expect(tabs.getByRole('tab', { name: 'О компании', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(section.getByRole('button', { name: /Изменить/ }).first()).toBeVisible();
+
+  await tabs.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
+  await expect(page).toHaveURL(/#company\/staff$/);
+  await expect(tabs.getByRole('tab', { name: 'Сотрудники', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(section.getByRole('button', { name: /UI sales/ })).toBeVisible();
+
+  // Хлебная крошка «Компания» из карточки ведёт на «О компании».
+  await section.getByRole('button', { name: /UI sales/ }).click();
+  const card = page.getByRole('region', { name: 'Сотрудник' });
+  await card.getByRole('button', { name: 'Компания', exact: true }).click();
+  await expect(page).toHaveURL(/#company\/about$/);
+  await expect(page.getByRole('region', { name: 'Компания' })).toBeVisible();
+  // «К списку» из карточки возвращает на вкладку «Сотрудники».
+  await tabs.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
+  await section.getByRole('button', { name: /UI sales/ }).click();
+  await card.getByRole('button', { name: 'К списку', exact: true }).click();
+  await expect(page).toHaveURL(/#company\/staff$/);
+  await expect(tabs.getByRole('tab', { name: 'Сотрудники', exact: true })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('старый адрес #staff открывает вкладку «Сотрудники» раздела «Компания»', async ({ page }) => {
+  await enter(page);
+  await page.goto('/#staff');
+  await expect(page).toHaveURL(/#company\/staff$/);
+  await expect(page.getByRole('tab', { name: 'Компания', exact: true })).toHaveAttribute('aria-selected', 'true');
+  const section = page.getByRole('region', { name: 'Компания' });
+  await expect(section.getByRole('tab', { name: 'Сотрудники', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(section.getByRole('button', { name: /UI sales/ })).toBeVisible();
+  // Прямой адрес вкладки переживает перезагрузку.
+  await page.reload();
+  await expect(page).toHaveURL(/#company\/staff$/);
+  await expect(section.getByRole('tab', { name: 'Сотрудники', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('комната добавляется со страницы проекта, у новой написано, что площадь не указана', async ({ page }) => {
