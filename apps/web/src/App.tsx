@@ -17,6 +17,8 @@ import { SyncStatus } from './partner/SyncStatus';
 import { applyStoredTheme } from './app-shell/theme';
 import styles from './partner/partner.module.css';
 import { ChevronLeftIcon, MoreIcon } from './icons';
+import { SharedRoomPage } from './screens/Shared/SharedRoomPage';
+import { isClientLinkHash, parseClientLinkHash } from './partner/clientLink';
 
 type Route = 'cabinet' | 'problemomer' | 'calculator';
 
@@ -355,7 +357,20 @@ function PartnerShell() {
   return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${user?.id||'login'}-${route}`} shift={false}>{body}</PageTransition></ShellFrame>;
 }
 
+function useClientLinkToken(): { open: boolean; token: string | null } {
+  const [hash, setHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  return { open: isClientLinkHash(hash), token: parseClientLinkHash(hash) };
+}
+
 export default function App() {
+  const clientLink = useClientLinkToken();
+  // Страница клиента живёт отдельно от кабинета: без входа, без данных компании.
+  if (clientLink.open) return <SharedRoomPage token={clientLink.token} />;
   return (
     <PartnerProvider>
       <PartnerShell />

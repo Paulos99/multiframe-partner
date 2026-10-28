@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ensureClientLinkUrl } from '../../partner/clientLink';
 import { usePartner } from '../../partner/PartnerContext';
 import { SoundPressureHelpButton } from '../../ui/SoundPressureHelp';
 import { useSession } from '../../state/SessionContext';
@@ -11,6 +12,7 @@ import {
   SLAB_THICKNESS_OPTIONS,
   SLAB_TYPE_OPTIONS,
   shouldAskNoiseKind,
+  type SessionState,
 } from '../../state/types';
 import {
   FELT_STEP_LABELS,
@@ -233,9 +235,8 @@ function saveBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export function useResultProfile() {
-  const { session, restart } = useSession();
-  const { diagnosisRequest, objects, attachProfile, user } = usePartner();
+/** Всё, что экран результата берёт из ответов: без входа, сети и действий. Им же пользуется страница клиента. */
+export function deriveResultView(session: SessionState) {
   const room = session.answers.room;
   const sim = session.derived?.simulation ?? deriveSimulation(session.answers);
   const hybridBefore = comfortClassFor(sim.before.Rw, sim.before.Lnw);
@@ -277,6 +278,42 @@ export function useResultProfile() {
         ? 'типовая ~220 мм'
         : `${slabTypeLabel}, типовая ~220 мм`
       : `${slabTypeLabel}, ${slabThickLabel}`;
+
+  return {
+    session,
+    room,
+    sim,
+    hybridBefore,
+    hybridAfter,
+    beforeOfficial,
+    afterOfficial,
+    airNowFelt,
+    airAfterFelt,
+    impactNowFelt,
+    impactAfterFelt,
+    roomLabel,
+    houseLabel,
+    wishLabel,
+    neighborsLabel,
+    noiseKindLabel,
+    wish,
+    noiseType,
+    caseVerdictParagraphs,
+    productClaim: about.claim,
+    productParagraphs: about.paragraphs,
+    productImageSrc: MULTIFRAME_PANEL_IMG,
+    slabContext,
+  };
+}
+
+export type ResultView = ReturnType<typeof deriveResultView>;
+
+export function useResultProfile() {
+  const { session, restart } = useSession();
+  const { diagnosisRequest, objects, attachProfile, user } = usePartner();
+  const view = deriveResultView(session);
+  const { room, hybridBefore, hybridAfter } = view;
+  const roomLabel = view.roomLabel;
 
   const calcUrl = buildCalculatorUrl(session.cta);
 
@@ -326,9 +363,15 @@ export function useResultProfile() {
     setPdfBusy(true);
     setPdfError(false);
     try {
+      const shareUrl = await ensureClientLinkUrl(
+        diagnosisRequest?.objectId,
+        user?.role,
+        session.answers.room as unknown as Record<string, unknown>,
+      );
       const { blob, filename } = await renderAcousticProfilePdf(session, {
         compact: true,
         hidePrices: user?.role === 'crew',
+        shareUrl,
       });
       saveBlob(blob, filename);
       const objectId = diagnosisRequest?.objectId;
@@ -360,30 +403,8 @@ export function useResultProfile() {
           : 'Поделиться';
 
   return {
-    session,
+    ...view,
     restart,
-    room,
-    sim,
-    hybridBefore,
-    hybridAfter,
-    beforeOfficial,
-    afterOfficial,
-    airNowFelt,
-    airAfterFelt,
-    impactNowFelt,
-    impactAfterFelt,
-    roomLabel,
-    houseLabel,
-    wishLabel,
-    neighborsLabel,
-    noiseKindLabel,
-    wish,
-    noiseType,
-    caseVerdictParagraphs,
-    productClaim: about.claim,
-    productParagraphs: about.paragraphs,
-    productImageSrc: MULTIFRAME_PANEL_IMG,
-    slabContext,
     pdfBusy,
     pdfError,
     shareLabel,

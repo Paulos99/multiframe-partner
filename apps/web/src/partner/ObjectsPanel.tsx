@@ -23,6 +23,7 @@ import { documentOpenPolicy } from './roomDocuments';
 import { answersFromStoredRoom, roomStubFromLabel } from './roomLink';
 import { createInitialSession, withDerived } from '../state/session';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
+import { ensureClientLinkUrl } from './clientLink';
 import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
 import { StatusSwap } from './motionBits';
@@ -48,7 +49,11 @@ function formatDocWhen(iso: string): string {
 }
 
 /** Профиль проблемомера без блока сметы. Если ответов комнаты нет — схема и количества. */
-async function plainProfileBlob(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+async function plainProfileBlob(
+  obj: JobObject,
+  doc: JobObjectDocument,
+  role: UserRole,
+): Promise<Blob> {
   const answers = answersFromStoredRoom(obj.room);
   if (answers?.roomType && answers.ceilingAreaM2) {
     try {
@@ -61,7 +66,16 @@ async function plainProfileBlob(obj: JobObject, doc: JobObjectDocument): Promise
         },
       });
       if (session.derived) {
-        const { blob } = await renderAcousticProfilePdf(session, { compact: true, hidePrices: true });
+        const shareUrl = await ensureClientLinkUrl(
+          obj.id,
+          role,
+          session.answers.room as unknown as Record<string, unknown>,
+        );
+        const { blob } = await renderAcousticProfilePdf(session, {
+          compact: true,
+          hidePrices: true,
+          shareUrl,
+        });
         return blob;
       }
     } catch {
@@ -309,7 +323,7 @@ export function ObjectsPanel({
 
   async function blobForDocument(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
     if (documentOpenPolicy(user.role) === 'without-prices') {
-      if (documentDisplayKind(doc.kind) === 'profile') return plainProfileBlob(obj, doc);
+      if (documentDisplayKind(doc.kind) === 'profile') return plainProfileBlob(obj, doc, user.role);
       return buildDemoPdfBlob(obj, doc, { hidePrices: true });
     }
     if (doc.demo) return buildDemoPdfBlob(obj, doc, { hidePrices: false });

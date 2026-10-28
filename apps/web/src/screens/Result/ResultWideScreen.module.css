@@ -28,7 +28,10 @@
 /* ——— Title ——— */
 .titleBar {
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
   padding: 2px 2px 0;
 }
 

@@ -5,6 +5,7 @@ import { useSession } from '../state/SessionContext';
 import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
+import { ensureClientLinkUrl } from './clientLink';
 import { roomRecordFromAnswers } from './roomLink';
 import { usePartner } from './PartnerContext';
 import listStyles from './ProjectList.module.css';
@@ -146,9 +147,15 @@ export function SaveObjectCard() {
     attachedProfile.current = sig;
     if (alive.current) setProfileNote('Прикладываем «Профиль» к комнате…');
     try {
+      const shareUrl = await ensureClientLinkUrl(
+        obj.id,
+        user?.role,
+        session.answers.room as unknown as Record<string, unknown>,
+      );
       const { blob } = await renderAcousticProfilePdf(session, {
         compact: true,
         hidePrices: user?.role === 'crew',
+        shareUrl,
       });
       const saved = await attachProfile(obj, await blobToBase64(blob));
       if (alive.current) setProfileNote(saved ? '«Профиль» приложен к комнате' : null);
