@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildQuizAttempt } from './attempts';
 import { buildQuiz, isCorrectAnswer, questionsForRole, shuffledOptions, summarizeQuiz, type QuizKind } from './engine';
 import { useTrainer } from './TrainerContext';
-import { Page, Quotes, Score, go } from './ui';
+import { Fold, Page, Quotes, Score, StepBar, go } from './ui';
 import type { LearningAttempt, QuizAnswer, QuizQuestion } from './types';
 import styles from './Trainer.module.css';
 
@@ -47,24 +47,14 @@ export function QuizStart({ setSession }: { setSession: (s: QuizSession | null) 
   }
 
   return (
-    <Page title="Проверка знаний" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Один вопрос на экране. После ответа сразу видно верный вариант и цитату из видео.">
-      <label className={styles.fieldLine}>
-        Тема для режима «По теме»
-        <select value={topic || topics[0]?.id || ''} onChange={(e) => setTopic(e.target.value)}>
-          {topics.map((x) => (
-            <option key={x.id} value={x.id}>
-              {x.title}
-            </option>
-          ))}
-        </select>
-      </label>
+    <Page title="Проверка знаний" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Один вопрос на экране. После ответа сразу видно верный вариант и цитату из видео. Засчитывается от 80 % верных.">
       {empty ? (
         <p className={styles.notice} role="status">
           {empty}
         </p>
       ) : null}
       <ul className={styles.cards}>
-        {KINDS.map((k) => (
+        {KINDS.filter((k) => k.kind !== 'topic').map((k) => (
           <li key={k.kind}>
             <button type="button" className={styles.cardBtn} onClick={() => start(k.kind)}>
               <strong>{k.title}</strong>
@@ -72,6 +62,25 @@ export function QuizStart({ setSession }: { setSession: (s: QuizSession | null) 
             </button>
           </li>
         ))}
+        <li>
+          <div className={styles.cardBox}>
+            <strong>По теме</strong>
+            <span className={styles.meta}>Выберите тему и проверьте себя только по ней.</span>
+            <label className={styles.fieldLine}>
+              Тема
+              <select value={topic || topics[0]?.id || ''} onChange={(e) => setTopic(e.target.value)}>
+                {topics.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className={styles.secondary} onClick={() => start('topic')}>
+              Начать по теме
+            </button>
+          </div>
+        </li>
       </ul>
     </Page>
   );
@@ -133,9 +142,7 @@ export function QuizRun({ session, setSession }: { session: QuizSession | null; 
 
   return (
     <Page title="Проверка знаний" back={{ label: 'Выбор проверки', to: { page: 'quiz', step: 'start' } }}>
-      <p className={styles.step}>
-        Вопрос {session.index + 1} из {total}
-      </p>
+      <StepBar current={session.checked ? session.index + 1 : session.index} total={total} label={`Вопрос ${session.index + 1} из ${total}`} />
       <fieldset className={styles.question} disabled={session.checked}>
         <legend>{q.question}</legend>
         {q.type === 'multi' ? <p className={styles.hint}>Можно выбрать несколько вариантов.</p> : null}
@@ -162,7 +169,9 @@ export function QuizRun({ session, setSession }: { session: QuizSession | null; 
         <section className={styles.block} aria-live="polite" aria-label="Разбор вопроса">
           <p className={lastAnswer?.correct ? styles.okLine : styles.failLine}>{lastAnswer?.correct ? '✔ Верно' : '✖ Неверно'}</p>
           <p>{q.explanation}</p>
-          <Quotes quotes={q.sourceQuotes} videos={t.content.quiz.videos} copyable={t.role === 'stp_admin'} />
+          <Fold title="Цитата из видео" hint={`цитат: ${q.sourceQuotes.length}`} label="Из видео">
+            <Quotes quotes={q.sourceQuotes} videos={t.content.quiz.videos} copyable={t.role === 'stp_admin'} />
+          </Fold>
         </section>
       ) : null}
       <div className={styles.stickyBar}>

@@ -4,7 +4,7 @@ import { ROLEPLAY_CRITERIA, answerError, evaluateScenario, scenariosForRole, wor
 import { draftKey } from './store';
 import { scoreStep } from './scoring';
 import { useTrainer } from './TrainerContext';
-import { Flags, Page, SavedNote, Score, SelfAssess, go } from './ui';
+import { Fold, Flags, Page, SavedNote, Score, SelfAssess, StepBar, go } from './ui';
 import type { AttemptAnswer, CriterionId, LearningAttempt, Scenario, Scores } from './types';
 import styles from './Trainer.module.css';
 
@@ -19,6 +19,7 @@ export type ScenarioSession = {
 };
 
 const stars = (n: number) => '●'.repeat(n) + '○'.repeat(Math.max(0, 5 - n));
+const DIFFICULTY = ['', 'очень лёгкий', 'лёгкий', 'средний', 'сложный', 'очень сложный'];
 
 export function ScenarioList() {
   const t = useTrainer();
@@ -26,7 +27,7 @@ export function ScenarioList() {
   const done = new Map<string, LearningAttempt>();
   for (const a of t.attempts) if (a.itemType === 'scenario' && a.passed) done.set(a.itemIds[0], a);
   return (
-    <Page title="Ролевые разговоры" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Телефонный разговор с клиентом по шагам. Выберите ситуацию.">
+    <Page title="Ролевые разговоры" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Телефонный разговор с клиентом по шагам. Выберите ситуацию, прочитайте вводные и начните.">
       {list.length === 0 ? <p className={styles.notice}>Для вашей роли пока нет сценариев. Включите «Показывать материалы всех ролей» в настройках тренажёра.</p> : null}
       <ul className={styles.cards}>
         {list.map((s) => {
@@ -35,11 +36,15 @@ export function ScenarioList() {
             <li key={s.id}>
               <button type="button" className={styles.cardBtn} onClick={() => go({ page: 'scenario', id: s.id, step: 'situation' })}>
                 <strong>{s.title}</strong>
-                <span className={styles.meta}>
-                  {s.callType} · сложность {stars(s.difficulty)} · около {s.estimatedMinutes} мин
+                <span className={styles.meta}>{s.callType}</span>
+                <span className={styles.chips}>
+                  <span className={styles.chip} role="img" aria-label={`Сложность: ${DIFFICULTY[s.difficulty] ?? s.difficulty}`}>
+                    {stars(s.difficulty)}
+                  </span>
+                  <span className={styles.chip}>около {s.estimatedMinutes} мин</span>
+                  {draft ? <span className={styles.tag}>Есть незавершённый разговор</span> : null}
+                  {done.has(s.id) ? <span className={styles.tagOk}>Засчитан</span> : null}
                 </span>
-                {draft ? <span className={styles.tag}>Есть незавершённый разговор</span> : null}
-                {done.has(s.id) ? <span className={styles.tagOk}>Засчитан</span> : null}
               </button>
             </li>
           );
@@ -84,17 +89,21 @@ export function ScenarioSituation({ id, setSession }: { id: string; setSession: 
         <p>
           <strong>Ваша цель:</strong> {s.goal}
         </p>
+        <p className={styles.chips}>
+          <span className={styles.chip}>{s.callType}</span>
+          <span className={styles.chip}>около {s.estimatedMinutes} мин</span>
+          <span className={styles.chip}>шагов: {s.steps.length + 1}</span>
+        </p>
+      </section>
+      <section className={styles.block} aria-label="Что считается успехом">
         <h4>Что будет считаться успехом</h4>
         <ul>
           {s.successCriteria.map((c) => (
             <li key={c.id}>{c.text}</li>
           ))}
         </ul>
-        <p className={styles.hint}>
-          {s.callType} · около {s.estimatedMinutes} мин · шагов: {s.steps.length + 1}
-        </p>
       </section>
-      <div className={styles.actions}>
+      <div className={`${styles.stickyBar} ${styles.actions}`}>
         {draft ? (
           <>
             <button type="button" className={styles.primary} onClick={() => void begin(true)}>
@@ -216,23 +225,25 @@ export function ScenarioTalk({
 
   return (
     <Page title={s.title} back={{ label: 'Выйти (разговор сохранится)', to: { page: 'scenario', id, step: 'situation' } }}>
-      <p className={styles.step}>
-        Шаг {Math.min(session.stepIndex + 1, total)} из {total}
-      </p>
-      <ol className={styles.chat} aria-label="Разговор">
-        {transcript.map((a, i) => (
-          <li key={i}>
-            <p className={styles.client}>Клиент: {a.clientLine}</p>
-            <p className={styles.mine}>Вы: {a.text}</p>
-          </li>
-        ))}
-      </ol>
+      <StepBar current={Math.min(session.stepIndex, total)} total={total} label={`Шаг ${session.reaction ? session.stepIndex : Math.min(session.stepIndex + 1, total)} из ${total}`} />
+      {transcript.length ? (
+        <ol className={styles.chat} aria-label="Разговор">
+          {transcript.map((a, i) => (
+            <li key={i}>
+              <p className={styles.client}>Клиент: {a.clientLine}</p>
+              <p className={styles.mine}>Вы: {a.text}</p>
+            </li>
+          ))}
+        </ol>
+      ) : null}
       {session.reaction ? (
         <div className={styles.block} aria-live="polite">
           <p className={styles.client}>Клиент: {session.reaction}</p>
-          <button type="button" className={styles.primary} onClick={() => setSession({ ...session, reaction: null })}>
-            Дальше
-          </button>
+          <div className={styles.stickyBar}>
+            <button type="button" className={styles.primary} onClick={() => setSession({ ...session, reaction: null })}>
+              Дальше
+            </button>
+          </div>
         </div>
       ) : (
         <div className={styles.talk}>
@@ -361,8 +372,7 @@ export function ScenarioResult({ id, session, setSession }: { id: string; sessio
           })}
         </ul>
       </section>
-      <section className={styles.block} aria-label="Разбор шагов">
-        <h4>Разбор по шагам</h4>
+      <Fold title="Разбор по шагам" hint={`шагов: ${evaluation.steps.length}`} label="Разбор шагов">
         {evaluation.steps.map((st) => {
           const o = objById.get(st.objectionId);
           return (
@@ -401,7 +411,7 @@ export function ScenarioResult({ id, session, setSession }: { id: string; sessio
             <li key={e}>{e}</li>
           ))}
         </ul>
-      </section>
+      </Fold>
       {attempt ? (
         <section className={styles.result} aria-label="Итог разговора" aria-live="polite">
           <SavedNote />
@@ -410,7 +420,7 @@ export function ScenarioResult({ id, session, setSession }: { id: string; sessio
           </p>
           <p className={attempt.passed ? styles.okLine : styles.failLine}>{attempt.passed ? '✔ Разговор засчитан' : '✖ Разговор не засчитан'}</p>
           <p className={styles.hint}>Предварительная оценка и ваша сохранены отдельно.</p>
-          <div className={styles.actions}>
+          <div className={`${styles.stickyBar} ${styles.actions}`}>
             <button type="button" className={styles.primary} onClick={() => { setSession(null); go({ page: 'scenario', id, step: 'situation' }); }}>
               Пройти ещё раз
             </button>

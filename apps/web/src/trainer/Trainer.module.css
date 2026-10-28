@@ -1,4 +1,5 @@
 .root {
+  --trainer-nav-h: 0px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -7,7 +8,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 .pageTitle {
@@ -30,6 +31,9 @@
 .back,
 .linkBtn {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   align-self: flex-start;
   min-height: var(--touch-min);
   padding: 4px 2px;
@@ -42,13 +46,17 @@
   text-align: left;
   cursor: pointer;
 }
-.linkBtn {
-  min-height: 36px;
+.back {
+  margin-left: -4px;
 }
 .primary,
 .secondary,
 .danger {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: var(--touch-min);
   padding: 10px 16px;
   border-radius: var(--cab-radius-md);
@@ -150,21 +158,46 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 10px 16px;
+}
+.homeTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 360px;
+  min-width: 0;
+}
+.sectionTitle {
+  margin: 6px 0 -4px;
+  font-size: 1rem;
+  font-weight: 750;
 }
 .today {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 16px;
   border: 1px solid color-mix(in srgb, var(--cab-accent) 45%, var(--cab-border));
   border-radius: var(--cab-radius-md);
-  background: var(--cab-card);
+  background: var(--cab-accent-soft);
 }
-.today p {
+.todayText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.todayText p {
   margin: 0;
   line-height: 1.45;
+}
+.todayActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .tiles,
 .cards {
@@ -178,13 +211,15 @@
 @media (min-width: 720px) {
   .tiles {
     grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
   }
   .cards {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 .tile,
-.cardBtn {
+.cardBtn,
+.cardBox {
   appearance: none;
   display: flex;
   flex-direction: column;
@@ -200,9 +235,77 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cardBox {
+  cursor: default;
+}
+.cardBox .fieldLine,
+.cardBox select {
+  width: 100%;
+}
+.cardBox > button {
+  align-self: stretch;
+}
+.tile:hover,
+.cardBtn:hover {
+  border-color: var(--cab-accent);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.08);
+}
+.tile:focus-visible,
+.cardBtn:focus-visible {
+  outline: 2px solid var(--cab-accent);
+  outline-offset: 2px;
+}
+.tile {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  grid-template-areas:
+    'icon title'
+    'icon text'
+    'icon chips';
+  column-gap: 12px;
+  align-content: start;
+  align-items: start;
+}
+@media (min-width: 720px) {
+  .tile {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'icon'
+      'title'
+      'text'
+      'chips';
+    grid-template-rows: auto auto 1fr auto;
+    row-gap: 6px;
+    align-content: stretch;
+  }
+  .tile .chips {
+    align-self: end;
+  }
+}
+.tileIcon {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-accent-soft);
+  color: var(--cab-accent-text);
+}
+.tile strong {
+  grid-area: title;
+}
+.tileText {
+  grid-area: text;
+}
+.tile .chips {
+  grid-area: chips;
 }
 .tile strong,
-.cardBtn strong {
+.cardBtn strong,
+.cardBox strong {
   font-size: 1.02rem;
 }
 .tile span,
@@ -210,6 +313,36 @@
   color: var(--cab-muted);
   font-size: 0.92rem;
   line-height: 1.4;
+}
+.tile .tileIcon {
+  color: var(--cab-accent-text);
+}
+.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+.chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-pill);
+  background: var(--cab-subtle);
+  color: var(--cab-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.tile .chip {
+  font-size: 0.82rem;
 }
 .tag,
 .tagOk {
@@ -227,12 +360,12 @@
 }
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
 }
 .stats div {
-  padding: 8px;
+  padding: 8px 10px;
   border: 1px solid var(--cab-border);
   border-radius: var(--cab-radius-md);
   background: var(--cab-card);
@@ -246,15 +379,112 @@
   font-weight: 750;
   overflow-wrap: anywhere;
 }
+.levelLine {
+  font-size: 1.05rem;
+}
 
-/* карточка отработки */
-.cardHead {
+/* шаги и раскрывающиеся разделы */
+.stepBar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stepHead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 12px;
 }
+.stepHead .step,
+.stepHead .linkBtn {
+  white-space: nowrap;
+}
+.stepTrack {
+  height: 6px;
+  border-radius: var(--cab-radius-pill);
+  background: var(--cab-track);
+  overflow: hidden;
+}
+.stepFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--cab-radius-pill);
+  background: var(--cab-accent);
+  transition: width 0.25s ease;
+}
+.fold {
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-subtle);
+}
+.fold summary,
+.checkSelf summary,
+.side summary {
+  list-style: none;
+}
+.fold summary::-webkit-details-marker,
+.checkSelf summary::-webkit-details-marker,
+.side summary::-webkit-details-marker {
+  display: none;
+}
+.fold summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  min-height: var(--touch-min);
+  padding: 8px 40px 8px 14px;
+  position: relative;
+  cursor: pointer;
+}
+.fold summary::after,
+.side summary::after,
+.checkSelf summary::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-70%) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+details[open] > summary::after {
+  transform: translateY(-30%) rotate(-135deg);
+}
+.side summary,
+.checkSelf summary {
+  position: relative;
+  padding-right: 28px;
+}
+.checkSelf summary::after {
+  right: 6px;
+}
+.side summary::after {
+  right: 2px;
+}
+.foldTitle {
+  font-weight: 750;
+}
+.foldHint {
+  color: var(--cab-muted);
+  font-size: 0.88rem;
+}
+.foldBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+.plain {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* карточка отработки */
 .step {
   margin: 0;
   color: var(--cab-muted);
@@ -298,7 +528,10 @@
 }
 .mine {
   margin: 0;
-  padding: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-card);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -336,15 +569,35 @@
 .stickyBar > button {
   flex: 1 1 160px;
 }
+/* На телефоне снизу лежит панель разделов: действие встаёт над ней и всегда на виду. */
+@media (max-width: 640px) {
+  .stickyBar {
+    bottom: calc(var(--trainer-nav-h) + var(--safe-bottom));
+    margin: 0 -12px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--cab-border);
+    box-shadow: 0 -10px 18px -12px rgb(0 0 0 / 0.22);
+  }
+}
 .side {
-  padding: 14px;
   border: 1px solid var(--cab-border);
   border-radius: var(--cab-radius-md);
   background: var(--cab-subtle);
 }
+.side summary {
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.side {
+  padding: 4px 14px;
+}
 .side p,
 .side ul {
-  margin: 8px 0 0;
+  margin: 0 0 10px;
 }
 .coach {
   margin: 0;
@@ -527,7 +780,9 @@
   font-size: 1rem;
 }
 .checkSelf summary {
-  min-height: 36px;
+  display: flex;
+  align-items: center;
+  min-height: var(--touch-min);
   color: var(--cab-accent-text);
   font-size: 0.92rem;
   font-weight: 650;
@@ -594,6 +849,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  min-height: var(--touch-min);
   line-height: 1.4;
 }
 .checkLine input,
@@ -607,6 +863,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  min-height: var(--touch-min);
 }
 .form {
   display: flex;
@@ -623,12 +880,35 @@
 }
 .bars li {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 4px;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'name value'
+    'track track';
+  gap: 4px 12px;
+  align-items: baseline;
+}
+.barName {
+  grid-area: name;
+  font-weight: 650;
+}
+.barTrack {
+  grid-area: track;
+}
+.barValue,
+.barValueWeak {
+  grid-area: value;
+  text-align: right;
+  font-size: 0.9rem;
+  color: var(--cab-muted);
+}
+.barValueWeak {
+  color: var(--cab-danger);
+  font-weight: 650;
 }
 @media (min-width: 720px) {
   .bars li {
-    grid-template-columns: 180px 1fr 190px;
+    grid-template-columns: 200px 1fr 170px;
+    grid-template-areas: 'name track value';
     align-items: center;
   }
 }
@@ -653,10 +933,15 @@
 .chat {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 14px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.chat li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .stepResult {
   display: flex;
@@ -776,4 +1061,35 @@
   background: color-mix(in srgb, var(--cab-accent) 14%, var(--cab-card));
   border: 1px solid var(--cab-accent);
   font-weight: 650;
+}
+
+/* Нижняя панель телефона занимает примерно 65 px: закреплённые действия поднимаются над ней. */
+@media (max-width: 640px) {
+  .root {
+    --trainer-nav-h: 65px;
+  }
+  .statsLevel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .statsLevel div:first-child {
+    grid-column: 1 / -1;
+  }
+  .answer {
+    height: 120px;
+    min-height: 0;
+  }
+  .todayActions,
+  .todayActions > button {
+    width: 100%;
+  }
+  .actions > button {
+    flex: 1 1 100%;
+  }
+  .stickyBar.actions > button,
+  .stickyBar > button {
+    flex: 1 1 140px;
+  }
+  .homeHead > .secondary {
+    width: 100%;
+  }
 }

@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { DECK_SIZES, ROLE_TITLES, computeProgress, dueCards, objectionsForRole, questionsForRole, scenariosForRole } from './engine';
 import { useTrainer } from './TrainerContext';
-import { Dialog, Page, Quotes, Score, go } from './ui';
+import { ChecklistIcon, GaugeIcon, PartnersIcon, SettingsIcon } from '../icons';
+import { Dialog, Fold, Page, Quotes, Score, go } from './ui';
 import type { LearningAttempt } from './types';
 import styles from './Trainer.module.css';
 
@@ -58,7 +59,17 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function Home({ onStartDrill, onOpenSettings }: { onStartDrill: () => void; onOpenSettings: () => void }) {
+export function Home({
+  onStartDrill,
+  onResumeDrill,
+  resume,
+  onOpenSettings,
+}: {
+  onStartDrill: () => void;
+  onResumeDrill: () => void;
+  resume: { index: number; total: number } | null;
+  onOpenSettings: () => void;
+}) {
   const t = useTrainer();
   const now = useMemo(() => new Date(), []);
   const showAll = t.settings.showAllRoles;
@@ -69,53 +80,100 @@ export function Home({ onStartDrill, onOpenSettings }: { onStartDrill: () => voi
   const dueQuiz = dueCards(t.cards, 'quiz', now, t.content.scoring.srs.dailyLimit).length;
   const prog = computeProgress(t.content, t.role, showAll, t.attempts, t.cards, now);
   const isAdmin = t.role === 'stp_admin';
+  const deck = t.settings.deckSize;
   return (
     <section className={styles.page} aria-label="Тренажёр продаж">
       <div className={styles.homeHead}>
-        <div>
+        <div className={styles.homeTitle}>
           <h3 className={styles.pageTitle}>Тренажёр продаж</h3>
-          <p className={styles.lead}>Ваша роль: {ROLE_TITLES[t.role]}. Тренируйтесь на реальных ответах клиентам, всё сохраняется на этом устройстве.</p>
+          <p className={styles.lead}>
+            Учитесь отвечать клиентам на возражения: пишете ответ, сверяетесь с эталоном из обучающих видео и видите, что улучшить. Ваша роль: {ROLE_TITLES[t.role]}. Результаты хранятся на этом устройстве.
+          </p>
         </div>
         <button type="button" className={styles.secondary} onClick={onOpenSettings}>
-          Настройки подхода
+          <SettingsIcon size={18} />
+          <span>Настройки подхода</span>
         </button>
       </div>
 
       <section className={styles.today} aria-label="Сегодня">
-        <h4>Сегодня</h4>
-        <p>
-          {due > 0 ? `Пора повторить возражений: ${due}.` : t.attempts.length ? 'Повторять по расписанию пока нечего.' : 'Вы ещё не начинали. Хватит пяти минут.'}
-          {dueQuiz > 0 ? ` Вопросов для повторения: ${dueQuiz}.` : ''}
-        </p>
-        <button type="button" className={styles.primary} onClick={onStartDrill}>
-          Подход на 5 минут
-        </button>
+        <div className={styles.todayText}>
+          <h4>Сегодня</h4>
+          <p>
+            {resume
+              ? `Подход не закончен: возражение ${resume.index} из ${resume.total}. Можно продолжить с того же места.`
+              : due > 0
+                ? `Пора повторить возражений: ${due}.`
+                : t.attempts.length
+                  ? 'Повторять по расписанию пока нечего. Можно взять новый подход.'
+                  : 'Вы ещё не начинали. Хватит пяти минут.'}
+            {dueQuiz > 0 ? ` Вопросов для повторения: ${dueQuiz}.` : ''}
+          </p>
+        </div>
+        <div className={styles.todayActions}>
+          {resume ? (
+            <>
+              <button type="button" className={styles.primary} onClick={onResumeDrill}>
+                Продолжить подход
+              </button>
+              <button type="button" className={styles.secondary} onClick={onStartDrill}>
+                Подход на 5 минут
+              </button>
+            </>
+          ) : (
+            <button type="button" className={styles.primary} onClick={onStartDrill}>
+              Подход на 5 минут
+            </button>
+          )}
+        </div>
       </section>
 
+      <h4 className={styles.sectionTitle}>Выберите, как тренироваться</h4>
       <ul className={styles.tiles} aria-label="Режимы">
         <li>
           <button type="button" className={styles.tile} onClick={onStartDrill}>
+            <span className={styles.tileIcon}>
+              <GaugeIcon size={26} />
+            </span>
             <strong>Быстрая отработка</strong>
-            <span>Клиент возражает, вы отвечаете, затем разбор с эталоном. Возражений для вас: {objs}.</span>
+            <span className={styles.tileText}>Клиент возражает, вы отвечаете, затем разбор с эталоном.</span>
+            <span className={styles.chips}>
+              <span className={styles.chip}>Возражений для вас: {objs}</span>
+              <span className={styles.chip}>{deck} в подходе</span>
+            </span>
           </button>
         </li>
         <li>
           <button type="button" className={styles.tile} onClick={() => go({ page: 'scenarios' })}>
+            <span className={styles.tileIcon}>
+              <PartnersIcon size={26} />
+            </span>
             <strong>Ролевые разговоры</strong>
-            <span>Телефонный разговор по шагам, 6–8 минут. Сценариев: {scs}.</span>
+            <span className={styles.tileText}>Телефонный разговор с клиентом по шагам, как в жизни.</span>
+            <span className={styles.chips}>
+              <span className={styles.chip}>Сценариев: {scs}</span>
+              <span className={styles.chip}>6–8 минут</span>
+            </span>
           </button>
         </li>
         <li>
           <button type="button" className={styles.tile} onClick={() => go({ page: 'quiz', step: 'start' })}>
+            <span className={styles.tileIcon}>
+              <ChecklistIcon size={26} />
+            </span>
             <strong>Проверка знаний</strong>
-            <span>Вопросы по видео, сразу видно верный ответ. Вопросов: {qs}.</span>
+            <span className={styles.tileText}>Вопросы по видео: сразу виден верный ответ и цитата.</span>
+            <span className={styles.chips}>
+              <span className={styles.chip}>Вопросов: {qs}</span>
+              <span className={styles.chip}>10 за раз</span>
+            </span>
           </button>
         </li>
       </ul>
 
       <section className={styles.block} aria-label="Мой прогресс">
         <h4>Мой прогресс</h4>
-        <dl className={styles.stats}>
+        <dl className={`${styles.stats} ${styles.statsLevel}`}>
           <div>
             <dt>Уровень</dt>
             <dd>{prog.level.title}</dd>
@@ -185,35 +243,47 @@ export function ProgressScreen() {
   const t = useTrainer();
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [more, setMore] = useState(false);
   const prog = computeProgress(t.content, t.role, t.settings.showAllRoles, t.attempts, t.cards, new Date());
+  const history = prog.attempts.slice(0, 30);
+  const shown = more ? history : history.slice(0, 8);
+  const sum = (rows: { mastered: number; total: number }[]) => `освоено ${rows.reduce((n, r) => n + r.mastered, 0)} из ${rows.reduce((n, r) => n + r.total, 0)}`;
   return (
     <Page title="Мой прогресс" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }}>
       {t.attempts.length === 0 ? <p className={styles.notice}>Пока нет ни одной попытки. Начните с быстрой отработки.</p> : null}
-      <p>
-        Уровень: <strong>{prog.level.title}</strong>
-        {prog.levelAvg !== null ? <span className={styles.hint}> · средний балл последних попыток {String(prog.levelAvg).replace('.', ',')}</span> : null}
-      </p>
+      <section className={styles.block} aria-label="Уровень">
+        <p className={styles.levelLine}>
+          Уровень: <strong>{prog.level.title}</strong>
+        </p>
+        {prog.levelAvg !== null ? <p className={styles.hint}>Средний балл последних попыток: {String(prog.levelAvg).replace('.', ',')} из 5</p> : null}
+        <dl className={styles.stats}>
+          <div>
+            <dt>Попыток</dt>
+            <dd>{t.attempts.length}</dd>
+          </div>
+          <div>
+            <dt>Засчитано</dt>
+            <dd>{prog.passedCount}</dd>
+          </div>
+          <div>
+            <dt>Дней подряд</dt>
+            <dd>{prog.streakDays}</dd>
+          </div>
+        </dl>
+      </section>
       <section className={styles.block} aria-label="По критериям">
         <h4>По критериям</h4>
         <ul className={styles.bars}>
           {prog.criteriaAvg.map((c) => (
             <li key={c.id}>
-              <span>{c.title}</span>
+              <span className={styles.barName}>{c.title}</span>
               <span className={styles.barTrack} aria-hidden="true">
                 <span className={c.weak ? styles.barWeak : styles.barFill} style={{ width: `${((c.avg ?? 0) / 5) * 100}%` }} />
               </span>
-              <span>{c.avg === null ? 'нет данных' : `${String(c.avg).replace('.', ',')}${c.weak ? ' · слабое место' : ''}`}</span>
+              <span className={c.weak ? styles.barValueWeak : styles.barValue}>{c.avg === null ? 'нет данных' : `${String(c.avg).replace('.', ',')}${c.weak ? ' · слабое место' : ''}`}</span>
             </li>
           ))}
         </ul>
-      </section>
-      <section className={styles.block} aria-label="По причинам отказа">
-        <h4>По причинам отказа</h4>
-        <MasteryList rows={prog.reasons} />
-      </section>
-      <section className={styles.block} aria-label="По темам">
-        <h4>По темам проверки знаний</h4>
-        <MasteryList rows={prog.topics} />
       </section>
       {prog.weakPoints.length ? (
         <section className={styles.block} aria-label="Что чаще пропускаете">
@@ -232,16 +302,29 @@ export function ProgressScreen() {
       ) : null}
       <section className={styles.block} aria-label="История">
         <h4>История</h4>
-        {prog.attempts.length ? (
-          <ul className={styles.list}>
-            {prog.attempts.slice(0, 30).map((a) => (
-              <AttemptRow key={a.id} a={a} />
-            ))}
-          </ul>
+        {history.length ? (
+          <>
+            <ul className={styles.list}>
+              {shown.map((a) => (
+                <AttemptRow key={a.id} a={a} />
+              ))}
+            </ul>
+            {history.length > shown.length ? (
+              <button type="button" className={styles.secondary} onClick={() => setMore(true)}>
+                Показать все попытки ({history.length})
+              </button>
+            ) : null}
+          </>
         ) : (
           <p className={styles.hint}>Здесь появятся ваши попытки.</p>
         )}
       </section>
+      <Fold title="По причинам отказа" hint={sum(prog.reasons)}>
+        <MasteryList rows={prog.reasons} />
+      </Fold>
+      <Fold title="По темам проверки знаний" hint={sum(prog.topics)} label="По темам">
+        <MasteryList rows={prog.topics} />
+      </Fold>
       <div className={styles.actions}>
         <button type="button" className={styles.danger} onClick={() => setConfirm(true)} disabled={!t.attempts.length && !t.cards.length}>
           Сбросить мой прогресс
@@ -333,15 +416,14 @@ export function BankScreen({ id, onTrain }: { id?: string; onTrain: (objectionId
             </ul>
           </section>
         ) : null}
-        <section className={styles.block} aria-label="Из видео">
-          <h4>Из видео</h4>
-          <Quotes quotes={o.sourceQuotes} videos={t.content.objections.videos} copyable={t.role === 'stp_admin'} />
-        </section>
         <section className={styles.block} aria-label="Типичная ошибка">
           <h4>Типичная ошибка</h4>
           <p>{o.commonMistake}</p>
         </section>
-        <div className={styles.actions}>
+        <Fold title="Из видео" hint={`цитат: ${o.sourceQuotes.length}`}>
+          <Quotes quotes={o.sourceQuotes} videos={t.content.objections.videos} copyable={t.role === 'stp_admin'} />
+        </Fold>
+        <div className={`${styles.stickyBar} ${styles.actions}`}>
           <button
             type="button"
             className={styles.primary}
@@ -369,13 +451,14 @@ export function BankScreen({ id, onTrain }: { id?: string; onTrain: (objectionId
           ))}
         </select>
       </label>
+      <p className={styles.hint}>Карточек: {list.length}. Нажмите на карточку, чтобы открыть ответ целиком.</p>
       {list.length === 0 ? <p className={styles.notice}>По этой причине для вашей роли возражений нет. Выберите другую или включите «Показывать материалы всех ролей».</p> : null}
       <ul className={styles.cards}>
         {list.map((o) => (
           <li key={o.id}>
             <button type="button" className={styles.cardBtn} onClick={() => go({ page: 'bank', id: o.id })}>
               <strong>{o.panel.title}</strong>
-              <span className={styles.meta}>{o.panel.shortAnswer}</span>
+              <span className={`${styles.meta} ${styles.clamp}`}>{o.panel.shortAnswer}</span>
               <span className={styles.tag}>{reasons.find((r) => r.key === o.refusalReasonKey)?.title}</span>
             </button>
           </li>

@@ -74,6 +74,8 @@ function Inner() {
             setDrill(start());
             go({ page: 'drill' });
           }}
+          onResumeDrill={() => go({ page: 'drill' })}
+          resume={drill && drill.phase !== 'summary' ? { index: drill.index + 1, total: drill.deck.length } : null}
           onOpenSettings={openSettings}
         />
       );
