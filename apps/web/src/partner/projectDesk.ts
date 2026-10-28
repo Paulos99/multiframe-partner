@@ -5,6 +5,7 @@ import {
   type Project,
   type ProjectStatus,
 } from '../../../../packages/shared/partner';
+import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { comfortTransitionLabel } from '../state/simulation';
 
 const VIEW_KEY = 'mf-project-desk-view';
@@ -53,6 +54,25 @@ export function effectiveProjectStatus(project: Pick<Project, 'id' | 'status'>, 
     if (PROJECT_STATUSES.indexOf(stage) > PROJECT_STATUSES.indexOf(best)) best = stage;
   }
   return best;
+}
+
+/**
+ * Стадия проекта для каждой комнаты: та же, что на доске и в списке проектов.
+ * Комнаты без проекта группируются так же, как в разделе «Проекты».
+ */
+export function roomProjectStatuses(projects: Project[], rooms: JobObject[]): Record<string, ProjectStatus> {
+  const doc = {
+    projects: projects.map((project) => ({ ...project })),
+    objects: rooms.map((room) => ({ ...room })),
+  };
+  groupOrphanRooms(doc);
+  const result: Record<string, ProjectStatus> = {};
+  for (const project of doc.projects as Project[]) {
+    const own = projectRooms(project, doc.objects as JobObject[]);
+    const status = effectiveProjectStatus(project, own);
+    for (const room of own) result[room.id] = status;
+  }
+  return result;
 }
 
 export function projectStatusLabel(status: ProjectStatus): string {
