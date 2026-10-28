@@ -16,7 +16,7 @@ import styles from './ClientLinkPanel.module.css';
 
 type Phase = 'idle' | 'loading' | 'ready' | 'off' | 'error';
 
-function failureText(err: unknown): string {
+export function failureText(err: unknown): string {
   if (isApiError(err) && err instanceof ApiError) {
     if (err.status === 404) return 'Комната ещё не отправлена на сервер. Подождите синхронизации и повторите.';
     if (err.status === 0) return 'Нет сети. Повторите, когда появится связь.';
@@ -25,7 +25,7 @@ function failureText(err: unknown): string {
   return 'Не удалось получить ссылку. Повторите чуть позже.';
 }
 
-async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;

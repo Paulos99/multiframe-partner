@@ -191,6 +191,77 @@ test('менеджер выдаёт ссылку, клиент открывае�
   await client.close();
 });
 
+test('«Переслать» стоит рядом с «Сохранить», открывает системную отправку и не оживляет отключённую ссылку', async ({
+  page,
+  request,
+}) => {
+  await page.addInitScript(() => {
+    const shared: { title?: string; url?: string }[] = [];
+    (window as unknown as { __shared: typeof shared }).__shared = shared;
+    navigator.share = async (data) => {
+      shared.push({ title: data?.title, url: data?.url });
+    };
+  });
+  const sharedCalls = () =>
+    page.evaluate(() => (window as unknown as { __shared: { title?: string; url?: string }[] }).__shared);
+  await enter(page);
+  await reachResult(page);
+
+  const save = page.getByRole('button', { name: 'Сохранить', exact: true });
+  const forward = page.getByRole('button', { name: 'Переслать', exact: true });
+  await expect(save).toBeVisible();
+  await expect(forward).toBeVisible();
+  await expect(forward).toBeEnabled();
+  const [a, b] = await Promise.all([save.boundingBox(), forward.boundingBox()]);
+  expect(Math.abs((a?.y ?? 0) - (b?.y ?? 1000))).toBeLessThan(6);
+  expect((b?.x ?? 0) > (a?.x ?? 0)).toBe(true);
+
+  await forward.click();
+  await expect.poll(async () => (await sharedCalls()).length).toBe(1);
+  const first = (await sharedCalls())[0]!;
+  expect(first.url).toMatch(TOKEN_URL);
+  expect(first.title).toBe('Результаты Проблемомера по вашей комнате');
+
+  // Повторная пересылка отдаёт ту же ссылку.
+  await forward.click();
+  await expect.poll(async () => (await sharedCalls()).length).toBe(2);
+  expect((await sharedCalls())[1]!.url).toBe(first.url);
+  const token = first.url!.split('/#/r/')[1]!;
+  expect((await request.get(`${API}/public/rooms/${token}`)).status()).toBe(200);
+
+  // Менеджер отключил ссылку: «Переслать» ничего не отправляет и не включает, предлагает новую.
+  const owner = await apiToken(request, 'ui.owner');
+  const off = await request.delete(`${API}/objects/ui_room/share`, { headers: { Authorization: `Bearer ${owner}` } });
+  expect(off.ok()).toBeTruthy();
+  await forward.click();
+  await expect(page.getByTestId('forward-off')).toContainText('Ссылка отключена');
+  expect((await sharedCalls()).length).toBe(2);
+  expect((await request.get(`${API}/public/rooms/${token}`)).status()).toBe(404);
+
+  await page.getByTestId('forward-renew').click();
+  await expect.poll(async () => (await sharedCalls()).length).toBe(3);
+  const fresh = (await sharedCalls())[2]!.url!;
+  expect(fresh).toMatch(TOKEN_URL);
+  expect(fresh).not.toBe(first.url);
+  expect((await request.get(`${API}/public/rooms/${token}`)).status()).toBe(404);
+  expect((await request.get(`${API}/public/rooms/${fresh.split('/#/r/')[1]}`)).status()).toBe(200);
+});
+
+test('«Переслать» без системного меню копирует ссылку и показывает «Ссылка скопирована»', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+  });
+  await enter(page);
+  await reachResult(page);
+  await page.getByRole('button', { name: 'Переслать', exact: true }).click();
+  await expect(page.getByTestId('forward-note')).toHaveText('Ссылка скопирована');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(TOKEN_URL);
+});
+
 test('в ответе сервера по открытой ссылке нет цен и личных данных', async ({ request }) => {
   const owner = await markRoomWithSecrets(request);
   const made = await request.post(`${API}/objects/ui_room/share`, {

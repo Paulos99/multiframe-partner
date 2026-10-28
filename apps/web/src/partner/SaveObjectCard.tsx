@@ -5,7 +5,9 @@ import { useSession } from '../state/SessionContext';
 import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
+import { hasRemoteApi } from './apiClient';
 import { ensureClientLinkUrl } from './clientLink';
+import { ForwardLinkRow } from './ForwardClientLink';
 import { roomRecordFromAnswers } from './roomLink';
 import { usePartner } from './PartnerContext';
 import listStyles from './ProjectList.module.css';
@@ -203,10 +205,12 @@ export function SaveObjectCard() {
 
   if (linked) {
     return (
-      <div className={styles.actionRow} aria-label="Комната">
-        <Button type="button" fullWidth loading={busy} success={savedFlash} disabled={busy} onClick={() => void saveRoom()}>
-          {busy ? 'Сохраняем…' : 'Сохранить'}
-        </Button>
+      <div aria-label="Комната">
+        <ForwardLinkRow objectId={diagnosisRequest!.objectId}>
+          <Button type="button" fullWidth loading={busy} success={savedFlash} disabled={busy} onClick={() => void saveRoom()}>
+            {busy ? 'Сохраняем…' : 'Сохранить'}
+          </Button>
+        </ForwardLinkRow>
         {msg ? (
           <p className={styles.flash} role="status">
             {msg}
@@ -309,6 +313,11 @@ export function SaveObjectCard() {
             {busy ? 'Сохраняем…' : 'Сохранить'}
           </Button>
         </div>
+        {hasRemoteApi() && canCreate ? (
+          <p className={styles.hint} data-testid="forward-reason">
+            «Переслать» появится после сохранения: ссылка нужна для готовой комнаты.
+          </p>
+        ) : null}
       </form>
     </section>
   );
