@@ -474,16 +474,79 @@ function ProjectBoard({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const busy = useRef(false);
+  // Последняя точка указателя. Быстрый жест даёт два-три события движения, и dnd-kit к отпусканию
+  // ещё не успевает определить колонку под курсором. Тогда стадию берём по этой точке.
+  const lastPoint = useRef<{ x: number; y: number } | null>(null);
+  // Жест мышью: откуда начали и довёл ли его до конца dnd-kit.
+  const gesture = useRef<{ id: string; x: number; y: number; settled: boolean; ended: boolean } | null>(null);
+  const moveRef = useRef<(id: string, target: ProjectStatus) => void>(() => undefined);
+  useEffect(() => {
+    if (!movable) return;
+    const remember = (event: PointerEvent | TouchEvent) => {
+      const point = 'touches' in event ? event.touches[0] || event.changedTouches[0] : event;
+      if (point) lastPoint.current = { x: point.clientX, y: point.clientY };
+    };
+    const down = (event: PointerEvent) => {
+      remember(event);
+      const card = event.pointerType === 'touch' || event.button !== 0 ? null : (event.target as Element | null)?.closest('[data-project-id]');
+      const id = card?.getAttribute('data-project-id');
+      gesture.current = id ? { id, x: event.clientX, y: event.clientY, settled: false, ended: false } : null;
+    };
+    const up = (event: PointerEvent) => {
+      remember(event);
+      const g = gesture.current;
+      if (!g || g.ended) return;
+      g.ended = true;
+      if (Math.hypot(event.clientX - g.x, event.clientY - g.y) < 5) return;
+      // После переноса мышью щелчок не должен открывать проект.
+      const stop = (click: Event) => {
+        click.stopPropagation();
+        click.preventDefault();
+      };
+      window.addEventListener('click', stop, true);
+      window.setTimeout(() => window.removeEventListener('click', stop, true), 120);
+      // Очень быстрый жест (нажал, дёрнул, отпустил за пару миллисекунд): dnd-kit не успевает
+      // начать перенос и молча его теряет. Если он не сообщил об итоге, переносим сами.
+      window.setTimeout(() => {
+        if (g.settled) return;
+        g.settled = true;
+        const stage = stageAtPointer();
+        if (stage) moveRef.current(g.id, stage);
+      }, 80);
+    };
+    const names = ['pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend'] as const;
+    for (const name of names) window.addEventListener(name, remember as EventListener, true);
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('pointerup', up, true);
+    return () => {
+      for (const name of names) window.removeEventListener(name, remember as EventListener, true);
+      window.removeEventListener('pointerdown', down, true);
+      window.removeEventListener('pointerup', up, true);
+    };
+  }, [movable]);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 6 } }),
   );
   const shown = rows.map((row) => (moved[row.project.id] ? { ...row, status: moved[row.project.id] } : row));
   const activeRow = activeId ? shown.find((row) => row.project.id === activeId) : undefined;
 
-  function end({ active, over }: DragEndEvent) {
+  function stageAtPointer(): ProjectStatus | null {
+    const point = lastPoint.current;
+    if (!point || typeof document === 'undefined') return null;
+    for (const el of document.elementsFromPoint(point.x, point.y)) {
+      const stage = el.closest('[data-project-stage]')?.getAttribute('data-project-stage');
+      if (stage && (PROJECT_STATUSES as readonly string[]).includes(stage)) return stage as ProjectStatus;
+    }
+    return null;
+  }
+
+  function end({ active, over, activatorEvent }: DragEndEvent) {
     setActiveId(null);
-    if (over) void move(String(active.id), over.id as ProjectStatus);
+    const byKeyboard = activatorEvent instanceof KeyboardEvent;
+    if (gesture.current) gesture.current.settled = true;
+    const target = (byKeyboard ? null : stageAtPointer()) ?? (over ? (over.id as ProjectStatus) : null);
+    if (target) void move(String(active.id), target);
   }
 
   function step(id: string, direction: number) {
@@ -491,6 +554,8 @@ function ProjectBoard({
     const target = row ? PROJECT_STATUSES[PROJECT_STATUSES.indexOf(row.status) + direction] : undefined;
     if (target) void move(id, target);
   }
+
+  moveRef.current = (id, target) => void move(id, target);
 
   async function move(id: string, target: ProjectStatus) {
     const row = shown.find((item) => item.project.id === id);
@@ -555,7 +620,10 @@ function ProjectBoard({
           setActiveId(String(active.id));
         }}
         onDragEnd={end}
-        onDragCancel={() => setActiveId(null)}
+        onDragCancel={() => {
+          if (gesture.current) gesture.current.settled = true;
+          setActiveId(null);
+        }}
       >
         {board}
         {createPortal(

@@ -20,15 +20,16 @@ async function openBoard(page: Page) {
   await expect(page.locator('[data-project-stage]')).toHaveCount(5);
 }
 
-async function drag(page: Page, from: Locator, to: Locator) {
+/** Настоящий жест мышью: нажать, несколько шагов движения, отпустить. Без клавиатуры и dispatchEvent. */
+async function drag(page: Page, from: Locator, to: Locator, steps = 12) {
   await from.scrollIntoViewIfNeeded();
   const a = await from.boundingBox();
   const b = await to.boundingBox();
   if (!a || !b) throw new Error('нет координат для переноса');
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
   await page.mouse.down();
-  await page.mouse.move(a.x + a.width / 2 + 12, a.y + a.height / 2 + 4, { steps: 3 });
-  await page.mouse.move(b.x + b.width / 2, b.y + 90, { steps: 12 });
+  if (steps > 1) await page.mouse.move(a.x + a.width / 2 + 12, a.y + a.height / 2 + 4, { steps: 3 });
+  await page.mouse.move(b.x + b.width / 2, b.y + 90, { steps });
   await page.mouse.up();
 }
 
@@ -56,6 +57,25 @@ for (const role of ['owner', 'sales']) {
     await expect(page).toHaveURL(/#project\/ui_project\/overview$/);
     await expect(page.getByRole('region', { name: 'Проект' }).getByRole('heading', { level: 1, name: 'Тестовая квартира' })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+}
+
+for (const [name, steps] of [['быстрый жест в один прыжок', 1], ['медленный жест мелкими шагами', 60]] as const) {
+  test(`мышь: ${name}`, async ({ page }) => {
+    await enter(page, 'owner');
+    await openBoard(page);
+    const card = page.locator('[data-project-id="ui_project"]');
+    await drag(page, card, page.locator('[data-project-stage="proposal"]'), steps);
+    await expect(page.locator('[data-project-stage="proposal"] [data-project-id="ui_project"]')).toBeVisible();
+    await expect(page).not.toHaveURL(/#project\//);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    // Выделения текста нет, а следующий перенос работает.
+    expect(await page.evaluate(() => String(getSelection()))).toBe('');
+    await drag(page, page.locator('[data-project-id="ui_project"]'), page.locator('[data-project-stage="measure"]'), steps);
+    await expect(page.locator('[data-project-stage="measure"] [data-project-id="ui_project"]')).toBeVisible();
+    await page.reload();
+    await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
+    await expect(page.locator('[data-project-stage="measure"] [data-project-id="ui_project"]')).toBeVisible();
   });
 }
 
