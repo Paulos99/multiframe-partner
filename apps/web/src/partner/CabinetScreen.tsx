@@ -17,14 +17,22 @@ import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { AnimatePresence, FadeRise, m, motionPresets } from './motionBits';
 import { ObjectsPanel } from './ObjectsPanel';
-import { StaffPanel } from './StaffPanel';
+import { CompanySection } from './CompanySection';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
 import { ToolsPanel } from './ToolsPanel';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
-import { navigateHash, navigateProject, parseProjectHash, parseStaffHash } from './projectRoute';
+import {
+  isLegacyStaffList,
+  navigateCompany,
+  navigateHash,
+  navigateProject,
+  parseCompanyHash,
+  parseProjectHash,
+  parseStaffHash,
+} from './projectRoute';
 import { consumeReturnToTools } from './toolsReturn';
 import styles from './partner.module.css';
 import addStyles from './AdminPartners.module.css';
@@ -36,14 +44,26 @@ function projectHashOpen(): boolean {
 function leaveProjectHash() {
   if (typeof window === 'undefined' || !window.location.hash) return;
   const hash = window.location.hash;
-  if (parseProjectHash(hash).kind === 'desk' && parseStaffHash(hash).kind === 'list') return;
+  if (
+    parseProjectHash(hash).kind === 'desk' &&
+    parseStaffHash(hash).kind === 'list' &&
+    parseCompanyHash(hash) === null &&
+    !isLegacyStaffList(hash)
+  ) {
+    return;
+  }
   navigateHash('', 'replace');
 }
 
-function useFollowStaffHash(openStaff: () => void) {
+/** Адреса раздела «Компания»: вкладки, карточка сотрудника и старый «#staff». */
+function companyHashOpen(hash: string): boolean {
+  return parseCompanyHash(hash) !== null || parseStaffHash(hash).kind === 'person' || isLegacyStaffList(hash);
+}
+
+function useFollowCompanyHash(openCompany: () => void) {
   useEffect(() => {
     const sync = () => {
-      if (parseStaffHash(window.location.hash).kind === 'person') openStaff();
+      if (companyHashOpen(window.location.hash)) openCompany();
     };
     window.addEventListener('hashchange', sync);
     window.addEventListener('popstate', sync);
@@ -51,7 +71,7 @@ function useFollowStaffHash(openStaff: () => void) {
       window.removeEventListener('hashchange', sync);
       window.removeEventListener('popstate', sync);
     };
-  }, [openStaff]);
+  }, [openCompany]);
 }
 
 function useFollowProjectHash(openProjects: () => void) {
@@ -430,7 +450,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   );
 }
 
-type OwnerTab = 'today' | 'projects' | 'tools' | 'company' | 'staff' | 'analytics' | 'help';
+type OwnerTab = 'today' | 'projects' | 'tools' | 'company' | 'analytics' | 'help';
 
 function OwnerCabinet({
   onNavigate,
@@ -443,13 +463,13 @@ function OwnerCabinet({
   const user = api.user!;
   const [tab, setTab] = useCabinetSection<OwnerTab>('analytics', () => {
     if (consumeReturnToTools()) return 'tools';
-    if (typeof window !== 'undefined' && parseStaffHash(window.location.hash).kind === 'person') return 'staff';
+    if (typeof window !== 'undefined' && companyHashOpen(window.location.hash)) return 'company';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setTab('projects'), []);
-  const showStaff = useMemo(() => () => setTab('staff'), []);
+  const showCompany = useMemo(() => () => setTab('company'), []);
   useFollowProjectHash(showProjects);
-  useFollowStaffHash(showStaff);
+  useFollowCompanyHash(showCompany);
   const [createToken, setCreateToken] = useState(0);
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
   const [city, setCity] = useState(user.org?.city || '');
@@ -498,57 +518,13 @@ function OwnerCabinet({
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
-    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { leaveProjectHash(); setTab('company'); } },
-    { id: 'staff', label: 'Сотрудники', active: tab === 'staff', onSelect: () => { leaveProjectHash(); setTab('staff'); } },
+    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { navigateCompany('about', 'replace'); setTab('company'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
 
-  return (
-    <CabinetChrome
-      title={roleHeading('owner', user)}
-      lead={user.org?.city ? `Компания · ${user.org.city}` : 'Компания'}
-      items={ownerNav}
-      extra={
-        <>
-          <SyncBadge />
-          <InstallAppButton />
-        </>
-      }
-      profile={profileOf(user, api.logout)}
-    >
-      <FrameBody>
-      {tab === 'today' ? (
-        <TabPanel>
-          <TodayHome
-            onOpenRoom={(id) => {
-              const room = api.objects.find((item) => item.id === id);
-              if (room?.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: id });
-              else api.openObject(id);
-              setTab('projects');
-            }}
-            onProjects={() => {
-              navigateProject({ kind: 'desk' }, 'replace');
-              setTab('projects');
-            }}
-            onCreateProject={() => {
-              setCreateToken((n) => n + 1);
-              navigateProject({ kind: 'desk' }, 'replace');
-              setTab('projects');
-            }}
-            onProblemomer={() => onNavigate('problemomer')}
-            onCalculator={onOpenCalc}
-          />
-        </TabPanel>
-      ) : null}
-      {tab === 'projects' ? (
-        <TabPanel>
-          <ObjectsPanel openCreateToken={createToken} onCreate={() => onNavigate('problemomer')} />
-        </TabPanel>
-      ) : null}
-
-      {tab === 'company' ? (
-        <TabPanel>
+  const aboutPanel = (
+    <>
           {!companyEdit ? (
             <section className={`${styles.card} ${styles.panelCard}`}>
               <h2>Компания</h2>
@@ -652,12 +628,55 @@ function OwnerCabinet({
           </form>
           )}
           <InstallHint />
+    </>
+  );
+
+  return (
+    <CabinetChrome
+      title={roleHeading('owner', user)}
+      lead={user.org?.city ? `Компания · ${user.org.city}` : 'Компания'}
+      items={ownerNav}
+      extra={
+        <>
+          <SyncBadge />
+          <InstallAppButton />
+        </>
+      }
+      profile={profileOf(user, api.logout)}
+    >
+      <FrameBody>
+      {tab === 'today' ? (
+        <TabPanel>
+          <TodayHome
+            onOpenRoom={(id) => {
+              const room = api.objects.find((item) => item.id === id);
+              if (room?.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: id });
+              else api.openObject(id);
+              setTab('projects');
+            }}
+            onProjects={() => {
+              navigateProject({ kind: 'desk' }, 'replace');
+              setTab('projects');
+            }}
+            onCreateProject={() => {
+              setCreateToken((n) => n + 1);
+              navigateProject({ kind: 'desk' }, 'replace');
+              setTab('projects');
+            }}
+            onProblemomer={() => onNavigate('problemomer')}
+            onCalculator={onOpenCalc}
+          />
+        </TabPanel>
+      ) : null}
+      {tab === 'projects' ? (
+        <TabPanel>
+          <ObjectsPanel openCreateToken={createToken} onCreate={() => onNavigate('problemomer')} />
         </TabPanel>
       ) : null}
 
-      {tab === 'staff' ? (
+      {tab === 'company' ? (
         <TabPanel>
-          <StaffPanel />
+          <CompanySection about={aboutPanel} />
         </TabPanel>
       ) : null}
 

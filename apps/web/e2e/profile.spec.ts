@@ -214,6 +214,7 @@ test('имя из профиля сразу в приветствии и шап�
 
 test('владелец сохраняет имя сотрудника, сотрудник видит его в приветствии', async ({ page }) => {
   await enter(page);
+  await page.getByRole('tab', { name: 'Компания', exact: true }).click();
   await page.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
   await page.getByRole('button', { name: /UI sales/ }).click();
   const card = page.getByRole('region', { name: 'Сотрудник' });
