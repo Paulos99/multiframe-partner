@@ -7,7 +7,9 @@ import { InstallPromptHost } from './app-shell/InstallAppButton';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
 import { type SessionUser } from '../../../packages/shared/partner';
-import { isCabinetCalcMessage } from './partner/cabinetCalc';
+import { isCabinetCalcMessage, type CabinetCalcMessage } from './partner/cabinetCalc';
+import { CalcSaveToProject } from './partner/CalcSaveToProject';
+import { canSaveToProject } from './partner/toolSave';
 import { sessionFromRoom } from './partner/roomLink';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
@@ -171,6 +173,8 @@ function PartnerShell() {
   const [route, setRoute] = useState<Route>('cabinet');
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
+  /** Расчёт без комнаты, ждущий «куда сохранить». */
+  const [calcToSave, setCalcToSave] = useState<CabinetCalcMessage | null>(null);
 
   const userId = user?.id ?? '';
   const seenLeave = useRef(0);
@@ -183,6 +187,7 @@ function PartnerShell() {
   useEffect(() => {
     setCalcObjectId(null);
     setCalcNotice(null);
+    setCalcToSave(null);
     setRoute('cabinet');
   }, [userId]);
 
@@ -208,6 +213,10 @@ function PartnerShell() {
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       if (!isCabinetCalcMessage(event.data)) return;
+      if (event.data.saveRequest && !event.data.objectId && !calcObjectId) {
+        setCalcToSave(event.data);
+        return;
+      }
       const objectId = event.data.objectId || calcObjectId;
       if (!objectId) return;
       void applyCalculation(event.data, objectId).then((saved) => {
@@ -255,6 +264,7 @@ function PartnerShell() {
       clientName: calcClientName,
       areaM2: calcRequest?.objectId === calcObjectId ? calcRequest?.areaM2 : null,
       hidePrices: user.role === 'crew',
+      saveToProject: canSaveToProject(user.role),
     });
   }, [
     user,
@@ -334,6 +344,7 @@ function PartnerShell() {
               </div>
             )}
           </div>
+          <CalcSaveToProject message={calcToSave} onClose={() => setCalcToSave(null)} />
         </div>
       ) : (
         <div className={styles.toolHost}>

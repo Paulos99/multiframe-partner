@@ -183,8 +183,8 @@ export function ProjectDesk({
     );
   }
 
-  if (role === 'crew') {
-    return <CrewJobs projects={projects} rooms={rooms} query={query} onOpenRoom={onOpenRoom} />;
+  if (role === 'crew' || role === 'measurer') {
+    return <AssignedJobs role={role} projects={projects} rooms={rooms} query={query} seesMoney={seesMoney} onOpenRoom={onOpenRoom} />;
   }
 
   return (
@@ -218,21 +218,28 @@ export function ProjectDesk({
   );
 }
 
-function CrewJobs({
+/** Простой список назначенных комнат для бригады и замерщика: без вида «список/канбан», без перетаскивания и удаления. */
+function AssignedJobs({
+  role,
   projects,
   rooms,
   query,
+  seesMoney,
   onOpenRoom,
 }: {
+  role: 'crew' | 'measurer';
   projects: Project[];
   rooms: JobObject[];
   query: string;
+  seesMoney: boolean;
   onOpenRoom: (room: JobObject) => void;
 }) {
-  const { active, done } = useMemo(() => crewProjectLists(projects, rooms, query), [projects, rooms, query]);
+  const { active, done } = useMemo(() => crewProjectLists(projects, rooms, query, role), [projects, rooms, query, role]);
   return (
     <section className={styles.desk} aria-label="Список проектов">
-      <p className={styles.lead}>Ваши комнаты: адрес, площадь, панели и статус.</p>
+      <p className={styles.lead}>
+        {role === 'measurer' ? 'Комнаты, которые нужно замерить: адрес, площадь и статус.' : 'Ваши комнаты: адрес, площадь, панели и статус.'}
+      </p>
       {!active.length && !done.length ? (
         <p className={styles.empty}>
           {query ? 'По этому запросу проектов нет.' : 'Пока нет назначенных комнат.'}
@@ -242,18 +249,18 @@ function CrewJobs({
           {active.length ? (
             <div className={styles.crewList}>
               {active.map((group) => (
-                <CrewProject key={group.project.id} group={group} onOpenRoom={onOpenRoom} />
+                <CrewProject key={group.project.id} group={group} role={role} seesMoney={seesMoney} onOpenRoom={onOpenRoom} />
               ))}
             </div>
           ) : (
-            <p className={styles.empty}>Незакрытых комнат нет.</p>
+            <p className={styles.empty}>{role === 'measurer' ? 'Комнат без замера нет.' : 'Незакрытых комнат нет.'}</p>
           )}
           {done.length ? (
             <details className={styles.done}>
               <summary>Готовые · {done.length}</summary>
               <div className={styles.crewList}>
                 {done.map((group) => (
-                  <CrewProject key={group.project.id} group={group} onOpenRoom={onOpenRoom} />
+                  <CrewProject key={group.project.id} group={group} role={role} seesMoney={seesMoney} onOpenRoom={onOpenRoom} />
                 ))}
               </div>
             </details>
@@ -272,9 +279,13 @@ function roomPlace(project: Project, room: JobObject): string {
 
 function CrewProject({
   group,
+  role,
+  seesMoney,
   onOpenRoom,
 }: {
   group: CrewProjectGroup;
+  role: 'crew' | 'measurer';
+  seesMoney: boolean;
   onOpenRoom: (room: JobObject) => void;
 }) {
   const { project, rooms } = group;
@@ -285,11 +296,15 @@ function CrewProject({
         {rooms.map((room) => {
           const title = roomTitle(room);
           const place = roomPlace(project, room);
+          const total = seesMoney ? room.estimate?.totalCost : undefined;
           const facts = [
             room.room?.areaM2 != null ? formatArea(room.room.areaM2) : 'Площадь не указана',
-            panelLabel(room.estimate?.panels),
+            role === 'crew' ? panelLabel(room.estimate?.panels) : null,
+            typeof total === 'number' ? formatRub(total) : null,
             JOB_OBJECT_STATUS_LABELS[room.status as JobObjectStatus] || room.status,
-          ].join(' · ');
+          ]
+            .filter(Boolean)
+            .join(' · ');
           return (
             <button
               key={room.id}

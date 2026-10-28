@@ -95,7 +95,7 @@ async function expectFullResult(page: Page, withSave: boolean) {
   const next = page.getByRole('region', { name: 'Следующий шаг', exact: true });
   await next.scrollIntoViewIfNeeded();
   await expect(next).toHaveCSS('opacity', '1', { timeout: 5000 });
-  // Смета для КП и «Сохранить» остаются у ролей, которые создают объекты.
+  // Смета для КП и «Сохранить» остаются у ролей, которым можно записывать в проект (замерщик — только в свои комнаты).
   await expect(page.getByRole('heading', { name: 'Смета для КП' })).toBeVisible();
   const save = page.getByRole('button', { name: 'Сохранить', exact: true });
   await save.scrollIntoViewIfNeeded();
@@ -141,7 +141,7 @@ for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {
     await walkToResult(page);
     await page.waitForTimeout(800);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/${role}-top.png` });
-    await expectFullResult(page, role === 'owner' || role === 'sales');
+    await expectFullResult(page, role === 'owner' || role === 'sales' || role === 'measurer');
     if (role === 'owner') await expectResultScrolls(page, 'wheel');
     if (SHOTS) {
       await page.evaluate(() => window.scrollTo(0, 0));

@@ -1,5 +1,4 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { canCreateObjects } from '../../../../../packages/shared/partner';
 import { CompactAudio } from '../../ui/CompactAudio';
 import { EchoComfort, EchoComfortRings } from '../../ui/EchoComfort';
 import { SpectrumChart } from '../../ui/SpectrumChart';
@@ -15,6 +14,7 @@ import {
 import { PartnerEstimateCard } from '../../partner/PartnerEstimateCard';
 import { SaveObjectCard } from '../../partner/SaveObjectCard';
 import { ClientLinkButton } from '../../partner/ClientLinkPanel';
+import { canSaveToProject } from '../../partner/toolSave';
 import { usePartner } from '../../partner/PartnerContext';
 import styles from './ResultWideScreen.module.css';
 
@@ -435,7 +435,7 @@ export function ResultDashboard({
 export function ResultWideScreen() {
   const { diagnosisRequest, user } = usePartner();
   const linkedRoom = Boolean(diagnosisRequest?.objectId);
-  const canSaveHere = Boolean(user && (canCreateObjects(user.role) || linkedRoom));
+  const canSaveHere = Boolean(user && (canSaveToProject(user.role) || linkedRoom));
   const p = useResultProfile();
 
   return (

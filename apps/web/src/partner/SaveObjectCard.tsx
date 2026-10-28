@@ -1,16 +1,18 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { canCreateObjects, type JobObject } from '../../../../packages/shared/partner';
+import { useEffect, useRef, useState } from 'react';
+import { type JobObject } from '../../../../packages/shared/partner';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { useSession } from '../state/SessionContext';
 import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
-import { hasRemoteApi } from './apiClient';
 import { ensureClientLinkUrl } from './clientLink';
 import { ForwardLinkRow } from './ForwardClientLink';
 import { roomRecordFromAnswers } from './roomLink';
 import { usePartner } from './PartnerContext';
-import listStyles from './ProjectList.module.css';
+import { setProfileAttach } from './profileAttach';
+import { SaveToProjectModal } from './SaveToProjectModal';
+import { canSaveToProject, cleanName, resolveTargetProject, type SaveTarget } from './toolSave';
+import { roomTypeLabel } from '../state/types';
 import styles from './partner.module.css';
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -24,6 +26,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 export function SaveObjectCard() {
   const { user, saveObject, createProject, partner, diagnosisRequest, objects, projects, attachProfile, leaveToCabinet } = usePartner();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { session } = useSession();
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -71,8 +74,7 @@ export function SaveObjectCard() {
   }, [savedFlash]);
 
   if (!user) return null;
-  const canCreate = canCreateObjects(user.role);
-  if (!canCreate && !objectId && !diagnosisRequest?.objectId) return null;
+  if (!canSaveToProject(user.role) && !objectId && !diagnosisRequest?.objectId) return null;
   const linkedId = diagnosisRequest?.objectId || objectId;
   const linked = Boolean(diagnosisRequest?.objectId);
 
@@ -143,12 +145,17 @@ export function SaveObjectCard() {
   }
 
   /** «Профиль» — PDF проблемомера — уходит в карточку объекта рядом со сметой. */
-  async function attachProfileTo(obj: JobObject) {
+  async function attachProfileTo(obj: JobObject, afterPaint = false) {
     const sig = `${obj.id}:${JSON.stringify(session.answers)}`;
     if (attachedProfile.current === sig) return;
     attachedProfile.current = sig;
     if (alive.current) setProfileNote('Прикладываем «Профиль» к комнате…');
+    setProfileAttach(obj.id, 'pending');
     try {
+      if (afterPaint) {
+        // Сначала отрисуем страницу комнаты: сборка PDF занимает главный поток на несколько секунд.
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
+      }
       const shareUrl = await ensureClientLinkUrl(
         obj.id,
         user?.role,
@@ -160,9 +167,11 @@ export function SaveObjectCard() {
         shareUrl,
       });
       const saved = await attachProfile(obj, await blobToBase64(blob));
+      setProfileAttach(obj.id, null);
       if (alive.current) setProfileNote(saved ? '«Профиль» приложен к комнате' : null);
     } catch {
       attachedProfile.current = null;
+      setProfileAttach(obj.id, 'failed');
       if (alive.current) setProfileNote('Не удалось приложить «Профиль». Сохраните комнату ещё раз.');
     }
   }
@@ -198,11 +207,6 @@ export function SaveObjectCard() {
     }
   }
 
-  async function onSave(e: FormEvent) {
-    e.preventDefault();
-    await saveRoom();
-  }
-
   if (linked) {
     return (
       <div aria-label="Комната">
@@ -230,95 +234,67 @@ export function SaveObjectCard() {
     );
   }
 
+  /**
+   * Проблемомер без комнаты: «Сохранить» открывает выбор проекта и комнаты.
+   * Запись идёт тем же путём, что и из комнаты проекта: ответы, площадь, название и тип.
+   */
+  async function saveToTarget(target: SaveTarget): Promise<JobObject> {
+    const project = await resolveTargetProject(target, projects, createProject, user?.org?.city || '');
+    const wanted = target.room;
+    const existing = 'id' in wanted ? objects.find((item) => item.id === wanted.id) : undefined;
+    if ('id' in wanted && !existing) throw new Error('Комната не найдена. Обновите страницу и повторите.');
+    const label = 'create' in wanted ? cleanName(wanted.create.name) : existing?.roomName || '';
+    const base = {
+      projectId: project.id,
+      ...(label ? { roomName: label } : {}),
+      clientSummary: summary,
+      room: roomPayload(),
+      estimate: estimatePayload(),
+    };
+    const obj = await saveObject(
+      existing
+        ? {
+            ...base,
+            id: existing.id,
+            status: existing.status,
+            clientName: existing.clientName,
+            clientPhone: existing.clientPhone,
+            address: existing.address,
+            city: existing.city || user?.org?.city || '',
+          }
+        : {
+            ...base,
+            status: 'draft',
+            clientName: project.clientName || '',
+            clientPhone: project.clientPhone || '',
+            address: project.address || '',
+            city: project.city || user?.org?.city || '',
+          },
+    );
+    // Страница комнаты открывается сразу после записи; «Профиль» приложится следом.
+    void attachProfileTo(obj, true);
+    return obj;
+  }
+
+  const prefillName = roomTypeLabel(room, '') || 'Комната';
+
   return (
-    <section className={styles.card} style={{ width: '100%', marginTop: 8 }} aria-label="Комната">
-      <h2>Сохранить комнату</h2>
-      <p className={styles.lead}>
-        {canCreate
-          ? 'Комната останется черновиком, пока менеджер или владелец не переставит её. Без сети сохранится на телефоне.'
-          : 'Профиль запишется в назначенную комнату. Новую комнату создаёт менеджер или владелец.'}
-      </p>
-      <form onSubmit={(e) => void onSave(e)}>
-        <div className={listStyles.picker}>
-          <label className={styles.field}>
-            Проект
-            <select aria-label="Проект" value={projectChoice} onChange={(event) => setProjectChoice(event.target.value)}>
-              {canCreate ? <option value="new">Новый проект</option> : null}
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                  {project.address ? ` · ${project.address}` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.field}>
-            Комната
-            <input
-              aria-label="Комната"
-              value={roomName}
-              placeholder="Название"
-              onChange={(event) => setRoomName(event.target.value)}
-            />
-          </label>
-        </div>
-        <div className={styles.grid2}>
-          <label className={styles.field}>
-            Клиент
-            <input
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              placeholder="Имя"
-            />
-          </label>
-          <label className={styles.field}>
-            Телефон
-            <input
-              value={clientPhone}
-              onChange={(e) => setClientPhone(e.target.value)}
-              placeholder="+7…"
-              inputMode="tel"
-            />
-          </label>
-          <label className={styles.field}>
-            Адрес
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Улица, дом, квартира"
-            />
-          </label>
-          <label className={styles.field}>
-            Город
-            <input value={city} onChange={(e) => setCity(e.target.value)} />
-          </label>
-        </div>
-        {msg ? (
-          <p className={styles.flash} role="status">
-            {msg}
-          </p>
-        ) : null}
-        {profileNote ? (
-          <p className={styles.hint} role="status" data-testid="profile-attach-note">
-            {profileNote}
-          </p>
-        ) : null}
-        {err ? (
-          <p className={styles.error} role="alert">
-            {err}
-          </p>
-        ) : null}
-        <div className={styles.actionRow}>
-          <Button type="submit" fullWidth loading={busy} success={savedFlash} disabled={busy}>
-            {busy ? 'Сохраняем…' : 'Сохранить'}
-          </Button>
-        </div>
-        {hasRemoteApi() && canCreate ? (
-          <p className={styles.hint} data-testid="forward-reason">
-            «Переслать» появится после сохранения: ссылка нужна для готовой комнаты.
-          </p>
-        ) : null}
-      </form>
-    </section>
+    <div className={styles.actionRow} aria-label="Комната">
+      <Button type="button" fullWidth onClick={() => setPickerOpen(true)}>
+        Сохранить
+      </Button>
+      {profileNote ? (
+        <p className={styles.hint} role="status" data-testid="profile-attach-note">
+          {profileNote}
+        </p>
+      ) : null}
+      <SaveToProjectModal
+        open={pickerOpen}
+        tool="problemomer"
+        prefill={{ roomName: prefillName, roomType: roomTypeLabel(room, ''), areaM2: area }}
+        onSave={saveToTarget}
+        onClose={() => setPickerOpen(false)}
+      />
+    </div>
   );
 }

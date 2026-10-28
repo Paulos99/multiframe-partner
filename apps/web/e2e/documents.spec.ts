@@ -104,7 +104,7 @@ test('менеджер видит те же PDF в карточке комнат
   await expect(page.getByRole('button', { name: 'Клиенту', exact: true }).first()).toBeVisible();
 });
 
-test('проблемомер: «Сохранить объект» прикладывает «Профиль» к объекту', async ({ page, request }) => {
+test('проблемомер: «Сохранить» в проект создаёт комнату и прикладывает «Профиль»', async ({ page, request }) => {
   test.setTimeout(120000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -119,16 +119,29 @@ test('проблемомер: «Сохранить объект» приклад
   await page.goto(`/?p=${token}`);
   await expect(page.getByRole('button', { name: 'Мой профиль', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Проблемомер', exact: true }).click();
-  const save = page.getByRole('region', { name: 'Комната', exact: true });
-  await expect(save).toBeVisible({ timeout: 30000 });
-  await save.getByPlaceholder('Имя').fill('Профиль Тест');
-  await save.getByRole('button', { name: 'Сохранить', exact: true }).click();
-  await expect(page.getByTestId('profile-attach-note')).toHaveText('«Профиль» приложен к комнате', { timeout: 60000 });
+  const saveButton = page.getByRole('button', { name: 'Сохранить', exact: true });
+  await expect(saveButton).toBeVisible({ timeout: 30000 });
+  await saveButton.click();
+  const modal = page.getByRole('dialog', { name: 'Сохранить в проект' });
+  await modal.getByRole('button', { name: /Тестовая квартира/ }).click();
+  await modal.getByRole('button', { name: /Создать комнату/ }).click();
+  await modal.getByLabel('Название комнаты').fill('Профиль Тест');
+  await modal.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  // После сохранения открывается страница комнаты, профиль уже приложен.
+  await expect(page).toHaveURL(/#project\/ui_project\/room\//, { timeout: 60000 });
 
   const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.owner', password } });
   const { token: auth } = await login.json();
-  const list = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${auth}` } });
-  const saved = (await list.json()).objects.find((o: { clientName: string }) => o.clientName === 'Профиль Тест');
+  const findSaved = async () => {
+    const list = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${auth}` } });
+    return (await list.json()).objects.find((o: { roomName?: string }) => o.roomName === 'Профиль Тест');
+  };
+  // «Профиль» прикладывается уже после открытия страницы комнаты.
+  await expect
+    .poll(async () => (await findSaved())?.documents?.some((d: { kind: string }) => d.kind === 'profile'), { timeout: 60000 })
+    .toBe(true);
+  const saved = await findSaved();
+  expect(saved).toBeTruthy();
   const profile = saved.documents.find((d: { kind: string }) => d.kind === 'profile');
   expect(profile?.filename).toContain('профиль');
   const file = await request.get(`${API}/objects/${saved.id}/documents/${profile.id}`, {
@@ -139,11 +152,6 @@ test('проблемомер: «Сохранить объект» приклад
   // Лимит запроса облачной функции ~3.5 МБ: компактный профиль должен быть заметно меньше.
   expect(pdf.length).toBeLessThan(2_000_000);
 
-  // Повторное сохранение без правок не плодит второй профиль.
-  await page.getByRole('region', { name: 'Комната', exact: true }).getByRole('button', { name: 'Сохранить', exact: true }).click();
-  await page.waitForTimeout(1500);
-  const again = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${auth}` } });
-  const after = (await again.json()).objects.find((o: { id: string }) => o.id === saved.id);
-  expect(after.documents.filter((d: { kind: string }) => d.kind === 'profile')).toHaveLength(1);
+  expect(saved.documents.filter((d: { kind: string }) => d.kind === 'profile')).toHaveLength(1);
   expect(errors).toEqual([]);
 });

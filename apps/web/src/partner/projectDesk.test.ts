@@ -10,6 +10,7 @@ import {
   panelLabel,
   projectMatches,
   readProjectView,
+  roomIsFinishedFor,
   writeProjectView,
 } from './projectDesk.ts';
 
@@ -123,6 +124,29 @@ test('монтажнику: сначала проекты с незакрыты�
   assert.equal(panelLabel(1), '1 панель');
   assert.equal(panelLabel(39), '39 панелей');
   assert.equal(panelLabel(undefined), 'Панели не посчитаны');
+});
+
+test('замерщику: сначала проекты с комнатами на замере, ушедшие дальше отдельно', () => {
+  const todo = { ...project, id: 'todo', name: 'Лесная', address: 'ул. Лесная, 3' };
+  const moved = { ...project, id: 'moved', name: 'Садовая', address: 'ул. Садовая, 5' };
+  const rooms = [
+    room({ id: 'q0', projectId: 'todo', status: 'quote_sent', roomName: 'Холл' }),
+    room({ id: 'm1', projectId: 'todo', status: 'measured', roomName: 'Кухня' }),
+    room({ id: 'd1', projectId: 'todo', status: 'draft', roomName: 'Спальня' }),
+    room({ id: 'q1', projectId: 'moved', status: 'quote_sent', roomName: 'Зал' }),
+    room({ id: 'i1', projectId: 'moved', status: 'install', roomName: 'Гостиная' }),
+  ];
+  assert.equal(roomIsFinishedFor('measurer', rooms[0]), true);
+  assert.equal(roomIsFinishedFor('measurer', rooms[1]), false);
+  assert.equal(roomIsFinishedFor('measurer', rooms[2]), false);
+  assert.equal(roomIsFinishedFor('measurer', rooms[4]), true);
+  assert.equal(roomIsFinishedFor('crew', rooms[1]), false);
+  const lists = crewProjectLists([moved, todo], rooms, '', 'measurer');
+  assert.deepEqual(lists.active.map((item) => item.project.id), ['todo']);
+  assert.deepEqual(lists.active[0]?.rooms.map((item) => item.id), ['m1', 'd1', 'q0']);
+  assert.deepEqual(lists.done.map((item) => item.project.id), ['moved']);
+  // для бригады те же комнаты считаются незакрытыми
+  assert.equal(crewProjectLists([moved, todo], rooms, '').active.length, 2);
 });
 
 test('бригада не получает суммы, замерщик получает', () => {

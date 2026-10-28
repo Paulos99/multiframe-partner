@@ -28,6 +28,7 @@ import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
 import { StatusSwap } from './motionBits';
 import { usePartner } from './PartnerContext';
+import { useProfileAttach } from './profileAttach';
 import { formatDocStamp } from './historyFormatting';
 import { ObjectHistory } from './ObjectHistory';
 import { SavedResultPage } from './SavedResultPage';
@@ -284,6 +285,7 @@ export function ObjectsPanel({
     () => grouped.objects.find((object) => object.id === selectedId) || null,
     [grouped, selectedId],
   );
+  const profileAttach = useProfileAttach(selected?.id);
   useEffect(() => {
     if (!openCreateToken || !canCreate) return;
     setCreating(true);
@@ -787,6 +789,16 @@ export function ObjectsPanel({
             ) : (
               <p className={styles.hint}>Смета ещё не посчитана</p>
             )}
+
+            {profileAttach === 'pending' ? (
+              <p className={styles.hint} role="status" data-testid="room-profile-pending">
+                Прикладываем «Профиль» к комнате…
+              </p>
+            ) : profileAttach === 'failed' ? (
+              <p className={styles.hint} role="status">
+                Не удалось приложить «Профиль». Откройте Проблемомер этой комнаты и сохраните ещё раз.
+              </p>
+            ) : null}
 
             <ObjectDocuments
               obj={selected}

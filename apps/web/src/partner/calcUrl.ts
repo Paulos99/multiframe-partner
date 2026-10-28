@@ -58,6 +58,8 @@ export function calcUrlFromOrg(
     clientName?: string | null;
     areaM2?: number | null;
     hidePrices?: boolean;
+    /** Расчёт без комнаты: в калькуляторе появляется «Сохранить в проект». */
+    saveToProject?: boolean;
   },
 ): string {
   const params = partnerCalcParamsFromOrg(org, companyName);
@@ -74,6 +76,7 @@ export function calcUrlFromOrg(
   }
   if (params.company) q.set('company', params.company);
   if (opts?.objectId) q.set('objectId', opts.objectId);
+  else if (opts?.saveToProject) q.set('saveToProject', '1');
   if (opts?.clientName) q.set('client', opts.clientName);
   if (opts?.objectId && typeof opts.areaM2 === 'number' && Number.isFinite(opts.areaM2) && opts.areaM2 > 0) {
     q.set('area', String(opts.areaM2));
