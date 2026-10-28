@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { EASE, m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { markReturnToTools } from './toolsReturn';
 import styles from './ToolsPanel.module.css';
+import { canCreateObjects, type UserRole } from '../../../../packages/shared/partner';
+import { usePartner } from './PartnerContext';
 import { ArrowRightIcon, CalculatorIcon as CalculatorGlyph, GaugeIcon } from '../icons';
 
 export type ToolCopy = {
@@ -13,23 +15,34 @@ export type ToolCopy = {
   action: string;
 };
 
-/** Тексты карточек. Одинаковые для всех ролей: цены видят все. */
-export function toolCards(): ToolCopy[] {
+/**
+ * Тексты карточек. Монтажник цен не видит: про сумму и смету ему не пишем.
+ * Сохранить результат в комнату можно только там, где роль создаёт комнаты.
+ */
+export function toolCards(role: UserRole = 'owner'): ToolCopy[] {
+  const prices = role !== 'crew';
+  const saves = canCreateObjects(role);
   return [
     {
       id: 'problemomer',
       title: 'Проблемомер',
       tagline: 'Диагностика шума в комнате',
       when: ['Первый контакт с клиентом', 'Замер на объекте', 'Клиент жалуется на соседей'],
-      why: ['Показать проблему в цифрах и классах комфорта', 'Обосновать звукоизоляцию MultiFrame', 'Сохранить в объект «Профиль»: акустический профиль комнаты в PDF'],
+      why: [
+        'Показать проблему в цифрах и классах комфорта',
+        'Обосновать звукоизоляцию MultiFrame',
+        ...(saves ? ['Сохранить акустический профиль комнаты в проект: PDF ляжет в карточку комнаты'] : []),
+      ],
       action: 'Открыть Проблемомер',
     },
     {
       id: 'calculator',
       title: 'Калькулятор',
-      tagline: 'Материалы и стоимость потолка',
-      when: ['После замера, когда известна площадь', 'Перед отправкой КП клиенту', 'Перед выездом на монтаж'],
-      why: ['Посчитать панели, крепёж и сумму по прайсу', 'Получить «Смету» в PDF: цены, количество и схема раскладки'],
+      tagline: prices ? 'Материалы и стоимость потолка' : 'Материалы для потолка',
+      when: ['После замера, когда известна площадь', prices ? 'Перед отправкой КП клиенту' : 'Перед сборкой комплекта', 'Перед выездом на монтаж'],
+      why: prices
+        ? ['Посчитать панели, крепёж и сумму по прайсу', 'Получить «Смету» в PDF: цены, количество и схема раскладки']
+        : ['Посчитать панели и крепёж', 'Получить схему раскладки и количество материалов'],
       action: 'Открыть Калькулятор',
     },
   ];
@@ -56,7 +69,7 @@ function Bullets({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-/** Вкладка «Инструменты»: две большие карточки вместо кнопок в шапке. */
+/** Раздел «Инструменты»: Проблемомер и Калькулятор без проекта, страницей в основной части. */
 export function ToolsPanel({
   onProblemomer,
   onCalculator,
@@ -65,6 +78,7 @@ export function ToolsPanel({
   onCalculator: () => void;
 }) {
   const reduce = usePrefersReducedMotion();
+  const role = usePartner().user?.role;
   const open = (id: ToolCopy['id']) => {
     markReturnToTools();
     if (id === 'problemomer') onProblemomer();
@@ -79,10 +93,13 @@ export function ToolsPanel({
     <section className={styles.panel} aria-labelledby="tools-title">
       <header className={styles.head}>
         <h2 id="tools-title">Инструменты</h2>
-        <p>Диагностика на объекте и расчёт для коммерческого предложения.</p>
+        <p>
+          Работают сами по себе: проект создавать не нужно.
+          {role === 'crew' ? ' Диагностика на объекте и расчёт материалов.' : ' Диагностика на объекте и расчёт для коммерческого предложения.'}
+        </p>
       </header>
       <div className={styles.grid}>
-        {toolCards().map((tool, index) => (
+        {toolCards(role).map((tool, index) => (
           <m.article
             key={tool.id}
             className={styles.card}

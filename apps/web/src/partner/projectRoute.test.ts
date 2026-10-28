@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseProjectHash, parseStaffHash, projectHash, staffHash } from './projectRoute.ts';
+import {
+  companyHash,
+  isLegacyStaffList,
+  parseCompanyHash,
+  parseProjectHash,
+  parseStaffHash,
+  projectHash,
+  staffHash,
+} from './projectRoute.ts';
 
 test('адрес проекта: вкладка по умолчанию «Обзор», комната отдельно', () => {
   assert.deepEqual(parseProjectHash(''), { kind: 'desk' });
@@ -33,5 +41,21 @@ test('адрес проекта: вкладка по умолчанию «Обз
   assert.deepEqual(parseStaffHash('#project/ui_project/overview'), { kind: 'list' });
   assert.deepEqual(parseStaffHash('#staff/ui%20sales'), { kind: 'person', staffId: 'ui sales' });
   assert.equal(staffHash({ kind: 'person', staffId: 'ui sales' }), '#staff/ui%20sales');
-  assert.equal(staffHash({ kind: 'list' }), '');
+  assert.equal(staffHash({ kind: 'list' }), '#company/staff');
+});
+
+test('раздел «Компания»: вкладки в адресе и старый адрес списка сотрудников', () => {
+  assert.equal(parseCompanyHash('#company/staff'), 'staff');
+  assert.equal(parseCompanyHash('#company/about'), 'about');
+  assert.equal(parseCompanyHash('#company'), 'about');
+  assert.equal(parseCompanyHash('#company/unknown'), 'about');
+  assert.equal(parseCompanyHash('#staff/ui_sales'), null);
+  assert.equal(parseCompanyHash('#project/p1/overview'), null);
+  assert.equal(parseCompanyHash(''), null);
+  assert.equal(companyHash('about'), '#company/about');
+  assert.equal(isLegacyStaffList('#staff'), true);
+  assert.equal(isLegacyStaffList('#staff/'), true);
+  assert.equal(isLegacyStaffList('#staff/ui_sales'), false);
+  assert.equal(isLegacyStaffList('#company/staff'), false);
+  assert.deepEqual(parseStaffHash('#company/staff'), { kind: 'list' });
 });
