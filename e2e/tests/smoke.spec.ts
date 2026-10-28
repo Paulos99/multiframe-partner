@@ -70,7 +70,7 @@ for (const role of ROLES) {
 
     if (role.id === 'crew') await checkCrewDocuments(page, browser, info, server);
 
-    await openTraining(page, role);
+    await openTraining(page);
     await assertPageFits(page);
     await shot(page, info, `${role.id}-training`);
   });

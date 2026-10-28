@@ -86,8 +86,15 @@ const training = renderToStaticMarkup(<HelpTrainingPanel role="owner" />);
 if (!training.includes('Обучение') || !training.includes('Загружаем материалы')) {
   throw new Error('Раздел обучения без загрузки материалов');
 }
-if (!training.includes('Материалы') || !training.includes('Кабинет')) {
-  throw new Error('Вкладки обучения не подписаны');
+// Раздела «Кабинет» в обучении нет ни у одной роли: ни вкладки, ни личной инструкции.
+for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {
+  const html = renderToStaticMarkup(<HelpTrainingPanel role={role} />);
+  if (html.includes('Кабинет') || html.includes('role="tab"') || html.includes('Ваша работа') || html.includes('С чего начать')) {
+    throw new Error(`В обучении роли ${role} остался раздел «Кабинет»`);
+  }
+  if (!html.includes('Обучение') || !html.includes('Загружаем материалы')) {
+    throw new Error(`В обучении роли ${role} нет материалов`);
+  }
 }
 
 console.log('Present surfaces: checks passed');

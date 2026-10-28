@@ -22,8 +22,6 @@ export type RoleCase = {
   homeText: string;
   /** null — у админа нет списка объектов, открываем список партнёров. */
   objectsHeading: 'Проекты' | null;
-  /** Заголовок личной инструкции в «Обучении». */
-  trainingTitle: string;
 };
 
 export const ROLES: RoleCase[] = [
@@ -34,7 +32,6 @@ export const ROLES: RoleCase[] = [
     title: /^Партнёрская сеть StP MultiFrame$/,
     homeText: 'Сегодня',
     objectsHeading: null,
-    trainingTitle: 'Ваша работа · Админ StP',
   },
   {
     id: 'owner',
@@ -43,7 +40,6 @@ export const ROLES: RoleCase[] = [
     title: /^Владелец · Потолки Столицы$/,
     homeText: 'Сегодня',
     objectsHeading: 'Проекты',
-    trainingTitle: 'Ваша работа · Владелец',
   },
   {
     id: 'sales',
@@ -52,7 +48,6 @@ export const ROLES: RoleCase[] = [
     title: /^Менеджер · Потолки Столицы$/,
     homeText: 'Сегодня',
     objectsHeading: 'Проекты',
-    trainingTitle: 'Ваша работа · Менеджер',
   },
   {
     id: 'measurer',
@@ -61,7 +56,6 @@ export const ROLES: RoleCase[] = [
     title: /^Замерщик · Потолки Столицы$/,
     homeText: 'Сегодня',
     objectsHeading: 'Проекты',
-    trainingTitle: 'Ваша работа · Замерщик',
   },
   {
     id: 'crew',
@@ -70,7 +64,6 @@ export const ROLES: RoleCase[] = [
     title: /^Монтажник · Потолки Столицы$/,
     homeText: 'Сегодня',
     objectsHeading: 'Проекты',
-    trainingTitle: 'Ваша работа · Монтажник',
   },
   {
     id: 'owner-b',
@@ -79,7 +72,6 @@ export const ROLES: RoleCase[] = [
     title: /^Владелец · Северный Потолок$/,
     homeText: 'Сегодня',
     objectsHeading: 'Проекты',
-    trainingTitle: 'Ваша работа · Владелец',
   },
 ];
 
