@@ -3,6 +3,8 @@ import type { JobObject, JobObjectEstimate, OrgSettings } from '../../../../pack
 export type CabinetCalcMessage = {
   type: 'mf-cabinet-calc';
   objectId?: string | null;
+  /** Расчёт без комнаты, отправлен по «Сохранить в проект»: кабинет спросит, куда его записать. */
+  saveRequest?: boolean;
   inputMode?: string | null;
   areaEstimate?: boolean;
   hasScheme?: boolean;

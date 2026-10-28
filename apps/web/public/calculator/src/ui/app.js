@@ -619,6 +619,7 @@ function syncChromeUi() {
 
   if ($('downloadBtn')) $('downloadBtn').disabled = !ready;
   if ($('shareBtnSecondary')) $('shareBtnSecondary').disabled = !ready;
+  syncSaveToProjectBtn(ready);
 
   // В draw до замкнутого контура — только высота/фото, без «что считать»
   // В area поверхности уже заданы полями выше — блок не нужен
@@ -2166,7 +2167,8 @@ async function publishCalcToCabinet(options = {}) {
   if (window.parent === window) return;
   const params = new URLSearchParams(window.location.search);
   const objectId = params.get('objectId');
-  if (!objectId) return;
+  // Без комнаты расчёт уходит в кабинет только по «Сохранить в проект».
+  if (!objectId && !options.saveRequest) return;
   const area = cabinetCeilingArea();
   if (!(area > 0)) return;
   const panels = state.bom?.ceiling?.stats?.withReserve ?? state.bom?.ceiling?.stats?.panelsToPurchase ?? 0;
@@ -2176,7 +2178,8 @@ async function publishCalcToCabinet(options = {}) {
   if (!withPdf && sig === lastPublishedSig) return;
   const payload = {
     type: 'mf-cabinet-calc',
-    objectId,
+    objectId: objectId || null,
+    ...(options.saveRequest ? { saveRequest: true } : {}),
     inputMode: state.inputMode,
     areaEstimate: isAreaEstimateMode(),
     hasScheme: !isAreaEstimateMode(),
@@ -2221,6 +2224,32 @@ function scheduleCabinetPublish(options = {}) {
     return;
   }
   void publishCalcToCabinet({ withPdf });
+}
+
+/** «Сохранить в проект»: только в кабинете, когда расчёт открыт без комнаты. */
+function saveToProjectAvailable() {
+  if (window.parent === window) return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('saveToProject') === '1' && !params.get('objectId');
+}
+
+function syncSaveToProjectBtn(ready) {
+  const btn = $('saveToProjectBtn');
+  if (!btn) return;
+  const available = saveToProjectAvailable();
+  btn.hidden = !available;
+  btn.disabled = !available || !ready;
+}
+
+async function handleSaveToProject() {
+  if (!state.bom || !saveToProjectAvailable()) return;
+  const btn = $('saveToProjectBtn');
+  if (btn) btn.disabled = true;
+  try {
+    await publishCalcToCabinet({ withPdf: true, saveRequest: true });
+  } finally {
+    if (btn) btn.disabled = !resultsUnlockedForUi();
+  }
 }
 
 async function handlePDF() {
@@ -2499,6 +2528,7 @@ function init() {
 
   $('shareBtn')?.addEventListener('click', handleShare);
   $('downloadBtn')?.addEventListener('click', handlePDF);
+  $('saveToProjectBtn')?.addEventListener('click', () => void handleSaveToProject());
 
   state.inputMode = null;
   syncModePanelsUi();

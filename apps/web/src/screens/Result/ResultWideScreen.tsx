@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { canCreateObjects } from '../../../../../packages/shared/partner';
 import { CompactAudio } from '../../ui/CompactAudio';
 import { EchoComfort, EchoComfortRings } from '../../ui/EchoComfort';
 import { SpectrumChart } from '../../ui/SpectrumChart';
@@ -13,6 +12,7 @@ import {
 } from './resultShared';
 import { PartnerEstimateCard } from '../../partner/PartnerEstimateCard';
 import { SaveObjectCard } from '../../partner/SaveObjectCard';
+import { canSaveToProject } from '../../partner/toolSave';
 import { usePartner } from '../../partner/PartnerContext';
 import styles from './ResultWideScreen.module.css';
 
@@ -132,7 +132,7 @@ function useScrollDrift() {
 export function ResultWideScreen() {
   const { diagnosisRequest, user } = usePartner();
   const linkedRoom = Boolean(diagnosisRequest?.objectId);
-  const canSaveHere = Boolean(user && (canCreateObjects(user.role) || linkedRoom));
+  const canSaveHere = Boolean(user && (canSaveToProject(user.role) || linkedRoom));
   const p = useResultProfile();
   const rootRef = useScrollDrift();
 

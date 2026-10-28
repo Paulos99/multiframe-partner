@@ -228,7 +228,7 @@ type PartnerApi = {
   cabinetLeaveNonce: number;
   attachCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
   /** Площадь и, если PDF уже собран, смета — в существующую комнату. Новую комнату не создаёт и никому не шлёт. */
-  applyCalculation: (message: CabinetCalcMessage, objectId: string | null) => Promise<JobObject | null>;
+  applyCalculation: (message: CabinetCalcMessage, objectId: string | null, room?: JobObject) => Promise<JobObject | null>;
   /** «Профиль» — PDF проблемомера в карточку объекта. */
   attachProfile: (saved: JobObject, pdfBase64: string) => Promise<JobObject | null>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
@@ -1016,9 +1016,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   );
 
   const applyCalculation = useCallback(
-    async (message: CabinetCalcMessage, objectId: string | null) => {
+    async (message: CabinetCalcMessage, objectId: string | null, room?: JobObject) => {
       if (!user || !objectId) return null;
-      const existing = objects.find((item) => item.id === objectId);
+      // `room` — только что созданная комната: список объектов в состоянии ещё не обновился.
+      const existing = room?.id === objectId ? room : objects.find((item) => item.id === objectId);
       if (!existing) return null;
       if (!canCreateObjects(user.role) && user.role !== 'measurer') return null;
       const patch = linkCalcToRoom(message, existing, user.org);
