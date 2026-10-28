@@ -7,6 +7,7 @@ import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
 import { roomRecordFromAnswers } from './roomLink';
 import { usePartner } from './PartnerContext';
+import { setProfileAttach } from './profileAttach';
 import { SaveToProjectModal } from './SaveToProjectModal';
 import { canSaveToProject, cleanName, resolveTargetProject, type SaveTarget } from './toolSave';
 import { roomTypeLabel } from '../state/types';
@@ -142,20 +143,27 @@ export function SaveObjectCard() {
   }
 
   /** «Профиль» — PDF проблемомера — уходит в карточку объекта рядом со сметой. */
-  async function attachProfileTo(obj: JobObject) {
+  async function attachProfileTo(obj: JobObject, afterPaint = false) {
     const sig = `${obj.id}:${JSON.stringify(session.answers)}`;
     if (attachedProfile.current === sig) return;
     attachedProfile.current = sig;
     if (alive.current) setProfileNote('Прикладываем «Профиль» к комнате…');
+    setProfileAttach(obj.id, 'pending');
     try {
+      if (afterPaint) {
+        // Сначала отрисуем страницу комнаты: сборка PDF занимает главный поток на несколько секунд.
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
+      }
       const { blob } = await renderAcousticProfilePdf(session, {
         compact: true,
         hidePrices: user?.role === 'crew',
       });
       const saved = await attachProfile(obj, await blobToBase64(blob));
+      setProfileAttach(obj.id, null);
       if (alive.current) setProfileNote(saved ? '«Профиль» приложен к комнате' : null);
     } catch {
       attachedProfile.current = null;
+      setProfileAttach(obj.id, 'failed');
       if (alive.current) setProfileNote('Не удалось приложить «Профиль». Сохраните комнату ещё раз.');
     }
   }
@@ -253,7 +261,8 @@ export function SaveObjectCard() {
             city: project.city || user?.org?.city || '',
           },
     );
-    await attachProfileTo(obj);
+    // Страница комнаты открывается сразу после записи; «Профиль» приложится следом.
+    void attachProfileTo(obj, true);
     return obj;
   }
 

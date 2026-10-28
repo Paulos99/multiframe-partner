@@ -121,11 +121,15 @@ test('Проблемомер из «Инструментов»: комната �
 
   await expect(page).toHaveURL(/#project\/ui_project\/room\//, { timeout: 60000 });
   await expect(dialog(page)).toHaveCount(0);
+  await expect
+    .poll(async () => (await rooms(request)).find((r) => r.roomName === 'Спальня родителей')?.documents?.some((d) => d.kind === 'profile'), {
+      timeout: 30000,
+    })
+    .toBe(true);
   const saved = (await rooms(request)).find((r) => r.roomName === 'Спальня родителей');
   expect(saved?.projectId).toBe('ui_project');
   expect(saved?.room.areaM2).toBe(18);
   expect(saved?.room.roomType).toBe('bedroom');
-  expect(saved?.documents?.some((d) => d.kind === 'profile')).toBe(true);
   // Вкладка «Инструменты» не перехватывает возврат: остаёмся на странице комнаты.
   await page.waitForTimeout(600);
   await expect(page).toHaveURL(/#project\/ui_project\/room\//);
@@ -148,9 +152,12 @@ test('комната с данными: перед заменой нужно п�
   await modal.getByRole('button', { name: 'Сохранить', exact: true }).click();
   await modal.getByRole('button', { name: 'Заменить и сохранить', exact: true }).click();
   await expect(page).toHaveURL(/#project\/ui_project\/room\/ui_room/, { timeout: 60000 });
-  const after = (await rooms(request)).find((r) => r.id === 'ui_room');
-  expect(after?.room.areaM2).toBe(18);
-  expect(after?.documents?.some((d) => d.kind === 'profile')).toBe(true);
+  await expect
+    .poll(async () => (await rooms(request)).find((r) => r.id === 'ui_room')?.documents?.some((d) => d.kind === 'profile'), {
+      timeout: 30000,
+    })
+    .toBe(true);
+  expect((await rooms(request)).find((r) => r.id === 'ui_room')?.room.areaM2).toBe(18);
 });
 
 test('владелец создаёт проект и комнату прямо из окна сохранения', async ({ page, request }) => {
@@ -300,4 +307,66 @@ test('окно сохранения: без цен и боковых панел�
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   expect(box!.y + box!.height).toBeLessThanOrEqual(780);
   await expect(page.locator('[class*="drawer" i]')).toHaveCount(0);
+});
+
+test('после выбора проекта шапка и кнопки на месте, комнаты видны, прокручивается только список', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1024, height: 560 });
+  await enter(page, 'owner');
+  await walkProblemomer(page);
+  const modal = await openSaveModal(page);
+  await modal.getByRole('button', { name: /Тестовая квартира/ }).click();
+  // Выбранный проект сворачивается в строку с «Изменить», список проектов уходит.
+  await expect(modal.getByRole('button', { name: 'Изменить', exact: true })).toBeVisible();
+  await expect(modal.getByLabel('Найти проект')).toHaveCount(0);
+  const create = modal.getByRole('button', { name: /Создать комнату/ });
+  await expect(create).toBeVisible();
+  const inside = async (locator: ReturnType<Page['locator']>) => {
+    const box = await locator.boundingBox();
+    const frame = await modal.boundingBox();
+    return Boolean(box && frame && box.y >= frame.y - 1 && box.y + box.height <= frame.y + frame.height + 1);
+  };
+  await expect.poll(() => inside(modal.getByRole('heading', { name: 'Сохранить в проект' }))).toBe(true);
+  await expect.poll(() => inside(create)).toBe(true);
+  await expect.poll(() => inside(modal.getByRole('button', { name: 'Отмена', exact: true }))).toBe(true);
+  await create.click();
+  // Окно само не прокручивается: заголовок и кнопки остаются на месте при любой высоте.
+  await expect(modal.getByLabel('Название комнаты')).toBeVisible();
+  expect(await modal.evaluate((el) => el.scrollTop)).toBe(0);
+  await expect.poll(() => inside(modal.getByRole('heading', { name: 'Сохранить в проект' }))).toBe(true);
+  await expect.poll(() => inside(modal.getByRole('button', { name: 'Сохранить', exact: true }))).toBe(true);
+  // «Изменить» возвращает к списку проектов.
+  await modal.getByRole('button', { name: 'Изменить', exact: true }).click();
+  await expect(modal.getByLabel('Найти проект')).toBeVisible();
+  await expect(modal.getByRole('button', { name: /Создать комнату/ })).toHaveCount(0);
+});
+
+test('после «Сохранить» страница комнаты открывается сразу, без пустого экрана, «Профиль» приложится следом', async ({ page, request }) => {
+  test.setTimeout(120000);
+  await enter(page, 'owner');
+  await walkProblemomer(page);
+  // Медленная сеть: ответы сервера приходят с задержкой.
+  await page.route(`${API}/**`, async (route) => {
+    if (route.request().method() !== 'OPTIONS') await new Promise((resolve) => setTimeout(resolve, 1200));
+    await route.continue();
+  });
+  const modal = await openSaveModal(page);
+  await modal.getByRole('button', { name: /Тестовая квартира/ }).click();
+  await modal.getByRole('button', { name: /Создать комнату/ }).click();
+  await modal.getByLabel('Название комнаты').fill('Быстрая');
+  await modal.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  // Пока идёт запись, кнопка показывает ход работы, а не замирает.
+  await expect(modal.getByRole('button', { name: 'Сохраняем…' })).toBeVisible();
+  await expect(page).toHaveURL(/#project\/ui_project\/room\//, { timeout: 60000 });
+  // Сразу после перехода на экране страница комнаты, а не серая пустота.
+  const room = page.getByRole('region', { name: 'Комната' });
+  await expect(room).toBeVisible({ timeout: 1500 });
+  await expect(room.getByRole('heading', { name: 'Быстрая', level: 1 })).toBeVisible({ timeout: 1500 });
+  expect((await page.locator('body').innerText()).trim().length).toBeGreaterThan(100);
+  await expect
+    .poll(async () => (await rooms(request)).find((r) => r.roomName === 'Быстрая')?.documents?.some((d) => d.kind === 'profile'), {
+      timeout: 60000,
+    })
+    .toBe(true);
+  await expect(page.getByTestId('room-profile-pending')).toHaveCount(0, { timeout: 30000 });
 });

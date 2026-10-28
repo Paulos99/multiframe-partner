@@ -132,8 +132,15 @@ test('проблемомер: «Сохранить» в проект созда�
 
   const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.owner', password } });
   const { token: auth } = await login.json();
-  const list = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${auth}` } });
-  const saved = (await list.json()).objects.find((o: { roomName?: string }) => o.roomName === 'Профиль Тест');
+  const findSaved = async () => {
+    const list = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${auth}` } });
+    return (await list.json()).objects.find((o: { roomName?: string }) => o.roomName === 'Профиль Тест');
+  };
+  // «Профиль» прикладывается уже после открытия страницы комнаты.
+  await expect
+    .poll(async () => (await findSaved())?.documents?.some((d: { kind: string }) => d.kind === 'profile'), { timeout: 60000 })
+    .toBe(true);
+  const saved = await findSaved();
   expect(saved).toBeTruthy();
   const profile = saved.documents.find((d: { kind: string }) => d.kind === 'profile');
   expect(profile?.filename).toContain('профиль');
