@@ -149,11 +149,11 @@ for (const width of [360, 390]) {
     await enter(page, 'owner');
     const el = strip(page);
     const tabs = nav(page).getByRole('tab');
-    await expect(tabs).toHaveCount(8);
+    await expect(tabs).toHaveCount(7);
     await expect(tabs.last()).toHaveAttribute('data-nav-id', 'profile');
     await expect(nav(page).getByRole('tab', { name: 'Обучение', exact: true })).toHaveCount(1);
 
-    // Восемь вкладок не влезают: лента со snap, без полосы, «Профиль» докручивается.
+    // Семь вкладок не влезают: лента со snap, без полосы, «Профиль» докручивается.
     const style = await el.evaluate((e) => {
       const cs = getComputedStyle(e);
       return { overflowX: cs.overflowX, snap: cs.scrollSnapType, bar: cs.scrollbarWidth, overflow: e.scrollWidth - e.clientWidth };
