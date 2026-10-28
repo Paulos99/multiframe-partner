@@ -4,7 +4,7 @@ const password = 'ui-fixture-password-only';
 const roles = ['admin', 'owner', 'sales', 'measurer', 'crew'] as const;
 
 test.beforeEach(async ({ request }) => {
-  await request.post('http://127.0.0.1:4681/__reset');
+  await request.post('http://127.0.0.1:4181/__reset');
 });
 
 async function openTraining(page: Page) {
