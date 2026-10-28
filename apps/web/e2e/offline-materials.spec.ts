@@ -95,8 +95,10 @@ async function setup(page: Page, net: Net) {
 }
 
 async function reopenMaterials(page: Page) {
-  await page.getByRole('tab', { name: 'Кабинет', exact: true }).click();
-  await page.getByRole('tab', { name: 'Материалы', exact: true }).click();
+  // Раздел обучения — только материалы: уходим на другую вкладку кабинета и возвращаемся.
+  await page.getByRole('tab', { name: 'Сегодня', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Обучение' })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Обучение', exact: true }).click();
 }
 
 test('офлайн: скачать всё, докачать после обрыва, открыть без сети, удалить копии', async ({ page, context }) => {
@@ -155,6 +157,7 @@ test('офлайн: скачать всё, докачать после обры�
   // Без сети.
   await context.setOffline(true);
   net.offline = true;
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
   await reopenMaterials(page);
   await expect(page.getByTestId('materials-offline-note')).toContainText('Нет сети');
   await expect(page.getByRole('button', { name: 'Загрузить файл' })).toHaveCount(0);
