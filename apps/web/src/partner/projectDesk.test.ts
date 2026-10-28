@@ -139,6 +139,16 @@ test('бригада не получает суммы, замерщик полу
   assert.equal(roleSeesProjectMoney('owner'), true);
 });
 
+test('deleteProjectWarning: считает комнаты и склоняет слово', async () => {
+  const { deleteProjectWarning } = await import('./projectDesk.ts');
+  assert.match(deleteProjectWarning(1), /1 комната\)/);
+  assert.match(deleteProjectWarning(3), /3 комнаты\)/);
+  assert.match(deleteProjectWarning(5), /5 комнат\)/);
+  assert.match(deleteProjectWarning(11), /11 комнат\)/);
+  assert.match(deleteProjectWarning(21), /21 комната\)/);
+  assert.match(deleteProjectWarning(0), /нет комнат/);
+});
+
 test('roomProjectStatuses: комнаты берут стадию проекта, а не свою', async () => {
   const { roomProjectStatuses } = await import('./projectDesk.ts');
   const project = { id: 'prj_a', orgId: 'org', name: 'Чернов А.', status: 'measure' } as Project;
