@@ -15,89 +15,121 @@ async function enter(page: Page, role: string) {
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
 }
 
+const calcTitle = 'iframe[title="Калькулятор MultiFrame · партнёр"]';
+const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true });
+
+async function openTools(page: Page) {
+  await tab(page, 'Инструменты').click();
+  await expect(tab(page, 'Инструменты')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('region', { name: 'Инструменты' })).toBeVisible();
+}
+
 for (const role of roles) {
-  test(`${role}: «Сегодня» открывает Проблемомер и Калькулятор, отдельного раздела нет`, async ({ page }) => {
+  test(`${role}: раздел «Инструменты» в меню, оба инструмента открываются без проекта`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
     await enter(page, role);
-    await expect(page.getByRole('tab', { name: 'Инструменты', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Проблемомер', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Калькулятор', exact: true })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Сегодня', exact: true })).toHaveAttribute('aria-selected', 'true');
+    // Меню остаётся коротким: не больше семи пунктов (на телефоне ещё «Профиль»).
+    const count = await page.getByRole('complementary', { name: 'Разделы кабинета' }).getByRole('tab').count();
+    expect(count).toBeGreaterThanOrEqual(4);
+    expect(count).toBeLessThanOrEqual(7);
+    await openTools(page);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // Проблемомер: открывается страницей, проект не нужен.
+    await page.getByRole('button', { name: 'Открыть Проблемомер', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Начать', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Кабинет', exact: true }).click();
+    // «Назад» возвращает в «Инструменты», а не на стартовый экран.
+    await expect(page.getByRole('region', { name: 'Инструменты' })).toBeVisible();
+    await expect(tab(page, 'Инструменты')).toHaveAttribute('aria-selected', 'true');
+
+    // Калькулятор: свой экран без привязки к комнате.
+    await page.getByRole('button', { name: 'Открыть Калькулятор', exact: true }).click();
+    const frame = page.locator(calcTitle);
+    await expect(frame).toBeVisible();
+    await expect(frame).not.toHaveAttribute('src', /objectId=/);
+    await expect(
+      page.frameLocator(calcTitle).getByRole('heading', { name: 'Что вы знаете о помещении?' }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Кабинет', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Инструменты' })).toBeVisible();
+    expect(errors).toEqual([]);
   });
 }
 
-test('менеджер: «Сегодня» открывает Проблемомер и Калькулятор без ошибки страницы', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await enter(page, 'sales');
-
-  await page.getByRole('button', { name: 'Проблемомер', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Начать', exact: true })).toBeVisible();
-
-  await page.getByRole('button', { name: 'Кабинет', exact: true }).click();
-  await expect(page.getByRole('tab', { name: 'Сегодня', exact: true })).toHaveAttribute('aria-selected', 'true');
-
-  await page.getByRole('button', { name: 'Калькулятор', exact: true }).click();
-  await expect(
-    page
-      .frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]')
-      .getByRole('heading', { name: 'Что вы знаете о помещении?' }),
-  ).toBeVisible();
-  expect(errors).toEqual([]);
-});
-
-test('карточки открывают нужный инструмент, «Назад» возвращает во вкладку', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+test('карточка целиком открывает инструмент, лишних окон и переключателей нет', async ({ page }) => {
   await enter(page, 'owner');
-
-  await page.getByRole('button', { name: 'Проблемомер', exact: true }).click();
+  await openTools(page);
+  await page.locator('[data-tool="problemomer"] h3').click();
   await expect(page.getByRole('button', { name: 'Начать', exact: true })).toBeVisible();
   await expect(page.getByRole('tablist', { name: 'Инструмент' })).toHaveCount(0);
-
   await page.getByRole('button', { name: 'Кабинет', exact: true }).click();
-  await expect(page.getByRole('tab', { name: 'Сегодня', exact: true })).toHaveAttribute('aria-selected', 'true');
-
-  await page.getByRole('button', { name: 'Калькулятор', exact: true }).click();
-  await expect(
-    page
-      .frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]')
-      .getByRole('heading', { name: 'Что вы знаете о помещении?' }),
-  ).toBeVisible();
+  await page.locator('[data-tool="calculator"] h3').click();
+  await expect(page.locator(calcTitle)).toBeVisible();
   await expect(page.getByRole('tablist', { name: 'Инструмент' })).toHaveCount(0);
-  expect(errors).toEqual([]);
 });
 
-test('монтажник: калькулятор без цен', async ({ page }) => {
+test('«Сегодня» по-прежнему открывает оба инструмента', async ({ page }) => {
+  await enter(page, 'sales');
+  await expect(tab(page, 'Сегодня')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('button', { name: 'Проблемомер', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Калькулятор', exact: true })).toBeVisible();
+});
+
+test('монтажник: в «Инструментах» и калькуляторе нет цен', async ({ page }) => {
   await enter(page, 'crew');
-  await expect(page.getByText('спецификац', { exact: false })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Калькулятор', exact: true }).click();
-  const frame = page.locator('iframe[title="Калькулятор MultiFrame · партнёр"]');
+  await openTools(page);
+  const section = page.getByRole('region', { name: 'Инструменты' });
+  await expect(section).not.toContainText('₽');
+  await expect(section).not.toContainText(/сумм|смет|прайс|цен/i);
+  await page.getByRole('button', { name: 'Открыть Калькулятор', exact: true }).click();
+  const frame = page.locator(calcTitle);
   await expect(frame).toBeVisible();
   await expect(frame).toHaveAttribute('src', /hidePrices=1/);
   await expect(frame).not.toHaveAttribute('src', /panelPrice|pricePerM2|installPerM2|dowelPrice/);
-  const calc = page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]');
+  const calc = page.frameLocator(calcTitle);
   await expect(calc.getByRole('heading', { name: 'Что вы знаете о помещении?' })).toBeVisible();
   await expect(calc.locator('body')).toHaveClass(/hide-prices/);
   await expect(calc.locator('body')).not.toContainText('₽');
+  // Проблемомер без проекта тоже без цен.
+  await page.getByRole('button', { name: 'Кабинет', exact: true }).click();
+  await page.getByRole('button', { name: 'Открыть Проблемомер', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Начать', exact: true })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('₽');
 });
 
-for (const vp of [
-  { width: 390, height: 844 },
-  { width: 820, height: 1180 },
-]) {
-  test(`${vp.width}px: «Инструменты» видны в меню без прокрутки, карточки помещаются`, async ({ page }) => {
-    await page.setViewportSize(vp);
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await enter(page, 'owner');
-    const problem = page.getByRole('button', { name: 'Проблемомер', exact: true });
-    const calc = page.getByRole('button', { name: 'Калькулятор', exact: true });
-    await expect(problem).toBeInViewport({ ratio: 1 });
-    await expect(calc).toBeInViewport({ ratio: 1 });
-    expect(
-      await page.evaluate(() => document.scrollingElement!.scrollWidth <= window.innerWidth),
-    ).toBe(true);
+for (const role of ['measurer', 'sales'] as const) {
+  test(`${role}: калькулятор без проекта получает цены компании`, async ({ page }) => {
+    await enter(page, role);
+    await openTools(page);
+    await page.getByRole('button', { name: 'Открыть Калькулятор', exact: true }).click();
+    const frame = page.locator(calcTitle);
+    await expect(frame).toBeVisible();
+    await expect(frame).not.toHaveAttribute('src', /hidePrices=1/);
+    await expect(frame).toHaveAttribute('src', /panelPrice=/);
+    await expect(page.frameLocator(calcTitle).locator('body')).not.toHaveClass(/hide-prices/);
   });
 }
+
+test('на телефоне и в узком меню «Инструменты» доступны и открываются страницей', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // Телефон: нижняя панель разделов.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await enter(page, 'owner');
+  await expect(tab(page, 'Инструменты')).toBeInViewport({ ratio: 1 });
+  await openTools(page);
+  await expect(page.getByRole('button', { name: 'Открыть Проблемомер', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.scrollingElement!.scrollWidth <= window.innerWidth)).toBe(true);
+  // Узкий планшет: разделы под кнопкой «Меню».
+  await page.setViewportSize({ width: 700, height: 900 });
+  await page.getByRole('button', { name: 'Меню', exact: true }).click();
+  await tab(page, 'Сегодня').click();
+  await page.getByRole('button', { name: 'Меню', exact: true }).click();
+  await tab(page, 'Инструменты').click();
+  await expect(page.getByRole('region', { name: 'Инструменты' })).toBeVisible();
+  expect(await page.evaluate(() => document.scrollingElement!.scrollWidth <= window.innerWidth)).toBe(true);
+});
 
 /** Относительная яркость по WCAG для `rgb(r, g, b)`. */
 function luminance(rgb: string) {
@@ -118,8 +150,9 @@ for (const theme of ['light', 'dark'] as const) {
   test(`${theme}: карточки инструментов зелёные, текст и маркеры белые, AA`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await enter(page, 'owner');
+    await openTools(page);
     if (theme === 'dark') await page.evaluate(() => document.body.classList.add('theme-dark'));
-    const button = page.getByRole('button', { name: 'Проблемомер', exact: true });
+    const button = page.locator('[data-tool="problemomer"]');
     const bg = await button.evaluate((el) => getComputedStyle(el).backgroundColor);
     const color = await button.evaluate((el) => getComputedStyle(el).color);
     expect(bg).toBe('rgb(1, 100, 79)');
