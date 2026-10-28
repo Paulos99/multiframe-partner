@@ -14,6 +14,7 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { useCabinetSection } from './analyticsRoute';
 import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
+import { trainerHashOpen } from '../trainer/route';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { AnimatePresence, FadeRise, m, motionPresets } from './motionBits';
 import { ObjectsPanel } from './ObjectsPanel';
@@ -35,6 +36,10 @@ function projectHashOpen(): boolean {
 function leaveProjectHash() {
   if (typeof window === 'undefined' || !window.location.hash) return;
   const hash = window.location.hash;
+  if (trainerHashOpen(hash)) {
+    navigateHash('', 'replace');
+    return;
+  }
   if (parseProjectHash(hash).kind === 'desk' && parseStaffHash(hash).kind === 'list') return;
   navigateHash('', 'replace');
 }
@@ -115,6 +120,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const partners = useMemo(() => api.adminListPartners(), [api]);
   const [tab, setTab] = useCabinetSection<AdminTab>('analytics', () => {
     consumeReturnToTools();
+    if (trainerHashOpen()) return 'help';
     return 'today';
   });
   const [login, setLogin] = useState('');
@@ -173,10 +179,10 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   }
 
   const adminNav: SideItem[] = [
-    { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => setTab('today') },
-    { id: 'partners', label: 'Партнёры', active: tab === 'partners', onSelect: () => setTab('partners') },
-    { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => setTab('analytics') },
-    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => setTab('help') },
+    { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
+    { id: 'partners', label: 'Партнёры', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
+    { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
+    { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
 
   return (
@@ -436,6 +442,7 @@ function OwnerCabinet({
   const [tab, setTab] = useCabinetSection<OwnerTab>('analytics', () => {
     consumeReturnToTools();
     if (typeof window !== 'undefined' && parseStaffHash(window.location.hash).kind === 'person') return 'staff';
+    if (trainerHashOpen()) return 'help';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setTab('projects'), []);
@@ -688,6 +695,7 @@ function SalesCabinet({
   const [createToken, setCreateToken] = useState(0);
   const [tab, setTab] = useCabinetSection<'today' | 'projects' | 'analytics' | 'help'>('analytics', () => {
     consumeReturnToTools();
+    if (trainerHashOpen()) return 'help';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setTab('projects'), []);
@@ -780,6 +788,7 @@ function FieldCabinet({
   const user = api.user!;
   const [view, setView] = useState<'today' | 'projects' | 'help'>(() => {
     consumeReturnToTools();
+    if (trainerHashOpen()) return 'help';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setView('projects'), []);
