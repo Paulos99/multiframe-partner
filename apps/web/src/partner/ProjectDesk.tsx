@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { MoreIcon } from '../icons';
 import {
   DndContext,
   DragOverlay,
@@ -211,7 +212,7 @@ export function ProjectDesk({
       ) : view === 'list' ? (
         <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} />
       ) : (
-        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onMoveStatus={onMoveStatus} />
+        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onMoveStatus={onMoveStatus} onDelete={onDeleteProject} />
       )}
     </section>
   );
@@ -408,6 +409,7 @@ function BoardCard({
   saving,
   onOpen,
   onStep,
+  onMenu,
 }: {
   row: Row;
   seesMoney: boolean;
@@ -415,6 +417,8 @@ function BoardCard({
   saving: boolean;
   onOpen: (id: string) => void;
   onStep: (id: string, direction: number) => void;
+  /** Только для ролей, которым можно удалять проекты. */
+  onMenu?: (x: number, y: number) => void;
 }) {
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
     id: row.project.id,
@@ -423,6 +427,7 @@ function BoardCard({
   const area = areaSum(row.rooms);
   const money = preliminaryRoomTotal(row.rooms);
   return (
+    <div className={styles.cardWrap}>
     <button
       ref={setNodeRef}
       {...(draggable ? attributes : {})}
@@ -445,6 +450,14 @@ function BoardCard({
       onClick={() => {
         if (!isDragging) onOpen(row.project.id);
       }}
+      onContextMenu={
+        onMenu
+          ? (event) => {
+              event.preventDefault();
+              onMenu(event.clientX, event.clientY);
+            }
+          : undefined
+      }
     >
       <strong>{row.project.name}</strong>
       <span>{[row.project.clientName, row.project.address].filter(Boolean).join(' · ') || 'Адрес не заполнен'}</span>
@@ -454,6 +467,26 @@ function BoardCard({
         {seesMoney && money.calculated ? ` · ${formatRub(money.total)}` : ''}
       </span>
     </button>
+    {onMenu && !isDragging ? (
+      <button
+        type="button"
+        className={styles.cardMenu}
+        aria-label={`Действия с проектом «${row.project.name}»`}
+        aria-haspopup="menu"
+        // Ни перенос, ни открытие проекта не должны срабатывать от этой кнопки.
+        onPointerDown={(event) => event.stopPropagation()}
+        onTouchStart={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          const box = event.currentTarget.getBoundingClientRect();
+          onMenu(box.right, box.bottom + 4);
+        }}
+      >
+        <MoreIcon size={18} />
+      </button>
+    ) : null}
+    </div>
   );
 }
 
@@ -462,13 +495,16 @@ function ProjectBoard({
   seesMoney,
   onOpen,
   onMoveStatus,
+  onDelete,
 }: {
   rows: Row[];
   seesMoney: boolean;
   onOpen: (id: string) => void;
   onMoveStatus?: (id: string, status: ProjectStatus) => Promise<void>;
+  onDelete?: (project: Project) => void;
 }) {
   const movable = Boolean(onMoveStatus);
+  const [menu, setMenu] = useState<{ project: Project; x: number; y: number } | null>(null);
   // Показываем карточку на новой стадии сразу, пока проект сохраняется. При ошибке возвращаем назад.
   const [moved, setMoved] = useState<Record<string, ProjectStatus>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -593,6 +629,7 @@ function ProjectBoard({
                   saving={Boolean(moved[row.project.id])}
                   onOpen={onOpen}
                   onStep={step}
+                  onMenu={onDelete ? (x, y) => setMenu({ project: row.project, x, y }) : undefined}
                 />
               ))}
               {!column.length ? <p className={styles.empty}>Пока пусто</p> : null}
@@ -603,9 +640,60 @@ function ProjectBoard({
     </div>
   );
 
-  if (!movable) return board;
+  const menuView =
+    menu && onDelete
+      ? createPortal(
+          <div
+            className={styles.menuBackdrop}
+            onPointerDown={() => setMenu(null)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setMenu(null);
+            }}
+          >
+            <div
+              role="menu"
+              aria-label={`Действия с проектом «${menu.project.name}»`}
+              className={styles.menu}
+              style={{
+                left: Math.max(8, Math.min(menu.x, window.innerWidth - 208)),
+                top: Math.max(8, Math.min(menu.y, window.innerHeight - 64)),
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setMenu(null);
+              }}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuDanger}
+                autoFocus
+                onClick={() => {
+                  const project = menu.project;
+                  setMenu(null);
+                  onDelete(project);
+                }}
+              >
+                Удалить проект…
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  if (!movable) {
+    return (
+      <>
+        {board}
+        {menuView}
+      </>
+    );
+  }
   return (
     <>
+      {menuView}
       {error ? (
         <p className={styles.boardError} role="alert">
           {error}

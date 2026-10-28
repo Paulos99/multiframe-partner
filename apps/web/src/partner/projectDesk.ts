@@ -222,3 +222,12 @@ export function crewProjectLists(projects: Project[], rooms: JobObject[], query:
   }
   return { active, done };
 }
+
+/** Предупреждение в окне удаления проекта: сколько комнат пропадёт вместе с ним. */
+export function deleteProjectWarning(rooms: number): string {
+  if (!rooms) return 'В проекте нет комнат. Действие нельзя отменить.';
+  const tail = rooms % 100;
+  const word =
+    tail > 10 && tail < 15 ? 'комнат' : rooms % 10 === 1 ? 'комната' : rooms % 10 >= 2 && rooms % 10 <= 4 ? 'комнаты' : 'комнат';
+  return `Вместе с проектом удалятся все его комнаты (${rooms} ${word}) с расчётами. Действие нельзя отменить.`;
+}
