@@ -5,7 +5,14 @@ export type ProjectTab = (typeof PROJECT_TABS)[number];
 export type ProjectRoute =
   | { kind: 'desk' }
   | { kind: 'project'; projectId: string; tab: ProjectTab }
-  | { kind: 'room'; projectId: string; roomId: string };
+  | { kind: 'room'; projectId: string; roomId: string; view?: RoomResultView };
+
+/** Сохранённый расчёт комнаты как страница: результаты Проблемомера или калькулятора. */
+export type RoomResultView = 'profile' | 'estimate';
+
+function isResultView(value: string | undefined): value is RoomResultView {
+  return value === 'profile' || value === 'estimate';
+}
 
 function isTab(value: string | undefined): value is ProjectTab {
   return Boolean(value && (PROJECT_TABS as readonly string[]).includes(value));
@@ -23,6 +30,9 @@ export function parseProjectHash(hash: string): ProjectRoute {
   });
   if (parts[0] !== 'project' || !parts[1]) return { kind: 'desk' };
   if (parts[2] === 'room' && parts[3]) {
+    if (parts[4] === 'result' && isResultView(parts[5])) {
+      return { kind: 'room', projectId: parts[1], roomId: parts[3], view: parts[5] };
+    }
     return { kind: 'room', projectId: parts[1], roomId: parts[3] };
   }
   return { kind: 'project', projectId: parts[1], tab: isTab(parts[2]) ? parts[2] : 'overview' };
@@ -31,7 +41,10 @@ export function parseProjectHash(hash: string): ProjectRoute {
 export function projectHash(route: ProjectRoute): string {
   if (route.kind === 'desk') return '';
   const projectId = encodeURIComponent(route.projectId);
-  if (route.kind === 'room') return `#project/${projectId}/room/${encodeURIComponent(route.roomId)}`;
+  if (route.kind === 'room') {
+    const base = `#project/${projectId}/room/${encodeURIComponent(route.roomId)}`;
+    return route.view ? `${base}/result/${route.view}` : base;
+  }
   return `#project/${projectId}/${route.tab}`;
 }
 
