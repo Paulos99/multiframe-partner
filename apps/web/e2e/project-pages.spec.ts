@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openProjectRoom } from './open-room';
 
 const password = 'ui-fixture-password-only';
 
@@ -111,9 +112,7 @@ test('замерщик видит цены в калькуляторе из ко
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
 
   await enter(page, 'measurer');
-  await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
-  await page.getByRole('region', { name: 'Проект' }).getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
-  await page.getByRole('region', { name: 'Проект' }).getByRole('button', { name: 'Спальня' }).click();
+  await openProjectRoom(page, 'Спальня');
   await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Калькулятор', exact: true }).click();
   const frame = page.locator('iframe[title="Калькулятор MultiFrame · партнёр"]');
   await expect(frame).toBeVisible();

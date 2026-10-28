@@ -92,7 +92,7 @@ test('перенос с клавиатуры: Alt и стрелка', async ({ p
   await expect(page.locator('[data-project-stage="proposal"] [data-project-id="ui_project"]')).toBeVisible();
 });
 
-test('замерщик видит доску, но карточки не двигаются', async ({ page }) => {
+test('у замерщика доски нет, проект не переносится', async ({ page }) => {
   await enter(page, 'owner');
   await page.locator('[data-project-id="ui_project"], button:has-text("Тестовая квартира")').first().click();
   await page.getByRole('region', { name: 'Проект' }).getByRole('button', { name: 'Настройки проекта', exact: true }).click();
@@ -102,12 +102,9 @@ test('замерщик видит доску, но карточки не дви�
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
 
   await enter(page, 'measurer');
-  await openBoard(page);
-  const card = page.locator('[data-project-id="ui_project"]');
-  await expect(card).not.toHaveAttribute('aria-roledescription', /.+/);
-  await drag(page, card, page.locator('[data-project-stage="proposal"]'));
-  await expect(page.locator('[data-project-stage="install"] [data-project-id="ui_project"]')).toBeVisible();
-  await expect(page.locator('[data-project-stage="proposal"] [data-project-id="ui_project"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-project-stage]')).toHaveCount(0);
+  await expect(page.locator('[data-project-id="ui_project"]')).not.toHaveAttribute('aria-roledescription', /.+/);
 });
 
 test('демо: перенос сохраняется после перезагрузки', async ({ page }) => {

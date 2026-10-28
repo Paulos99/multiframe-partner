@@ -6,13 +6,14 @@ test.beforeEach(async ({ request }) => {
   await request.post('http://127.0.0.1:4181/__reset');
 });
 
-async function enter(page: Page, role: string) {
+async function enter(page: Page, role: string, board = true) {
   await page.goto('/');
   await page.getByLabel('Логин', { exact: true }).fill(`ui.${role}`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
+  if (!board) return;
   await page.getByRole('button', { name: 'Канбан', exact: true }).click();
   await expect(page.locator('[data-project-stage]')).toHaveCount(5);
 }
@@ -88,7 +89,7 @@ test('перенос мышью за «…» карточку не двигае�
   await expect(page).not.toHaveURL(/#project\//);
 });
 
-test('замерщик не видит удаления на доске; у бригады доски нет', async ({ page }) => {
+test('у замерщика доски и удаления проекта нет', async ({ page }) => {
   await enter(page, 'owner');
   await page.locator('[data-project-id="ui_project"]').click();
   await page.getByRole('region', { name: 'Проект' }).getByRole('button', { name: 'Настройки проекта', exact: true }).click();
@@ -97,9 +98,11 @@ test('замерщик не видит удаления на доске; у бр
   await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
 
-  await enter(page, 'measurer');
+  await enter(page, 'measurer', false);
   const card = page.locator('[data-project-id="ui_project"]');
   await expect(card).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-project-stage]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Действия с проектом/ })).toHaveCount(0);
   await card.click({ button: 'right' });
   await expect(page.getByRole('menu')).toHaveCount(0);

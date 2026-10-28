@@ -96,11 +96,25 @@ test('замерщик читает описание, бригада не вид
   await measurer.selectOption('ui_measurer');
   await card.getByRole('button', { name: 'Сохранить', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Сохранить', exact: true })).toBeEnabled();
+  // Замерщик видит проект списком своих комнат: назначаем ему кухню.
+  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('button', { name: 'Кухня' }).click();
+  await page.getByRole('region', { name: 'Комната' }).getByLabel('Исполнитель').selectOption('ui_measurer');
+  await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
 
   await enter(page, 'measurer');
-  await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
+  const list = page.getByRole('region', { name: 'Список проектов' });
+  await expect(page.getByRole('group', { name: 'Вид проектов' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  await expect(list.getByRole('heading', { name: 'Тестовая квартира', exact: true })).toBeVisible();
+  await expect(list.getByRole('button', { name: 'Кухня' })).toContainText('Замер');
+  await expect(list.getByRole('table')).toHaveCount(0);
+  await list.getByRole('button', { name: 'Кухня' }).click();
+  await expect(page).toHaveURL(/#project\/ui_project\/room\//);
+  await page.getByRole('navigation', { name: 'Путь' }).getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const read = page.getByRole('region', { name: 'Проект' });
+  await read.getByRole('tab', { name: 'Обзор', exact: true }).click();
   await expect(read.getByRole('button', { name: 'Настройки проекта', exact: true })).toHaveCount(0);
   await expect(read.getByText('Текст для бригады замера')).toBeVisible();
   await read.getByRole('tab', { name: 'Настройки', exact: true }).click();
