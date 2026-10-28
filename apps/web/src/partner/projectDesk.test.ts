@@ -138,3 +138,17 @@ test('бригада не получает суммы, замерщик полу
   assert.equal(roleSeesProjectMoney('crew'), false);
   assert.equal(roleSeesProjectMoney('owner'), true);
 });
+
+test('roomProjectStatuses: комнаты берут стадию проекта, а не свою', async () => {
+  const { roomProjectStatuses } = await import('./projectDesk.ts');
+  const project = { id: 'prj_a', orgId: 'org', name: 'Чернов А.', status: 'measure' } as Project;
+  const draft = room({ id: 'r1', status: 'draft', projectId: 'prj_a' });
+  const install = room({ id: 'r2', status: 'install', projectId: 'prj_a' });
+  const stages = roomProjectStatuses([project], [draft, install]);
+  assert.equal(stages.r1, 'measure');
+  assert.equal(stages.r2, 'measure');
+  // Без сохранённой стадии — самая дальняя открытая стадия комнат, как на доске.
+  const auto = roomProjectStatuses([{ ...project, status: undefined } as Project], [draft, install]);
+  assert.equal(auto.r1, effectiveProjectStatus({ ...project, status: undefined } as Project, [draft, install]));
+  assert.equal(auto.r1, 'install');
+});
