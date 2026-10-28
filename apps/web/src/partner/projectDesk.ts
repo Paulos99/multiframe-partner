@@ -224,8 +224,18 @@ export type CrewProjectGroup = {
   rooms: JobObject[];
 };
 
+/** Комната закрыта для роли: бригада — когда работа сдана, замерщик — когда комната ушла дальше стадии «Замер». */
+export function roomIsFinishedFor(role: 'crew' | 'measurer', room: Pick<JobObject, 'status'>): boolean {
+  return role === 'measurer' ? room.status !== 'draft' && room.status !== 'measured' : room.status === 'closed';
+}
+
 /** Проекты с незакрытой комнатой сверху. Полностью закрытые — отдельно, архив не показываем. */
-export function crewProjectLists(projects: Project[], rooms: JobObject[], query: string): {
+export function crewProjectLists(
+  projects: Project[],
+  rooms: JobObject[],
+  query: string,
+  role: 'crew' | 'measurer' = 'crew',
+): {
   active: CrewProjectGroup[];
   done: CrewProjectGroup[];
 } {
@@ -235,9 +245,11 @@ export function crewProjectLists(projects: Project[], rooms: JobObject[], query:
     if (project.archivedAt) continue;
     const own = projectRooms(project, rooms);
     if (!own.length || !projectMatches(project, own, query)) continue;
-    const ordered = [...own].sort((a, b) => Number(a.status === 'closed') - Number(b.status === 'closed'));
+    const ordered = [...own].sort(
+      (a, b) => Number(roomIsFinishedFor(role, a)) - Number(roomIsFinishedFor(role, b)),
+    );
     const group = { project, rooms: ordered };
-    if (ordered.some((room) => room.status !== 'closed')) active.push(group);
+    if (ordered.some((room) => !roomIsFinishedFor(role, room))) active.push(group);
     else done.push(group);
   }
   return { active, done };
