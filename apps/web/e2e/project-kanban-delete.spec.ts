@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 const password = 'ui-fixture-password-only';
 
 test.beforeEach(async ({ request }) => {
-  await request.post('http://127.0.0.1:4481/__reset');
+  await request.post('http://127.0.0.1:4181/__reset');
 });
 
 async function enter(page: Page, role: string) {
