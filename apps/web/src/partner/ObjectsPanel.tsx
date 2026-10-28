@@ -541,6 +541,13 @@ export function ObjectsPanel({
           navigateProject({ kind: 'project', projectId: route.projectId, tab }, 'replace');
         }}
         onSave={(id, input) => api.updateProject(id, input)}
+        onMoveStatus={
+          canMove
+            ? async (id, status) => {
+                await api.updateProject(id, { status });
+              }
+            : undefined
+        }
         onOpenRoom={(room) => {
           const projectId = room.projectId || (route.kind === 'project' ? route.projectId : '');
           if (projectId) navigateProject({ kind: 'room', projectId, roomId: room.id });

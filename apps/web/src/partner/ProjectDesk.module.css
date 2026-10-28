@@ -199,6 +199,52 @@
   text-align: left;
 }
 
+.cardDraggable {
+  cursor: grab;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
+.cardDraggable * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.cardDraggable:active {
+  cursor: grabbing;
+}
+
+.cardSource {
+  opacity: 0.35;
+}
+
+.card[data-saving] {
+  opacity: 0.7;
+}
+
+.cardOverlay {
+  width: 240px;
+  cursor: grabbing;
+  border-color: var(--cab-accent, #01644f);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  transform: rotate(2deg);
+}
+
+.columnOver {
+  border-color: var(--cab-accent, #01644f);
+  box-shadow: inset 0 0 0 1px var(--cab-accent, #01644f);
+}
+
+.boardError {
+  margin: 0 0 8px;
+  color: var(--cab-danger, #b42318);
+  font-size: 14px;
+}
+
 .card:hover,
 .roomBtn:hover,
 .step:hover,

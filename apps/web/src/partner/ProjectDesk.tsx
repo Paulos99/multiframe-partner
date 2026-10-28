@@ -1,5 +1,19 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  pointerWithin,
+  closestCorners,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+} from '@dnd-kit/core';
 import {
   JOB_OBJECT_STATUS_LABELS,
   PROJECT_STATUSES,
@@ -72,6 +86,7 @@ export function ProjectDesk({
   onDesk,
   onTab,
   onSave,
+  onMoveStatus,
   onOpenRoom,
   onAddRoom,
   onDeleteProject,
@@ -87,6 +102,8 @@ export function ProjectDesk({
   onDesk: () => void;
   onTab: (tab: ProjectTab) => void;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
+  /** Только для ролей, которые меняют стадию проекта. Без него карточки на доске не перетаскиваются. */
+  onMoveStatus?: (id: string, status: ProjectStatus) => Promise<void>;
   onOpenRoom: (room: JobObject) => void;
   onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
   onDeleteProject?: (project: Project) => void;
@@ -194,7 +211,7 @@ export function ProjectDesk({
       ) : view === 'list' ? (
         <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} />
       ) : (
-        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} />
+        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onMoveStatus={onMoveStatus} />
       )}
     </section>
   );
@@ -346,53 +363,282 @@ function ProjectTable({
   );
 }
 
+const boardCollision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length ? hits : closestCorners(args);
+};
+
+const BOARD_TEXT = {
+  screenReaderInstructions: {
+    draggable:
+      'Проект можно перетащить мышью или пальцем. С клавиатуры: Alt и стрелка влево или вправо переносят проект на соседнюю стадию.',
+  },
+  announcements: {
+    onDragStart: () => 'Проект взят для переноса',
+    onDragOver: ({ over }: { over: { id: string | number } | null }) =>
+      over ? `Стадия «${projectStatusLabel(over.id as ProjectStatus)}»` : 'Вне доски',
+    onDragEnd: ({ over }: { over: { id: string | number } | null }) =>
+      over ? `Проект перенесён в «${projectStatusLabel(over.id as ProjectStatus)}»` : 'Перенос отменён',
+    onDragCancel: () => 'Перенос отменён',
+  },
+};
+
+function BoardColumn({ status, count, active, children }: { status: ProjectStatus; count: number; active: boolean; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: status, disabled: !active });
+  return (
+    <section
+      ref={setNodeRef}
+      className={`${styles.column} ${active && isOver ? styles.columnOver : ''}`}
+      data-project-stage={status}
+      aria-label={projectStatusLabel(status)}
+    >
+      <div className={styles.columnHead}>
+        <h3>{projectStatusLabel(status)}</h3>
+        <span className={styles.count}>{count}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function BoardCard({
+  row,
+  seesMoney,
+  draggable,
+  saving,
+  onOpen,
+  onStep,
+}: {
+  row: Row;
+  seesMoney: boolean;
+  draggable: boolean;
+  saving: boolean;
+  onOpen: (id: string) => void;
+  onStep: (id: string, direction: number) => void;
+}) {
+  const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
+    id: row.project.id,
+    disabled: !draggable || saving,
+  });
+  const area = areaSum(row.rooms);
+  const money = preliminaryRoomTotal(row.rooms);
+  return (
+    <button
+      ref={setNodeRef}
+      {...(draggable ? attributes : {})}
+      {...(draggable && !saving ? listeners : {})}
+      // Касание обрабатывает TouchSensor (долгое нажатие), чтобы короткий жест прокручивал доску, а не переносил карточку.
+      onPointerDown={(event) => {
+        if (event.pointerType !== 'touch') listeners?.onPointerDown?.(event);
+      }}
+      type="button"
+      className={`${styles.card} ${draggable ? styles.cardDraggable : ''} ${isDragging ? styles.cardSource : ''}`}
+      data-project-id={row.project.id}
+      data-saving={saving || undefined}
+      aria-roledescription={draggable ? 'карточка проекта' : undefined}
+      onKeyDown={(event) => {
+        if (draggable && event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+          event.preventDefault();
+          onStep(row.project.id, event.key === 'ArrowRight' ? 1 : -1);
+        }
+      }}
+      onClick={() => {
+        if (!isDragging) onOpen(row.project.id);
+      }}
+    >
+      <strong>{row.project.name}</strong>
+      <span>{[row.project.clientName, row.project.address].filter(Boolean).join(' · ') || 'Адрес не заполнен'}</span>
+      <span>
+        {row.rooms.length} пом.
+        {area.known ? ` · ${formatArea(area.total)}` : ''}
+        {seesMoney && money.calculated ? ` · ${formatRub(money.total)}` : ''}
+      </span>
+    </button>
+  );
+}
+
 function ProjectBoard({
   rows,
   seesMoney,
   onOpen,
+  onMoveStatus,
 }: {
   rows: Row[];
   seesMoney: boolean;
   onOpen: (id: string) => void;
+  onMoveStatus?: (id: string, status: ProjectStatus) => Promise<void>;
 }) {
-  return (
+  const movable = Boolean(onMoveStatus);
+  // Показываем карточку на новой стадии сразу, пока проект сохраняется. При ошибке возвращаем назад.
+  const [moved, setMoved] = useState<Record<string, ProjectStatus>>({});
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const busy = useRef(false);
+  // Последняя точка указателя. Быстрый жест даёт два-три события движения, и dnd-kit к отпусканию
+  // ещё не успевает определить колонку под курсором. Тогда стадию берём по этой точке.
+  const lastPoint = useRef<{ x: number; y: number } | null>(null);
+  // Жест мышью: откуда начали и довёл ли его до конца dnd-kit.
+  const gesture = useRef<{ id: string; x: number; y: number; settled: boolean; ended: boolean } | null>(null);
+  const moveRef = useRef<(id: string, target: ProjectStatus) => void>(() => undefined);
+  useEffect(() => {
+    if (!movable) return;
+    const remember = (event: PointerEvent | TouchEvent) => {
+      const point = 'touches' in event ? event.touches[0] || event.changedTouches[0] : event;
+      if (point) lastPoint.current = { x: point.clientX, y: point.clientY };
+    };
+    const down = (event: PointerEvent) => {
+      remember(event);
+      const card = event.pointerType === 'touch' || event.button !== 0 ? null : (event.target as Element | null)?.closest('[data-project-id]');
+      const id = card?.getAttribute('data-project-id');
+      gesture.current = id ? { id, x: event.clientX, y: event.clientY, settled: false, ended: false } : null;
+    };
+    const up = (event: PointerEvent) => {
+      remember(event);
+      const g = gesture.current;
+      if (!g || g.ended) return;
+      g.ended = true;
+      if (Math.hypot(event.clientX - g.x, event.clientY - g.y) < 5) return;
+      // После переноса мышью щелчок не должен открывать проект.
+      const stop = (click: Event) => {
+        click.stopPropagation();
+        click.preventDefault();
+      };
+      window.addEventListener('click', stop, true);
+      window.setTimeout(() => window.removeEventListener('click', stop, true), 120);
+      // Очень быстрый жест (нажал, дёрнул, отпустил за пару миллисекунд): dnd-kit не успевает
+      // начать перенос и молча его теряет. Если он не сообщил об итоге, переносим сами.
+      window.setTimeout(() => {
+        if (g.settled) return;
+        g.settled = true;
+        const stage = stageAtPointer();
+        if (stage) moveRef.current(g.id, stage);
+      }, 80);
+    };
+    const names = ['pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend'] as const;
+    for (const name of names) window.addEventListener(name, remember as EventListener, true);
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('pointerup', up, true);
+    return () => {
+      for (const name of names) window.removeEventListener(name, remember as EventListener, true);
+      window.removeEventListener('pointerdown', down, true);
+      window.removeEventListener('pointerup', up, true);
+    };
+  }, [movable]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 6 } }),
+  );
+  const shown = rows.map((row) => (moved[row.project.id] ? { ...row, status: moved[row.project.id] } : row));
+  const activeRow = activeId ? shown.find((row) => row.project.id === activeId) : undefined;
+
+  function stageAtPointer(): ProjectStatus | null {
+    const point = lastPoint.current;
+    if (!point || typeof document === 'undefined') return null;
+    for (const el of document.elementsFromPoint(point.x, point.y)) {
+      const stage = el.closest('[data-project-stage]')?.getAttribute('data-project-stage');
+      if (stage && (PROJECT_STATUSES as readonly string[]).includes(stage)) return stage as ProjectStatus;
+    }
+    return null;
+  }
+
+  function end({ active, over, activatorEvent }: DragEndEvent) {
+    setActiveId(null);
+    const byKeyboard = activatorEvent instanceof KeyboardEvent;
+    if (gesture.current) gesture.current.settled = true;
+    const target = (byKeyboard ? null : stageAtPointer()) ?? (over ? (over.id as ProjectStatus) : null);
+    if (target) void move(String(active.id), target);
+  }
+
+  function step(id: string, direction: number) {
+    const row = shown.find((item) => item.project.id === id);
+    const target = row ? PROJECT_STATUSES[PROJECT_STATUSES.indexOf(row.status) + direction] : undefined;
+    if (target) void move(id, target);
+  }
+
+  moveRef.current = (id, target) => void move(id, target);
+
+  async function move(id: string, target: ProjectStatus) {
+    const row = shown.find((item) => item.project.id === id);
+    if (!onMoveStatus || !row || !PROJECT_STATUSES.includes(target) || row.status === target || busy.current) return;
+    busy.current = true;
+    setError(null);
+    setMoved((value) => ({ ...value, [id]: target }));
+    try {
+      await onMoveStatus(id, target);
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : 'Не удалось сохранить стадию. Проект возвращён назад.');
+    } finally {
+      busy.current = false;
+      setMoved((value) => {
+        const next = { ...value };
+        delete next[id];
+        return next;
+      });
+    }
+  }
+
+  const board = (
     <div className={styles.board}>
       {PROJECT_STATUSES.map((status) => {
-        const column = rows.filter((row) => row.status === status);
+        const column = shown.filter((row) => row.status === status);
         return (
-          <section key={status} className={styles.column} data-project-stage={status} aria-label={projectStatusLabel(status)}>
-            <div className={styles.columnHead}>
-              <h3>{projectStatusLabel(status)}</h3>
-              <span className={styles.count}>{column.length}</span>
-            </div>
+          <BoardColumn key={status} status={status} count={column.length} active={movable}>
             <div className={styles.cards}>
-              {column.map((row) => {
-                const area = areaSum(row.rooms);
-                const money = preliminaryRoomTotal(row.rooms);
-                return (
-                  <button
-                    key={row.project.id}
-                    type="button"
-                    className={styles.card}
-                    data-project-id={row.project.id}
-                    onClick={() => onOpen(row.project.id)}
-                  >
-                    <strong>{row.project.name}</strong>
-                    <span>{[row.project.clientName, row.project.address].filter(Boolean).join(' · ') || 'Адрес не заполнен'}</span>
-                    <span>
-                      {row.rooms.length} пом.
-                      {area.known ? ` · ${formatArea(area.total)}` : ''}
-                      {seesMoney && money.calculated ? ` · ${formatRub(money.total)}` : ''}
-                    </span>
-                  </button>
-                );
-              })}
+              {column.map((row) => (
+                <BoardCard
+                  key={row.project.id}
+                  row={row}
+                  seesMoney={seesMoney}
+                  draggable={movable}
+                  saving={Boolean(moved[row.project.id])}
+                  onOpen={onOpen}
+                  onStep={step}
+                />
+              ))}
               {!column.length ? <p className={styles.empty}>Пока пусто</p> : null}
             </div>
-          </section>
+          </BoardColumn>
         );
       })}
     </div>
+  );
+
+  if (!movable) return board;
+  return (
+    <>
+      {error ? (
+        <p className={styles.boardError} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={boardCollision}
+        accessibility={BOARD_TEXT}
+        onDragStart={({ active }) => {
+          setError(null);
+          setActiveId(String(active.id));
+        }}
+        onDragEnd={end}
+        onDragCancel={() => {
+          if (gesture.current) gesture.current.settled = true;
+          setActiveId(null);
+        }}
+      >
+        {board}
+        {createPortal(
+          <DragOverlay dropAnimation={null}>
+            {activeRow ? (
+              <div className={`${styles.card} ${styles.cardOverlay}`} data-project-overlay>
+                <strong>{activeRow.project.name}</strong>
+                <span>{[activeRow.project.clientName, activeRow.project.address].filter(Boolean).join(' · ') || 'Адрес не заполнен'}</span>
+              </div>
+            ) : null}
+          </DragOverlay>,
+          document.body,
+        )}
+      </DndContext>
+    </>
   );
 }
 
