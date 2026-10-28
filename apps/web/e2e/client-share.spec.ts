@@ -156,6 +156,38 @@ test('менеджер выдаёт ссылку, клиент открывае�
   await expect(gone).toContainText('Ссылка недоступна');
   await expect(gone).toContainText('Попросите того, кто её отправил');
   await expect(clientPage.getByRole('heading', { name: /Акустический профиль/ })).toHaveCount(0);
+
+  // Повторное открытие панели отключённую ссылку не оживляет.
+  await page.getByTestId('client-link-button').click();
+  await page.getByTestId('client-link-button').click();
+  await expect(page.getByTestId('client-link-off')).toBeVisible();
+  await expect(page.getByTestId('client-link-url')).toHaveCount(0);
+  const owner = await apiToken(request, 'ui.owner');
+  const state = await request.get(`${API}/objects/ui_room/share`, { headers: { Authorization: `Bearer ${owner}` } });
+  expect(((await state.json()) as { link: { enabled: boolean } }).link.enabled).toBe(false);
+  expect((await request.get(`${API}/public/rooms/${token}`)).status()).toBe(404);
+  // Обновление снимка (так делает и отчёт при сохранении) тоже не включает ссылку.
+  const refresh = await request.post(`${API}/objects/ui_room/share`, {
+    headers: { Authorization: `Bearer ${owner}` },
+    data: { answers: { roomType: 'bedroom' } },
+  });
+  expect(((await refresh.json()) as { link: { enabled: boolean } }).link.enabled).toBe(false);
+  expect((await request.get(`${API}/public/rooms/${token}`)).status()).toBe(404);
+  await clientPage.reload();
+  await expect(clientPage.getByTestId('shared-room-unavailable')).toBeVisible();
+
+  // Новая ссылка только по явной кнопке, и токен другой.
+  await page.getByTestId('client-link-renew').click();
+  await expect(page.getByTestId('client-link-url')).toHaveValue(TOKEN_URL);
+  const renewed = await page.getByTestId('client-link-url').inputValue();
+  expect(renewed).not.toBe(link);
+  expect((await request.get(`${API}/public/rooms/${token}`)).status()).toBe(404);
+  await clientPage.goto(renewed);
+  await expect(clientPage.getByRole('heading', { name: 'Акустический профиль: Спальня' })).toBeVisible({
+    timeout: 20000,
+  });
+  await clientPage.goto(link);
+  await expect(clientPage.getByTestId('shared-room-unavailable')).toBeVisible();
   await client.close();
 });
 

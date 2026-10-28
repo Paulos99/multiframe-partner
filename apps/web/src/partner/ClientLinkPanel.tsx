@@ -67,15 +67,20 @@ export function ClientLinkButton() {
     noteTimer.current = window.setTimeout(() => setNote(''), 2600);
   }
 
-  async function issue() {
+  /** renew: true — только по кнопке «Выдать новую ссылку». Открытие панели ссылку не оживляет. */
+  async function issue(renew = false) {
     if (!objectId) return;
     setPhase('loading');
     setError('');
     try {
       // Снимок обновляется при каждом открытии: клиент видит то же, что менеджер на экране.
-      const next = await apiCreateRoomShare(objectId, session.answers.room as unknown as Record<string, unknown>);
+      const next = await apiCreateRoomShare(
+        objectId,
+        session.answers.room as unknown as Record<string, unknown>,
+        renew,
+      );
       setLink(next);
-      setPhase('ready');
+      setPhase(next.enabled && next.token ? 'ready' : 'off');
     } catch (err) {
       setError(failureText(err));
       setPhase('error');
@@ -198,11 +203,19 @@ export function ClientLinkButton() {
               <p role="status" data-testid="client-link-off">
                 Ссылка отключена. Прежний адрес больше не открывается.
               </p>
-              <div className={styles.row}>
-                <Button variant="secondary" onClick={() => void issue()}>
-                  Выдать новую ссылку
-                </Button>
-              </div>
+              {canDisableClientLink(user?.role) ? (
+                <div className={styles.row}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => void issue(true)}
+                    data-testid="client-link-renew"
+                  >
+                    Выдать новую ссылку
+                  </Button>
+                </div>
+              ) : (
+                <p className={styles.hint}>Новую ссылку выдаёт владелец или менеджер.</p>
+              )}
             </>
           ) : null}
 

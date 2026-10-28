@@ -200,14 +200,74 @@ describe('ссылка для клиента', { concurrency: false }, () => {
     assert.equal(stored.snapshot, undefined, 'снимок стёрт');
   });
 
-  test('повторное включение выдаёт новый токен, старый остаётся мёртвым', async () => {
+  test('отключённую ссылку не оживляют ни обновление снимка, ни повторное открытие', async () => {
+    const dead = link.token;
+    const stored = () =>
+      JSON.parse(readFileSync(platformFile, 'utf8')).roomShares.find((row) => row.objectId === room.id);
+    for (const who of ['owner', 'sales']) {
+      for (const body of [{ answers: ANSWERS }, {}, { answers: ANSWERS, renew: false }]) {
+        const response = await call('POST', `/objects/${room.id}/share`, { token: tokens[who], body });
+        assert.equal(response.statusCode, 200, response.body);
+        const view = readJson(response).link;
+        assert.equal(view.enabled, false, `${who}: ссылка осталась отключённой`);
+        assert.equal(view.token, null);
+        assert.equal(view.disabled, true);
+      }
+    }
+    assert.equal((await call('GET', `/public/rooms/${dead}`)).statusCode, 404);
+    assert.equal(stored().enabled, false);
+    assert.equal(stored().token, undefined, 'токен не появился');
+    assert.equal(stored().snapshot, undefined, 'снимок не записан');
+    const get = readJson(await call('GET', `/objects/${room.id}/share`, { token: tokens.owner })).link;
+    assert.equal(get.enabled, false);
+  });
+
+  test('новую ссылку выдаёт только явный запрос владельца или менеджера', async () => {
+    const asMeasurer = await call('POST', `/objects/${room.id}/share`, {
+      token: tokens.measurer,
+      body: { answers: ANSWERS, renew: true },
+    });
+    assert.equal(asMeasurer.statusCode, 404, 'замерщик без назначения комнату не видит');
+    const asCrew = await call('POST', `/objects/${room.id}/share`, {
+      token: tokens.crew,
+      body: { answers: ANSWERS, renew: true },
+    });
+    assert.equal(asCrew.statusCode, 403);
+    assert.equal((await call('GET', `/public/rooms/${link.token}`)).statusCode, 404);
+
     const fresh = readJson(
+      await call('POST', `/objects/${room.id}/share`, {
+        token: tokens.sales,
+        body: { answers: ANSWERS, renew: true },
+      }),
+    ).link;
+    assert.equal(fresh.enabled, true);
+    assert.notEqual(fresh.token, link.token, 'токен новый');
+    assert.equal((await call('GET', `/public/rooms/${link.token}`)).statusCode, 404, 'старый мёртв');
+    assert.equal((await call('GET', `/public/rooms/${fresh.token}`)).statusCode, 200);
+
+    // Обычное обновление снимка у живой ссылки токен не меняет.
+    const again = readJson(
       await call('POST', `/objects/${room.id}/share`, { token: tokens.owner, body: { answers: ANSWERS } }),
     ).link;
-    assert.notEqual(fresh.token, link.token);
-    assert.equal((await call('GET', `/public/rooms/${link.token}`)).statusCode, 404);
-    assert.equal((await call('GET', `/public/rooms/${fresh.token}`)).statusCode, 200);
+    assert.equal(again.token, fresh.token);
     link = fresh;
+  });
+
+  test('замерщик не оживляет и не перевыпускает ссылку, которую отключил менеджер', async () => {
+    const mine = readJson(
+      await call('POST', '/objects', {
+        token: tokens.owner,
+        body: { clientName: 'z', address: 'c', city: 'Москва', roomName: 'Кабинет', assignedTo: ids.exec1, room: { answers: ANSWERS } },
+      }),
+    ).object;
+    const made = readJson(await call('POST', `/objects/${mine.id}/share`, { token: tokens.measurer, body: {} })).link;
+    assert.equal((await call('DELETE', `/objects/${mine.id}/share`, { token: tokens.owner })).statusCode, 200);
+    const plain = readJson(await call('POST', `/objects/${mine.id}/share`, { token: tokens.measurer, body: {} })).link;
+    assert.equal(plain.enabled, false);
+    const renew = await call('POST', `/objects/${mine.id}/share`, { token: tokens.measurer, body: { renew: true } });
+    assert.equal(renew.statusCode, 403);
+    assert.equal((await call('GET', `/public/rooms/${made.token}`)).statusCode, 404);
   });
 
   test('после удаления комнаты ссылка перестаёт открываться', async () => {

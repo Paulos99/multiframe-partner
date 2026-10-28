@@ -144,6 +144,15 @@ export async function handleRoomShare(ctx) {
     if (!answers || typeof answers !== 'object') {
       return ctx.json(400, { message: 'Сначала пройдите Проблемомер для этой комнаты' });
     }
+    // Отключённая ссылка мертва навсегда. Открытие панели и обновление снимка её не оживляют:
+    // новый токен выдаётся только по явному «Выдать новую ссылку» (renew), и только владельцем или менеджером.
+    const disabled = Boolean(row && row.enabled !== true);
+    if (disabled && body.renew !== true) {
+      return ctx.json(200, { link: ownerView(row) });
+    }
+    if (disabled && !DISABLE_ROLES.includes(user.role)) {
+      return ctx.json(403, { message: 'Новую ссылку выдаёт владелец или менеджер' });
+    }
     const now = new Date().toISOString();
     const snapshot = {
       room: sanitizeRoomAnswers({ ...answers, roomType: answers.roomType ?? obj.room?.roomType }),
@@ -177,7 +186,7 @@ export async function handleRoomShare(ctx) {
     return ctx.json(200, { link: ownerView(next) });
   }
 
-  // DELETE: отключить. Токен и снимок стираются, повторное включение выдаёт новый токен.
+  // DELETE: отключить. Токен и снимок стираются, новую ссылку выдаёт только явный запрос (renew), старый токен не возвращается.
   if (!DISABLE_ROLES.includes(user.role)) {
     return ctx.json(403, { message: 'Недостаточно прав' });
   }

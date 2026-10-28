@@ -551,14 +551,18 @@ export async function apiGetRoomShare(objectId: string): Promise<RoomShareLink> 
   return data.link;
 }
 
-/** Создаёт ссылку или обновляет снимок ответов у уже включённой. */
+/**
+ * Создаёт ссылку или обновляет снимок ответов у уже включённой.
+ * Отключённую ссылку не оживляет: сервер вернёт enabled: false. Новую выдаёт только renew: true.
+ */
 export async function apiCreateRoomShare(
   objectId: string,
   answers: Record<string, unknown>,
+  renew = false,
 ): Promise<RoomShareLink> {
   const data = await request<{ link: RoomShareLink }>(`/objects/${encodeURIComponent(objectId)}/share`, {
     method: 'POST',
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify(renew ? { answers, renew: true } : { answers }),
   });
   return data.link;
 }
