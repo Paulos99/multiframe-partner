@@ -64,9 +64,46 @@ export function parseStaffHash(hash: string): StaffRoute {
   return { kind: 'person', staffId: parts[1] };
 }
 
+/** Список сотрудников теперь вкладка раздела «Компания»; карточка по-прежнему #staff/<id>. */
 export function staffHash(route: StaffRoute): string {
-  if (route.kind === 'list') return '';
+  if (route.kind === 'list') return companyHash('staff');
   return `#staff/${encodeURIComponent(route.staffId)}`;
+}
+
+export const COMPANY_TABS = ['about', 'staff'] as const;
+
+export type CompanyTab = (typeof COMPANY_TABS)[number];
+
+function hashParts(hash: string): string[] {
+  return hash
+    .replace(/^#/, '')
+    .replace(/^\/+/, '')
+    .split('/')
+    .filter(Boolean)
+    .map((part) => {
+      try {
+        return decodeURIComponent(part);
+      } catch {
+        return part;
+      }
+    });
+}
+
+/** #company/<about|staff>. Не адрес раздела — null. «#company» без вкладки — «О компании». */
+export function parseCompanyHash(hash: string): CompanyTab | null {
+  const parts = hashParts(hash);
+  if (parts[0] !== 'company') return null;
+  return parts[1] === 'staff' ? 'staff' : 'about';
+}
+
+export function companyHash(tab: CompanyTab): string {
+  return `#company/${tab}`;
+}
+
+/** Старый адрес списка: «#staff» без id. Его переводим на вкладку «Сотрудники». */
+export function isLegacyStaffList(hash: string): boolean {
+  const parts = hashParts(hash);
+  return parts[0] === 'staff' && !parts[1];
 }
 
 export function navigateHash(hash: string, mode: 'push' | 'replace' = 'push') {
@@ -85,4 +122,8 @@ export function navigateProject(route: ProjectRoute, mode: 'push' | 'replace' = 
 
 export function navigateStaff(route: StaffRoute, mode: 'push' | 'replace' = 'push') {
   navigateHash(staffHash(route), mode);
+}
+
+export function navigateCompany(tab: CompanyTab, mode: 'push' | 'replace' = 'push') {
+  navigateHash(companyHash(tab), mode);
 }

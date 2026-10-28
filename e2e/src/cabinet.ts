@@ -103,16 +103,16 @@ export async function openProjects(page: Page): Promise<'opened' | 'unavailable'
   return state === 'unavailable' ? 'unavailable' : 'opened';
 }
 
-export async function openTraining(page: Page, role: RoleCase): Promise<void> {
+export async function openTraining(page: Page): Promise<void> {
   const tab = page.getByRole('tab', { name: 'Обучение', exact: true });
   if (await tab.count()) await tab.click();
   else await page.getByRole('button', { name: 'Обучение', exact: true }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'Обучение' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Материалы' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Инструкции и презентации по продукту.')).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Папки' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Кабинет' }).click();
-  await expect(page.getByRole('heading', { level: 3, name: role.trainingTitle })).toBeVisible();
+  // Раздела «Кабинет» в обучении больше нет.
+  await expect(page.getByRole('tab', { name: 'Кабинет', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 3, name: /^Ваша работа/ })).toHaveCount(0);
 }
 
 export async function objectNames(page: Page): Promise<string[]> {

@@ -11,19 +11,19 @@ export interface VerdictPcts {
 }
 
 /*
- * «Рекомендации» on the Result step — короткий текст для клиента и для
- * консультации (замерщик, монтажник, менеджер пересказывают его своими словами).
+ * «Рекомендации» on the Result step — текст для клиента и для консультации
+ * (замерщик, монтажник, менеджер пересказывают его своими словами).
  *
- * Структура (не больше 3 предложений):
- *   1) Что не так в этой комнате — одно предложение: проблемы через запятую
- *      + одна причина (перекрытие/потолок) один раз, без повторов.
- *   2) Что сделает MultiFrame — одно предложение с цифрами из симуляции
- *      (perceivedImpactPct / perceivedAirPct, как есть).
- *   3) Честная оговорка про шаги сверху — только когда она уместна.
+ * Три части, каждая — отдельный абзац:
+ *   1) Что происходит и почему (по ответам клиента). Про натяжной потолок
+ *      («гудит, как барабан») — только когда планируется натяжной потолок.
+ *   2) Что даёт MultiFrame — с цифрами из симуляции (perceivedImpactPct /
+ *      perceivedAirPct, как есть).
+ *   3) Честная оговорка и следующий шаг (замер и расчёт).
  *
- * Что такое панель, из чего она и «до 17 дБ» — в блоке «Что такое MultiFrame»,
- * здесь это не повторяем. Этот файл одинаковый в multiframe-partner
- * (apps/web/src/state) и multiframe-problemomer (src/state).
+ * Что такое панель и из чего она — в блоке «Что такое MultiFrame», здесь это
+ * не повторяем. Этот файл одинаковый в multiframe-partner (apps/web/src/state)
+ * и multiframe-problemomer (src/state).
  */
 
 function capitalize(s: string): string {
@@ -79,10 +79,19 @@ function slabNoun(room: RoomAnswers): string {
   return 'перекрытие';
 }
 
-/** Why sound passes — named once per text. */
-function isolationCause(room: RoomAnswers): string {
-  const slab = slabNoun(room);
-  return `${slab} с натяжным потолком гудит, как барабан`;
+/** Why the sound passes — «плита пропускает удар». */
+function slabPasses(room: RoomAnswers, kind: NoiseType): string {
+  const noun = slabNoun(room) === 'деревянное перекрытие' ? 'перекрытие' : 'плита';
+  const what = kind === 'impact' ? 'удар' : kind === 'airborne' ? 'звук' : 'и удар, и голос';
+  return `${noun} пропускает ${what}`;
+}
+
+/** Only for a stretch ceiling — never for other ceilings. */
+function stretchSentence(room: RoomAnswers, kind: NoiseType): string | null {
+  if (room.plannedCeiling !== 'stretch') return null;
+  return kind === 'airborne'
+    ? 'Натяжной потолок усиливает звук и гудит, как барабан'
+    : 'Натяжной потолок усиливает удар и гудит, как барабан';
 }
 
 /** The customer hears neighbours (not «usually quiet») and cares about it. */
@@ -100,8 +109,8 @@ function joinProblems(items: readonly string[]): string {
   return `${items.slice(0, -1).join(', ')}, а ${items[items.length - 1]}`;
 }
 
-/** Sentence 1 — what is wrong in this room, in everyday words. */
-function factSentence(room: RoomAnswers, noiseType: NoiseType): string {
+/** Part 1 — what is wrong in this room and why, in everyday words. */
+function factParagraph(room: RoomAnswers, noiseType: NoiseType): string {
   const kind = heardKind(room, noiseType);
   const above = hearsFromAbove(room);
   const privacy = hasWish(room, 'privacy_out');
@@ -121,51 +130,57 @@ function factSentence(room: RoomAnswers, noiseType: NoiseType): string {
   if (echo) problems.push('звук отдаётся эхом');
 
   if (problems.length === 0) {
-    return `Сверху пока тихо, но ${slabNoun(room)} почти не держит звук, и шумных соседей будет хорошо слышно`;
+    return sentence(
+      `Сверху пока тихо, но ${slabNoun(room)} почти не держит звук, и шумных соседей будет хорошо слышно`,
+    );
   }
   const cause =
     !above && !privacy
       ? 'гладкий потолок отражает звук обратно в комнату'
-      : isolationCause(room);
-  return `${roomWhere(room)} ${joinProblems(problems)}: ${cause}`;
+      : slabPasses(room, kind);
+  const first = sentence(`${roomWhere(room)} ${joinProblems(problems)}: ${cause}`);
+  const stretch = stretchSentence(room, kind);
+  return stretch ? `${first} ${sentence(stretch)}` : first;
 }
 
-/** Sentence 2 — what MultiFrame changes here, with simulated numbers. */
-function benefitSentence(room: RoomAnswers, noiseType: NoiseType, pcts: VerdictPcts): string {
+/** Part 2 — what MultiFrame gives here, with simulated numbers. */
+function benefitParagraph(room: RoomAnswers, noiseType: NoiseType, pcts: VerdictPcts): string {
   const kind = heardKind(room, noiseType);
-  const voices = hasWish(room, 'privacy_out') ? 'голоса в обе стороны' : 'голоса';
-  const steps = 'шаги';
   const impact = pcts.perceivedImpactPct;
   const air = pcts.perceivedAirPct;
   const numbers =
     kind === 'airborne'
-      ? `${voices} станут тише на ${air}%, ${steps} — на ${impact}%`
-      : `${steps} станут тише на ${impact}%, ${voices} — на ${air}%`;
-  const echo = hasWish(room, 'music_recording') ? ', а эха станет меньше' : '';
-  return `С MultiFrame на потолке ${numbers}${echo}`;
+      ? `голоса станут тише примерно на ${air}%, шаги — на ${impact}%`
+      : `шаги станут тише примерно на ${impact}%, голоса — на ${air}%`;
+  const echo = hasWish(room, 'music_recording') ? ' и в комнате станет меньше эха' : '';
+  return sentence(`С панелями на потолке ${numbers}${echo}`);
 }
 
-/** Optional sentence 3 — honest limit for footsteps from above. */
-function limitSentence(room: RoomAnswers, noiseType: NoiseType): string | null {
-  if (!hearsFromAbove(room)) return null;
-  if (heardKind(room, noiseType) === 'airborne') return null;
-  if (room.floorAbove === 'floating') return null;
-  return 'Честно скажем: полностью убрать шаги может только пол у соседей, но стук станет глухим и мягким';
+const NEXT_STEP = 'Следующий шаг — замер комнаты и точный расчёт';
+
+/** Part 3 — honest limit (when the client hears the neighbours) and the next step. */
+function limitParagraph(room: RoomAnswers): string {
+  const next = sentence(NEXT_STEP);
+  if (!hearsFromAbove(room)) return next;
+  return `${sentence('Панели на потолке сделают шум тише')} ${sentence(
+    'Чтобы избавиться от него полностью, нужна ещё звукоизоляция стен и пола в квартире сверху',
+  )} ${next}`;
 }
 
 /**
- * Recommendations for Result: 2–3 short sentences.
- * First item is the key fact (rendered bold), then the benefit, then an optional limit.
+ * Recommendations for Result: three short paragraphs —
+ * what is happening and why (key fact), what MultiFrame gives, honest limit + next step.
  */
 export function caseVerdictParts(
   room: RoomAnswers,
   noiseType: NoiseType,
   pcts: VerdictPcts,
 ): readonly string[] {
-  const parts = [factSentence(room, noiseType), benefitSentence(room, noiseType, pcts)];
-  const limit = limitSentence(room, noiseType);
-  if (limit) parts.push(limit);
-  return parts.map(sentence);
+  return [
+    factParagraph(room, noiseType),
+    benefitParagraph(room, noiseType, pcts),
+    limitParagraph(room),
+  ];
 }
 
 export function caseVerdict(room: RoomAnswers, noiseType: NoiseType, pcts: VerdictPcts): string {
@@ -186,24 +201,22 @@ export function productAbout(
   const air = deltas?.airDb != null && Number.isFinite(deltas.airDb) ? Math.abs(Math.round(deltas.airDb)) : null;
   const impact =
     deltas?.impactDb != null && Number.isFinite(deltas.impactDb) ? Math.abs(Math.round(deltas.impactDb)) : null;
+  const what =
+    'STP MultiFrame — система звукоизоляции потолка и стен из готовых панелей: каркас из вспененного полипропилена с мягким акустическим наполнителем. Сквозная перфорация гасит звук внутри панели, а не отражает его обратно.';
   const effect =
     air != null && impact != null
-      ? `В вашем случае расчёт даёт около ${air} дБ по воздуху и ${impact} дБ по удару — это эффект этой комнаты.`
-      : 'Эффект считается для вашей комнаты, а не как лабораторный максимум системы.';
+      ? ` Для вашей комнаты расчёт даёт около ${air} дБ по воздушному шуму и ${impact} дБ по ударному.`
+      : '';
   return {
     claim: '',
     paragraphs: [
-      `StP MultiFrame — модульная панель на потолок: она снижает шум сверху и поглощает эхо в комнате. ${effect}`,
-      'Панели изготовлены из экологичных, негорючих и гипоаллергенных материалов, безопасны для здоровья всей семьи.',
-      'Это решение для тех, кто хочет тише именно в своей комнате.',
+      `${what}${effect}`,
+      'Без стекловолоконной пыли, клея и опасных пропиток, не поддерживает горение. Система толщиной около 6 см почти не съедает высоту, а потолок 20 м² мастер закрывает примерно за час — вместе с натяжным потолком.',
     ],
   };
 }
 
 export const MULTIFRAME_PRODUCT_CLAIM = '';
-
-export const MULTIFRAME_PRODUCT_BLURB =
-  'StP MultiFrame — это модульная звукоизоляционная панель, которая делает дом тише и комфортнее за счёт двойного эффекта: она блокирует ударный и воздушный шум от соседей (до 17 дБ) и одновременно поглощает эхо внутри помещения, улучшая акустику. Панели изготовлены из экологичных, негорючих и гипоаллергенных материалов, безопасны для здоровья всей семьи. Это продуманное решение для тех, кто ценит тишину, здоровье и качество жизни.';
 
 export const MULTIFRAME_PANEL_IMG = `${(import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/'}images/multiframe-panel-transparent.png`;
 

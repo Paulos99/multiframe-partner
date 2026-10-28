@@ -30,7 +30,9 @@ for (const role of roles) {
     }
 
     if (role === 'owner') {
-      await nav.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
+      await nav.getByRole('tab', { name: 'Компания', exact: true }).click();
+      await page.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
+      await noDrawers(page, 'вкладка «Сотрудники»');
       await page.getByRole('button', { name: /UI sales/ }).click();
       await expect(page).toHaveURL(/#staff\//);
       await expect(page.getByRole('region', { name: 'Сотрудник' })).toBeVisible();
