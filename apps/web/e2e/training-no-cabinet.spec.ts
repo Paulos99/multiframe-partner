@@ -16,7 +16,10 @@ async function openTraining(page: Page) {
 }
 
 async function expectNoCabinetSection(page: Page) {
-  await expect(page.getByRole('tablist', { name: 'Разделы обучения' })).toHaveCount(0);
+  // Вкладки теперь «Материалы» и «Тренажёр»; «Кабинета» среди них нет.
+  const tabs = page.getByRole('tablist', { name: 'Разделы обучения' }).getByRole('tab');
+  await expect(tabs).toHaveText(['Материалы', 'Тренажёр']);
+  await expect(page.getByRole('tab', { name: 'Материалы', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'Кабинет', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 3, name: /^Ваша работа/ })).toHaveCount(0);
   await expect(page.getByText('С чего начать', { exact: true })).toHaveCount(0);
@@ -26,7 +29,7 @@ async function expectNoCabinetSection(page: Page) {
 }
 
 for (const role of roles) {
-  test(`${role}: в «Обучении» нет раздела «Кабинет», материалы открываются сразу`, async ({ page }) => {
+  test(`${role}: в «Обучении» вкладки «Материалы» и «Тренажёр», раздела «Кабинет» нет`, async ({ page }) => {
     await page.goto('/');
     await page.getByLabel('Логин', { exact: true }).fill(`ui.${role}`);
     await page.getByLabel('Пароль', { exact: true }).fill(password);

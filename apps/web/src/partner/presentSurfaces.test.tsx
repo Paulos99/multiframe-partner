@@ -86,14 +86,17 @@ const training = renderToStaticMarkup(<HelpTrainingPanel role="owner" />);
 if (!training.includes('Обучение') || !training.includes('Загружаем материалы')) {
   throw new Error('Раздел обучения без загрузки материалов');
 }
-// Раздела «Кабинет» в обучении нет ни у одной роли: ни вкладки, ни личной инструкции.
+// В обучении две вкладки: «Материалы» и «Тренажёр». Раздела «Кабинет» нет ни у одной роли.
 for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {
   const html = renderToStaticMarkup(<HelpTrainingPanel role={role} />);
-  if (html.includes('Кабинет') || html.includes('role="tab"') || html.includes('Ваша работа') || html.includes('С чего начать')) {
+  if (html.includes('Кабинет') || html.includes('Ваша работа') || html.includes('С чего начать')) {
     throw new Error(`В обучении роли ${role} остался раздел «Кабинет»`);
   }
   if (!html.includes('Обучение') || !html.includes('Загружаем материалы')) {
     throw new Error(`В обучении роли ${role} нет материалов`);
+  }
+  if (!html.includes('>Материалы<') || !html.includes('>Тренажёр<')) {
+    throw new Error(`В обучении роли ${role} нет вкладок «Материалы» и «Тренажёр»`);
   }
 }
 
