@@ -529,3 +529,55 @@ export async function apiChangePassword(currentPassword:string,newPassword:strin
 export async function apiUploadAvatar(base64:string) {
   return (await request<{user:SessionUser}>('/me/avatar',{method:'PUT',body:JSON.stringify({base64,mime:'image/webp'})})).user;
 }
+
+/** Ссылка для клиента на результаты Проблемомера одной комнаты. */
+export interface RoomShareLink {
+  enabled: boolean;
+  token: string | null;
+  updatedAt?: string;
+  /** Ссылку отключили вручную. */
+  disabled?: boolean;
+}
+
+/** Что сервер отдаёт по открытой ссылке: только поля комнаты, без цен и контактов. */
+export interface PublicRoomShare {
+  roomName: string;
+  room: Record<string, unknown>;
+  updatedAt?: string;
+}
+
+export async function apiGetRoomShare(objectId: string): Promise<RoomShareLink> {
+  const data = await request<{ link: RoomShareLink }>(`/objects/${encodeURIComponent(objectId)}/share`);
+  return data.link;
+}
+
+/**
+ * Создаёт ссылку или обновляет снимок ответов у уже включённой.
+ * Отключённую ссылку не оживляет: сервер вернёт enabled: false. Новую выдаёт только renew: true.
+ */
+export async function apiCreateRoomShare(
+  objectId: string,
+  answers: Record<string, unknown>,
+  renew = false,
+): Promise<RoomShareLink> {
+  const data = await request<{ link: RoomShareLink }>(`/objects/${encodeURIComponent(objectId)}/share`, {
+    method: 'POST',
+    body: JSON.stringify(renew ? { answers, renew: true } : { answers }),
+  });
+  return data.link;
+}
+
+export async function apiDisableRoomShare(objectId: string): Promise<void> {
+  await request<{ link: RoomShareLink }>(`/objects/${encodeURIComponent(objectId)}/share`, {
+    method: 'DELETE',
+  });
+}
+
+/** Открытая страница клиента: без входа, токена сессии в запросе нет. */
+export async function apiPublicRoom(token: string, signal?: AbortSignal): Promise<PublicRoomShare> {
+  const data = await request<{ share: PublicRoomShare }>(`/public/rooms/${encodeURIComponent(token)}`, {
+    token: null,
+    signal,
+  });
+  return data.share;
+}

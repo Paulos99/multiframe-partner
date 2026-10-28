@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { CompactAudio } from '../../ui/CompactAudio';
 import { EchoComfort, EchoComfortRings } from '../../ui/EchoComfort';
 import { SpectrumChart } from '../../ui/SpectrumChart';
@@ -9,9 +9,11 @@ import {
   MULTIFRAME_PILLARS,
   NORM_ROWS,
   useResultProfile,
+  type ResultView,
 } from './resultShared';
 import { PartnerEstimateCard } from '../../partner/PartnerEstimateCard';
 import { SaveObjectCard } from '../../partner/SaveObjectCard';
+import { ClientLinkButton } from '../../partner/ClientLinkPanel';
 import { canSaveToProject } from '../../partner/toolSave';
 import { usePartner } from '../../partner/PartnerContext';
 import styles from './ResultWideScreen.module.css';
@@ -129,11 +131,26 @@ function useScrollDrift() {
   return rootRef;
 }
 
-export function ResultWideScreen() {
-  const { diagnosisRequest, user } = usePartner();
-  const linkedRoom = Boolean(diagnosisRequest?.objectId);
-  const canSaveHere = Boolean(user && (canSaveToProject(user.role) || linkedRoom));
-  const p = useResultProfile();
+/**
+ * Панель результата: параметры, показатели, рекомендации, шкалы и сравнение на слух.
+ * Общая для кабинета и для страницы клиента; цены, сохранение и ссылка приходят снаружи.
+ */
+export function ResultDashboard({
+  p,
+  title = 'Акустический профиль помещения',
+  titleExtra = null,
+  estimate = null,
+  next = null,
+}: {
+  p: ResultView;
+  title?: string;
+  /** Действия рядом с заголовком (в кабинете — «Ссылка для клиента»). */
+  titleExtra?: ReactNode;
+  /** Смета с ценами. На странице клиента её нет. */
+  estimate?: ReactNode;
+  /** «Следующий шаг». На странице клиента его нет. */
+  next?: ReactNode;
+}) {
   const rootRef = useScrollDrift();
 
   const quieterAir = p.sim.perceivedAirPct;
@@ -159,7 +176,8 @@ export function ResultWideScreen() {
   return (
     <div className={styles.root} ref={rootRef}>
       <header className={styles.titleBar} data-reveal>
-        <h1>Акустический профиль помещения</h1>
+        <h1>{title}</h1>
+        {titleExtra}
       </header>
 
       <section className={`${styles.objectSpec} ${styles.driftSlow}`} data-reveal aria-label="Параметры комнаты">
@@ -390,9 +408,9 @@ export function ResultWideScreen() {
         </section>
       ) : null}
 
-      <PartnerEstimateCard areaM2={p.room.ceilingAreaM2} />
+      {estimate}
 
-      <div className={`${styles.closeRow} ${canSaveHere ? '' : styles.closeRowSingle}`}>
+      <div className={`${styles.closeRow} ${next ? '' : styles.closeRowSingle}`}>
         <section className={styles.panel} data-reveal aria-label="Уникальность системы MultiFrame">
           <h2>Уникальность MultiFrame</h2>
           <ul className={styles.uniqGrid}>
@@ -408,7 +426,25 @@ export function ResultWideScreen() {
           </ul>
         </section>
 
-        {canSaveHere ? (
+        {next}
+      </div>
+    </div>
+  );
+}
+
+export function ResultWideScreen() {
+  const { diagnosisRequest, user } = usePartner();
+  const linkedRoom = Boolean(diagnosisRequest?.objectId);
+  const canSaveHere = Boolean(user && (canSaveToProject(user.role) || linkedRoom));
+  const p = useResultProfile();
+
+  return (
+    <ResultDashboard
+      p={p}
+      titleExtra={<ClientLinkButton />}
+      estimate={<PartnerEstimateCard areaM2={p.room.ceilingAreaM2} />}
+      next={
+        canSaveHere ? (
           <section
             className={`${styles.panel} ${styles.nextPanel}`}
             data-reveal
@@ -420,8 +456,8 @@ export function ResultWideScreen() {
             </p>
             <SaveObjectCard />
           </section>
-        ) : null}
-      </div>
-    </div>
+        ) : null
+      }
+    />
   );
 }

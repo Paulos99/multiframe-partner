@@ -59,3 +59,17 @@ test('раздел «Компания»: вкладки в адресе и ст�
   assert.equal(isLegacyStaffList('#company/staff'), false);
   assert.deepEqual(parseStaffHash('#company/staff'), { kind: 'list' });
 });
+
+test('адрес сохранённого расчёта комнаты: результаты проблемомера и калькулятора', () => {
+  const profile = parseProjectHash('#project/p1/room/r1/result/profile');
+  assert.deepEqual(profile, { kind: 'room', projectId: 'p1', roomId: 'r1', view: 'profile' });
+  assert.equal(projectHash(profile), '#project/p1/room/r1/result/profile');
+  assert.deepEqual(parseProjectHash('#project/p1/room/r1/result/estimate'), {
+    kind: 'room',
+    projectId: 'p1',
+    roomId: 'r1',
+    view: 'estimate',
+  });
+  // Лишнее в адресе не ломает комнату: открывается обычная карточка.
+  assert.deepEqual(parseProjectHash('#project/p1/room/r1/result/нет'), { kind: 'room', projectId: 'p1', roomId: 'r1' });
+});

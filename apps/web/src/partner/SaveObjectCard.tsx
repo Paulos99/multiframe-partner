@@ -5,6 +5,8 @@ import { useSession } from '../state/SessionContext';
 import { buildClientSummary } from '../state/session';
 import { Button } from '../ui/Button';
 import { buildEstimateFromOrg } from './estimate';
+import { ensureClientLinkUrl } from './clientLink';
+import { ForwardLinkRow } from './ForwardClientLink';
 import { roomRecordFromAnswers } from './roomLink';
 import { usePartner } from './PartnerContext';
 import { setProfileAttach } from './profileAttach';
@@ -154,9 +156,15 @@ export function SaveObjectCard() {
         // Сначала отрисуем страницу комнаты: сборка PDF занимает главный поток на несколько секунд.
         await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
       }
+      const shareUrl = await ensureClientLinkUrl(
+        obj.id,
+        user?.role,
+        session.answers.room as unknown as Record<string, unknown>,
+      );
       const { blob } = await renderAcousticProfilePdf(session, {
         compact: true,
         hidePrices: user?.role === 'crew',
+        shareUrl,
       });
       const saved = await attachProfile(obj, await blobToBase64(blob));
       setProfileAttach(obj.id, null);
@@ -201,10 +209,12 @@ export function SaveObjectCard() {
 
   if (linked) {
     return (
-      <div className={styles.actionRow} aria-label="Комната">
-        <Button type="button" fullWidth loading={busy} success={savedFlash} disabled={busy} onClick={() => void saveRoom()}>
-          {busy ? 'Сохраняем…' : 'Сохранить'}
-        </Button>
+      <div aria-label="Комната">
+        <ForwardLinkRow objectId={diagnosisRequest!.objectId}>
+          <Button type="button" fullWidth loading={busy} success={savedFlash} disabled={busy} onClick={() => void saveRoom()}>
+            {busy ? 'Сохраняем…' : 'Сохранить'}
+          </Button>
+        </ForwardLinkRow>
         {msg ? (
           <p className={styles.flash} role="status">
             {msg}

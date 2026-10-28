@@ -23,6 +23,7 @@ import { documentOpenPolicy } from './roomDocuments';
 import { answersFromStoredRoom, roomStubFromLabel } from './roomLink';
 import { createInitialSession, withDerived } from '../state/session';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
+import { ensureClientLinkUrl } from './clientLink';
 import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
 import { StatusSwap } from './motionBits';
@@ -30,6 +31,7 @@ import { usePartner } from './PartnerContext';
 import { useProfileAttach } from './profileAttach';
 import { formatDocStamp } from './historyFormatting';
 import { ObjectHistory } from './ObjectHistory';
+import { SavedResultPage } from './SavedResultPage';
 import listStyles from './ProjectList.module.css';
 import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
 import { ProjectDesk } from './ProjectDesk';
@@ -49,7 +51,11 @@ function formatDocWhen(iso: string): string {
 }
 
 /** Профиль проблемомера без блока сметы. Если ответов комнаты нет — схема и количества. */
-async function plainProfileBlob(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+async function plainProfileBlob(
+  obj: JobObject,
+  doc: JobObjectDocument,
+  role: UserRole,
+): Promise<Blob> {
   const answers = answersFromStoredRoom(obj.room);
   if (answers?.roomType && answers.ceilingAreaM2) {
     try {
@@ -62,7 +68,16 @@ async function plainProfileBlob(obj: JobObject, doc: JobObjectDocument): Promise
         },
       });
       if (session.derived) {
-        const { blob } = await renderAcousticProfilePdf(session, { compact: true, hidePrices: true });
+        const shareUrl = await ensureClientLinkUrl(
+          obj.id,
+          role,
+          session.answers.room as unknown as Record<string, unknown>,
+        );
+        const { blob } = await renderAcousticProfilePdf(session, {
+          compact: true,
+          hidePrices: true,
+          shareUrl,
+        });
         return blob;
       }
     } catch {
@@ -77,12 +92,14 @@ function ObjectDocuments({
   busyId,
   hidePrices,
   onOpen,
+  onResults,
   onShare,
 }: {
   obj: JobObject;
   busyId: string | null;
   hidePrices: boolean;
   onOpen: (doc: JobObjectDocument, download: boolean) => void;
+  onResults: (doc: JobObjectDocument) => void;
   onShare: (doc: JobObjectDocument) => void;
 }) {
   const docs = visibleDocuments(obj.documents);
@@ -121,10 +138,18 @@ function ObjectDocuments({
                   <button
                     type="button"
                     className={styles.ghost}
+                    data-testid="doc-open-results"
+                    onClick={() => onResults(doc)}
+                  >
+                    Открыть результаты
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.ghost}
                     disabled={busyId === doc.id}
                     onClick={() => onOpen(doc, false)}
                   >
-                    {busyId === doc.id ? 'Открываем…' : 'Открыть'}
+                    {busyId === doc.id ? 'Открываем…' : 'Открыть PDF'}
                   </button>
                   <button
                     type="button"
@@ -311,7 +336,7 @@ export function ObjectsPanel({
 
   async function blobForDocument(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
     if (documentOpenPolicy(user.role) === 'without-prices') {
-      if (documentDisplayKind(doc.kind) === 'profile') return plainProfileBlob(obj, doc);
+      if (documentDisplayKind(doc.kind) === 'profile') return plainProfileBlob(obj, doc, user.role);
       return buildDemoPdfBlob(obj, doc, { hidePrices: true });
     }
     if (doc.demo) return buildDemoPdfBlob(obj, doc, { hidePrices: false });
@@ -623,7 +648,49 @@ export function ObjectsPanel({
           )
         : null}
 
-      {route.kind === 'room' && selected && selectedCard
+      {route.kind === 'room' && route.view && selected && selectedCard ? (
+        <section className={styles.roomPage} aria-label="Комната" data-testid="room-result-view">
+          <nav className={styles.crumbs} aria-label="Путь">
+            <button type="button" onClick={() => navigateProject({ kind: 'desk' }, 'replace')}>
+              Проекты
+            </button>
+            <span aria-hidden="true">/</span>
+            <button type="button" onClick={closeRoom}>
+              {selectedCard.project?.name || selectedCard.title}
+            </button>
+            <span aria-hidden="true">/</span>
+            <button
+              type="button"
+              onClick={() => navigateProject({ kind: 'room', projectId: route.projectId, roomId: route.roomId })}
+            >
+              {roomTitle(selected)}
+            </button>
+            <span aria-hidden="true">/</span>
+            <span>{route.view === 'profile' ? 'Результаты Проблемомера' : 'Результаты калькулятора'}</span>
+          </nav>
+          {(() => {
+            const wanted = route.view;
+            const doc =
+              visibleDocuments(selected.documents).find((item) => {
+                const kind = documentDisplayKind(item.kind) === 'profile' ? 'profile' : 'estimate';
+                return kind === wanted;
+              }) || null;
+            return (
+              <SavedResultPage
+                obj={selected}
+                view={wanted}
+                doc={doc}
+                hidePrices={hideMoney}
+                pdfBusy={Boolean(doc && docBusy === doc.id)}
+                onOpenPdf={doc ? () => void openDocument(selected, doc, false) : null}
+                onBack={() => navigateProject({ kind: 'room', projectId: route.projectId, roomId: route.roomId })}
+              />
+            );
+          })()}
+        </section>
+      ) : null}
+
+      {route.kind === 'room' && !route.view && selected && selectedCard
         ? (
         <section className={styles.roomPage} aria-label="Комната">
           <nav className={styles.crumbs} aria-label="Путь">
@@ -738,6 +805,14 @@ export function ObjectsPanel({
               busyId={docBusy}
               hidePrices={hideMoney}
               onOpen={(doc, download) => void openDocument(selected, doc, download)}
+              onResults={(doc) =>
+                navigateProject({
+                  kind: 'room',
+                  projectId: route.kind === 'room' ? route.projectId : selected.projectId || '',
+                  roomId: selected.id,
+                  view: documentDisplayKind(doc.kind) === 'profile' ? 'profile' : 'estimate',
+                })
+              }
               onShare={(doc) => void shareDocument(selected, doc)}
             />
 
@@ -848,7 +923,7 @@ export function ObjectsPanel({
             ) : null}
         </section>
       )
-        : route.kind === 'room' ? (
+        : route.kind === 'room' && !(route.view && selected && selectedCard) ? (
           <section className={styles.roomPage} aria-label="Комната">
             <p className={styles.lead}>{api.objectsLoading ? 'Открываем комнату…' : 'Комната не найдена.'}</p>
             <button type="button" className={styles.ghost} onClick={() => navigateProject({ kind: 'desk' }, 'replace')}>

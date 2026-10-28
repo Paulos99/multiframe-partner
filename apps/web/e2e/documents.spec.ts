@@ -83,7 +83,7 @@ test('монтажник: PDF в комнате без цен, предпрос�
   await expect(page.getByText('Панели', { exact: true })).toBeVisible();
 
   await expect(page.getByRole('button', { name: 'Клиенту', exact: true }).first()).toBeVisible();
-  await page.locator('[data-doc-kind="profile"]').getByRole('button', { name: 'Открыть', exact: true }).click();
+  await page.locator('[data-doc-kind="profile"]').getByRole('button', { name: 'Открыть PDF', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: /Просмотр: .*профиль/ });
   await expect(dialog).toBeVisible({ timeout: 20000 });
   await expect(dialog).toHaveAttribute('data-file-kind', 'pdf');

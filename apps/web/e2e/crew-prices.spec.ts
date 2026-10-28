@@ -52,4 +52,7 @@ test('монтажник не видит цены в комнате, кальк�
   await expect(page.getByText(/бескаркас/i).filter({ visible: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toHaveCount(0);
+  // Монтажнику ссылку клиента не отдаём ни кнопкой внизу, ни панелью.
+  await expect(page.getByRole('button', { name: 'Переслать', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Ссылка для клиента', exact: true })).toHaveCount(0);
 });

@@ -70,7 +70,7 @@ const PILLARS = [
   },
 ] as const;
 
-type QrBundle = { site: string; calc: string };
+type QrBundle = { site: string; calc: string; share?: string };
 type LogoBundle = { stp: string; mf: string };
 type ReportAssets = { qr: QrBundle; logos: LogoBundle; panel: string };
 
@@ -186,18 +186,21 @@ function pillSvg(
 </svg>`;
 }
 
-async function buildQrBundle(): Promise<QrBundle> {
+async function buildQrBundle(shareUrl?: string | null): Promise<QrBundle> {
   const opts = {
     width: 160,
     margin: 1,
     color: { dark: '#0c332c', light: '#ffffff' },
     errorCorrectionLevel: 'M' as const,
   };
-  const [site, calc] = await Promise.all([
+  // Ссылка клиента длиннее: QR крупнее и с запасом на помарки печати, чтобы телефон читал его с листа.
+  const shareOpts = { ...opts, width: 400, margin: 2, errorCorrectionLevel: 'Q' as const };
+  const [site, calc, share] = await Promise.all([
     QRCode.toDataURL(SITE_URL, opts),
     QRCode.toDataURL(CALCULATOR_URL, opts),
+    shareUrl ? QRCode.toDataURL(shareUrl, shareOpts) : Promise.resolve(undefined),
   ]);
-  return { site, calc };
+  return { site, calc, share };
 }
 
 function pageChrome(
@@ -230,7 +233,7 @@ function pageChrome(
 function buildReportDocument(
   session: SessionState,
   assets: ReportAssets,
-  opts: { hidePrices?: boolean } = {},
+  opts: { hidePrices?: boolean; shareUrl?: string | null } = {},
 ): string {
   const { qr, logos, panel } = assets;
   const handoff = buildLeadHandoff(session);
@@ -737,6 +740,9 @@ function buildReportDocument(
     border: 1px solid rgba(1,100,79,.22);
     background: #eef7f3;
   }
+  .qr-row-share { grid-template-columns: 1fr; }
+  .qr-card-share img { width: 116px; height: 116px; }
+  .qr-card-share .qr-url { font-size: 9.5px; }
   .qr-card img {
     width: 84px; height: 84px; border-radius: 10px;
     border: 1px solid #dce6e1; background: #fff; flex-shrink: 0;
@@ -937,8 +943,23 @@ function buildReportDocument(
     }
 
     <h2 style="margin:12px 0 4px;font-size:15px;font-weight:800">Продолжите с MultiFrame</h2>
-    <p class="hero-sub" style="margin-bottom:0">Отсканируйте QR — сайт бренда или калькулятор комплектации.</p>
+    <p class="hero-sub" style="margin-bottom:0">${opts.shareUrl ? 'Отсканируйте QR — результаты комнаты, сайт бренда или калькулятор комплектации.' : 'Отсканируйте QR — сайт бренда или калькулятор комплектации.'}</p>
 
+    ${
+      qr.share && opts.shareUrl
+        ? `<div class="qr-row qr-row-share">
+      <div class="qr-card qr-card-share">
+        <img src="${qr.share}" alt="QR код страницы с результатами комнаты" width="116" height="116" />
+        <div>
+          <div class="qr-k">Результаты комнаты</div>
+          <strong>Послушайте сами</strong>
+          <p>Отсканируйте QR: откроется страница с результатами по этой комнате и звуком до и после. Входить никуда не нужно.</p>
+          <span class="qr-url">${escapeHtml(opts.shareUrl)}</span>
+        </div>
+      </div>
+    </div>`
+        : ''
+    }
     <div class="qr-row">
       <div class="qr-card">
         <img src="${qr.site}" alt="QR код сайта MultiFrame" width="84" height="84" />
@@ -1046,19 +1067,24 @@ function triggerDownload(blob: Blob, filename: string): void {
 /** Render report as one A4 page image each → PDF blob («Профиль» объекта). */
 export async function renderAcousticProfilePdf(
   session: SessionState,
-  opts: { compact?: boolean; hidePrices?: boolean } = {},
+  opts: { compact?: boolean; hidePrices?: boolean; shareUrl?: string | null } = {},
 ): Promise<{ blob: Blob; filename: string }> {
   const full = session.derived ? session : withDerived(session);
   if (!full.derived) {
     throw new Error('Нет расчёта для отчёта');
   }
 
+  const shareUrl = opts.shareUrl || null;
   const [qr, logos, panel] = await Promise.all([
-    buildQrBundle(),
+    buildQrBundle(shareUrl),
     buildLogoBundle(),
     fetchPanelDataUrl(),
   ]);
-  const html = buildReportDocument(full, { qr, logos, panel }, { hidePrices: opts.hidePrices === true });
+  const html = buildReportDocument(
+    full,
+    { qr, logos, panel },
+    { hidePrices: opts.hidePrices === true, shareUrl },
+  );
   const iframe = document.createElement('iframe');
   iframe.setAttribute('aria-hidden', 'true');
   iframe.setAttribute('title', 'PDF');

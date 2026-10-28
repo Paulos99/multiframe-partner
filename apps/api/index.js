@@ -19,6 +19,7 @@ import {
   resetStoredDocumentsForTests,
   saveStoredDocument,
 } from './platformStore.js';
+import { handleRoomShare } from './roomShare.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
@@ -916,6 +917,19 @@ export async function handler(event = {}) {
       deleteStorage: (key) => s3Delete(key),
     });
     if (projectsResponse) return projectsResponse;
+
+    const roomShareResponse = await handleRoomShare({
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      loadPlatform,
+      json,
+      getBody: () => getBody(event),
+      savePlatform,
+      objectVisibleTo,
+      pushActivity,
+    });
+    if (roomShareResponse) return roomShareResponse;
 
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
