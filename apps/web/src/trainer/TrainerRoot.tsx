@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePartner } from '../partner/PartnerContext';
+import { requestTrainingSync } from '../partner/trainingSync';
 import { DrillScreen, useStartDrill, type DrillSession } from './DrillScreen';
 import { trainerRoleOf } from './engine';
 import { BankScreen, Home, ProgressScreen, SettingsDialog } from './HomeScreens';
@@ -97,6 +98,7 @@ export function TrainerRoot() {
       userId={user.id}
       partnerId={user.orgId}
       role={trainerRoleOf(user.role)}
+      onQueued={user.orgId ? requestTrainingSync : undefined}
       loading={
         <p className={styles.notice} role="status">
           Загружаем тренажёр…

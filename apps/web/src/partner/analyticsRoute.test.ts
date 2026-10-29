@@ -26,3 +26,15 @@ test('чужой hash — это сводка', () => {
   assert.equal(parseAnalyticsHash('#project/obj/room/room', null).page, 'overview');
   assert.equal(parseAnalyticsHash('', null).page, 'overview');
 });
+
+test('страницы обучения: сотрудник и компания', () => {
+  const user = parseAnalyticsHash('#analytics/training/ui_sales', null);
+  assert.equal(user.page, 'training-user');
+  assert.equal(user.userId, 'ui_sales');
+  assert.equal(analyticsHash(user), '#analytics/training/ui_sales');
+  const company = parseAnalyticsHash('#analytics/training-company/ui_org_b', null);
+  assert.equal(company.page, 'training-company');
+  assert.equal(company.orgId, 'ui_org_b');
+  assert.equal(analyticsHash(company), '#analytics/training-company/ui_org_b');
+  assert.equal(parseAnalyticsHash('#analytics/training', null).page, 'overview');
+});
