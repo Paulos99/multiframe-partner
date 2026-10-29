@@ -170,7 +170,7 @@ const server = createServer(async (req, res) => {
       body,
     });
     res.writeHead(out.statusCode, out.headers);
-    res.end(out.body);
+    res.end(out.isBase64Encoded ? Buffer.from(out.body, 'base64') : out.body);
   } catch {
     res.writeHead(500);
     res.end('{}');

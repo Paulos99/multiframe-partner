@@ -38,6 +38,7 @@ import { ProjectDesk } from './ProjectDesk';
 import { deleteProjectWarning, roomTitle } from './projectDesk';
 import { navigateProject, parseProjectHash, PROJECT_TABS, type ProjectRoute } from './projectRoute';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
+import { RoomPhotoReport } from './photos/RoomPhotoReport';
 import styles from './partner.module.css';
 
 const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
@@ -815,6 +816,8 @@ export function ObjectsPanel({
               }
               onShare={(doc) => void shareDocument(selected, doc)}
             />
+
+            <RoomPhotoReport key={selected.id} objectId={selected.id} />
 
             <div className={styles.navRow}>
               <button type="button" className={styles.ghost} onClick={() => api.requestDiagnosis(selected.id)}>

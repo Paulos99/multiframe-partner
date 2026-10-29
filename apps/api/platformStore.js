@@ -33,7 +33,7 @@ const rootCache = new Map();
 const origins = new WeakMap();
 
 const ID_LISTS = new Set(['users', 'orgs', 'objects', 'projects', 'materials', 'roomShares']);
-const LIST_CAPS = { history: 50, documents: 40 };
+const LIST_CAPS = { history: 50, documents: 40, photos: 60 };
 
 function cacheMap() {
   return cacheSlots.getStore() || rootCache;

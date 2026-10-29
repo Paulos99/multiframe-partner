@@ -295,6 +295,10 @@ export async function handleProjects(ctx) {
         for (const doc of obj.documents || []) {
           if (doc.storageKey) await ctx.deleteStorage(doc.storageKey);
         }
+        for (const photo of obj.photos || []) {
+          if (photo.storageKey) await ctx.deleteStorage(photo.storageKey);
+          if (photo.thumbKey) await ctx.deleteStorage(photo.thumbKey);
+        }
       }
     }
     return ctx.json(200, { ok: true });

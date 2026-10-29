@@ -303,6 +303,8 @@ export type JobObject = {
   history: JobObjectHistoryEntry[];
   /** Версии PDF калькулятора, новые первыми. Предыдущие не затираются. */
   documents?: JobObjectDocument[];
+  /** Сколько фото в комнате по этапам. Только те этапы, которые видит роль. Самих фото в списке нет. */
+  photoCounts?: { before: number; progress: number; after: number };
   /** Комната принадлежит проекту. Новый объект получает проект при создании. */
   projectId?: string | null;
   /** Название комнаты внутри проекта. У старых объектов поля нет. */
