@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { ChevronLeftIcon } from '../icons';
 import { navigateHash } from '../partner/projectRoute';
 import { highlightRanges, needsNote } from './engine';
 import { trainerHash, type TrainerRoute } from './route';
@@ -15,7 +16,8 @@ export function Page({ title, back, children, lead }: { title: string; back?: { 
     <section className={styles.page} aria-label={title}>
       {back ? (
         <button type="button" className={styles.back} onClick={() => go(back.to)}>
-          ← {back.label}
+          <ChevronLeftIcon size={18} />
+          <span>{back.label}</span>
         </button>
       ) : null}
       <h3 className={styles.pageTitle}>{title}</h3>
@@ -23,6 +25,50 @@ export function Page({ title, back, children, lead }: { title: string; back?: { 
       {children}
     </section>
   );
+}
+
+/** Полоса «шаг из N»: видно, сколько пройдено и сколько осталось. Подпись выводит сам экран. */
+export function StepBar({ current, total, label, extra }: { current: number; total: number; label: string; extra?: ReactNode }) {
+  const done = Math.max(0, Math.min(total, current));
+  return (
+    <div className={styles.stepBar}>
+      <div className={styles.stepHead}>
+        <span className={styles.step}>{label}</span>
+        {extra}
+      </div>
+      <div className={styles.stepTrack} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+        <span className={styles.stepFill} style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** Раздел, который раскрывается по нажатию: обзор сверху, подробности по запросу. */
+export function Fold({ title, hint, label, defaultOpen = false, children }: { title: string; hint?: string; label?: string; defaultOpen?: boolean; children: ReactNode }) {
+  return (
+    <section className={styles.fold} aria-label={label ?? title}>
+      <details open={defaultOpen || undefined}>
+        <summary>
+          <span className={styles.foldTitle}>{title}</span>
+          {hint ? <span className={styles.foldHint}>{hint}</span> : null}
+        </summary>
+        <div className={styles.foldBody}>{children}</div>
+      </details>
+    </section>
+  );
+}
+
+/** Подсказка: на широком экране раскрыта сразу, на телефоне свёрнута. */
+export function useWideScreen(query = '(min-width: 900px)'): boolean {
+  const [wide, setWide] = useState(() => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : true));
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia(query);
+    const on = () => setWide(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return wide;
 }
 
 /** Небольшое окно по центру: настройки подхода и подобные короткие формы. */
@@ -227,9 +273,11 @@ export function SelfAssess({
           {error}
         </p>
       ) : null}
-      <button type="submit" className={styles.primary} disabled={busy}>
-        {busy ? 'Сохраняем…' : submitLabel}
-      </button>
+      <div className={styles.stickyBar}>
+        <button type="submit" className={styles.primary} disabled={busy}>
+          {busy ? 'Сохраняем…' : submitLabel}
+        </button>
+      </div>
     </form>
   );
 }

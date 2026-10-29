@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildDrillAttempt, drillPhrasing } from './attempts';
 import { DRILL_CRITERIA, answerError, buildDeck, evaluateDrill, wordCount, MIN_WORDS } from './engine';
-import { Flags, Highlighted, Page, Points, Quotes, SavedNote, Score, SelfAssess, go } from './ui';
+import { Fold, Flags, Highlighted, Page, Points, Quotes, SavedNote, Score, SelfAssess, StepBar, go, useWideScreen } from './ui';
+import { SettingsIcon } from '../icons';
 import { useTrainer } from './TrainerContext';
 import type { CriterionId, LearningAttempt, Objection, Scores } from './types';
 import styles from './Trainer.module.css';
@@ -97,6 +98,7 @@ function Card({
   const area = useRef<HTMLTextAreaElement>(null);
   const total = session.deck.length;
   const phase = session.phase;
+  const wide = useWideScreen();
 
   useEffect(() => {
     if (phase === 'beat1' || phase === 'beat2') {
@@ -188,23 +190,26 @@ function Card({
   }
 
   const header = (
-    <div className={styles.cardHead}>
-      <span className={styles.step}>
-        Возражение {session.index + 1} из {total}
-      </span>
-      <button type="button" className={styles.linkBtn} onClick={onOpenSettings}>
-        Настройки подхода
-      </button>
-    </div>
+    <StepBar
+      current={phase === 'saved' ? session.index + 1 : session.index}
+      total={total}
+      label={`Возражение ${session.index + 1} из ${total}`}
+      extra={
+        <button type="button" className={styles.linkBtn} onClick={onOpenSettings}>
+          <SettingsIcon size={16} />
+          <span>Настройки подхода</span>
+        </button>
+      }
+    />
   );
 
   if (phase === 'beat1' || phase === 'beat2') {
     return (
-      <Page title="Быстрая отработка" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Ответьте клиенту так, как сказали бы по телефону: два шага, затем разбор.">
+      <Page title="Быстрая отработка" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Ответьте клиенту так, как сказали бы по телефону: сначала на возражение, потом на повтор. Затем разбор.">
         {header}
         <div className={styles.twoCols}>
           <div className={styles.talk}>
-            <p className={styles.beat}>{phase === 'beat1' ? 'Реплика клиента' : 'Клиент не согласен и повторяет'}</p>
+            <p className={styles.beat}>{phase === 'beat1' ? 'Шаг 1 из 2 · Реплика клиента' : 'Шаг 2 из 2 · Клиент не согласен и повторяет'}</p>
             <blockquote className={styles.client}>{clientLine}</blockquote>
             <label className={styles.answerLabel} htmlFor="drill-answer">
               Ваш ответ клиенту
@@ -241,14 +246,16 @@ function Card({
             </div>
           </div>
           <aside className={styles.side} aria-label="Подсказки">
-            <h4>На что смотрим</h4>
-            <ul>
-              <li>Вы признали позицию клиента и повторили его слова.</li>
-              <li>Назвали факты из обучающих видео, а не общие слова.</li>
-              <li>Не пообещали тишину и не назвали чужие цифры.</li>
-              <li>Показали выгоду для клиента.</li>
-            </ul>
-            <p className={styles.hint}>Тема: {t.content.objections.refusalReasons.find((r) => r.key === o.refusalReasonKey)?.title}</p>
+            <details key={wide ? 'wide' : 'narrow'} open={wide}>
+              <summary>На что смотрим</summary>
+              <ul>
+                <li>Вы признали позицию клиента и повторили его слова.</li>
+                <li>Назвали факты из обучающих видео, а не общие слова.</li>
+                <li>Не пообещали тишину и не назвали чужие цифры.</li>
+                <li>Показали выгоду для клиента.</li>
+              </ul>
+              <p className={styles.hint}>Тема: {t.content.objections.refusalReasons.find((r) => r.key === o.refusalReasonKey)?.title}</p>
+            </details>
           </aside>
         </div>
       </Page>
@@ -284,7 +291,7 @@ function Card({
           {answered && evalResult ? (
             <>
               <section aria-label="Пункты ответа" className={styles.block}>
-                <h4>Что названо</h4>
+                <h4>Что названо · {evalResult.matchedPointIds.length} из {o.requiredPoints.length}</h4>
                 <Points objection={o} matched={evalResult.matchedPointIds} content={t.content} />
               </section>
               <section aria-label="Нарушения" className={styles.block}>
@@ -300,15 +307,13 @@ function Card({
             <p className={styles.beat}>На повтор клиента</p>
             <p className={styles.refAnswer}>{o.pushbackReferenceAnswer}</p>
           </section>
-          <section aria-label="Из видео" className={styles.block}>
-            <h4>Из видео</h4>
+          <Fold title="Из видео" hint={`цитат: ${o.sourceQuotes.length}`}>
             <Quotes quotes={o.sourceQuotes} videos={t.content.objections.videos} copyable={t.role === 'stp_admin'} />
             <p className={styles.hint}>Видео лежат в разделе «Материалы». Если ролик не открывается без сети, цитаты выше остаются доступны.</p>
-          </section>
-          <section aria-label="Типичная ошибка" className={styles.block}>
-            <h4>Типичная ошибка</h4>
-            <p>{o.commonMistake}</p>
-          </section>
+          </Fold>
+          <Fold title="Типичная ошибка">
+            <p className={styles.plain}>{o.commonMistake}</p>
+          </Fold>
         </div>
         <div className={styles.reviewSide}>
           {phase === 'review' && !session.skipped ? (
@@ -331,7 +336,7 @@ function Card({
               {attempt.autoScores.objection !== undefined && attempt.selfScores ? (
                 <p className={styles.hint}>Предварительная оценка и ваша сохранены отдельно.</p>
               ) : null}
-              <div className={styles.actions}>
+              <div className={`${styles.actions} ${styles.stickyBar}`}>
                 <button type="button" className={styles.primary} onClick={next}>
                   {last ? 'Закончить подход' : 'Следующее возражение'}
                 </button>
