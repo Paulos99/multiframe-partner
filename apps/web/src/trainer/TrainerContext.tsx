@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { loadTrainerContent } from './content';
 import { defaultSettings, type Built, type Who } from './attempts';
+import { isLegacyAttempt, isLegacyCard } from './engine';
 import { trainerStore, type TrainerStore } from './store';
 import type { LearningAttempt, ReviewCard, ScenarioDraft, TrainerContent, TrainerRole, TrainerSettings } from './types';
 
@@ -14,6 +15,8 @@ export type TrainerApi = {
   cards: ReviewCard[];
   drafts: ScenarioDraft[];
   pending: number;
+  /** Старые попытки набором текста: хранятся, но в итоги не входят. */
+  legacyCount: number;
   saveSettings: (next: Partial<TrainerSettings>) => Promise<void>;
   commit: (built: Built) => Promise<void>;
   resetAll: () => Promise<void>;
@@ -58,6 +61,7 @@ export function TrainerProvider({
     cards: ReviewCard[];
     drafts: ScenarioDraft[];
     pending: number;
+    legacyCount: number;
   } | null>(null);
 
   useEffect(() => {
@@ -84,7 +88,14 @@ export function TrainerProvider({
         l.store.drafts(userId),
         l.store.pendingSync(userId),
       ]);
-      setData({ settings: settings ?? defaultSettings(userId, l.content), attempts, cards, drafts, pending });
+      setData({
+        settings: settings ?? defaultSettings(userId, l.content),
+        attempts: attempts.filter((a) => !isLegacyAttempt(a)),
+        cards: cards.filter((c) => !isLegacyCard(c)),
+        drafts,
+        pending,
+        legacyCount: attempts.filter(isLegacyAttempt).length,
+      });
     },
     [userId],
   );

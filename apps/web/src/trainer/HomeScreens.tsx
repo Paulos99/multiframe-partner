@@ -3,7 +3,8 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { DECK_SIZES, ROLE_TITLES, computeProgress, dueCards, objectionsForRole, questionsForRole, scenariosForRole } from './engine';
 import { useTrainer } from './TrainerContext';
 import { ChecklistIcon, GaugeIcon, PartnersIcon, SettingsIcon } from '../icons';
-import { Dialog, Fold, Page, Quotes, Score, go } from './ui';
+import { errorLabel } from './choice';
+import { Dialog, Fold, Page, Quotes, go } from './ui';
 import type { LearningAttempt } from './types';
 import styles from './Trainer.module.css';
 
@@ -18,14 +19,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const t = useTrainer();
   const [deck, setDeck] = useState(t.settings.deckSize);
   const [all, setAll] = useState(t.settings.showAllRoles);
-  const [auto, setAuto] = useState(t.settings.autoScoring);
   return (
     <Dialog title="Настройки подхода" onClose={onClose}>
       <form
         className={styles.form}
         onSubmit={(e) => {
           e.preventDefault();
-          void t.saveSettings({ deckSize: deck, showAllRoles: all, autoScoring: auto }).then(onClose);
+          void t.saveSettings({ deckSize: deck, showAllRoles: all }).then(onClose);
         }}
       >
         <label className={styles.fieldLine}>
@@ -37,10 +37,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               </option>
             ))}
           </select>
-        </label>
-        <label className={styles.checkLine}>
-          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-          <span>Автоматическая подсказка оценки. Если выключить, ответ даёте устно и оцениваете себя сами.</span>
         </label>
         <label className={styles.checkLine}>
           <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />
@@ -87,7 +83,7 @@ export function Home({
         <div className={styles.homeTitle}>
           <h3 className={styles.pageTitle}>Тренажёр продаж</h3>
           <p className={styles.lead}>
-            Учитесь отвечать клиентам на возражения: пишете ответ, сверяетесь с эталоном из обучающих видео и видите, что улучшить. Ваша роль: {ROLE_TITLES[t.role]}. Результаты хранятся на этом устройстве.
+            Учитесь отвечать клиентам на возражения: выбираете лучший из четырёх ответов, сразу видите, почему другие не подходят, и опираетесь на факты из обучающих видео. Ваша роль: {ROLE_TITLES[t.role]}. Результаты хранятся на этом устройстве.
           </p>
         </div>
         <button type="button" className={styles.secondary} onClick={onOpenSettings}>
@@ -136,7 +132,7 @@ export function Home({
               <GaugeIcon size={26} />
             </span>
             <strong>Быстрая отработка</strong>
-            <span className={styles.tileText}>Клиент возражает, вы отвечаете, затем разбор с эталоном.</span>
+            <span className={styles.tileText}>Клиент возражает, вы выбираете ответ из четырёх, затем разбор с эталоном.</span>
             <span className={styles.chips}>
               <span className={styles.chip}>Возражений для вас: {objs}</span>
               <span className={styles.chip}>{deck} в подходе</span>
@@ -149,7 +145,7 @@ export function Home({
               <PartnersIcon size={26} />
             </span>
             <strong>Ролевые разговоры</strong>
-            <span className={styles.tileText}>Телефонный разговор с клиентом по шагам, как в жизни.</span>
+            <span className={styles.tileText}>Телефонный разговор с клиентом по шагам: на каждой реплике выбираете ответ.</span>
             <span className={styles.chips}>
               <span className={styles.chip}>Сценариев: {scs}</span>
               <span className={styles.chip}>6–8 минут</span>
@@ -179,6 +175,10 @@ export function Home({
             <dd>{prog.level.title}</dd>
           </div>
           <div>
+            <dt>Верно с первой попытки</dt>
+            <dd>{prog.levelShare === null ? '—' : `${Math.round(prog.levelShare * 100)} %`}</dd>
+          </div>
+          <div>
             <dt>Засчитано</dt>
             <dd>{prog.passedCount}</dd>
           </div>
@@ -202,8 +202,13 @@ export function Home({
           <h4>Содержимое тренажёра</h4>
           <p className={styles.hint}>
             Версия: {t.content.contentVersion}. Возражений: {t.content.objections.objections.length}, сценариев: {t.content.scenarios.scenarios.length}, вопросов: {t.content.quiz.questions.length}.
-            Каждый эталон и вопрос подтверждён дословной цитатой из видео.
+            Каждый эталон и вопрос подтверждён дословной цитатой из видео. Факты с сайтов производителей показаны со ссылкой и словами «производитель указывает».
           </p>
+          {t.content.hidden.length ? (
+            <p className={styles.notice}>
+              Скрыто до решения открытого вопроса: {t.content.hidden.map((h) => `«${h.title}»`).join(', ')}.
+            </p>
+          ) : null}
         </section>
       ) : null}
       {t.pending > 0 ? <p className={styles.hint}>Результатов на этом устройстве: {t.pending}. Отправка на сервер пока не подключена, данные не потеряются.</p> : null}
@@ -219,24 +224,21 @@ function AttemptRow({ a }: { a: LearningAttempt }) {
       : a.itemType === 'scenario'
         ? (t.content.scenarios.scenarios.find((s) => s.id === a.itemIds[0])?.title ?? a.itemIds[0])
         : `${a.itemIds.length} вопросов`;
+  const picks = a.picks ?? [];
+  const result =
+    a.mode === 'quiz'
+      ? `${Math.round((a.total / 5) * 100)} %`
+      : `${picks.filter((p) => p.firstTry).length} из ${picks.length} с первой попытки`;
   return (
     <li>
       <span>
         {dateLabel(a.finishedAt)} · {MODE_TITLE[a.mode]}: {title}
-        {a.skipped ? ' · «Не знаю»' : ''}
       </span>
       <span>
-        {a.mode === 'quiz' ? `${Math.round((a.total / 5) * 100)} %` : <Score value={a.total} />} {a.passed ? '✔' : '✖'}
-        {a.selfScores && a.mode !== 'quiz' ? <span className={styles.hint}> (подсказка системы: {autoTotal(a)})</span> : null}
+        {result} {a.passed ? '✔' : '✖'}
       </span>
     </li>
   );
-}
-
-function autoTotal(a: LearningAttempt): string {
-  const vals = Object.values(a.autoScores).filter((v): v is number => typeof v === 'number');
-  if (!vals.length) return '—';
-  return (Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10).toString().replace('.', ',');
 }
 
 export function ProgressScreen() {
@@ -251,11 +253,22 @@ export function ProgressScreen() {
   return (
     <Page title="Мой прогресс" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }}>
       {t.attempts.length === 0 ? <p className={styles.notice}>Пока нет ни одной попытки. Начните с быстрой отработки.</p> : null}
+      {t.legacyCount > 0 ? (
+        <p className={styles.notice}>
+          Старых попыток с набором ответа текстом: {t.legacyCount}. Оценка изменилась: теперь считается, сколько ответов верно с первой попытки, поэтому старые попытки в итоги не входят. Они сохранены на устройстве.
+        </p>
+      ) : null}
       <section className={styles.block} aria-label="Уровень">
         <p className={styles.levelLine}>
           Уровень: <strong>{prog.level.title}</strong>
         </p>
-        {prog.levelAvg !== null ? <p className={styles.hint}>Средний балл последних попыток: {String(prog.levelAvg).replace('.', ',')} из 5</p> : null}
+        {prog.levelShare !== null ? (
+          <p className={styles.hint}>
+            Верно с первой попытки в последних попытках: {Math.round(prog.levelShare * 100)} %. «Уверенный» с 75 %, «Мастер» с 90 %.
+          </p>
+        ) : (
+          <p className={styles.hint}>Уровень появится после первой попытки в режиме выбора.</p>
+        )}
         <dl className={styles.stats}>
           <div>
             <dt>Попыток</dt>
@@ -280,18 +293,31 @@ export function ProgressScreen() {
               <span className={styles.barTrack} aria-hidden="true">
                 <span className={c.weak ? styles.barWeak : styles.barFill} style={{ width: `${((c.avg ?? 0) / 5) * 100}%` }} />
               </span>
-              <span className={c.weak ? styles.barValueWeak : styles.barValue}>{c.avg === null ? 'нет данных' : `${String(c.avg).replace('.', ',')}${c.weak ? ' · слабое место' : ''}`}</span>
+              <span className={c.weak ? styles.barValueWeak : styles.barValue}>{c.avg === null ? 'не оценивалось' : `${String(c.avg).replace('.', ',')}${c.weak ? ' · слабое место' : ''}`}</span>
             </li>
           ))}
         </ul>
       </section>
-      {prog.weakPoints.length ? (
-        <section className={styles.block} aria-label="Что чаще пропускаете">
-          <h4>Что вы чаще пропускаете</h4>
+      {prog.errorTypes.length ? (
+        <section className={styles.block} aria-label="Частые ошибки">
+          <h4>Какие ошибки вы выбираете чаще</h4>
           <ul className={styles.list}>
-            {prog.weakPoints.map((w) => (
-              <li key={w.key}>
-                <span>{w.text}</span>
+            {prog.errorTypes.map((e) => (
+              <li key={e.type}>
+                <span>{errorLabel(e.type)}</span>
+                <span className={styles.hint}>раз: {e.count}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {prog.weakObjections.length ? (
+        <section className={styles.block} aria-label="Что повторить">
+          <h4>Где чаще ошибаетесь с первого раза</h4>
+          <ul className={styles.list}>
+            {prog.weakObjections.map((w) => (
+              <li key={w.objectionId}>
+                <span>{w.title}</span>
                 <button type="button" className={styles.linkBtn} onClick={() => go({ page: 'drill', objectionId: w.objectionId })}>
                   Потренировать ({w.count})
                 </button>
@@ -326,7 +352,7 @@ export function ProgressScreen() {
         <MasteryList rows={prog.topics} />
       </Fold>
       <div className={styles.actions}>
-        <button type="button" className={styles.danger} onClick={() => setConfirm(true)} disabled={!t.attempts.length && !t.cards.length}>
+        <button type="button" className={styles.danger} onClick={() => setConfirm(true)} disabled={!t.attempts.length && !t.cards.length && !t.legacyCount}>
           Сбросить мой прогресс
         </button>
       </div>
@@ -420,7 +446,7 @@ export function BankScreen({ id, onTrain }: { id?: string; onTrain: (objectionId
           <h4>Типичная ошибка</h4>
           <p>{o.commonMistake}</p>
         </section>
-        <Fold title="Из видео" hint={`цитат: ${o.sourceQuotes.length}`}>
+        <Fold title="Из видео и с сайтов" hint={`источников: ${o.sourceQuotes.length}`}>
           <Quotes quotes={o.sourceQuotes} videos={t.content.objections.videos} copyable={t.role === 'stp_admin'} />
         </Fold>
         <div className={`${styles.stickyBar} ${styles.actions}`}>

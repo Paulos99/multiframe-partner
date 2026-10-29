@@ -1,20 +1,5 @@
-/** Чистая логика тренажёра: колоды, повторение по Лейтнеру, оценка сценария и викторины, прогресс. */
-import { norm, scoreStep, scoreText, total, tokens } from './scoring';
-import type {
-  AttemptAnswer,
-  CriterionId,
-  Flag,
-  LearningAttempt,
-  Mode,
-  Objection,
-  QuizAnswer,
-  QuizQuestion,
-  ReviewCard,
-  Scenario,
-  Scores,
-  TrainerContent,
-  TrainerRole,
-} from './types';
+/** Чистая логика тренажёра: колоды, повторение по Лейтнеру, викторина, прогресс. Выбор ответа и оценка — в choice.ts. */
+import type { CriterionId, ErrorType, LearningAttempt, Objection, QuizAnswer, QuizQuestion, ReviewCard, Scenario, TrainerContent, TrainerRole } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -46,7 +31,6 @@ export const ROLE_TITLES: Record<TrainerRole, string> = {
 
 export const DEFAULT_DECK_SIZE = 5;
 export const DECK_SIZES = [3, 5, 10] as const;
-export const MIN_WORDS = 8;
 
 export function objectionsForRole(content: TrainerContent, role: TrainerRole, showAll: boolean): Objection[] {
   const all = content.objections.objections;
@@ -62,16 +46,6 @@ export function questionsForRole(content: TrainerContent, role: TrainerRole, sho
 }
 
 /* ---------- текст ответа ---------- */
-
-export function wordCount(text: string): number {
-  return tokens(norm(text)).length;
-}
-export function answerError(text: string, minWords = MIN_WORDS): string | null {
-  const n = wordCount(text);
-  if (n === 0) return 'Напишите ответ клиенту.';
-  if (n < minWords) return `Ответ короткий: нужно хотя бы ${minWords} слов, сейчас ${n}. Если не знаете, нажмите «Не знаю».`;
-  return null;
-}
 
 /** Диапазоны найденных фрагментов в исходном тексте (длина строки при подготовке не меняется). */
 export function highlightRanges(text: string, patterns: string[]): [number, number][] {
@@ -158,6 +132,7 @@ export function buildDeck(
   now: Date,
   size: number,
 ): Objection[] {
+  cards = cards.filter((c) => !isLegacyCard(c));
   const pool = objectionsForRole(content, role, showAll);
   const byId = new Map(cards.filter((c) => c.itemType === 'objection').map((c) => [c.itemId, c]));
   const due = dueCards(cards, 'objection', now, content.scoring.srs.dailyLimit)
@@ -201,157 +176,6 @@ export function seededShuffle<T>(items: readonly T[], seed: string): T[] {
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
-}
-
-/* ---------- самооценка и порог ---------- */
-
-export const DRILL_CRITERIA: CriterionId[] = ['discovery', 'listening', 'objection', 'value', 'honesty'];
-export const ROLEPLAY_CRITERIA: CriterionId[] = ['discovery', 'listening', 'objection', 'value', 'honesty', 'nextstep'];
-
-export function criteriaOf(mode: Mode): CriterionId[] {
-  return mode === 'roleplay' ? ROLEPLAY_CRITERIA : mode === 'quiz' ? ['honesty'] : DRILL_CRITERIA;
-}
-
-/** Изменение больше чем на балл требует короткой пометки. */
-export function needsNote(auto: number | undefined, self: number): boolean {
-  return auto !== undefined && Math.abs(self - auto) > 1;
-}
-
-export function isPassed(scores: Scores, mode: Mode, totalScore: number, content: TrainerContent, extra?: { quizPercent?: number }): boolean {
-  const t = content.scoring.passThresholds;
-  if (mode === 'quiz') return (extra?.quizPercent ?? 0) >= t.quiz.percentCorrect;
-  if (mode === 'objection') {
-    return totalScore >= t.objection.total && (scores.honesty ?? 1) >= t.objection.honestyAtLeast && (scores.objection ?? 1) >= t.objection.objectionAtLeast;
-  }
-  return totalScore >= t.roleplay.total && (scores.honesty ?? 1) >= t.roleplay.honestyAtLeast && (scores.nextstep ?? 1) >= t.roleplay.nextstepAtLeast;
-}
-
-export function finalOf(auto: Scores, self: Scores | null): Scores {
-  return self ? { ...auto, ...self } : { ...auto };
-}
-
-export const ALL_ONES: Scores = { discovery: 1, listening: 1, objection: 1, value: 1, honesty: 1, nextstep: 1 };
-
-/**
- * Подсказка самооценки не должна быть щедрее разбора. «Слышу клиента» в эталонном подсчёте
- * растёт от вежливого начала и повтора слов клиента, даже если ни один пункт не назван.
- * Поэтому: ни одного названного пункта — не больше 2, меньше половины — не больше 3.
- * Подсчёт в scoring.ts остаётся как в эталоне; поправка только здесь, в автооценке тренажёра.
- */
-export function calibrate<T extends Partial<Record<CriterionId, number>>>(scores: T, cov: number): T {
-  if (scores.listening === undefined) return scores;
-  const cap = cov <= 0 ? 2 : cov < 0.5 ? 3 : 5;
-  return { ...scores, listening: Math.min(scores.listening, cap) };
-}
-
-/* ---------- быстрая отработка ---------- */
-
-export type DrillEvaluation = {
-  autoScores: Scores;
-  flags: Flag[];
-  cov: number;
-  matchedPointIds: string[];
-  missedPointIds: string[];
-  missingCritical: string[];
-};
-
-export function evaluateDrill(o: Objection, phrasing: number, beat1: string, beat2: string, content: TrainerContent, skipped: boolean): DrillEvaluation {
-  if (skipped) {
-    return {
-      autoScores: { ...ALL_ONES },
-      flags: [],
-      cov: 0,
-      matchedPointIds: [],
-      missedPointIds: o.requiredPoints.map((p) => `${o.id}:${p.id}`),
-      missingCritical: o.requiredPoints.filter((p) => p.critical).map((p) => p.id),
-    };
-  }
-  const r = scoreStep(beat1, beat2, o, phrasing, content.scoring);
-  return {
-    autoScores: calibrate(r.scores, r.cov),
-    flags: r.hits,
-    cov: r.cov,
-    matchedPointIds: r.matchedPointIds.map((p) => `${o.id}:${p}`),
-    missedPointIds: r.missedPointIds.map((p) => `${o.id}:${p}`),
-    missingCritical: r.missingCritical,
-  };
-}
-
-/* ---------- сценарий ---------- */
-
-export type StepResult = {
-  stepId: string;
-  objectionId: string;
-  passed: boolean;
-  cov: number;
-  scores: Record<CriterionId, number>;
-  flags: Flag[];
-  matchedPointIds: string[];
-  missedPointIds: string[];
-  missingCritical: string[];
-  usedHint: boolean;
-};
-export type ScenarioEvaluation = {
-  steps: StepResult[];
-  closingScores: Record<CriterionId, number> | null;
-  autoScores: Scores;
-  flags: Flag[];
-  criteria: { id: string; text: string; kind: string; ok: boolean | null }[];
-};
-
-const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 1);
-
-export function evaluateScenario(
-  scenario: Scenario,
-  answers: AttemptAnswer[],
-  hintsUsed: string[],
-  content: TrainerContent,
-): ScenarioEvaluation {
-  const objById = new Map(content.objections.objections.map((o) => [o.id, o]));
-  const steps: StepResult[] = [];
-  for (const step of scenario.steps) {
-    const o = objById.get(step.objectionId);
-    if (!o) continue;
-    const b1 = answers.find((a) => a.stepId === step.id && a.beat === 1)?.text ?? '';
-    const b2 = answers.find((a) => a.stepId === step.id && a.beat === 2)?.text ?? '';
-    const r = scoreStep(b1, b2, o, step.clientPhrasingIndex, content.scoring);
-    const usedHint = hintsUsed.includes(step.id);
-    const scores = { ...calibrate(r.scores, r.cov) };
-    if (usedHint) scores.objection = Math.max(1, scores.objection - 1);
-    const critical = r.hits.some((h) => h.severity === 'critical');
-    steps.push({
-      stepId: step.id,
-      objectionId: o.id,
-      passed: r.cov >= 0.6 && !critical,
-      cov: r.cov,
-      scores,
-      flags: r.hits,
-      matchedPointIds: r.matchedPointIds.map((p) => `${o.id}:${p}`),
-      missedPointIds: r.missedPointIds.map((p) => `${o.id}:${p}`),
-      missingCritical: r.missingCritical,
-      usedHint,
-    });
-  }
-  const closingText = answers.find((a) => a.stepId === 'closing')?.text ?? '';
-  const closing = closingText ? scoreText(closingText, [], '', content.scoring) : null;
-  const flags = [...steps.flatMap((s) => s.flags), ...(closing?.hits ?? [])];
-  const honesty = Math.min(...steps.map((s) => s.scores.honesty), closing?.scores.honesty ?? 5);
-  const autoScores: Scores = {
-    discovery: mean(steps.map((s) => s.scores.discovery)),
-    listening: mean(steps.map((s) => s.scores.listening)),
-    objection: mean(steps.map((s) => s.scores.objection)),
-    value: mean(steps.map((s) => s.scores.value)),
-    honesty,
-    nextstep: closing?.scores.nextstep ?? 1,
-  };
-  const criteria = scenario.successCriteria.map((c) => {
-    let ok: boolean | null = null;
-    if (c.kind === 'objectionPoints') ok = steps.every((s) => s.missingCritical.length === 0);
-    else if (c.kind === 'noForbiddenClaims') ok = flags.length === 0;
-    else if (c.kind === 'nextStep') ok = (autoScores.nextstep ?? 1) >= 5;
-    return { id: c.id, text: c.text, kind: c.kind, ok };
-  });
-  return { steps, closingScores: closing?.scores ?? null, autoScores, flags, criteria };
 }
 
 /* ---------- викторина ---------- */
@@ -440,14 +264,25 @@ export function summarizeQuiz(content: TrainerContent, questions: QuizQuestion[]
 
 export type Level = { id: string; title: string };
 
-export function levelOf(attempts: LearningAttempt[], content: TrainerContent): { level: Level; avg: number | null } {
-  const recent = [...attempts].filter((a) => a.mode !== 'quiz').sort((a, b) => b.finishedAt.localeCompare(a.finishedAt)).slice(0, 10);
-  const levels = content.scoring.passThresholds.levels;
-  if (!recent.length) return { level: levels[0], avg: null };
-  const avg = recent.reduce((s, a) => s + a.total, 0) / recent.length;
+/** Попытка набором текста с автооценкой (до режима выбора): в итоги не входит. */
+export const isLegacyAttempt = (a: LearningAttempt): boolean => a.mode !== 'quiz' && !a.picks;
+/** Карточка возражения от старой автооценки: коробку нельзя переносить в режим выбора. */
+export const isLegacyCard = (c: ReviewCard): boolean => c.itemType === 'objection' && c.scheme !== 2;
+
+const LEVEL_WINDOW = 10;
+
+/** Уровень: средняя доля «верно с первой попытки» по последним десяти попыткам в режиме выбора. */
+export function levelOf(attempts: LearningAttempt[], content: TrainerContent): { level: Level; share: number | null } {
+  const levels = content.scoring.choiceMode.passThresholds.levels;
+  const recent = attempts
+    .filter((a) => !isLegacyAttempt(a) && a.mode !== 'quiz' && typeof a.firstTryCorrect === 'number')
+    .sort((a, b) => b.finishedAt.localeCompare(a.finishedAt))
+    .slice(0, LEVEL_WINDOW);
+  if (!recent.length) return { level: levels[0], share: null };
+  const share = recent.reduce((s, a) => s + (a.firstTryCorrect ?? 0), 0) / recent.length;
   let level = levels[0];
-  for (const l of levels) if (avg >= l.minAvg) level = l;
-  return { level, avg: Math.round(avg * 100) / 100 };
+  for (const l of levels) if (share >= l.minShare) level = l;
+  return { level, share: Math.round(share * 1000) / 1000 };
 }
 
 export type MasteryRow = { id: string; title: string; mastered: number; inWork: number; notStarted: number; total: number };
@@ -457,11 +292,17 @@ export type Progress = {
   topics: MasteryRow[];
   reasons: MasteryRow[];
   streakDays: number;
-  weakPoints: { key: string; objectionId: string; text: string; count: number }[];
+  /** Чаще всего выбранные неверные ответы (первый выбор) по типам ошибки. */
+  errorTypes: { type: ErrorType; count: number }[];
+  /** Возражения, где чаще ошибались с первого раза. */
+  weakObjections: { objectionId: string; title: string; count: number }[];
   attempts: LearningAttempt[];
   level: Level;
-  levelAvg: number | null;
+  /** Средняя доля верных с первой попытки по последним попыткам, 0–1. */
+  levelShare: number | null;
   passedCount: number;
+  /** Старые попытки набором текста: в итоги не входят. */
+  legacyCount: number;
 };
 
 function dayKey(d: Date): string {
@@ -494,11 +335,14 @@ function mastery(items: { id: string; title: string; ids: string[] }[], cards: M
   });
 }
 
-export function computeProgress(content: TrainerContent, role: TrainerRole, showAll: boolean, attempts: LearningAttempt[], cards: ReviewCard[], now: Date): Progress {
+export function computeProgress(content: TrainerContent, role: TrainerRole, showAll: boolean, allAttempts: LearningAttempt[], allCards: ReviewCard[], now: Date): Progress {
+  const attempts = allAttempts.filter((a) => !isLegacyAttempt(a));
+  const cards = allCards.filter((c) => !isLegacyCard(c));
   const sorted = [...attempts].sort((a, b) => b.finishedAt.localeCompare(a.finishedAt));
-  const last10 = sorted.slice(0, 10);
+  const choice = sorted.filter((a) => a.mode !== 'quiz');
+  const last10 = choice.slice(0, LEVEL_WINDOW);
   const criteriaAvg = content.scoring.criteria.map((c) => {
-    const vals = last10.map((a) => a.finalScores[c.id]).filter((v): v is number => typeof v === 'number');
+    const vals = last10.map((a) => a.choiceScores?.[c.id]).filter((v): v is number => typeof v === 'number');
     const avg = vals.length ? Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10 : null;
     return { id: c.id, title: c.title, avg, weak: avg !== null && avg < 3.5 };
   });
@@ -514,34 +358,37 @@ export function computeProgress(content: TrainerContent, role: TrainerRole, show
     content.objections.refusalReasons.map((r) => ({ id: r.key, title: r.title, ids: objs.filter((o) => o.refusalReasonKey === r.key).map((o) => o.id) })),
     objCards,
   ).filter((r) => r.total > 0);
-  const missed = new Map<string, number>();
-  for (const a of attempts) for (const k of a.missedPointIds) missed.set(k, (missed.get(k) ?? 0) + 1);
-  const objById = new Map(content.objections.objections.map((o) => [o.id, o]));
-  const weakPoints = [...missed.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([key, count]) => {
-      const [objectionId, pointId] = key.split(':');
-      const text = objById.get(objectionId)?.requiredPoints.find((p) => p.id === pointId)?.text ?? key;
-      return { key, objectionId, text, count };
-    })
-    .filter((w) => objById.has(w.objectionId));
+  const types = new Map<ErrorType, number>();
+  const weak = new Map<string, number>();
+  for (const a of choice.slice(0, 30)) {
+    for (const p of a.picks ?? []) {
+      if (p.firstTry) continue;
+      const t = p.firstError?.errorType;
+      if (t) types.set(t, (types.get(t) ?? 0) + 1);
+      if (p.objectionId) weak.set(p.objectionId, (weak.get(p.objectionId) ?? 0) + 1);
+    }
+  }
+  const titleOf = new Map(content.objections.objections.map((o) => [o.id, o.panel.title]));
   const lv = levelOf(attempts, content);
   return {
     criteriaAvg,
     topics,
     reasons,
     streakDays: streakOf(attempts, now),
-    weakPoints,
+    errorTypes: [...types.entries()].sort((a, b) => b[1] - a[1]).map(([type, count]) => ({ type, count })),
+    weakObjections: [...weak.entries()]
+      .filter(([id]) => titleOf.has(id))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([objectionId, count]) => ({ objectionId, title: titleOf.get(objectionId) ?? objectionId, count })),
     attempts: sorted,
     level: lv.level,
-    levelAvg: lv.avg,
+    levelShare: lv.share,
     passedCount: attempts.filter((a) => a.passed).length,
+    legacyCount: allAttempts.length - attempts.length,
   };
 }
-
 export function quizTotal(percent: number): number {
   return Math.round((percent / 100) * 5 * 100) / 100;
 }
 
-export { total as totalScore };

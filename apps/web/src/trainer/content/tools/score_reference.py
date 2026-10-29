@@ -23,22 +23,32 @@ def tokens(s):
 def rx(p):
     return re.compile(norm(p) if False else p.replace('ё', 'е'), re.I)
 
+CLAUSE_SPLIT = re.compile(r',|;|:|\u2014|\u2013| но | а | зато | однако ')
+ADVERSATIVE = re.compile(r' но | зато | однако ')
+
+def clauses(sent):
+    """Делит часть предложения на клаузы по запятым, тире, «а»: отрицание действует внутри своей клаузы."""
+    return [c.strip() for c in CLAUSE_SPLIT.split(sent) if c.strip()]
+
 def forbidden_hits(text, scoring):
-    """Возвращает список {id, severity, fragment}. Учитывает отрицание и исключения по предложению."""
+    """Возвращает список {id, severity, fragment}.
+    1) предложение делится по «но/зато/однако» на смысловые части: исключение exceptIfSentenceMatches действует только на свою часть
+       («я не обещаю идеал, но полная тишина будет» нарушение: исключение не распространяется на часть после «но»);
+    2) внутри части отрицание считается по КЛАУЗЕ: любое слово из negationWords до или после совпадения в той же клаузе гасит правило negationAware
+       («абсолютной тишины мы вам не гарантируем» не нарушение, хотя «не» стоит после совпадения)."""
     neg = set(scoring['negationWords'])
-    win = scoring['negationWindowTokens']
     hits = []
     for rule in scoring['globalForbidden'] + scoring.get('_localForbidden', []):
         for sent in sentences(norm(text)):
-            if any(re.search(e, sent) for e in rule.get('exceptIfSentenceMatches', [])):
-                continue
-            for p in rule['patterns']:
-                for m in re.finditer(p, sent):
-                    if rule.get('negationAware'):
-                        before = tokens(sent[:m.start()])[-win:]
-                        if any(t in neg for t in before):
-                            continue
-                    hits.append({'id': rule['id'], 'severity': rule['severity'], 'fragment': m.group(0)})
+            for seg in ADVERSATIVE.split(sent):
+                if any(re.search(e, seg) for e in rule.get('exceptIfSentenceMatches', [])):
+                    continue
+                for part in clauses(seg):
+                    if rule.get('negationAware') and any(t in neg for t in tokens(part)):
+                        continue
+                    for p in rule['patterns']:
+                        for m in re.finditer(p, part):
+                            hits.append({'id': rule['id'], 'severity': rule['severity'], 'fragment': m.group(0)})
     return hits
 
 def point_ok(point, text):
@@ -100,22 +110,17 @@ def score_text(text, points, client_text, scoring, need_next_step=False, require
     return res, hits, cov, mc
 
 def score_step(beat1, beat2, obj, phrasing_idx, scoring):
-    """Один шаг сценария или быстрая отработка: два ответа (на возражение и на повтор)."""
-    p1 = [p for p in obj['requiredPoints'] if p['beat'] == 1]
-    p2 = [p for p in obj['requiredPoints'] if p['beat'] == 2]
+    """Один шаг для свободной практики: два ответа (на возражение и на повтор).
+    Пункты requiredPoints — подсказки «что содержит хороший ответ». Каждый пункт ищется в ОБОИХ ответах вместе:
+    клиент мог сказать нужное в первой реплике, а не во второй (поле beats показывает лишь, где это обычно ждут)."""
+    pts = obj['requiredPoints']
+    p1 = [p for p in pts if p['beats'] == [1]]
+    p2 = [p for p in pts if p['beats'] == [2]]
     c1 = obj['clientPhrasing'][phrasing_idx]
     s1, h1, cov1, mc1 = score_text(beat1, p1, c1, scoring)
     s2, h2, cov2, mc2 = score_text(beat2, p2, obj['pushback'], scoring)
-    # общий охват: критичные пункты весят 2, считаем по обеим репликам вместе
-    pts = p1 + p2
-    tot = got = 0; missing = []
-    for p in pts:
-        w = 2 if p['critical'] else 1
-        tot += w
-        txt = beat1 if p['beat'] == 1 else beat2
-        if point_ok(p, txt): got += w
-        elif p['critical']: missing.append(p['id'])
-    cov = got / tot if tot else 1.0
+    both = beat1 + ' ' + beat2
+    cov, missing = coverage(pts, both)
     res = {
       'discovery': max(s1['discovery'], s2['discovery']),
       'listening': max(s1['listening'], s2['listening']),
