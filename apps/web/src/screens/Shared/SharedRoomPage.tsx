@@ -7,6 +7,7 @@ import { usePageReveal } from '../../partner/motionBits';
 import { apiPublicRoom, hasRemoteApi, isApiError, type PublicRoomShare } from '../../partner/apiClient';
 import { createInitialSession, withDerived } from '../../state/session';
 import type { RoomAnswers, SessionState } from '../../state/types';
+import { ClientPhotoReport } from '../../partner/photos/ClientPhotoReport';
 import { SmoothScroll } from '../../ui/SmoothScroll';
 import { ResultDashboard } from '../Result/ResultWideScreen';
 import { deriveResultView } from '../Result/resultShared';
@@ -137,6 +138,7 @@ export function SharedRoomPage({ token }: { token: string | null }) {
           Результаты Проблемомера по вашей комнате. Внизу страницы можно послушать, как звучит комната
           до и после.
         </p>
+        {state.kind === 'ready' && state.share.photos?.length ? <ClientPhotoReport photos={state.share.photos} /> : null}
         <ResultDashboard p={view} title={name ? `Акустический профиль: ${name}` : undefined} />
         <footer className={styles.footer}>
           <a className={styles.siteLink} href={SITE_URL} rel="noopener noreferrer">

@@ -18,6 +18,7 @@ import { trainerHashOpen } from '../trainer/route';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { AnimatePresence, FadeRise, m, motionPresets } from './motionBits';
 import { ObjectsPanel } from './ObjectsPanel';
+import { PhotoCases } from './photos/PhotoCases';
 import { CompanySection } from './CompanySection';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
@@ -27,9 +28,11 @@ import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
 import {
   isLegacyStaffList,
+  navigateCases,
   navigateCompany,
   navigateHash,
   navigateProject,
+  parseCasesHash,
   parseCompanyHash,
   parseProjectHash,
   parseStaffHash,
@@ -53,6 +56,7 @@ function leaveProjectHash() {
     parseProjectHash(hash).kind === 'desk' &&
     parseStaffHash(hash).kind === 'list' &&
     parseCompanyHash(hash) === null &&
+    parseCasesHash(hash) === null &&
     !isLegacyStaffList(hash)
   ) {
     return;
@@ -134,7 +138,7 @@ function profileOf(user: SessionUser, onLogout: () => void) {
   };
 }
 
-type AdminTab = 'today' | 'partners' | 'tools' | 'analytics' | 'help';
+type AdminTab = 'today' | 'partners' | 'cases' | 'tools' | 'analytics' | 'help';
 
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
@@ -142,8 +146,16 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [tab, setTab] = useCabinetSection<AdminTab>('analytics', () => {
     if (consumeReturnToTools()) return 'tools';
     if (trainerHashOpen()) return 'help';
+    if (parseCasesHash(window.location.hash)) return 'cases';
     return 'today';
   });
+  useEffect(() => {
+    const sync = () => {
+      if (parseCasesHash(window.location.hash)) setTab('cases');
+    };
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -202,6 +214,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const adminNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'partners', label: 'Партнёры', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
+    { id: 'cases', label: 'Кейсы', active: tab === 'cases', onSelect: () => { navigateCases({ kind: 'list' }, 'replace'); setTab('cases'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
@@ -431,6 +444,12 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
             </div>
           </div>
           <InstallHint />
+        </TabPanel>
+      ) : null}
+
+      {tab === 'cases' ? (
+        <TabPanel>
+          <PhotoCases />
         </TabPanel>
       ) : null}
 
