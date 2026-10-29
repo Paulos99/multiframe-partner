@@ -3,8 +3,13 @@ import { mkdirSync } from 'node:fs';
 
 const password = 'ui-fixture-password-only';
 const API = 'http://127.0.0.1:4181';
-const shots = '/workspace/review-fixes-shots';
-mkdirSync(shots, { recursive: true });
+const shots = process.env.REVIEW_SHOTS_DIR;
+if (shots) mkdirSync(shots, { recursive: true });
+
+/** Скриншоты пишутся только когда задана папка REVIEW_SHOTS_DIR (локальный разбор). */
+async function shot(page: Page, name: string, fullPage = false) {
+  if (shots) await page.screenshot({ path: `${shots}/${name}`, fullPage });
+}
 
 test.beforeEach(async ({ request }) => {
   await request.post(`${API}/__reset`);
@@ -47,11 +52,11 @@ for (const viewport of [
     // викторины нет: ни вариантов ответа, ни кнопки проверки
     await expect(page.locator('[data-option]')).toHaveCount(0);
     await search.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `${shots}/item4-trainer-search-горение-${kind(page)}.png` });
+    await shot(page, `item4-trainer-search-горение-${kind(page)}.png`);
     await input.fill('цена');
     await expect(search.getByRole('status')).toContainText('Найдено');
     await input.fill('ДОТ');
-    await page.screenshot({ path: `${shots}/item4-trainer-search-ДОТ-${kind(page)}.png` });
+    await shot(page, `item4-trainer-search-ДОТ-${kind(page)}.png`);
     await input.fill('ъъъъ');
     await expect(search.getByRole('status')).toContainText('Ничего не нашлось');
     // поле не уезжает за экран телефона
@@ -81,14 +86,14 @@ for (const viewport of [
     for (const banned of ['ниже допустимого', 'Допустимый', 'Сильный дискомфорт', 'важно для вас', 'до 17 дБ']) {
       await expect(body).not.toContainText(banned, { ignoreCase: true });
     }
-    await page.screenshot({ path: `${shots}/item3-result-top-${kind(page)}.png` });
+    await shot(page, `item3-result-top-${kind(page)}.png`);
     const norms = page.getByLabel('Нормы комфорта для жилья', { exact: true });
     await norms.scrollIntoViewIfNeeded();
     await expect(norms).toContainText('Дискомфорт');
     await expect(norms).toContainText('Комфорт');
     await expect(norms).toContainText('Высокий комфорт');
     await page.waitForTimeout(700);
-    await page.screenshot({ path: `${shots}/item3-comfort-scale-${kind(page)}.png` });
+    await shot(page, `item3-comfort-scale-${kind(page)}.png`);
   });
 }
 
@@ -128,5 +133,5 @@ test('PDF: три уровня комфорта, без запрещённых �
   expect(html).toContain('Дискомфорт');
   await page.setContent(html, { waitUntil: 'load' });
   await page.waitForTimeout(500);
-  await page.screenshot({ path: `${shots}/item3-pdf-preview.png`, fullPage: true });
+  await shot(page, `item3-pdf-preview.png`, true);
 });
