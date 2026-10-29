@@ -10,6 +10,7 @@
  * Цен, имени и телефона клиента, адреса, проекта, сотрудников и компании в ответе нет —
  * их нет и в снимке: ответ собирается из явного списка полей, а не вычитанием лишнего.
  * Выключенная, неизвестная или с удалённой комнатой ссылка отвечает одинаково: 404.
+ * Фотоотчёт добавляется отдельным разделом, только если его включили для клиента (без подписей и авторов).
  */
 import { randomBytes } from 'node:crypto';
 
@@ -116,7 +117,11 @@ export async function handleRoomShare(ctx) {
     if (!row) return notFound();
     const obj = (platform.objects || []).find((o) => o.id === row.objectId && o.orgId === row.orgId);
     if (!obj) return notFound();
-    return ctx.json(200, { share: publicView(row) });
+    const share = publicView(row);
+    // Фотоотчёт — только если владелец или менеджер включил показ клиенту и фото есть.
+    const report = ctx.clientReport ? await ctx.clientReport(ctx, obj) : null;
+    if (report) share.photos = report.photos;
+    return ctx.json(200, { share });
   }
 
   const match = path.match(SHARE_PATH);

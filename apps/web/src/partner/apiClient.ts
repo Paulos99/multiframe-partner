@@ -10,6 +10,7 @@ import type {
   SessionUser,
   UserRole,
 } from '../../../../packages/shared/partner';
+import type { PhotoStage } from '../../../../packages/shared/roomPhotos.js';
 import { loadToken, saveToken } from './localStore';
 import type {
   TrainingCompanyRow,
@@ -308,6 +309,7 @@ export async function apiFetchObjectDocument(
 export function stripObjectDocuments<T extends Partial<JobObject>>(input: T): T {
   const copy = { ...input };
   delete copy.documents;
+  delete copy.photoCounts;
   return copy;
 }
 
@@ -561,6 +563,8 @@ export interface PublicRoomShare {
   roomName: string;
   room: Record<string, unknown>;
   updatedAt?: string;
+  /** Фотоотчёт: есть, только если владелец или менеджер включил показ клиенту. */
+  photos?: PublicRoomPhoto[];
 }
 
 export async function apiGetRoomShare(objectId: string): Promise<RoomShareLink> {
@@ -596,7 +600,7 @@ export async function apiPublicRoom(token: string, signal?: AbortSignal): Promis
     token: null,
     signal,
   });
-  return data.share;
+  return data.share.photos ? { ...data.share, photos: data.share.photos.map(withUrls) } : data.share;
 }
 
 /* —— Обучение в аналитике (см. apps/api/training.js) —— */
@@ -616,3 +620,168 @@ export async function apiTrainingCompanies(): Promise<{ companies: TrainingCompa
 export async function apiTrainingUser(userId: string): Promise<TrainingUserView> {
   return request<TrainingUserView>(`/training/user/${encodeURIComponent(userId)}`);
 }
+
+/* —— Фотоотчёт комнаты —— */
+
+export interface RoomPhoto {
+  id: string;
+  stage: PhotoStage;
+  caption: string;
+  createdAt: string;
+  createdBy?: string | null;
+  authorName?: string;
+  authorRole?: string | null;
+  width: number | null;
+  height: number | null;
+  /** Короткоживущие ссылки: после просмотра список лучше запросить заново. */
+  url: string;
+  thumbUrl: string;
+}
+
+export interface RoomPhotoList {
+  photos: RoomPhoto[];
+  canAdd: PhotoStage[];
+  stages: PhotoStage[];
+  limit: number;
+  clientVisible: boolean;
+  canShareWithClient: boolean;
+}
+
+/** Без бакета сервер отдаёт путь от корня API: добавляем адрес API. */
+export function resolvePhotoUrl(url: string): string {
+  return url.startsWith('/') ? `${apiBase()}${url}` : url;
+}
+
+function withUrls<T extends { url?: string; thumbUrl?: string }>(photo: T): T {
+  return {
+    ...photo,
+    ...(photo.url ? { url: resolvePhotoUrl(photo.url) } : {}),
+    ...(photo.thumbUrl ? { thumbUrl: resolvePhotoUrl(photo.thumbUrl) } : {}),
+  };
+}
+
+const photosPath = (objectId: string) => `/objects/${encodeURIComponent(objectId)}/photos`;
+
+export async function apiListRoomPhotos(objectId: string, signal?: AbortSignal): Promise<RoomPhotoList> {
+  const data = await request<RoomPhotoList>(photosPath(objectId), { signal });
+  return { ...data, photos: data.photos.map(withUrls) };
+}
+
+/**
+ * Загрузка одного фото с процентом выполнения (fetch этого не умеет, поэтому XMLHttpRequest).
+ * Фото уходят по одному: сервер дописывает запись комнаты, параллельные запросы не нужны.
+ */
+export function apiUploadRoomPhoto(
+  objectId: string,
+  input: { stage: PhotoStage; caption: string; image: string; thumb: string },
+  onProgress?: (fraction: number) => void,
+): Promise<RoomPhoto> {
+  const base = apiBase();
+  if (!base) return Promise.reject(new Error('Сервер не настроен'));
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${base}${photosPath(objectId)}`);
+    xhr.timeout = 90_000;
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    const token = loadToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
+    };
+    xhr.onerror = () => reject(new ApiError(0, NETWORK_ERROR_MESSAGE));
+    xhr.ontimeout = () => reject(new ApiError(0, NETWORK_ERROR_MESSAGE));
+    xhr.onload = () => {
+      let data: { photo?: RoomPhoto; message?: string } = {};
+      try {
+        data = JSON.parse(xhr.responseText || '{}');
+      } catch {
+        /* пустой ответ */
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && data.photo) {
+        onProgress?.(1);
+        resolve(withUrls(data.photo));
+      } else {
+        reject(new ApiError(xhr.status, data.message || `Ошибка ${xhr.status}`));
+      }
+    };
+    xhr.send(JSON.stringify(input));
+  });
+}
+
+export async function apiUpdateRoomPhoto(objectId: string, photoId: string, caption: string): Promise<RoomPhoto> {
+  const data = await request<{ photo: RoomPhoto }>(`${photosPath(objectId)}/${encodeURIComponent(photoId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ caption }),
+  });
+  return withUrls(data.photo);
+}
+
+export async function apiDeleteRoomPhoto(objectId: string, photoId: string): Promise<void> {
+  await request(`${photosPath(objectId)}/${encodeURIComponent(photoId)}`, { method: 'DELETE' });
+}
+
+export async function apiSetPhotoReportVisible(objectId: string, clientVisible: boolean): Promise<boolean> {
+  const data = await request<{ clientVisible: boolean }>(photosPath(objectId), {
+    method: 'PATCH',
+    body: JSON.stringify({ clientVisible }),
+  });
+  return data.clientVisible;
+}
+
+/** Кейс админа: комната с фото. Без имени клиента и адреса. */
+export interface PhotoCase {
+  objectId: string;
+  roomName: string;
+  areaM2: number | null;
+  orgId: string;
+  partnerName: string;
+  city: string;
+  counts: Record<PhotoStage, number>;
+  total: number;
+  /** Есть и «До», и «После». */
+  complete: boolean;
+  lastAt: string | null;
+  firstAt: string | null;
+  coverUrl?: string | null;
+  coverStage?: PhotoStage | null;
+}
+
+export interface PhotoCaseFilters {
+  orgId?: string;
+  stage?: PhotoStage | '';
+  from?: string;
+  to?: string;
+}
+
+export async function apiListPhotoCases(
+  filters: PhotoCaseFilters = {},
+  signal?: AbortSignal,
+): Promise<{ cases: PhotoCase[]; partners: Array<{ id: string; name: string }> }> {
+  const q = new URLSearchParams();
+  if (filters.orgId) q.set('orgId', filters.orgId);
+  if (filters.stage) q.set('stage', filters.stage);
+  if (filters.from) q.set('from', filters.from);
+  if (filters.to) q.set('to', filters.to);
+  const data = await request<{ cases: PhotoCase[]; partners: Array<{ id: string; name: string }> }>(
+    `/photo-cases${q.toString() ? `?${q}` : ''}`,
+    { signal },
+  );
+  return {
+    ...data,
+    cases: data.cases.map((item) => ({ ...item, coverUrl: item.coverUrl ? resolvePhotoUrl(item.coverUrl) : null })),
+  };
+}
+
+export async function apiGetPhotoCase(
+  objectId: string,
+  signal?: AbortSignal,
+): Promise<{ case: PhotoCase; photos: RoomPhoto[] }> {
+  const data = await request<{ case: PhotoCase; photos: RoomPhoto[] }>(
+    `/photo-cases/${encodeURIComponent(objectId)}`,
+    { signal },
+  );
+  return { ...data, photos: data.photos.map(withUrls) };
+}
+
+/** Фото клиентской страницы: этап и ссылки, без подписей и авторов. */
+export type PublicRoomPhoto = Pick<RoomPhoto, 'id' | 'stage' | 'createdAt' | 'width' | 'height' | 'url' | 'thumbUrl'>;

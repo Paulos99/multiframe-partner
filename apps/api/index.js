@@ -21,6 +21,7 @@ import {
 } from './platformStore.js';
 import { handleRoomShare } from './roomShare.js';
 import { handleTraining } from './training.js';
+import { handleRoomPhotos, photoCountsForObject, removePhotoFiles, clientReport } from './roomPhotos.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
@@ -228,6 +229,17 @@ async function s3PutBytes(key, body, contentType) {
   });
 }
 
+/** Общие для фото и клиентской страницы: доступ к хранилищу и заголовки ответа. */
+const storageCtx = {
+  json: (...args) => json(...args),
+  cors: CORS,
+  storage: {
+    put: (key, body, type) => s3PutBytes(key, body, type),
+    get: (key) => s3GetBytes(key),
+    del: (key) => s3Delete(key),
+  },
+};
+
 async function s3Delete(key) {
   memoryDocs.delete(key);
   const bucket = partnerBucket();
@@ -395,8 +407,13 @@ function objectVisibleTo(user, obj) {
 
 /** Бригада получает количества без цен и сумм. Замерщик и остальные роли видят расчёт целиком. */
 function publicObject(obj, role) {
+  // Список фото с ключами бакета наружу не уходит: только число по этапам, которые видит роль.
+  const { photos: _photos, photoReport: _photoReport, ...rest } = obj;
+  void _photos;
+  void _photoReport;
   return {
-    ...obj,
+    ...rest,
+    photoCounts: photoCountsForObject(obj, role),
     estimate: estimateForRole(obj.estimate, role),
     history: obj.history || [],
     documents: visibleDocuments(obj.documents),
@@ -482,6 +499,9 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     history: existing?.history || [],
     // PDF только через POST /objects/:id/documents — обычный PATCH их не затирает.
     documents: Array.isArray(existing?.documents) ? existing.documents : [],
+    // Фото — только через /objects/:id/photos. Обычный PATCH их не затирает.
+    ...(Array.isArray(existing?.photos) ? { photos: existing.photos } : {}),
+    ...(existing?.photoReport ? { photoReport: existing.photoReport } : {}),
     ...link,
   };
 }
@@ -920,6 +940,8 @@ export async function handler(event = {}) {
     if (projectsResponse) return projectsResponse;
 
     const roomShareResponse = await handleRoomShare({
+      ...storageCtx,
+      clientReport,
       path,
       method,
       requireAuth: () => requireAuth(event),
@@ -942,6 +964,20 @@ export async function handler(event = {}) {
       normalizeRole,
     });
     if (trainingResponse) return trainingResponse;
+    const roomPhotosResponse = await handleRoomPhotos({
+      ...storageCtx,
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      loadPlatform,
+      getBody: () => getBody(event),
+      getQuery: () => getQuery(event),
+      savePlatform,
+      objectVisibleTo,
+      pushActivity,
+      uid,
+    });
+    if (roomPhotosResponse) return roomPhotosResponse;
 
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
@@ -1655,6 +1691,7 @@ export async function handler(event = {}) {
       for (const doc of doomed) {
         if (doc.storageKey) await s3Delete(doc.storageKey);
       }
+      await removePhotoFiles(storageCtx, existing);
       return json(200, { ok: true });
     }
 

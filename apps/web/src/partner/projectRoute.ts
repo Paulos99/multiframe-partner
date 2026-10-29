@@ -127,3 +127,20 @@ export function navigateStaff(route: StaffRoute, mode: 'push' | 'replace' = 'pus
 export function navigateCompany(tab: CompanyTab, mode: 'push' | 'replace' = 'push') {
   navigateHash(companyHash(tab), mode);
 }
+
+export type CasesRoute = { kind: 'list' } | { kind: 'case'; objectId: string };
+
+/** #cases — список кейсов с фото, #cases/<id комнаты> — страница кейса. Чужой адрес — null. */
+export function parseCasesHash(hash: string): CasesRoute | null {
+  const parts = hashParts(hash);
+  if (parts[0] !== 'cases') return null;
+  return parts[1] ? { kind: 'case', objectId: parts[1] } : { kind: 'list' };
+}
+
+export function casesHash(route: CasesRoute): string {
+  return route.kind === 'case' ? `#cases/${encodeURIComponent(route.objectId)}` : '#cases';
+}
+
+export function navigateCases(route: CasesRoute, mode: 'push' | 'replace' = 'push') {
+  navigateHash(casesHash(route), mode);
+}
