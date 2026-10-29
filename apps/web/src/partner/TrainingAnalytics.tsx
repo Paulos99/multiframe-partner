@@ -134,7 +134,7 @@ function EmployeesTable({ rows }: { rows: TrainingOrgView['employees'] }) {
             <th scope="col">Сотрудник</th>
             <th scope="col">Уровень</th>
             <th scope="col">Верно с первой попытки</th>
-            <th scope="col">Подходов</th>
+            <th scope="col">Попыток</th>
             <th scope="col">Последнее занятие</th>
             <th scope="col">Слабые места</th>
           </tr>
@@ -160,7 +160,7 @@ function EmployeesTable({ rows }: { rows: TrainingOrgView['employees'] }) {
                 <LevelChip id={row.level.id} title={row.level.title} />
               </td>
               <td data-label="Верно с первой попытки">{percent(row.levelShare)}</td>
-              <td data-label="Подходов">{row.sets}</td>
+              <td data-label="Попыток">{row.sets}</td>
               <td data-label="Последнее занятие" title={dateLabel(row.lastActivityAt)}>
                 {sinceLabel(row.lastActivityAt)}
               </td>
@@ -334,7 +334,7 @@ function UserBody({ view }: { view: TrainingUserView }) {
           <span className={ui.tileNote}>по последним ответам</span>
         </li>
         <Tile label="Верно с первой попытки" value={percent(summary.levelShare)} note="последние ответы" />
-        <Tile label="Подходов" value={String(summary.sets)} note={`засчитано: ${summary.passedSets}`} />
+        <Tile label="Попыток" value={String(summary.sets)} note={`засчитано: ${summary.passedSets}`} />
         <Tile label="Викторина" value={percent(summary.quizShare)} note={`подходов: ${summary.quizSets}`} />
         <Tile label="Открыл материалов" value={String(summary.materialsOpened)} note={`открытий: ${summary.materialOpens}`} />
         <Tile label="Последнее занятие" value={sinceLabel(summary.lastActivityAt)} note={dateLabel(summary.lastActivityAt)} />
@@ -398,7 +398,7 @@ function UserBody({ view }: { view: TrainingUserView }) {
       </div>
 
       <div className={ui.section}>
-        <h4 className={ui.sectionTitle}>Последние подходы</h4>
+        <h4 className={ui.sectionTitle}>Последние попытки</h4>
         {view.attempts.length ? (
           <div className={styles.dashTableScroll}>
             <table className={styles.dashTable} data-testid="training-attempts">
@@ -425,7 +425,7 @@ function UserBody({ view }: { view: TrainingUserView }) {
             </table>
           </div>
         ) : (
-          <p className={styles.hint}>Подходов пока не было.</p>
+          <p className={styles.hint}>Попыток пока не было.</p>
         )}
       </div>
 

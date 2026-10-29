@@ -73,6 +73,11 @@ const base = {
 for (const role of ['sales', 'measurer']) {
   base.users.push({ ...base.users[0], id: `ui_${role}`, login: `ui.${role}`, displayName: `UI ${role}`, role });
 }
+// Вторая компания — для проверок видимости: владелец одной компании не видит сотрудников другой.
+base.orgs.push({ id: 'ui_org_b', settings: { ...settings, companyName: 'UI other company' }, createdAt: now });
+for (const [id, role] of [['owner_b', 'owner'], ['sales_b', 'sales']]) {
+  base.users.push({ ...base.users[0], id: `ui_${id}`, login: `ui.${id}`, displayName: `UI ${id}`, role, orgId: 'ui_org_b' });
+}
 base.objects.push({
   ...base.objects[0],
   id: 'ui_crew_room',
