@@ -812,3 +812,46 @@
     min-height: 44px;
   }
 }
+
+/* Итог закрытого проекта: «Завершён» или «Отказ · причина». */
+.outcome {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.outcomeDone {
+  background: var(--cab-accent-soft, #01644f1a);
+  color: var(--cab-accent, #01644f);
+}
+.outcomeRefused,
+.badgeRefused {
+  background: #b3261e1a;
+  color: #b3261e;
+}
+.refusalNote {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #b3261e14;
+  color: #b3261e;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.outcomeBox {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--cab-border, #0002);
+  border-radius: 12px;
+}
+.outcomeBox legend {
+  padding: 0 6px;
+  font-weight: 700;
+}

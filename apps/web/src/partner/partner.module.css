@@ -3492,3 +3492,15 @@ div.drillPerson {
   white-space: nowrap;
 }
 
+
+/* Причина отказа под статусом комнаты. */
+.refusalNote {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #b3261e14;
+  color: #b3261e;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}

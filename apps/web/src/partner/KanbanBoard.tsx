@@ -48,6 +48,8 @@ import {
   type BoardSort,
 } from './kanban';
 import { CheckCircleIcon, DraftIcon, DrillIcon, MoreIcon, SendIcon, TapeMeasureIcon } from '../icons';
+import { CloseDialog, type CloseChoice } from './CloseDialog';
+import { refusalReasonPlain, roomStageLabel } from './closeOutcome';
 import styles from './KanbanBoard.module.css';
 
 function Column({
@@ -120,7 +122,7 @@ function Card({
         aria-roledescription="карточка"
         aria-disabled={disabled || undefined}
         className={`${styles.card} ${related ? styles.related : ''} ${isDragging ? styles.source : ''}`}
-        aria-label={`${roomDisplayName(room)} · ${room.clientName || 'Клиент'} · ${JOB_OBJECT_STATUS_LABELS[room.status]}`}
+        aria-label={`${roomDisplayName(room)} · ${room.clientName || 'Клиент'} · ${roomStageLabel(room)}`}
         onPointerDown={(e) => {
           if (e.pointerType !== 'touch') listeners?.onPointerDown?.(e);
         }}
@@ -214,6 +216,7 @@ export function KanbanBoard({
   // Where the pointer grabbed the card, relative to its top-left; the overlay rotates/scales around it.
   const [grab, setGrab] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const busy = useRef(false);
+  const [closing, setClosing] = useState<{ room: JobObject; changes: JobObject[] } | null>(null);
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
@@ -266,14 +269,27 @@ export function KanbanBoard({
       return `«${JOB_OBJECT_STATUS_LABELS[id as JobObjectStatus]}»`;
     }
     const room = namedRooms.find((item) => item.id === id);
-    return room ? `«${JOB_OBJECT_STATUS_LABELS[room.status]}»` : 'доски';
+    return room ? `«${roomStageLabel(room)}»` : 'доски';
   }
   function preview(next: JobObject[]) {
     draft.current = next;
     setLocal(next);
   }
-  async function commit(room: JobObject, next: JobObject[]) {
+  async function send(changes: JobObject[]) {
     const previousSort = sort;
+    busy.current = true;
+    setSort('manual');
+    try {
+      await onMove(changes);
+    } catch {
+      setSort(previousSort);
+      setLocal(snapshot.current);
+    } finally {
+      busy.current = false;
+      setLocal(null);
+    }
+  }
+  async function commit(room: JobObject, next: JobObject[]) {
     const list = next.filter((r) => r.status === room.status);
     const ranked = rankMovedColumn(list, room.id);
     const changes = ranked.filter(
@@ -286,17 +302,27 @@ export function KanbanBoard({
     preview(
       next.map((r) => ranked.find((updated) => updated.id === r.id) ?? r),
     );
-    busy.current = true;
-    setSort('manual');
-    try {
-      await onMove(changes);
-    } catch {
-      setSort(previousSort);
-      setLocal(snapshot.current);
-    } finally {
-      busy.current = false;
-      setLocal(null);
+    const original = snapshot.current.find((r) => r.id === room.id);
+    if (room.status === 'closed' && original?.status !== 'closed') {
+      // Закрытие: сначала выбор «Завершён» или «Отказ», потом сохранение.
+      setClosing({ room, changes });
+      return;
     }
+    await send(changes);
+  }
+  async function confirmClose(choice: CloseChoice) {
+    const pending = closing;
+    if (!pending) return;
+    setClosing(null);
+    await send(
+      pending.changes.map((item) =>
+        item.id === pending.room.id ? { ...item, refusal: choice ? { ...choice, at: '', by: null } : null } : item,
+      ),
+    );
+  }
+  function cancelClose() {
+    setClosing(null);
+    setLocal(null);
   }
   function over({ active: drag, over }: DragOverEvent) {
     if (!over) return;
@@ -390,12 +416,29 @@ export function KanbanBoard({
           <span title="Документы">{documentKindsSummary(room.documents) || 'Без PDF'}</span>
           <span>{room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'площадь не указана'}</span>
         </div>
+        {room.status === 'closed' ? (
+          <span
+            className={`${styles.outcome} ${room.refusal ? styles.outcomeRefused : styles.outcomeDone}`}
+            data-outcome={room.refusal ? 'refused' : 'completed'}
+          >
+            {roomStageLabel(room)}
+            {room.refusal ? ` · ${refusalReasonPlain(room.refusal.reasonKey)}` : ''}
+          </span>
+        ) : null}
         {room.pendingSync && <small>↻ Ожидает синхронизации</small>}
       </>
     );
   }
   return (
     <>
+      {closing ? (
+        <CloseDialog
+          subject="room"
+          name={roomDisplayName(closing.room)}
+          onConfirm={confirmClose}
+          onCancel={cancelClose}
+        />
+      ) : null}
       <div className={styles.toolbar}>
         <strong>{roomCountLabel(visible.length)}</strong>
         <button

@@ -46,6 +46,7 @@ import { FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import { StaffDrillDrawer } from './StaffDrillDrawer';
+import { refusalStats } from '../../../../packages/shared/refusal.js';
 import styles from './partner.module.css';
 import { FunnelIcon } from '../icons';
 
@@ -501,6 +502,16 @@ export function AnalyticsDashboard({
   }
 
   const dash = data!;
+  const refusals = (() => {
+    const range = rangeFromYmd(fromYmd, toYmd);
+    const stats = refusalStats((model?.objects || []) as never, range);
+    const items: AnalyticsBreakdownItem[] = stats.byReason.map((row) => ({
+      key: row.title,
+      count: row.count,
+      share: stats.total ? Math.round((row.count / stats.total) * 100) : 0,
+    }));
+    return { total: stats.total, items };
+  })();
   const tilePanels = dash.kpi.panels;
   const tileArea = dash.kpi.areaM2;
   const showDelta = Boolean(dash.kpiPrev);
@@ -685,6 +696,13 @@ export function AnalyticsDashboard({
               items={dash.breakdowns.calcMode}
               kind="mode"
             />
+            <div data-refusals>
+              <BreakdownList
+                title={`Отказы клиентов: ${refusals.total}`}
+                items={refusals.items}
+                kind="raw"
+              />
+            </div>
             <BreakdownList
               title="Город / регион"
               items={dash.breakdowns.city || []}

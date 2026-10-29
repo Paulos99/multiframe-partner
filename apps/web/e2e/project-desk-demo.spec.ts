@@ -105,7 +105,7 @@ test('демо-бригада видит список комнат без кан
   await expect(done.getByRole('heading', { name: 'Иванова А.', exact: true })).toBeHidden();
   await done.locator('summary').click();
   await expect(done.getByRole('heading', { name: 'Иванова А.', exact: true })).toBeVisible();
-  await expect(done.getByRole('button', { name: 'Гостиная' })).toContainText('Закрыто');
+  await expect(done.getByRole('button', { name: 'Гостиная' })).toContainText('Завершён');
   await expect(done.getByRole('heading', { name: 'Петров С.', exact: true })).toBeVisible();
 
   await open.getByRole('button', { name: 'Детская' }).click();

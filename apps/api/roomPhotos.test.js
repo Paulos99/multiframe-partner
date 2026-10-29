@@ -110,7 +110,7 @@ describe('фотоотчёт комнаты', { concurrency: false }, () => {
     const made = readJson(
       await call('POST', '/objects', {
         token: tokens.owner,
-        body: { clientName: 'Клиент Секретов', clientPhone: '+7 900 000-00-00', address: 'ул. Тайная, 1', city: 'Москва', roomName: 'Спальня', assignedTo: ids.exec1, room: { areaM2: 18 }, estimate: { panels: 9, dowels: 18, totalCost: 424242 } },
+        body: { clientName: 'Клиент Секретов', clientPhone: '+7 900 000-00-00', status: 'measured', address: 'ул. Тайная, 1', city: 'Москва', roomName: 'Спальня', assignedTo: ids.exec1, room: { areaM2: 18 }, estimate: { panels: 9, dowels: 18, totalCost: 424242 } },
       }),
     );
     room = made.object;

@@ -6,7 +6,7 @@ import {
 } from './guided-tour.js';
 import { VirtualCursor, sleep } from './virtual-cursor.js';
 
-export const APP_TUTORIAL_KEY = 'mf-app-tutorial-v7';
+export const APP_TUTORIAL_KEY = 'mf-app-tutorial-v8';
 
 /** L-room in meters (1 m grid). */
 const DEMO_ROOM = [
@@ -30,10 +30,6 @@ let nextWaiters = [];
 
 function $(sel) {
   return document.querySelector(sel);
-}
-
-function $$(sel) {
-  return [...document.querySelectorAll(sel)];
 }
 
 function aborted() {
@@ -76,25 +72,6 @@ async function narrate(tour, opts) {
   await tour.narrate(opts);
 }
 
-function revealSharedOptions() {
-  const sharedReveal = $('#sharedReveal');
-  if (!sharedReveal) return;
-  sharedReveal.classList.add('is-open');
-  sharedReveal.querySelector('.shared-reveal__collapse')?.removeAttribute('inert');
-  $('#sharedCalcOptions')?.setAttribute('aria-hidden', 'false');
-}
-
-async function ensureSidebarForParams() {
-  if (tourIsMobileLayout()) {
-    openMobileSidebar();
-    await sleep(320);
-  }
-  revealSharedOptions();
-  await sleep(220);
-  // Let open animation / layout settle before measuring spotlight
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-}
-
 async function drawRoomWithCursor(cursor, editor) {
   if (!editor) return;
   editor.prepareDemoDrawView({ minX: -0.5, minY: -0.5, maxX: 6, maxY: 5 });
@@ -131,225 +108,12 @@ async function drawRoomWithCursor(cursor, editor) {
   await sleep(BEAT);
 }
 
-/** Door 0.9 + window 1.2 + side margins ~1.4 ≈ 3.5 m minimum for the demo. */
-const DEMO_OPENINGS_MIN_LENGTH = 3.5;
-
-function pickLongestWall(editor) {
-  const walls = editor?.room?.walls || [];
-  if (!walls.length) return null;
-  return walls.reduce((a, b) => (b.length > a.length ? b : a));
-}
-
-/** Prefer a wall that fits door + window without overlap; else longest. */
-function pickDemoOpeningsWall(editor) {
-  const walls = editor?.room?.walls || [];
-  if (!walls.length) return null;
-  const fit = walls.filter((w) => w.length >= DEMO_OPENINGS_MIN_LENGTH);
-  if (fit.length) return fit.reduce((a, b) => (b.length > a.length ? b : a));
-  return pickLongestWall(editor);
-}
-
-async function demoOpenings(cursor, tour) {
-  if (tourIsMobileLayout()) closeMobileSidebar();
-  const openStep = tourIsMobileLayout() ? '5 / 8' : '4 / 8';
-
-  const openingsBtn = $('#sketchOpeningsBtn');
-  const editor = demoHooks?.getSketchEditor?.();
-  const wallsBtn = document.querySelector('#resultsTabs .tab-btn[data-tab="walls"]');
-  const sheet = () => $('.sketch-openings-modal__sheet') || $('#sketchOpeningsModal');
-
-  // Park card once — no further jumps this step
-  await narrate(tour, {
-    title: 'Проёмы в стенах',
-    text: 'Сначала вкладка «Стены», затем редактор проёмов — добавим дверь и окно.',
-    target: wallsBtn || openingsBtn || '.scheme-card',
-    radius: 12,
-    stepLabel: openStep,
-    forceCard: true,
-  });
-
-  // 1) Switch to walls view so the mode change is visible
-  if (wallsBtn) {
-    wallsBtn.hidden = false;
-    await cursor.click(wallsBtn, { duration: CURSOR_MS });
-    demoHooks?.setSchemeView?.('walls');
-    await sleep(BEAT);
-    tour.refreshSpotlight('.scheme-card', { radius: 12 });
-  }
-
-  // 2) Open openings editor
-  tour.setCopy({
-    title: 'Проёмы в стенах',
-    text: 'Открываем редактор — дверь и окно на одной длинной стене.',
-    stepLabel: openStep,
-  });
-  await sleep(420);
-
-  const beforeOpen = pickDemoOpeningsWall(editor);
-  if (beforeOpen) editor.selectedWallId = beforeOpen.id;
-
-  if (openingsBtn && !openingsBtn.disabled) {
-    await cursor.click(openingsBtn, { duration: CURSOR_MS });
-  } else {
-    editor?._openOpeningsModal?.();
-  }
-  await sleep(BEAT);
-  tour.refreshSpotlight(sheet(), { radius: 14 });
-
-  // rebuildWalls() inside _openOpeningsModal regenerates wall IDs — re-pick and select
-  const demoWall = pickDemoOpeningsWall(editor);
-  if (demoWall && editor) {
-    editor._selectWall(demoWall.id);
-    const labelKey = demoWall.label.replace(/^Стена\s+/, '');
-    const chip = $$('.sketch-wall-chip').find(
-      (el) => el.textContent?.includes(labelKey) || el.textContent?.includes(`${demoWall.length.toFixed(1)} м`)
-    );
-    if (chip) await cursor.click(chip, { duration: CURSOR_MS });
-  }
-
-  // 3) Door on the left
-  const doorBtn = $('#sketchAddDoorBtn');
-  if (doorBtn) {
-    await cursor.click(doorBtn, { duration: CURSOR_MS });
-  } else {
-    editor?._addOpening?.('door');
-  }
-  editor?._placeOpeningAside?.('left');
-  await sleep(BEAT + 200);
-
-  const winBtn = $('#sketchAddWindowBtn');
-  if (winBtn) {
-    await cursor.click(winBtn, { duration: CURSOR_MS });
-  } else {
-    editor?._addOpening?.('window');
-  }
-  editor?._placeOpeningAside?.('right');
-  await sleep(BEAT + 300);
-
-  const elev = $('.sketch-openings-elevation') || $('#sketchWallCanvas')?.parentElement;
-  if (elev) {
-    tour.refreshSpotlight(elev, { pad: 8, radius: 12 });
-    await cursor.moveTo(elev, { duration: CURSOR_MS });
-    await sleep(BEAT);
-  }
-
-  tour.setCopy({
-    title: 'Проёмы в стенах',
-    text: 'Оба проёма на развёртке. Закрываем редактор — смета обновится.',
-    stepLabel: openStep,
-  });
-  await sleep(450);
-
-  const done = $('#sketchOpeningsDoneBtn') || $('#sketchOpeningsCloseBtn');
-  if (done) await cursor.click(done, { duration: CURSOR_MS });
-  else editor?._closeOpeningsModal?.();
-  await sleep(BEAT);
-
-  demoHooks?.runCalculation?.({ silent: true });
-  demoHooks?.setSchemeView?.('walls');
-  await sleep(BEAT);
-  tour.refreshSpotlight('.scheme-card', { radius: 12 });
-}
-
-async function demoSurfaces(cursor, tour) {
-  await ensureSidebarForParams();
-
-  const isMobile = tourIsMobileLayout();
-  const block = $('#sharedCalcOptions');
-
-  if (isMobile && block) {
-    try {
-      block.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
-    } catch { /* ignore */ }
-    await sleep(180);
-    await narrate(tour, {
-      title: 'Что считать и монтаж',
-      text: 'Выберите стены и тип монтажа — только после этого появятся результаты.',
-      textMobile: 'Сначала стены и тип монтажа. Результаты — после кнопки «Готово».',
-      target: block,
-      scrollBlock: 'center',
-      stepLabel: '4 / 8',
-      pad: 12,
-      radius: 14,
-      forceCard: true,
-      skipScroll: true,
-    });
-    await sleep(BEAT * 0.4);
-  }
-
-  if (block && !isMobile) {
-    try {
-      block.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
-    } catch { /* ignore */ }
-    await sleep(120);
-  }
-
-  // Grey frame immediately, no scroll race with cursor
-  await narrate(tour, {
-    title: 'Что считать',
-    text: 'Снимаем лишние стены — оставляем потолок и две стены.',
-    target: block || '#sharedCalcOptions',
-    scrollBlock: 'center',
-    stepLabel: isMobile ? '4 / 8' : '5 / 8',
-    pad: 12,
-    radius: 14,
-    forceCard: true,
-    skipScroll: true,
-  });
-
-  const localMs = Math.round(CURSOR_MS * 0.55);
-  const deselect = $('#deselectAllWallsBtn');
-
-  // One approach move into the block, then short hops between chips
-  if (deselect || block) {
-    await cursor.moveTo(deselect || block, { duration: Math.round(CURSOR_MS * 0.8) });
-    await sleep(220);
-  }
-
-  if (deselect) {
-    await cursor.click(deselect, { duration: localMs });
-    await sleep(480);
-    // Keep same frame; only re-measure size after chips reflow
-    tour.refreshSpotlight(block || '#sharedCalcOptions', { pad: 12, radius: 14, sticky: true });
-  }
-
-  const ceilingLabel = $('#calcCeiling')?.closest('label');
-  const ceiling = $('#calcCeiling');
-  if (ceiling && !ceiling.checked && ceilingLabel) {
-    await cursor.click(ceilingLabel, { duration: localMs });
-    await sleep(400);
-  }
-
-  const wallLabels = $$('#wallSurfacesList label.surface-chip')
-    .filter((lab) => lab.querySelector('input[type="checkbox"]'));
-  for (const lab of wallLabels.slice(0, 2)) {
-    throwIfAborted();
-    const input = lab.querySelector('input[type="checkbox"]');
-    if (input?.checked) continue;
-    await cursor.click(lab, { duration: localMs });
-    await sleep(400);
-  }
-
-  demoHooks?.runCalculation?.({ silent: true });
-  await sleep(BEAT);
-
-  tour.setCopy({
-    title: 'Что считать',
-    text: 'В расчёте только выбранные поверхности.',
-    stepLabel: tourIsMobileLayout() ? '4 / 8' : '5 / 8',
-  });
-  // Do not move card — only keep spotlight locked on the options block
-  tour.refreshSpotlight(block || '#sharedCalcOptions', { pad: 12, radius: 14, sticky: true });
-  await sleep(BEAT);
-}
-
 function stepLabel(i, total) {
   return `${i} / ${total}`;
 }
 
 function buildSteps() {
-  const total = 8;
-  const mobile = tourIsMobileLayout();
+  const total = 6;
 
   const welcome = {
     id: 'welcome',
@@ -357,7 +121,7 @@ function buildSteps() {
       const title = $('.app-header__text') || $('.app-header');
       await narrate(tour, {
         title: 'Калькулятор MultiFRAME',
-        text: 'Считает панели и комплектующие для звукоизоляции потолка и стен — со схемой раскладки и сметой.',
+        text: 'Считает панели и комплектующие для бескаркасной звукоизоляции потолка — со схемой раскладки и сметой.',
         target: title,
         radius: 16,
         stepLabel: stepLabel(1, total),
@@ -478,20 +242,6 @@ function buildSteps() {
     },
   };
 
-  const openings = {
-    id: 'openings',
-    async play(cursor, tour) {
-      await demoOpenings(cursor, tour);
-    },
-  };
-
-  const surfaces = {
-    id: 'surfaces',
-    async play(cursor, tour) {
-      await demoSurfaces(cursor, tour);
-    },
-  };
-
   const results = {
     id: 'results',
     async play(cursor, tour) {
@@ -503,9 +253,9 @@ function buildSteps() {
       }
       await narrate(tour, {
         title: 'Смета и PDF',
-        text: 'Детальный список материалов и выгрузка в PDF — для клиента или прораба.',
+        text: 'Потолок без каркаса: панели, монтаж и крепёж в одной смете. Выгрузка в PDF — для клиента или прораба.',
         target: '#resultsAside',
-        stepLabel: stepLabel(6, total),
+        stepLabel: stepLabel(4, total),
         forceCard: true,
       });
       const aside = $('#resultsAside');
@@ -529,7 +279,7 @@ function buildSteps() {
         text: 'Когда цифры устраивают — можно перейти к покупке панелей.',
         target: buyBtn || '.workspace-stats',
         radius: 14,
-        stepLabel: stepLabel(7, total),
+        stepLabel: stepLabel(5, total),
         forceCard: true,
       });
       if (buyBtn) {
@@ -551,7 +301,7 @@ function buildSteps() {
           : '«Как работает?» в шапке запускает демо снова. Удачных расчётов!',
         target: '#appHelpBtn',
         radius: 22,
-        stepLabel: stepLabel(8, total),
+        stepLabel: stepLabel(6, total),
         forceCard: true,
       });
       const helpBtn = $('#appHelpBtn');
@@ -560,11 +310,7 @@ function buildSteps() {
     },
   };
 
-  // Mobile: after sketch → params (surfaces) first, then openings
-  if (mobile) {
-    return [welcome, mode, drawLayout, surfaces, openings, results, buy, help];
-  }
-  return [welcome, mode, drawLayout, openings, surfaces, results, buy, help];
+  return [welcome, mode, drawLayout, results, buy, help];
 }
 
 async function finishDemo(tour, cursor, { completed }) {

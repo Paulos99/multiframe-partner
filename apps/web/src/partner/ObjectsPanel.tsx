@@ -35,6 +35,8 @@ import { SavedResultPage } from './SavedResultPage';
 import listStyles from './ProjectList.module.css';
 import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
 import { ProjectDesk } from './ProjectDesk';
+import { CloseDialog } from './CloseDialog';
+import { refusalLine, roomStageLabel } from './closeOutcome';
 import { assigneeCandidates, assigneeRoleLabel, deleteProjectWarning, roomTitle } from './projectDesk';
 import { navigateProject, parseProjectHash, PROJECT_TABS, type ProjectRoute } from './projectRoute';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
@@ -178,10 +180,11 @@ function ObjectDocuments({
   );
 }
 
-function StatusBadge({ status }: { status: JobObjectStatus }) {
+function StatusBadge({ status, refusal }: { status: JobObjectStatus; refusal?: JobObject['refusal'] }) {
+  const label = roomStageLabel({ status, refusal });
   return (
-    <StatusSwap statusKey={status} className={styles.badge}>
-      {JOB_OBJECT_STATUS_LABELS[status]}
+    <StatusSwap statusKey={`${status}${refusal ? ':refusal' : ''}`} className={styles.badge}>
+      {label}
     </StatusSwap>
   );
 }
@@ -223,6 +226,7 @@ export function ObjectsPanel({
   const [query, setQuery] = useState('');
   const roomFilter = 'all' as const;
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [closingRoom, setClosingRoom] = useState<JobObject | null>(null);
   const [docBusy, setDocBusy] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<RoomDraft>(() => emptyDraft(user.org?.city || ''));
@@ -286,6 +290,11 @@ export function ObjectsPanel({
     () => grouped.objects.find((object) => object.id === selectedId) || null,
     [grouped, selectedId],
   );
+  const roomPhone = useMemo(() => {
+    if (!selected) return '';
+    const project = api.projects.find((item) => item.id === selected.projectId);
+    return (project?.clientPhone || selected.clientPhone || '').trim();
+  }, [selected, api.projects]);
   const profileAttach = useProfileAttach(selected?.id);
   useEffect(() => {
     if (!openCreateToken || !canCreate) return;
@@ -416,7 +425,7 @@ export function ObjectsPanel({
     const fields = {
       status: 'draft' as const,
       clientName: draft.clientName.trim(),
-      clientPhone: draft.clientPhone.trim(),
+      clientPhone: '',
       address: draft.address.trim(),
       city: draft.city.trim() || user.org?.city || '',
       roomName: roomLabel,
@@ -428,7 +437,6 @@ export function ObjectsPanel({
         const project = await api.createProject({
           name: fields.clientName || fields.address || roomLabel,
           clientName: fields.clientName,
-          clientPhone: fields.clientPhone,
           address: fields.address,
           city: fields.city,
         });
@@ -458,7 +466,6 @@ export function ObjectsPanel({
         projectId: project.id,
         roomName: label,
         clientName: project.clientName || '',
-        clientPhone: project.clientPhone || '',
         address: project.address || '',
         city: project.city || '',
         room: roomStubFromLabel(label),
@@ -511,6 +518,21 @@ export function ObjectsPanel({
 
   return (
     <div className={`${styles.card} ${styles.panelCard}`}>
+      {closingRoom ? (
+        <CloseDialog
+          subject="room"
+          name={roomTitle(closingRoom)}
+          onCancel={() => setClosingRoom(null)}
+          onConfirm={async (choice) => {
+            const room = closingRoom;
+            setClosingRoom(null);
+            await patch(room, {
+              status: 'closed',
+              refusal: choice ? { reasonKey: choice.reasonKey, comment: choice.comment, at: '', by: null } : null,
+            });
+          }}
+        />
+      ) : null}
       {showDesk ? (
       <div className={listStyles.toolbar}>
         <div>
@@ -571,8 +593,11 @@ export function ObjectsPanel({
         onSave={(id, input) => api.updateProject(id, input)}
         onMoveStatus={
           canMove
-            ? async (id, status) => {
-                await api.updateProject(id, { status });
+            ? async (id, status, choice) => {
+                await api.updateProject(id, {
+                  status,
+                  ...(status === 'done' ? { refusal: choice ? { reasonKey: choice.reasonKey, comment: choice.comment } : null } : {}),
+                });
               }
             : undefined
         }
@@ -712,7 +737,7 @@ export function ObjectsPanel({
                 <p className={styles.lead}>
                   {[
                     [selected.address, selected.city].filter(Boolean).join(', ') || 'Адрес не заполнен',
-                    JOB_OBJECT_STATUS_LABELS[selected.status],
+                    roomStageLabel(selected),
                   ].join(' · ')}
                 </p>
               </div>
@@ -734,10 +759,10 @@ export function ObjectsPanel({
                   <span>
                     <strong>{room.roomName || room.clientName || 'Комната'}</strong>
                     <span className={listStyles.meta}>
-                      {room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'Площадь не указана'} · {JOB_OBJECT_STATUS_LABELS[room.status]}
+                      {room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'Площадь не указана'} · {roomStageLabel(room)}
                     </span>
                   </span>
-                  <StatusBadge status={room.status} />
+                  <StatusBadge status={room.status} refusal={room.refusal} />
                 </button>
               ))}
             </div>
@@ -746,14 +771,14 @@ export function ObjectsPanel({
             {selectedRooms.length > 1 ? (
               <>
                 <h3>
-                  {selected.roomName || selected.clientName || 'Комната'} · {JOB_OBJECT_STATUS_LABELS[selected.status]}
+                  {selected.roomName || selected.clientName || 'Комната'} · {roomStageLabel(selected)}
                 </h3>
                 <p className={styles.lead}>
                   {[selected.address, selected.city].filter(Boolean).join(' · ') || 'Добавить адрес'}
                 </p>
               </>
             ) : (
-              <p className={styles.hint}>{JOB_OBJECT_STATUS_LABELS[selected.status]}</p>
+              <p className={styles.hint}>{roomStageLabel(selected)}</p>
             )}
             {selected.room.areaM2 == null ? (
               <div className={styles.areaCallout}>
@@ -765,9 +790,9 @@ export function ObjectsPanel({
                 </button>
               </div>
             ) : null}
-            {selected.clientPhone ? (
-              <a className={styles.callLink} href={telHref(selected.clientPhone)}>
-                Позвонить {selected.clientPhone}
+            {roomPhone ? (
+              <a className={styles.callLink} href={telHref(roomPhone)}>
+                Позвонить {roomPhone}
               </a>
             ) : null}
             {selected.estimate ? (
@@ -872,13 +897,23 @@ export function ObjectsPanel({
                       aria-pressed={selected.status === s}
                       disabled={pendingId === selected.id}
                       onClick={() => {
-                        if (s !== selected.status) void patch(selected, { status: s });
+                        if (s === selected.status) return;
+                        if (s === 'closed') setClosingRoom(selected);
+                        else void patch(selected, { status: s });
                       }}
                     >
                       {JOB_OBJECT_STATUS_LABELS[s]}
                     </button>
                   ))}
                 </div>
+                {selected.status === 'closed' ? (
+                  <p
+                    className={selected.refusal ? styles.refusalNote : styles.hint}
+                    data-outcome={selected.refusal ? 'refused' : 'completed'}
+                  >
+                    {selected.refusal ? refusalLine(selected) : 'Завершён: монтаж выполнен.'}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <p className={styles.hint}>Статус меняет менеджер или владелец.</p>

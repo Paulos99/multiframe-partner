@@ -26,6 +26,8 @@ import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { estimateForRole } from '../../packages/shared/projectAccess.js';
+import { cleanClientPhone, phoneRoomStatusAllowed, roleSeesClientPhone } from '../../packages/shared/clientPhone.js';
+import { cleanRefusal } from '../../packages/shared/refusal.js';
 import { applyDemoPersonalNames, normalizePersonName } from '../../packages/shared/personName.js';
 import {
   deleteObject,
@@ -412,6 +414,8 @@ function publicObject(obj, role) {
   void _photoReport;
   return {
     ...rest,
+    // Телефон клиента: только владелец, менеджер, замерщик и монтажник, и только с этапа «Замер».
+    clientPhone: roleSeesClientPhone(role) && phoneRoomStatusAllowed(obj.status) ? obj.clientPhone || '' : '',
     photoCounts: photoCountsForObject(obj, role),
     estimate: estimateForRole(obj.estimate, role),
     history: obj.history || [],
@@ -479,6 +483,9 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     platform,
     existing?.orgId || actor.orgId,
   );
+  const finalStatus = allowed.includes(status) ? status : 'draft';
+  const phone = objectPhone(body, existing, finalStatus);
+  const refusal = objectRefusal(body, existing, finalStatus, actor, now);
   return {
     id: existing?.id || body.id || uid('obj'),
     orgId: existing?.orgId || actor.orgId,
@@ -486,10 +493,10 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     updatedAt: now,
     createdBy: existing?.createdBy || actor.id,
     assignedTo: body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null,
-    status: allowed.includes(status) ? status : 'draft',
+    status: finalStatus,
     stageOrder: stageOrderInput(body, existing),
     clientName: String(body.clientName ?? existing?.clientName ?? '').trim(),
-    clientPhone: String(body.clientPhone ?? existing?.clientPhone ?? '').trim(),
+    clientPhone: phone,
     address: String(body.address ?? existing?.address ?? '').trim(),
     city: String(body.city ?? existing?.city ?? org?.settings?.city ?? '').trim(),
     room: body.room || existing?.room || {},
@@ -501,7 +508,48 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     // Фото — только через /objects/:id/photos. Обычный PATCH их не затирает.
     ...(Array.isArray(existing?.photos) ? { photos: existing.photos } : {}),
     ...(existing?.photoReport ? { photoReport: existing.photoReport } : {}),
+    ...(refusal ? { refusal } : {}),
     ...link,
+  };
+}
+
+/**
+ * Телефон клиента комнаты. Новый номер принимается только с этапа «Замер»: замер, КП, монтаж.
+ * Очистка и неизменённое значение проходят на любом этапе.
+ */
+function objectPhone(body, existing, status) {
+  const current = String(existing?.clientPhone ?? '').trim();
+  if (body.clientPhone === undefined) return current;
+  const raw = String(body.clientPhone ?? '').trim();
+  if (raw === current) return current;
+  const cleaned = cleanClientPhone(raw);
+  if (cleaned.error) throw Object.assign(new Error(cleaned.error), { status: 400 });
+  if (cleaned.value && !phoneRoomStatusAllowed(status)) {
+    throw Object.assign(new Error('Телефон клиента можно указать с этапа «Замер»'), { status: 400 });
+  }
+  return cleaned.value;
+}
+
+/** Отказ клиента. Запись живёт только у закрытой комнаты; причина обязательна. */
+function objectRefusal(body, existing, status, actor, now) {
+  if (status !== 'closed') return null;
+  const cleaned = cleanRefusal(body.refusal, {
+    userId: actor.id,
+    now,
+    existing: existing?.status === 'closed' ? existing?.refusal || null : null,
+  });
+  if (cleaned.error) throw Object.assign(new Error(cleaned.error), { status: 400 });
+  return cleaned.value || null;
+}
+
+/** Запись «Отказ: причина» в истории, когда комната закрыта отказом или причина изменилась. */
+function withRefusalHistory(next, existing, actor) {
+  if (!next.refusal) return next;
+  const before = existing?.status === 'closed' ? existing?.refusal : null;
+  if (before && before.reasonKey === next.refusal.reasonKey && before.comment === next.refusal.comment) return next;
+  return {
+    ...next,
+    history: [historyEvent(actor, next.updatedAt, 'refusal', next.refusal.reasonKey), ...(next.history || [])].slice(0, 50),
   };
 }
 
@@ -1573,6 +1621,7 @@ export async function handler(event = {}) {
             ...(existing.history || []),
           ].slice(0, 50);
         }
+        obj = withRefusalHistory(obj, existing, user);
         platform.objects[existingIdx] = obj;
       } else {
         obj.history = [historyEvent(user, obj.createdAt, 'create', obj.status)];
@@ -1632,9 +1681,10 @@ export async function handler(event = {}) {
           ...(existing.history || []),
         ].slice(0, 50);
       }
-      platform.objects[idx] = next;
+      const stored = withRefusalHistory(next, existing, user);
+      platform.objects[idx] = stored;
       await savePlatform(platform);
-      return json(200, { object: publicObject(next, user.role) });
+      return json(200, { object: publicObject(stored, user.role) });
     }
 
     if (method === 'GET' && /\/objects\/[^/]+$/.test(path) && !path.endsWith('/objects')) {

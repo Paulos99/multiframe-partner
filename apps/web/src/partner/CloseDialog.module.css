@@ -1,0 +1,133 @@
+/* Окно закрытия: небольшое, по центру, без боковой панели. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.42);
+}
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(460px, 100%);
+  max-height: min(640px, calc(100dvh - 32px));
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 20px 22px;
+  border: 1px solid var(--cab-border, #0001);
+  border-radius: 16px;
+  background: var(--cab-card, #fff);
+  color: var(--cab-ink, inherit);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 0.28);
+}
+.dialog h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.lead {
+  margin: 0;
+  color: var(--cab-muted, #666);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--cab-border, #0002);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.choice[data-checked] {
+  border-color: var(--cab-accent, #01644f);
+  background: var(--cab-accent-soft, #01644f1a);
+}
+.choice[data-refusal][data-checked] {
+  border-color: #b3261e;
+  background: #b3261e14;
+}
+.choice input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+.choice span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.choice small {
+  color: var(--cab-muted, #666);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.reason {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.reason label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+.reason select,
+.reason textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--cab-border, #0003);
+  border-radius: 10px;
+  background: var(--cab-card, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+}
+.error {
+  margin: 0;
+  color: #b3261e;
+  font-size: 0.9rem;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.cancel {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--cab-border, #0003);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -1320,3 +1320,31 @@ test('как в живом хранилище: главное число мон�
   // Четыре расчёта одной комнаты — это одна комната, а не «комнат 4».
   assert.ok(projects.every((project) => project.rooms === 1), JSON.stringify(projects.map((p) => [p.name, p.rooms])));
 });
+
+test('комната с отказом не считается смонтированной, завершённая считается', () => {
+  const room = (id: string, refusal?: { reasonKey: string; comment: string; at: string; by: string | null }) => ({
+    id,
+    orgId: 'org_a',
+    status: 'closed',
+    assignedTo: 'crew',
+    updatedAt: now,
+    room: { areaM2: 12 },
+    estimate: { panels: 6 },
+    ...(refusal ? { refusal } : {}),
+  });
+  const result = buildStaffDrill({
+    viewer: { id: 'owner', role: 'owner', orgId: 'org_a' },
+    users,
+    events: [],
+    objects: [room('done-room'), room('refused-room', { reasonKey: 'price_too_high', comment: '', at: now, by: 'sales' })],
+    projects: [],
+    metric: 'panels',
+    period: 'month',
+    orgId: 'org_a',
+    now,
+    demoFill: false,
+  });
+  const crew = result.roles.find((role) => role.id === 'crew')?.ranking[0];
+  assert.equal(crew?.mountedRooms, 1);
+  assert.equal(crew?.value, 6);
+});
