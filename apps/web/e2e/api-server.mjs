@@ -118,8 +118,19 @@ setObjectStoreTransportForTests(async (op) => {
 const { handler } = await import('../../api/index.js');
 const { resetStoredDocumentsForTests } =
   await import('../../api/platformStore.js');
+const { seedAnalyticsEventsForTests } = await import('../../api/index.js');
 const server = createServer(async (req, res) => {
   try {
+    // Только для проверок: события кладутся как есть. Через обычный вход сервер подставляет личность сам.
+    if (req.url === '/__seed-events' && req.method === 'POST') {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      await seedAnalyticsEventsForTests(Array.isArray(body.events) ? body.events : []);
+      res.writeHead(200);
+      res.end('{}');
+      return;
+    }
     if (req.url === '/__reset' && req.method === 'POST') {
       resetStoredDocumentsForTests();
       writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(base));

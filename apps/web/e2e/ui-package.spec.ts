@@ -160,7 +160,7 @@ test('diagnostic and calculator open without runtime regressions', async ({page}
 for (const role of ['admin', 'owner', 'sales'] as const) {
   test(`${role}: сводка аналитики без «Объёма», «Отправок», «Входов» и «По дням месяца»`, async ({ page, request }) => {
     if (role === 'owner') {
-      await request.post('http://127.0.0.1:4181/analytics/events', {
+      await request.post('http://127.0.0.1:4181/__seed-events', {
         data: {
           events: [
             {
