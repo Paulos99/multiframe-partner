@@ -10,7 +10,11 @@
 
 | Задача | Документ |
 |---|---|
+| Что это за сервис, из чего состоит | [OVERVIEW.md](OVERVIEW.md) |
+| Собрать статику под `/cabinet` | [BUILD.md](BUILD.md) |
+| Как выходит версия (метка `vX.Y.Z`) и что проверять после установки | [RELEASE.md](RELEASE.md) |
 | Поднять сервис на сервере по адресу `/cabinet`, обновить, откатить | [DEPLOY.md](DEPLOY.md) |
+| Пути API и API-шлюз, включая `/admin/stp-managers*` | [API_ROUTES.md](API_ROUTES.md) |
 | Все настройки (имена переменных окружения) | [ENV.md](ENV.md) |
 | Создать первого администратора | [ADMIN_BOOTSTRAP.md](ADMIN_BOOTSTRAP.md) |
 | Подключить свою базу данных и своё хранилище файлов | [DATA_LAYER.md](DATA_LAYER.md) |
@@ -18,6 +22,8 @@
 | Что проверить перед открытием для пользователей | [SECURITY_CHECKLIST.md](SECURITY_CHECKLIST.md) |
 | Стенд и боевой сервер, порядок выпуска изменений | [STAGING_VS_PROD.md](STAGING_VS_PROD.md) |
 | Запуск для разработки на своём компьютере | [LOCAL_DEV.md](LOCAL_DEV.md) |
+| Кому писать | [CONTACTS.md](CONTACTS.md) |
+| Памятка владельца: правка → стенд → метка → установка | [OWNER_WORKFLOW.md](OWNER_WORKFLOW.md) |
 | Результаты проверки безопасности | `SECURITY_AUDIT.md` (в описании запроса на слияние и в репозитории: [../SECURITY_AUDIT.md](../SECURITY_AUDIT.md)) |
 
 > **Важно про базу данных.** В коде нет подключения к YDB или к какой-либо SQL-базе. Все данные платформы хранятся
