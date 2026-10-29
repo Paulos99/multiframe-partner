@@ -23,3 +23,4 @@ export function photoCountsFor(
   role: string | null | undefined,
 ): PhotoCounts;
 export function photoTotal(counts: Partial<PhotoCounts> | null | undefined): number;
+export function photoReportVisibleToClient(obj: { photoReport?: { clientVisible?: boolean } | null } | null | undefined): boolean;

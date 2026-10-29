@@ -12,6 +12,13 @@ import type {
 } from '../../../../packages/shared/partner';
 import type { PhotoStage } from '../../../../packages/shared/roomPhotos.js';
 import { loadToken, saveToken } from './localStore';
+import type {
+  TrainingCompanyRow,
+  TrainingOrgView,
+  TrainingUserView,
+} from '../../../../packages/shared/trainingService.js';
+
+export type TrainingSyncAck = { acceptedAttemptIds: string[]; acceptedMaterialIds: string[]; rejected?: number; stored?: number };
 
 export function apiBase(): string {
   return (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
@@ -596,6 +603,23 @@ export async function apiPublicRoom(token: string, signal?: AbortSignal): Promis
   return data.share.photos ? { ...data.share, photos: data.share.photos.map(withUrls) } : data.share;
 }
 
+/* —— Обучение в аналитике (см. apps/api/training.js) —— */
+
+export async function apiTrainingSync(body: { attempts: unknown[]; materials: unknown[] }): Promise<TrainingSyncAck> {
+  return request<TrainingSyncAck>('/training/sync', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function apiTrainingOrg(orgId?: string | null): Promise<TrainingOrgView> {
+  return request<TrainingOrgView>(`/training/org${orgId ? `?orgId=${encodeURIComponent(orgId)}` : ''}`);
+}
+
+export async function apiTrainingCompanies(): Promise<{ companies: TrainingCompanyRow[] }> {
+  return request<{ companies: TrainingCompanyRow[] }>('/training/companies');
+}
+
+export async function apiTrainingUser(userId: string): Promise<TrainingUserView> {
+  return request<TrainingUserView>(`/training/user/${encodeURIComponent(userId)}`);
+}
 
 /* —— Фотоотчёт комнаты —— */
 
@@ -612,6 +636,8 @@ export interface RoomPhoto {
   /** Короткоживущие ссылки: после просмотра список лучше запросить заново. */
   url: string;
   thumbUrl: string;
+  /** Подписанная ссылка на миниатюру через API (с CORS): из неё собирается PDF-отчёт. */
+  pdfUrl?: string;
 }
 
 export interface RoomPhotoList {
@@ -628,11 +654,12 @@ export function resolvePhotoUrl(url: string): string {
   return url.startsWith('/') ? `${apiBase()}${url}` : url;
 }
 
-function withUrls<T extends { url?: string; thumbUrl?: string }>(photo: T): T {
+function withUrls<T extends { url?: string; thumbUrl?: string; pdfUrl?: string }>(photo: T): T {
   return {
     ...photo,
     ...(photo.url ? { url: resolvePhotoUrl(photo.url) } : {}),
     ...(photo.thumbUrl ? { thumbUrl: resolvePhotoUrl(photo.thumbUrl) } : {}),
+    ...(photo.pdfUrl ? { pdfUrl: resolvePhotoUrl(photo.pdfUrl) } : {}),
   };
 }
 
@@ -760,4 +787,4 @@ export async function apiGetPhotoCase(
 }
 
 /** Фото клиентской страницы: этап и ссылки, без подписей и авторов. */
-export type PublicRoomPhoto = Pick<RoomPhoto, 'id' | 'stage' | 'createdAt' | 'width' | 'height' | 'url' | 'thumbUrl'>;
+export type PublicRoomPhoto = Pick<RoomPhoto, 'id' | 'stage' | 'createdAt' | 'width' | 'height' | 'url' | 'thumbUrl' | 'pdfUrl'>;

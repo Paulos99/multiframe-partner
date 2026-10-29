@@ -216,7 +216,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const adminNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'partners', label: 'Партнёры', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
-    { id: 'cases', label: 'Кейсы', active: tab === 'cases', onSelect: () => { navigateCases({ kind: 'list' }, 'replace'); setTab('cases'); } },
+    { id: 'cases', label: 'Отчёты', active: tab === 'cases', onSelect: () => { navigateCases({ kind: 'list' }, 'replace'); setTab('cases'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },

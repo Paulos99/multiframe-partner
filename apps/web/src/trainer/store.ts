@@ -2,16 +2,26 @@
  * Данные пользователя на устройстве: база `training` (IndexedDB), как в ТЗ.
  * Привязаны к userId: другой пользователь на том же устройстве чужого прогресса не видит.
  * Если IndexedDB недоступна (приватный режим, тесты), работает хранилище в памяти.
- * Очередь отправки накапливается; сервер для попыток пока не подключён.
+ * Очередь отправки хранится здесь же: её читает отправка на сервер (`sync.ts`), успешно принятые записи из очереди убираются.
  */
 import type { LearningAttempt, ReviewCard, ScenarioDraft, TrainerSettings } from './types';
 
-export type SyncItem = { id: string; userId: string; queuedAt: string };
+/**
+ * Запись очереди отправки. `record` — сжатая запись для сервера (подход или открытие материала), собранная при сохранении.
+ * У старых элементов её нет: она достраивается при следующем запуске тренажёра. `null` — отправлять нечего.
+ */
+export type SyncItem = { id: string; userId: string; queuedAt: string; kind?: 'attempt' | 'material'; record?: Record<string, unknown> | null };
 
 export interface TrainerStore {
   readonly kind: 'indexeddb' | 'memory';
   attempts(userId: string): Promise<LearningAttempt[]>;
-  addAttempt(attempt: LearningAttempt): Promise<void>;
+  addAttempt(attempt: LearningAttempt, record?: Record<string, unknown> | null): Promise<void>;
+  /** Кладёт в очередь запись не из тренажёра, например «открыл материал». */
+  enqueue(item: SyncItem): Promise<void>;
+  queued(userId: string): Promise<SyncItem[]>;
+  /** Достраивает запись у старого элемента очереди; `null` убирает его из очереди. */
+  setQueueRecord(id: string, record: Record<string, unknown> | null): Promise<void>;
+  dequeue(ids: string[]): Promise<void>;
   cards(userId: string): Promise<ReviewCard[]>;
   putCards(cards: ReviewCard[]): Promise<void>;
   settings(userId: string): Promise<TrainerSettings | null>;
@@ -27,6 +37,13 @@ export interface TrainerStore {
 
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const draftKey = (userId: string, scenarioId: string) => `${userId}:${scenarioId}`;
+const attemptItem = (attempt: LearningAttempt, record?: Record<string, unknown> | null): SyncItem => ({
+  id: attempt.id,
+  userId: attempt.userId,
+  queuedAt: attempt.finishedAt,
+  kind: 'attempt',
+  ...(record !== undefined ? { record } : {}),
+});
 const fresh = (d: ScenarioDraft | null | undefined, now = Date.now()) => (d && Array.isArray(d.picks) && now - new Date(d.savedAt).getTime() <= DRAFT_TTL_MS ? d : null);
 
 export class MemoryStore implements TrainerStore {
@@ -39,9 +56,24 @@ export class MemoryStore implements TrainerStore {
   async attempts(userId: string) {
     return [...this.a.values()].filter((x) => x.userId === userId);
   }
-  async addAttempt(attempt: LearningAttempt) {
+  async addAttempt(attempt: LearningAttempt, record?: Record<string, unknown> | null) {
     this.a.set(attempt.id, attempt);
-    this.q.set(attempt.id, { id: attempt.id, userId: attempt.userId, queuedAt: attempt.finishedAt });
+    this.q.set(attempt.id, attemptItem(attempt, record));
+  }
+  async enqueue(item: SyncItem) {
+    this.q.set(item.id, item);
+  }
+  async queued(userId: string) {
+    return [...this.q.values()].filter((x) => x.userId === userId);
+  }
+  async setQueueRecord(id: string, record: Record<string, unknown> | null) {
+    const item = this.q.get(id);
+    if (!item) return;
+    if (record === null) this.q.delete(id);
+    else this.q.set(id, { ...item, record });
+  }
+  async dequeue(ids: string[]) {
+    for (const id of ids) this.q.delete(id);
   }
   async cards(userId: string) {
     return [...this.c.values()].filter((x) => x.userId === userId);
@@ -68,7 +100,7 @@ export class MemoryStore implements TrainerStore {
     return [...this.d.values()].filter((x) => x.userId === userId && fresh(x));
   }
   async pendingSync(userId: string) {
-    return [...this.q.values()].filter((x) => x.userId === userId).length;
+    return [...this.q.values()].filter((x) => x.userId === userId && x.kind !== 'material').length;
   }
   async reset(userId: string) {
     for (const [k, v] of this.a) if (v.userId === userId) this.a.delete(k);
@@ -123,15 +155,42 @@ export class IdbStore implements TrainerStore {
   attempts(userId: string) {
     return this.byUser<LearningAttempt>('attempts', userId);
   }
-  async addAttempt(attempt: LearningAttempt) {
-    const tx = this.db.transaction(['attempts', 'syncQueue'], 'readwrite');
-    tx.objectStore('attempts').put(attempt);
-    tx.objectStore('syncQueue').put({ id: attempt.id, userId: attempt.userId, queuedAt: attempt.finishedAt } satisfies SyncItem);
-    await new Promise<void>((resolve, reject) => {
+  private done(tx: IDBTransaction) {
+    return new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
     });
+  }
+  async addAttempt(attempt: LearningAttempt, record?: Record<string, unknown> | null) {
+    const tx = this.db.transaction(['attempts', 'syncQueue'], 'readwrite');
+    tx.objectStore('attempts').put(attempt);
+    tx.objectStore('syncQueue').put(attemptItem(attempt, record));
+    await this.done(tx);
+  }
+  async enqueue(item: SyncItem) {
+    await wrap(this.store('syncQueue', 'readwrite').put(item));
+  }
+  queued(userId: string) {
+    return this.byUser<SyncItem>('syncQueue', userId);
+  }
+  async setQueueRecord(id: string, record: Record<string, unknown> | null) {
+    const tx = this.db.transaction('syncQueue', 'readwrite');
+    const os = tx.objectStore('syncQueue');
+    const req = os.get(id);
+    req.onsuccess = () => {
+      const item = req.result as SyncItem | undefined;
+      if (!item) return;
+      if (record === null) os.delete(id);
+      else os.put({ ...item, record });
+    };
+    await this.done(tx);
+  }
+  async dequeue(ids: string[]) {
+    if (!ids.length) return;
+    const tx = this.db.transaction('syncQueue', 'readwrite');
+    for (const id of ids) tx.objectStore('syncQueue').delete(id);
+    await this.done(tx);
   }
   cards(userId: string) {
     return this.byUser<ReviewCard>('cards', userId);
@@ -164,7 +223,7 @@ export class IdbStore implements TrainerStore {
     return (await this.byUser<ScenarioDraft>('drafts', userId)).filter((d) => fresh(d));
   }
   async pendingSync(userId: string) {
-    return wrap(this.store('syncQueue').index('userId').count(userId));
+    return (await this.queued(userId)).filter((x) => x.kind !== 'material').length;
   }
   async reset(userId: string) {
     const tx = this.db.transaction(['attempts', 'cards', 'settings', 'drafts', 'syncQueue'], 'readwrite');
