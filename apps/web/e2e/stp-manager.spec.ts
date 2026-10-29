@@ -107,7 +107,7 @@ test('администратор StP создаёт менеджера, тот �
   await nav(page).getByRole('tab', { name: 'Партнёры', exact: true }).click();
   const block = page.locator('[data-section="stp-managers"]');
   await expect(block.getByRole('heading', { name: 'Менеджеры StP' })).toBeVisible();
-  await block.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await block.getByRole('button', { name: 'Добавить менеджера', exact: true }).click();
   await block.getByLabel('Логин', { exact: true }).fill('ui.new.manager');
   await block.getByLabel('Пароль', { exact: true }).fill('new-manager-password');
   await block.getByLabel('Имя', { exact: true }).fill('Иван Новиков');

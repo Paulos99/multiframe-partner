@@ -91,7 +91,7 @@ export function StpManagersAdmin() {
             setOpen((v) => !v);
           }}
         >
-          {open ? 'Свернуть' : 'Добавить'}
+          {open ? 'Скрыть форму' : 'Добавить менеджера'}
         </Button>
       </div>
       <p className={styles.hint}>
