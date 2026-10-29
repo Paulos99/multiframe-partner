@@ -3,11 +3,13 @@ import { CompactAudio } from '../../ui/CompactAudio';
 import { EchoComfort, EchoComfortRings } from '../../ui/EchoComfort';
 import { SpectrumChart } from '../../ui/SpectrumChart';
 import { noiseKpiLines } from '../../state/noiseKpi';
+import { IMPACT_HIGH_NOTE, IMPACT_SCALE_STEPS } from '../../state/simulation';
 import type { ClassLabel } from '../../state/types';
 import {
   FeltScale,
   MULTIFRAME_PILLARS,
   NORM_ROWS,
+  normRowKey,
   useResultProfile,
   type ResultView,
 } from './resultShared';
@@ -155,8 +157,8 @@ export function ResultDashboard({
 
   const quieterAir = p.sim.perceivedAirPct;
   const quieterImpact = p.sim.perceivedImpactPct;
-  const classNow = p.hybridBefore as ClassLabel;
-  const classMf = p.hybridAfter as ClassLabel;
+  const classNow = normRowKey(p.hybridBefore as ClassLabel);
+  const classMf = normRowKey(p.hybridAfter as ClassLabel);
 
   const objectCells: { label: string; value: string }[] = [
     { label: 'Перекрытие', value: p.slabContext },
@@ -283,6 +285,7 @@ export function ResultDashboard({
                           ) : null}
                         </span>
                         <span className={styles.normLevelLabel}>{r.label}</span>
+                        <small className={styles.indexHint}>{r.sp}</small>
                         {isNow ? <span className={styles.normPillNow}>Сейчас</span> : null}
                         {isMf ? <span className={styles.normPillMf}>MultiFrame</span> : null}
                       </span>
@@ -326,6 +329,8 @@ export function ResultDashboard({
               indexKind="Lnw"
               nowIndex={p.sim.before.Lnw}
               afterIndex={p.sim.after.Lnw}
+              steps={IMPACT_SCALE_STEPS}
+              highNote={IMPACT_HIGH_NOTE}
               quieterPct={p.sim.perceivedImpactPct}
               quieterDeltaDb={Math.abs(p.sim.delta.Lnw)}
               mode="nowAndAfter"

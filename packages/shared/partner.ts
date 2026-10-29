@@ -2,6 +2,7 @@
 
 import { computeAnalyticsFunnel } from './funnel.ts';
 import { STP_MANAGER_LABEL, STP_MANAGER_ROLE } from './rolePermissions.js';
+import type { RefusalRecord } from './refusal.js';
 import {
   PROJECT_STATUSES as PROJECT_STATUS_VALUES,
   PROJECT_STATUS_LABELS as PROJECT_STATUS_LABEL_VALUES,
@@ -193,7 +194,7 @@ export const JOB_OBJECT_STATUS_LABELS: Record<JobObjectStatus, string> = {
   measured: 'Замер',
   quote_sent: 'КП отправлено',
   install: 'Монтаж',
-  closed: 'Закрыто',
+  closed: 'Завершён',
 };
 
 export type JobObjectRoom = {
@@ -305,9 +306,12 @@ export type JobObject = {
   status: JobObjectStatus;
   stageOrder?: number;
   clientName: string;
+  /** Телефон клиента. Приходит только с этапа «Замер» и только владельцу, менеджеру, замерщику и монтажнику. */
   clientPhone: string;
   address: string;
   city: string;
+  /** Отказ клиента. Есть только у закрытой комнаты; нет записи — «Завершён». */
+  refusal?: RefusalRecord | null;
   room: JobObjectRoom;
   estimate: JobObjectEstimate | null;
   clientSummary: string;
@@ -346,6 +350,8 @@ export type Project = {
   description?: string;
   /** Цепочка статуса. Пусто — на экране статус берётся по комнатам. */
   status?: ProjectStatus;
+  /** Отказ клиента. Есть только у проекта в статусе «Завершён» (done). */
+  refusal?: RefusalRecord | null;
   managerUserId?: string | null;
   measurerUserId?: string | null;
   crewUserId?: string | null;
@@ -366,6 +372,8 @@ export type ProjectInput = {
   city?: string;
   description?: string;
   status?: ProjectStatus | '';
+  /** Причина отказа при закрытии «Отказ». null — «Завершён». */
+  refusal?: { reasonKey: string; comment?: string } | null;
   managerUserId?: string | null;
   measurerUserId?: string | null;
   crewUserId?: string | null;

@@ -1,4 +1,5 @@
 import { describeHistory, formatHistoryTime, historyAuthor, sortedHistory } from './historyFormatting.ts';
+import { refusalReasonPlain } from '../../../../packages/shared/refusal.js';
 
 function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
@@ -6,7 +7,9 @@ function equal(actual: unknown, expected: unknown) {
 const base = { at: '2026-10-18T09:00:00Z', userId: 'u1', login: 'manager', action: 'status' };
 const people = [{ id: 'u1', displayName: 'Анна' }];
 equal(describeHistory({ ...base, detail: 'measured→quote_sent' }, people), 'Статус: Замер → КП отправлено');
-equal(describeHistory({ ...base, detail: 'closed' }, people), 'Статус: Закрыто');
+equal(describeHistory({ ...base, detail: 'closed' }, people), 'Статус: Завершён');
+equal(describeHistory({ ...base, action: 'refusal', detail: 'price_too_high' }, people), 'Отказ: ' + refusalReasonPlain('price_too_high'));
+equal(describeHistory({ ...base, action: 'refusal', detail: 'zzz' }, people), 'Отказ клиента');
 equal(describeHistory({ ...base, detail: 'unknown→unknown' }, people), 'Статус комнаты изменён');
 equal(describeHistory({ ...base, action: 'assign', detail: 'u1' }, people), 'Назначен исполнитель: Анна');
 equal(describeHistory({ ...base, action: 'assign', detail: '—' }, people), 'Назначение исполнителя снято');

@@ -75,6 +75,23 @@ export const PLAYBACK_REF_DBA = PLAYBACK_REF_DBA_AIR;
 /** Global headroom after room FX. */
 export const MASTER_PLAYBACK_GAIN = 0.62;
 
+/**
+ * Поправка громкости по звуку и стороне, сверху на общий уровень (линейный множитель).
+ * Пылесос звучал слишком громко: «До» тише на 20% (×0.8), «После» тише на 5% (×0.95).
+ * Остальные звуки не меняются.
+ */
+export const STEM_SIDE_GAIN: Record<StemId, { before: number; after: number }> = {
+  music: { before: 1, after: 1 },
+  stomp: { before: 1, after: 1 },
+  vacuum: { before: 0.8, after: 0.95 },
+  clap: { before: 1, after: 1 },
+  talk: { before: 1, after: 1 },
+};
+
+export function stemSideGain(stemId: StemId, side: 'before' | 'after'): number {
+  return (STEM_SIDE_GAIN[stemId] ?? STEM_SIDE_GAIN.music)[side];
+}
+
 export const KEY_BAND_INDICES = [1, 3, 5, 7, 10, 13, 15] as const;
 
 export function keyBandHz(): number[] {

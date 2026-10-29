@@ -43,6 +43,14 @@ import {
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { applyDemoPersonalNames, normalizePersonName, personName } from '../../../../packages/shared/personName.js';
 import { carriedObjectLink } from './objectLink';
+import {
+  cleanClientPhone,
+  phoneRoomStatusAllowed,
+  phoneStageAllowed,
+  projectStageOf,
+  roleSeesClientPhone,
+} from '../../../../packages/shared/clientPhone.js';
+import { cleanRefusal } from '../../../../packages/shared/refusal.js';
 import { supplementDemoHistory } from '../../../../packages/shared/demoHistory.js';
 import {
   assignDemoRoomStaff,
@@ -936,9 +944,17 @@ function objectVisible(user: SessionUser, obj: JobObject): boolean {
 function presentObject(obj: JobObject, role: UserRole): JobObject {
   return {
     ...obj,
+    // Телефон клиента: только владелец, менеджер, замерщик, монтажник и только с этапа «Замер».
+    clientPhone: roleSeesClientPhone(role) && phoneRoomStatusAllowed(obj.status) ? obj.clientPhone || '' : '',
     estimate: estimateForRole(obj.estimate, role),
     documents: visibleDocuments(obj.documents),
   };
+}
+
+function presentProject(project: Project, role: UserRole, rooms: JobObject[]): Project {
+  const own = rooms.filter((room) => room.projectId === project.id);
+  const visible = roleSeesClientPhone(role) && phoneStageAllowed(projectStageOf(project, own));
+  return { ...project, clientPhone: visible ? project.clientPhone || '' : '' };
 }
 
 export function listLocalObjects(user: SessionUser): JobObject[] {
@@ -972,7 +988,9 @@ function projectVisibleLocal(user: SessionUser, project: Project, objects: JobOb
 
 export function listLocalProjects(user: SessionUser): Project[] {
   const db = loadDb();
-  return (db.projects || []).filter((project) => projectVisibleLocal(user, project, db.objects));
+  return (db.projects || [])
+    .filter((project) => projectVisibleLocal(user, project, db.objects))
+    .map((project) => presentProject(project, user.role, db.objects));
 }
 
 function projectAssignee(
@@ -1031,16 +1049,19 @@ export function upsertLocalProject(input: ProjectInput, actor: SessionUser): Pro
   const now = new Date().toISOString();
   const orgId = existing?.orgId || actor.orgId;
   const status = projectStatusField(input, existing);
+  const clientPhone = projectPhoneField(input, existing, status, db.objects);
+  const refusal = projectRefusalField(input, existing, status, actor, now);
   const project: Project = {
     id: existing?.id || input.id || uid('prj'),
     orgId,
     name: name.slice(0, 250),
     clientName: String(input.clientName ?? existing?.clientName ?? '').trim(),
-    clientPhone: String(input.clientPhone ?? existing?.clientPhone ?? '').trim(),
+    clientPhone,
     address: String(input.address ?? existing?.address ?? '').trim(),
     city: String(input.city ?? existing?.city ?? '').trim(),
     description: String(input.description ?? existing?.description ?? '').trim().slice(0, 4000),
     ...(status ? { status } : {}),
+    ...(refusal ? { refusal } : {}),
     managerUserId: projectAssignee(db, input, existing, 'managerUserId', orgId, ['owner', 'sales'], 'Менеджер'),
     measurerUserId: projectAssignee(db, input, existing, 'measurerUserId', orgId, ['measurer'], 'Замерщик'),
     crewUserId: projectAssignee(db, input, existing, 'crewUserId', orgId, ['crew'], 'Бригада'),
@@ -1057,7 +1078,46 @@ export function upsertLocalProject(input: ProjectInput, actor: SessionUser): Pro
       ? projects.map((item) => (item.id === project.id ? project : item))
       : [project, ...projects],
   });
-  return project;
+  return presentProject(project, actor.role, db.objects);
+}
+
+/** Как на сервере: новый номер — только с этапа «Замер», формат проверяется. */
+function projectPhoneField(
+  input: ProjectInput,
+  existing: Project | undefined,
+  status: Project['status'],
+  rooms: JobObject[],
+): string {
+  const current = String(existing?.clientPhone ?? '').trim();
+  if (!Object.prototype.hasOwnProperty.call(input, 'clientPhone')) return current;
+  const raw = String(input.clientPhone ?? '').trim();
+  if (raw === current) return current;
+  const cleaned = cleanClientPhone(raw);
+  if (cleaned.error) throw new Error(cleaned.error);
+  if (cleaned.value) {
+    const own = rooms.filter((room) => existing && room.projectId === existing.id);
+    if (!phoneStageAllowed(projectStageOf({ status }, own))) {
+      throw new Error('Телефон клиента можно указать с этапа «Замер»');
+    }
+  }
+  return cleaned.value || '';
+}
+
+function projectRefusalField(
+  input: ProjectInput,
+  existing: Project | undefined,
+  status: Project['status'],
+  actor: SessionUser,
+  now: string,
+): Project['refusal'] {
+  if (status !== 'done') return null;
+  const cleaned = cleanRefusal(input.refusal, {
+    userId: actor.id,
+    now,
+    existing: existing?.status === 'done' ? existing.refusal || null : null,
+  });
+  if (cleaned.error) throw new Error(cleaned.error);
+  return cleaned.value || null;
 }
 
 export function cacheProjects(projects: Project[]): void {
@@ -1148,6 +1208,26 @@ export function upsertLocalObject(
   if (actor.role === 'crew') throw new Error('Бригада не меняет проект и комнату');
 
   const status = (input.status || existing?.status || 'draft') as JobObjectStatus;
+  const phoneRaw = String(input.clientPhone ?? existing?.clientPhone ?? '').trim();
+  let clientPhone = String(existing?.clientPhone ?? '').trim();
+  if (input.clientPhone !== undefined && phoneRaw !== clientPhone) {
+    const cleaned = cleanClientPhone(phoneRaw);
+    if (cleaned.error) throw new Error(cleaned.error);
+    if (cleaned.value && !phoneRoomStatusAllowed(status)) {
+      throw new Error('Телефон клиента можно указать с этапа «Замер»');
+    }
+    clientPhone = cleaned.value || '';
+  }
+  let refusal: JobObject['refusal'] = null;
+  if (status === 'closed') {
+    const cleaned = cleanRefusal(input.refusal, {
+      userId: actor.id,
+      now,
+      existing: existing?.status === 'closed' ? existing.refusal || null : null,
+    });
+    if (cleaned.error) throw new Error(cleaned.error);
+    refusal = cleaned.value || null;
+  }
   const obj: JobObject = {
     id: existing?.id || input.id || uid('obj'),
     orgId: existing?.orgId || actor.orgId,
@@ -1159,7 +1239,7 @@ export function upsertLocalObject(
     status,
     stageOrder: input.stageOrder ?? (input.status && input.status !== existing?.status ? -Date.now() : existing?.stageOrder),
     clientName: (input.clientName ?? existing?.clientName ?? '').trim(),
-    clientPhone: (input.clientPhone ?? existing?.clientPhone ?? '').trim(),
+    clientPhone,
     address: (input.address ?? existing?.address ?? '').trim(),
     city: (input.city ?? existing?.city ?? org?.settings.city ?? '').trim(),
     room: input.room || existing?.room || {},
@@ -1168,6 +1248,7 @@ export function upsertLocalObject(
     history: existing?.history || [],
     documents: existing?.documents,
     pendingSync: input.pendingSync === true,
+    ...(refusal ? { refusal } : {}),
     ...carriedObjectLink(input, existing),
   };
 
@@ -1178,7 +1259,7 @@ export function upsertLocalObject(
       orgId: actor.orgId,
       name: (obj.clientName || obj.address || obj.roomName || 'Проект').slice(0, 250),
       clientName: obj.clientName,
-      clientPhone: obj.clientPhone,
+      clientPhone: '',
       address: obj.address,
       city: obj.city,
       createdAt: now,
@@ -1203,6 +1284,11 @@ export function upsertLocalObject(
     obj.history = [stamp('status', `${existing.status}→${input.status}`), ...existing.history].slice(0, 50);
   } else {
     obj.history = [stamp('update'), ...(existing.history || [])].slice(0, 50);
+  }
+
+  const before = existing?.status === 'closed' ? existing.refusal : null;
+  if (obj.refusal && (!before || before.reasonKey !== obj.refusal.reasonKey || before.comment !== obj.refusal.comment)) {
+    obj.history = [stamp('refusal', obj.refusal.reasonKey), ...(obj.history || [])].slice(0, 50);
   }
 
   const objects = existing

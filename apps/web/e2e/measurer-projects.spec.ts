@@ -19,13 +19,13 @@ async function assignMeasurerToRooms(page: Page, rooms: string[]) {
   await enter(page, 'owner');
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   for (const room of rooms) {
     await card.getByRole('button', { name: room }).click();
     await page.getByRole('region', { name: 'Комната' }).getByLabel('Исполнитель').selectOption('ui_measurer');
     await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
     await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'К проекту', exact: true }).click();
-    await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+    await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   }
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
 }
@@ -68,15 +68,18 @@ test('проекты замерщика: простой список комна�
   await expect(room.getByRole('button', { name: 'Калькулятор', exact: true })).toBeVisible();
 });
 
-test('проекты замерщика: сумма комнаты в списке видна замерщику', async ({ page }) => {
-  await enter(page, 'owner');
-  await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
-  const card = page.getByRole('region', { name: 'Проект' });
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
-  await card.getByRole('button', { name: 'Гостиная' }).click();
-  await page.getByRole('region', { name: 'Комната' }).getByLabel('Исполнитель').selectOption('ui_measurer');
-  await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
-  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+test('проекты замерщика: сумма комнаты в списке видна замерщику', async ({ page, request }) => {
+  // Гостиная на монтаже: в списке исполнителей там только монтажники, поэтому замерщика назначаем запросом.
+  const login = await request.post('http://127.0.0.1:4181/auth/login', {
+    data: { login: 'ui.sales', password },
+  });
+  expect(login.ok()).toBeTruthy();
+  const { token } = (await login.json()) as { token: string };
+  const saved = await request.patch('http://127.0.0.1:4181/objects/ui_crew_room', {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { assignedTo: 'ui_measurer' },
+  });
+  expect(saved.ok()).toBeTruthy();
 
   await enter(page, 'measurer');
   const desk = page.getByRole('region', { name: 'Список проектов' });

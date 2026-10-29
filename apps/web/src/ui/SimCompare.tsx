@@ -1,5 +1,7 @@
-import type { ClassLabel, DerivedSimSide, DerivedSimulation } from '../state/types';
+import type { ClassLabel, DerivedSimSide, DerivedSimulation, ScaleLevel } from '../state/types';
 import {
+  CLASS_TO_LEVEL,
+  SCALE_LEVEL_LABELS,
   DISCLAIMER_SIMULATION,
   HYBRID_CLASS_LABELS,
   NORM_FOOTNOTE,
@@ -15,10 +17,11 @@ interface Props {
   tone?: 'primary' | 'secondary';
 }
 
-const SCALE: ClassLabel[] = ['A', 'B', 'V', 'below'];
+/** Три уровня, лучший слева. */
+const SCALE: ScaleLevel[] = ['high', 'comfort', 'discomfort'];
 
 function scaleIndex(label: ClassLabel): number {
-  return SCALE.indexOf(label);
+  return SCALE.indexOf(CLASS_TO_LEVEL[label]);
 }
 
 function ClassPill({ side }: { side: DerivedSimSide }) {
@@ -26,9 +29,9 @@ function ClassPill({ side }: { side: DerivedSimSide }) {
     return <span className={styles.statusPartial}>частично</span>;
   }
   if (side.classStatus === 'below' || side.classLabel === 'below') {
-    return <span className={styles.statusBelow}>ниже нормы</span>;
+    return <span className={styles.statusBelow}>вне классов СП</span>;
   }
-  return <span className={styles.classPill}>класс {classCyr(side.classLabel)}</span>;
+  return <span className={styles.classPill}>класс СП: {classCyr(side.classLabel)}</span>;
 }
 
 function MetricTertiary({
@@ -93,7 +96,7 @@ function Column({
 
       <div className={styles.chips}>
         <span className={styles.chip}>Воздух: {airChip(side)}</span>
-        <span className={`${styles.chip} ${impact === 'вне нормы' ? styles.chipWarn : ''}`}>
+        <span className={`${styles.chip} ${impact === SCALE_LEVEL_LABELS.discomfort.toLowerCase() ? styles.chipWarn : ''}`}>
           Удар: {impact}
         </span>
       </div>
@@ -106,16 +109,16 @@ function ClassScale({ before, after }: { before: ClassLabel; after: ClassLabel }
   const from = scaleIndex(before);
   const to = scaleIndex(after);
   return (
-    <div className={styles.scaleBlock} aria-label="Шкала комфортности А → Б → В">
-      <p className={styles.chartTitle}>Класс комфорта</p>
+    <div className={styles.scaleBlock} aria-label="Шкала комфорта: три уровня">
+      <p className={styles.chartTitle}>Уровень комфорта</p>
       <div className={styles.scaleTrack}>
-        {SCALE.map((cls, i) => {
-          const label = cls === 'below' ? 'ниже' : classCyr(cls);
+        {SCALE.map((level, i) => {
+          const label = SCALE_LEVEL_LABELS[level];
           const isBefore = i === from;
           const isAfter = i === to;
           return (
             <div
-              key={cls}
+              key={level}
               className={`${styles.scaleStep} ${isBefore ? styles.scaleBefore : ''} ${isAfter ? styles.scaleAfter : ''}`}
             >
               <span className={styles.scaleDot} />

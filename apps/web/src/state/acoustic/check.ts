@@ -318,9 +318,9 @@ export function assertModelAnchors(): string[] {
   );
   const kidsAirFeltBefore = airFeltFromIndex(simKidsMono.before.Rw);
   const kidsAirFeltAfter = airFeltFromIndex(simKidsMono.after.Rw);
-  if (kidsAirFeltBefore === 'quiet') {
+  if (kidsAirFeltBefore === 'high') {
     errors.push(
-      `kids mono250 «До» felt should not be тихо (Rw ${simKidsMono.before.Rw}, step ${kidsAirFeltBefore})`,
+      `kids mono250 «До» felt should not be «высокий комфорт» (Rw ${simKidsMono.before.Rw}, step ${kidsAirFeltBefore})`,
     );
   }
   const shapeKidsAir = buildRoomAudioShape(simKidsMono, 'air', 'talk');
@@ -353,9 +353,9 @@ export function assertModelAnchors(): string[] {
     errors.push(`invalid impact felt step ${kidsImpactFeltBefore}`);
   }
   const kidsImpactFeltAfter = impactFeltFromIndex(simKidsMono.after.Lnw);
-  if (FELT_STEPS.indexOf(kidsImpactFeltAfter) < FELT_STEPS.indexOf('acceptable')) {
+  if (FELT_STEPS.indexOf(kidsImpactFeltAfter) < FELT_STEPS.indexOf('comfort')) {
     errors.push(
-      `kids mono impact after must reach приемлемо (got ${kidsImpactFeltAfter}, Lnw ${simKidsMono.after.Lnw})`,
+      `kids mono impact after must reach «комфорт» (got ${kidsImpactFeltAfter}, Lnw ${simKidsMono.after.Lnw})`,
     );
   }
 
@@ -385,9 +385,9 @@ export function assertModelAnchors(): string[] {
   for (const answers of harshImpact) {
     const sim = deriveSimulation(answers);
     const afterStep = impactFeltFromIndex(sim.after.Lnw);
-    if (FELT_STEPS.indexOf(afterStep) < FELT_STEPS.indexOf('acceptable')) {
+    if (FELT_STEPS.indexOf(afterStep) < FELT_STEPS.indexOf('comfort')) {
       errors.push(
-        `impact after must reach приемлемо (${answers.room.slabType}/${answers.room.houseType}: ${afterStep}, Lnw ${sim.after.Lnw})`,
+        `impact after must reach «комфорт» (${answers.room.slabType}/${answers.room.houseType}: ${afterStep}, Lnw ${sim.after.Lnw})`,
       );
     }
     if (sim.after.Lnw > NORMS.V.Lnw) {

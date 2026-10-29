@@ -98,7 +98,6 @@ describe('projects', { concurrency: false }, () => {
         body: {
           name: 'Квартира на Арбате',
           clientName: 'Иванова',
-          clientPhone: '+7 495 000-00-01',
           address: 'ул. Арбат, 12',
           city: 'Москва',
           totalCost: 999999,
@@ -263,7 +262,6 @@ describe('projects', { concurrency: false }, () => {
           body: {
             name: 'Квартира',
             clientName: 'Семья Орловых',
-            clientPhone: '+7 495 100-20-30',
             address: 'ул. Пятницкая, 10',
             city: 'Москва',
           },
@@ -409,7 +407,6 @@ describe('projects', { concurrency: false }, () => {
         token: owner,
         body: {
           clientName: 'Петрова',
-          clientPhone: '+7 495 000-11-22',
           address: 'ул. Пятницкая, 4',
           city: 'Москва',
           roomName: 'Кухня',
@@ -426,7 +423,7 @@ describe('projects', { concurrency: false }, () => {
     assert.ok(project);
     assert.equal(project.name, 'Петрова');
     assert.equal(project.address, 'ул. Пятницкая, 4');
-    assert.equal(project.clientPhone, '+7 495 000-11-22');
+    assert.equal(project.clientPhone, '', 'при создании комнаты телефон не копируется в проект');
     assert.equal(project.orgId, 'org_demo');
     assert.equal(project.totalCost, undefined);
     assert.equal(

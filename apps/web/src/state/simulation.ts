@@ -9,10 +9,17 @@ import type {
   DerivedSimSide,
   DerivedSimulation,
   RoomAnswers,
+  ScaleLevel,
   SessionAnswers,
   SlabKey,
 } from './types';
-import { HYBRID_CLASS_LABELS, SIMULATION_BADGE } from './types';
+import {
+  CLASS_TO_LEVEL,
+  HYBRID_CLASS_LABELS,
+  SCALE_LEVELS,
+  SCALE_LEVEL_LABELS,
+  SIMULATION_BADGE,
+} from './types';
 import { buildConstruction, resolveSlab } from './acoustic/construction';
 import { applyMultiFrame } from './acoustic/multiframe';
 import { buildReceiving, quietFromReceivedAir, quietFromReceivedImpact } from './acoustic/receiving';
@@ -68,7 +75,7 @@ export function grade(
       return {
         classLabel: cls,
         classStatus: 'ok',
-        label: cls === 'A' ? 'высокий комфорт' : cls === 'B' ? 'комфорт' : 'допустимый',
+        label: cls === 'A' ? 'высокий комфорт' : 'комфорт',
       };
     }
   }
@@ -77,7 +84,7 @@ export function grade(
       return {
         classLabel: cls,
         classStatus: 'partial',
-        label: 'воздух лучше, удар ещё не в норме',
+        label: 'по воздуху лучше, по удару пока дискомфорт',
       };
     }
   }
@@ -240,114 +247,96 @@ export function impactClassFor(Lnw: number): ClassLabel {
   return 'below';
 }
 
-/** Felt comfort steps on Result axes (visual only — not SP class letters). */
-export type FeltStep = 'danger' | 'uncomfortable' | 'acceptable' | 'comfort' | 'quiet';
-
-export const FELT_STEPS: FeltStep[] = [
-  'danger',
-  'uncomfortable',
-  'acceptable',
-  'comfort',
-  'quiet',
-];
-
-/** Align with housing comfort norms (СП А/Б/В) shown on Result. */
-export const FELT_STEP_LABELS: Record<FeltStep, string> = {
-  danger: 'Сильный дискомфорт',
-  uncomfortable: 'Ниже допустимого',
-  acceptable: 'Допустимый (В)',
-  comfort: 'Комфорт (Б)',
-  quiet: 'Высокий комфорт (А)',
-};
-
 /**
- * Far-below-V thresholds for the worst felt step on SP indices.
- * Typical in-situ ПК / brick (~Rw 46, Lnw 75) must land on «некомфортно», not the edge.
+ * Уровни шкалы на экране результата: ровно три (см. SCALE_LEVELS в types.ts).
+ * Соответствие порогам СП 51.13330:
+ *   воздух (Rw):  ≥ 54 дБ — «Высокий комфорт» (класс А); 50–53 дБ — «Комфорт» (классы Б, В); < 50 дБ — «Дискомфорт»;
+ *   удар (Lnw):   ≤ 55 дБ — «Высокий комфорт» (класс А); 56–60 дБ — «Комфорт» (классы Б, В); > 60 дБ — «Дискомфорт».
+ * Шкала удара тоже из трёх ступеней, но «с MultiFrame» удар не выше «Комфорта»: потолок не заменяет
+ * звукоизоляцию пола у соседей сверху (см. IMPACT_HIGH_NOTE).
  */
-export const FELT_DANGER = {
-  RwBelow: 44,
-  LnwAbove: 76,
-} as const;
+export type FeltStep = ScaleLevel;
 
-/**
- * @deprecated Felt axes use Rw/Lnw (SP). Kept only for experiments / old checks.
- * Воздух dBA: тихо ≤42 · комфортно ≤48 · приемлемо ≤54 · некомфортно ≤60.
- */
-export const FELT_AIR_DBA = {
-  quiet: 42,
-  comfort: 48,
-  acceptable: 54,
-  uncomfortable: 60,
-} as const;
+export const FELT_STEPS: FeltStep[] = [...SCALE_LEVELS];
 
-/** @deprecated Impact dBA ladder; Result uses Lnw. */
-export const FELT_IMPACT_DBA = {
-  quiet: 56,
-  comfort: 62,
-  acceptable: 68,
-  uncomfortable: 74,
-} as const;
+export const FELT_STEP_LABELS: Record<FeltStep, string> = SCALE_LEVEL_LABELS;
 
-/**
- * Бытовая шкала воздуха от Rw (СП А/Б/В): тихо=А · комфортно=Б · приемлемо=В ·
- * некомфортно=ниже В · очень шумно=далеко ниже.
- */
+/** Шкала удара — те же три ступени, что и у воздуха. */
+export const IMPACT_SCALE_STEPS: FeltStep[] = [...FELT_STEPS];
+
+/** Подпись у ступени «Высокий комфорт» на шкале удара (экран и PDF). */
+export const IMPACT_HIGH_NOTE = 'достижим только со звукоизоляцией пола у соседей сверху';
+
+/** Уровень по воздуху от Rw. */
 export function airFeltFromIndex(Rw: number): FeltStep {
-  if (Rw >= NORMS.A.Rw) return 'quiet';
-  if (Rw >= NORMS.B.Rw) return 'comfort';
-  if (Rw >= NORMS.V.Rw) return 'acceptable';
-  if (Rw < FELT_DANGER.RwBelow) return 'danger';
-  return 'uncomfortable';
+  if (Rw >= NORMS.A.Rw) return 'high';
+  if (Rw >= NORMS.V.Rw) return 'comfort';
+  return 'discomfort';
 }
 
-/** Бытовая шкала удара от Lnw (меньше — лучше): те же ступени СП. */
+/** Уровень по удару от Lnw (меньше — лучше). */
 export function impactFeltFromIndex(Lnw: number): FeltStep {
-  if (Lnw <= NORMS.A.Lnw) return 'quiet';
-  if (Lnw <= NORMS.B.Lnw) return 'comfort';
-  if (Lnw <= NORMS.V.Lnw) return 'acceptable';
-  if (Lnw > FELT_DANGER.LnwAbove) return 'danger';
-  return 'uncomfortable';
+  if (Lnw <= NORMS.A.Lnw) return 'high';
+  if (Lnw <= NORMS.V.Lnw) return 'comfort';
+  return 'discomfort';
 }
 
-/** @deprecated Use airFeltFromIndex — Result markers are SP indices. */
-export function airFeltFromReceived(receivedDba: number): FeltStep {
-  if (receivedDba <= FELT_AIR_DBA.quiet) return 'quiet';
-  if (receivedDba <= FELT_AIR_DBA.comfort) return 'comfort';
-  if (receivedDba <= FELT_AIR_DBA.acceptable) return 'acceptable';
-  if (receivedDba <= FELT_AIR_DBA.uncomfortable) return 'uncomfortable';
-  return 'danger';
+/**
+ * Правило продукта: результат с MultiFrame не показываем на «Дискомфорте».
+ * Цифры Rw и Lnw рядом остаются как есть. Пол «Комфорт» нужен только для слабых перекрытий
+ * (деревянные балки, тонкие плиты), где расчётный Rw после монтажа ниже 50 дБ.
+ */
+export const MULTIFRAME_MIN_LEVEL: FeltStep = 'comfort';
+
+function atLeastMultiFrameLevel(step: FeltStep): FeltStep {
+  return FELT_STEPS.indexOf(step) < FELT_STEPS.indexOf(MULTIFRAME_MIN_LEVEL) ? MULTIFRAME_MIN_LEVEL : step;
 }
 
-/** @deprecated Use impactFeltFromIndex. */
-export function impactFeltFromReceived(receivedDba: number): FeltStep {
-  if (receivedDba <= FELT_IMPACT_DBA.quiet) return 'quiet';
-  if (receivedDba <= FELT_IMPACT_DBA.comfort) return 'comfort';
-  if (receivedDba <= FELT_IMPACT_DBA.acceptable) return 'acceptable';
-  if (receivedDba <= FELT_IMPACT_DBA.uncomfortable) return 'uncomfortable';
-  return 'danger';
+/** Уровень по воздуху «с MultiFrame». */
+export function airFeltAfterMultiFrame(Rw: number): FeltStep {
+  return atLeastMultiFrameLevel(airFeltFromIndex(Rw));
+}
+
+/**
+ * Уровень по удару «с MultiFrame»: ровно «Комфорт». Не «Дискомфорт» (правило продукта)
+ * и не «Высокий комфорт»: он достижим только со звукоизоляцией пола у соседей сверху.
+ */
+export function impactFeltAfterMultiFrame(Lnw: number): FeltStep {
+  const level = atLeastMultiFrameLevel(impactFeltFromIndex(Lnw));
+  return level === 'high' ? 'comfort' : level;
+}
+
+/** Класс комнаты «с MultiFrame»: ниже В не показываем (см. MULTIFRAME_MIN_LEVEL). */
+export function comfortClassAfterMultiFrame(Rw: number, Lnw: number): ClassLabel {
+  const cls = comfortClassFor(Rw, Lnw);
+  return cls === 'below' ? 'V' : cls;
 }
 
 export const airFeltStep = airFeltFromIndex;
 export const impactFeltStep = impactFeltFromIndex;
 
-/** Official SP hybrid label for Result block headers (not felt words). */
+/** Уровень шкалы для класса СП. Понимает и коды уровней (аналитика после слияния). */
+export function comfortLevelOf(value: string | null | undefined): ScaleLevel | null {
+  if (!value) return null;
+  if ((SCALE_LEVELS as readonly string[]).includes(value)) return value as ScaleLevel;
+  return CLASS_TO_LEVEL[value as ClassLabel] ?? null;
+}
+
+/** Название уровня для заголовка блока на экране результата и в PDF. */
 export function officialComfortLabel(cls: ClassLabel): string {
-  if (cls === 'below') return 'ниже допустимого';
   return HYBRID_CLASS_LABELS[cls];
 }
 
-const COMFORT_CLASS_ORDER = Object.keys(HYBRID_CLASS_LABELS) as ClassLabel[];
+const LEVEL_RANK: Record<ScaleLevel, number> = { high: 0, comfort: 1, discomfort: 2 };
 
-/** User-facing comfort class name from the problem meter (`HYBRID_CLASS_LABELS`). */
+/** Название уровня по коду класса СП (A/B/V/below) или по коду уровня. */
 export function comfortClassLabel(value: string | null | undefined): string {
   if (!value || value === '?' || value === 'unknown') return '';
-  if ((COMFORT_CLASS_ORDER as string[]).includes(value)) {
-    return HYBRID_CLASS_LABELS[value as ClassLabel];
-  }
-  return value;
+  const level = comfortLevelOf(value);
+  return level ? SCALE_LEVEL_LABELS[level] : value;
 }
 
-/** Problem meter transition: «Высокий комфорт (А) → Комфорт (Б)». */
+/** Переход проблемомера: «Дискомфорт → Высокий комфорт». */
 export function comfortTransitionLabel(
   before: string | null | undefined,
   after: string | null | undefined,
@@ -358,32 +347,89 @@ export function comfortTransitionLabel(
   return left || right;
 }
 
-/** Order of «было → станет» follows the problem meter class list, then the target class. */
+/** Ключ перехода по трём уровням: коды классов СП A/B/V/below сводятся к high/comfort/discomfort. */
+export function comfortTransitionKey(key: string): string {
+  const parts = key.split('→');
+  if (parts.length !== 2) return comfortLevelOf(key) ?? key;
+  const left = comfortLevelOf(parts[0]) ?? (parts[0] || '?');
+  const right = comfortLevelOf(parts[1]) ?? (parts[1] || '?');
+  return `${left}→${right}`;
+}
+
+/** Сводит переходы старых четырёх классов к трём уровням: «Б → В» и «В → В» — это «Комфорт → Комфорт». */
+export function mergeComfortTransitions<T extends { key: string; count: number }>(
+  items: readonly T[],
+): T[] {
+  const merged = new Map<string, T>();
+  for (const item of items) {
+    const key = comfortTransitionKey(item.key);
+    const prev = merged.get(key);
+    merged.set(key, prev ? { ...prev, count: prev.count + item.count } : { ...item, key });
+  }
+  return [...merged.values()];
+}
+
+/** Порядок «было → станет»: сначала по уровню «было», затем по «станет». */
 export function comfortTransitionRank(key: string): number {
   const parts = key.split('→');
   if (parts.length !== 2) return 10_000;
   const rank = (value: string) => {
-    const index = COMFORT_CLASS_ORDER.indexOf(value as ClassLabel);
-    return index < 0 ? 50 : index;
+    const level = comfortLevelOf(value);
+    return level ? LEVEL_RANK[level] : 50;
   };
   return rank(parts[0] || '') * 100 + rank(parts[1] || '');
 }
 
 export function airChip(side: DerivedSimSide): string {
-  if (side.Rw >= NORMS.A.Rw) return CLASS_CYR.A;
-  if (side.Rw >= NORMS.B.Rw) return CLASS_CYR.B;
-  if (side.Rw >= NORMS.V.Rw) return CLASS_CYR.V;
-  return 'вне нормы';
+  return FELT_STEP_LABELS[airFeltFromIndex(side.Rw)].toLowerCase();
 }
 
 export function impactChip(side: DerivedSimSide): string {
-  if (side.Lnw > NORMS.V.Lnw) return 'вне нормы';
-  if (side.Lnw <= NORMS.A.Lnw) return CLASS_CYR.A;
-  if (side.Lnw <= NORMS.B.Lnw) return CLASS_CYR.B;
-  if (side.Lnw <= NORMS.V.Lnw) return CLASS_CYR.V;
-  return 'вне нормы';
+  return FELT_STEP_LABELS[impactFeltFromIndex(side.Lnw)].toLowerCase();
 }
 
 /** @deprecated aliases */
 export const buildSimulation = deriveSimulation;
 export const resolveSlabPreset = resolveSlabKey;
+
+/**
+ * Три уровня шкалы Проблемомера и их связь с порогами СП 51.13330.2011.
+ * Название блока — уровень шкалы; классы СП (А, Б, В) остаются только в пояснении к порогам.
+ */
+export const NORM_ROWS: {
+  key: string;
+  label: string;
+  rw: string;
+  lnw: string;
+  sp: string;
+  muted?: boolean;
+}[] = [
+  {
+    key: 'A',
+    label: SCALE_LEVEL_LABELS.high,
+    rw: `≥ ${NORMS.A.Rw}`,
+    lnw: `≤ ${NORMS.A.Lnw}`,
+    sp: 'класс А',
+  },
+  {
+    key: 'B',
+    label: SCALE_LEVEL_LABELS.comfort,
+    rw: `≥ ${NORMS.V.Rw}`,
+    lnw: `≤ ${NORMS.V.Lnw}`,
+    sp: 'классы Б и В',
+  },
+  {
+    key: 'below',
+    label: SCALE_LEVEL_LABELS.discomfort,
+    rw: `< ${NORMS.V.Rw}`,
+    lnw: `> ${NORMS.V.Lnw}`,
+    sp: 'ниже классов СП',
+    muted: true,
+  },
+];
+
+/** Какая строка таблицы подсвечивается для класса СП (Б и В — одна строка «Комфорт»). */
+export function normRowKey(cls: ClassLabel): string {
+  return cls === 'V' ? 'B' : cls;
+}
+

@@ -36,7 +36,7 @@ test('owner deletes a room from its card; it is gone after reload', async ({ pag
   await page.reload();
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Кухня' })).toBeVisible();
   await expect(card.getByRole('button', { name: 'Спальня' })).toHaveCount(0);
 });

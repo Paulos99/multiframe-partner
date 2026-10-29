@@ -90,7 +90,7 @@ test('комната добавляется со страницы проекта
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await card.getByLabel('Новая комната').fill('Кладовая');
   await card.getByRole('button', { name: 'Добавить комнату', exact: true }).click();
   const drawer = page.getByRole('region', { name: 'Комната' });

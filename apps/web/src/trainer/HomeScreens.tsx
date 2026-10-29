@@ -4,6 +4,7 @@ import { DECK_SIZES, ROLE_TITLES, computeProgress, dueCards, objectionsForRole, 
 import { useTrainer } from './TrainerContext';
 import { ChecklistIcon, GaugeIcon, PartnersIcon, SettingsIcon } from '../icons';
 import { errorLabel } from './choice';
+import { SearchPanel } from './SearchPanel';
 import { Dialog, Fold, Page, Quotes, go } from './ui';
 import type { LearningAttempt } from './types';
 import styles from './Trainer.module.css';
@@ -95,6 +96,8 @@ export function Home({
           <span>Настройки подхода</span>
         </button>
       </div>
+
+      <SearchPanel />
 
       <section className={styles.today} aria-label="Сегодня">
         <div className={styles.todayText}>

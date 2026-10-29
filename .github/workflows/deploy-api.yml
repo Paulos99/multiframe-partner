@@ -15,6 +15,9 @@ on:
       - 'infra/deploy_verify_guard_test.py'
       - '.github/workflows/deploy-api.yml'
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -98,4 +101,7 @@ jobs:
           ANALYTICS_ADMIN_KEY: ${{ secrets.ANALYTICS_ADMIN_KEY }}
           JWT_SECRET_PREVIOUS_CLEAR: ${{ vars.JWT_SECRET_PREVIOUS_CLEAR }}
           CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
+          DEMO_SEED: ${{ vars.DEMO_SEED }}
+          ALLOW_DEMO_RESET: ${{ vars.ALLOW_DEMO_RESET }}
+          SHARE_LINK_TTL_DAYS: ${{ vars.SHARE_LINK_TTL_DAYS }}
         run: python infra/deploy_yc.py

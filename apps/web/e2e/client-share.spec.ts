@@ -72,6 +72,7 @@ async function markRoomWithSecrets(request: APIRequestContext) {
   const res = await request.patch(`${API}/objects/ui_room`, {
     headers: { Authorization: `Bearer ${owner}` },
     data: {
+      status: 'measured',
       clientPhone: '+7 900 555-01-02',
       estimate: { panels: 16, dowels: 37, panelsCost: 38336, installCost: 36000, dowelsCost: 925, totalCost: 75261 },
     },

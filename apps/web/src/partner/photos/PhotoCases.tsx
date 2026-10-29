@@ -7,7 +7,7 @@ import {
   type PhotoCaseFilters,
   type RoomPhoto,
 } from '../apiClient';
-import { navigateCases, parseCasesHash, type CasesRoute } from '../projectRoute';
+import { casesHash, navigateCases, parseCasesHash, type CasesRoute } from '../projectRoute';
 import { Skeleton } from '../Skeleton';
 import { PhotoCompare } from './PhotoCompare';
 import { PhotoViewer } from './PhotoViewer';
@@ -29,7 +29,7 @@ function useCasesRoute(): CasesRoute {
   return route;
 }
 
-/** Раздел админа «Отчёты» (фотоотчёты партнёров, база кейсов): комнаты с фото всех партнёров. Список — обзор, кейс — отдельная страница. */
+/** «Аналитика → Фото отчёты» у админа (фотоотчёты партнёров, база кейсов): комнаты с фото всех партнёров. Список — обзор, кейс — отдельная страница. */
 export function PhotoCases() {
   const route = useCasesRoute();
   return route.kind === 'case' ? <CasePage objectId={route.objectId} /> : <CasesList />;
@@ -100,7 +100,7 @@ function CasesList() {
   return (
     <section className={styles.page} data-testid="photo-cases">
       <header className={styles.head}>
-        <h1>Отчёты</h1>
+        <h1>Фото отчёты</h1>
         <p className={styles.lead}>
           Комнаты, где партнёры приложили фото до, во время и после монтажа. База для примеров и разбора работ.
         </p>
@@ -192,7 +192,7 @@ function CasesList() {
           <li key={item.objectId}>
             <a
               className={styles.card}
-              href={`#cases/${encodeURIComponent(item.objectId)}`}
+              href={casesHash({ kind: 'case', objectId: item.objectId })}
               onClick={(event) => {
                 if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
                 event.preventDefault();

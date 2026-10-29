@@ -16,14 +16,12 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  JOB_OBJECT_STATUS_LABELS,
   PROJECT_STATUSES,
   canCreateObjects,
   documentLabel,
   roleSeesProjectMoney,
   visibleDocuments,
   type JobObject,
-  type JobObjectStatus,
   type Project,
   type ProjectInput,
   type ProjectStatus,
@@ -52,6 +50,10 @@ import {
 } from './projectDesk';
 import type { ProjectTab } from './projectRoute';
 import { preliminaryRoomTotal } from './projectSummary';
+import { CloseDialog, closeChoiceError, type CloseChoice } from './CloseDialog';
+import { projectStageLabel, refusalLine, refusalReasonPlain, roomStageLabel } from './closeOutcome';
+import { REFUSAL_COMMENT_MAX, REFUSAL_OTHER_KEY, REFUSAL_REASONS } from '../../../../packages/shared/refusal.js';
+import { PHONE_EXAMPLE, phoneStageAllowed } from '../../../../packages/shared/clientPhone.js';
 import { ProjectPhotoReports } from './photos/ProjectPhotoReports';
 import styles from './ProjectDesk.module.css';
 
@@ -59,7 +61,7 @@ type Person = { id: string; role: UserRole; displayName: string };
 
 const TABS = [
   ['overview', 'Обзор'],
-  ['work', 'Рабочая информация'],
+  ['work', 'Комнаты'],
   ['team', 'Команда'],
   ['tasks', 'Задачи'],
   ['reports', 'Отчёты'],
@@ -105,7 +107,7 @@ export function ProjectDesk({
   onTab: (tab: ProjectTab) => void;
   onSave: (id: string, input: ProjectInput) => Promise<Project>;
   /** Только для ролей, которые меняют стадию проекта. Без него карточки на доске не перетаскиваются. */
-  onMoveStatus?: (id: string, status: ProjectStatus) => Promise<void>;
+  onMoveStatus?: (id: string, status: ProjectStatus, refusal?: CloseChoice) => Promise<void>;
   onOpenRoom: (room: JobObject) => void;
   onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
   onDeleteProject?: (project: Project) => void;
@@ -302,7 +304,7 @@ function CrewProject({
             room.room?.areaM2 != null ? formatArea(room.room.areaM2) : 'Площадь не указана',
             role === 'crew' ? panelLabel(room.estimate?.panels) : null,
             typeof total === 'number' ? formatRub(total) : null,
-            JOB_OBJECT_STATUS_LABELS[room.status as JobObjectStatus] || room.status,
+            roomStageLabel(room),
           ]
             .filter(Boolean)
             .join(' · ');
@@ -364,7 +366,7 @@ function ProjectTable({
                 </td>
                 <td className={styles.cell}>{row.project.clientName || '—'}</td>
                 <td className={styles.cell}>{row.project.address || 'Адрес не заполнен'}</td>
-                <td className={styles.cell}>{projectStatusLabel(row.status)}</td>
+                <td className={styles.cell}>{projectStageLabel(row.project, row.status)}</td>
                 <td className={styles.cell}>{row.rooms.length}</td>
                 <td className={styles.cell}>{area.known ? formatArea(area.total) : '—'}</td>
                 {seesMoney ? (
@@ -482,6 +484,15 @@ function BoardCard({
         {area.known ? ` · ${formatArea(area.total)}` : ''}
         {seesMoney && money.calculated ? ` · ${formatRub(money.total)}` : ''}
       </span>
+      {row.status === 'done' ? (
+        <span
+          className={`${styles.outcome} ${row.project.refusal ? styles.outcomeRefused : styles.outcomeDone}`}
+          data-outcome={row.project.refusal ? 'refused' : 'completed'}
+        >
+          {projectStageLabel(row.project, row.status)}
+          {row.project.refusal ? ` · ${refusalReasonPlain(row.project.refusal.reasonKey)}` : ''}
+        </span>
+      ) : null}
     </button>
     {onMenu && !isDragging ? (
       <button
@@ -516,9 +527,10 @@ function ProjectBoard({
   rows: Row[];
   seesMoney: boolean;
   onOpen: (id: string) => void;
-  onMoveStatus?: (id: string, status: ProjectStatus) => Promise<void>;
+  onMoveStatus?: (id: string, status: ProjectStatus, refusal?: CloseChoice) => Promise<void>;
   onDelete?: (project: Project) => void;
 }) {
+  const [closing, setClosing] = useState<{ id: string; name: string } | null>(null);
   const movable = Boolean(onMoveStatus);
   const [menu, setMenu] = useState<{ project: Project; x: number; y: number } | null>(null);
   // Показываем карточку на новой стадии сразу, пока проект сохраняется. При ошибке возвращаем назад.
@@ -609,14 +621,19 @@ function ProjectBoard({
 
   moveRef.current = (id, target) => void move(id, target);
 
-  async function move(id: string, target: ProjectStatus) {
+  async function move(id: string, target: ProjectStatus, choice?: CloseChoice) {
     const row = shown.find((item) => item.project.id === id);
     if (!onMoveStatus || !row || !PROJECT_STATUSES.includes(target) || row.status === target || busy.current) return;
+    if (target === 'done' && choice === undefined) {
+      // Закрытие проекта: сначала «Завершён» или «Отказ», потом перенос.
+      setClosing({ id, name: row.project.name });
+      return;
+    }
     busy.current = true;
     setError(null);
     setMoved((value) => ({ ...value, [id]: target }));
     try {
-      await onMoveStatus(id, target);
+      await onMoveStatus(id, target, choice);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : 'Не удалось сохранить стадию. Проект возвращён назад.');
     } finally {
@@ -628,6 +645,19 @@ function ProjectBoard({
       });
     }
   }
+
+  const closeDialog = closing ? (
+    <CloseDialog
+      subject="project"
+      name={closing.name}
+      onCancel={() => setClosing(null)}
+      onConfirm={async (choice) => {
+        const pending = closing;
+        setClosing(null);
+        await move(pending.id, 'done', choice);
+      }}
+    />
+  ) : null;
 
   const board = (
     <div className={styles.board}>
@@ -710,6 +740,7 @@ function ProjectBoard({
   return (
     <>
       {menuView}
+      {closeDialog}
       {error ? (
         <p className={styles.boardError} role="alert">
           {error}
@@ -779,7 +810,7 @@ function ProjectPage({
   const money = preliminaryRoomTotal(rooms);
   const steps = nextSteps(rooms);
   const subtitle =
-    [project.clientName, [project.address, project.city].filter(Boolean).join(', '), projectStatusLabel(status)]
+    [project.clientName, [project.address, project.city].filter(Boolean).join(', '), projectStageLabel(project, status)]
       .filter(Boolean)
       .join(' · ') || 'Контакт и адрес пока не заполнены';
 
@@ -878,12 +909,14 @@ function Overview({
 }) {
   return (
     <div className={styles.stack}>
-      <span className={styles.badge}>{projectStatusLabel(status)}</span>
+      <span className={`${styles.badge} ${project.refusal && status === 'done' ? styles.badgeRefused : ''}`} data-outcome={status === 'done' ? (project.refusal ? 'refused' : 'completed') : undefined}>{projectStageLabel(project, status)}</span>
+      {status === 'done' && project.refusal ? <p className={styles.refusalNote}>{refusalLine(project)}</p> : null}
       <dl className={styles.facts}>
         <div>
           <dt>Клиент</dt>
           <dd>{project.clientName || 'Не указан'}</dd>
         </div>
+        <ClientPhoneFact project={project} status={status} />
         <div>
           <dt>Адрес</dt>
           <dd>{[project.address, project.city].filter(Boolean).join(', ') || 'Не указан'}</dd>
@@ -1001,7 +1034,7 @@ function Work({
             <span>
               {room.room?.areaM2 != null ? formatArea(room.room.areaM2) : 'Площадь не указана'}
               {' · '}
-              {JOB_OBJECT_STATUS_LABELS[room.status as JobObjectStatus] || room.status}
+              {roomStageLabel(room)}
               {seesMoney && typeof room.estimate?.totalCost === 'number' ? ` · ${formatRub(room.estimate.totalCost)}` : ''}
             </span>
             <span>Проблемомер: {problemomerLine(room)}</span>
@@ -1091,7 +1124,7 @@ function Tasks({
 
 function Reports({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room: JobObject) => void }) {
   const measured = rooms.filter((room) => room.status !== 'draft' || room.room?.areaM2 != null);
-  const installed = rooms.filter((room) => room.status === 'install' || room.status === 'closed');
+  const installed = rooms.filter((room) => room.status === 'install' || (room.status === 'closed' && !room.refusal));
   return (
     <div>
       <section className={styles.group}>
@@ -1123,7 +1156,7 @@ function Reports({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room:
               <button key={room.id} type="button" className={styles.roomBtn} onClick={() => onOpenRoom(room)}>
                 <span>
                   <strong>{roomTitle(room)}</strong>
-                  <span>{JOB_OBJECT_STATUS_LABELS[room.status as JobObjectStatus] || room.status}</span>
+                  <span>{roomStageLabel(room)}</span>
                 </span>
               </button>
             ))}
@@ -1164,6 +1197,20 @@ function Documents({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (roo
           </span>
         </button>
       ))}
+    </div>
+  );
+}
+
+/** Телефон клиента: показывается только с этапа «Замер» и только когда он указан. */
+function ClientPhoneFact({ project, status }: { project: Project; status: ProjectStatus }) {
+  const phone = (project.clientPhone || '').trim();
+  if (!phone || !phoneStageAllowed(project.status || status)) return null;
+  return (
+    <div data-client-phone>
+      <dt>Телефон клиента</dt>
+      <dd>
+        <a href={`tel:${phone.replace(/[^\d+]/g, '')}`}>{phone}</a>
+      </dd>
     </div>
   );
 }
@@ -1217,13 +1264,14 @@ function Settings({
             <dt>Клиент</dt>
             <dd>{project.clientName || 'Не указан'}</dd>
           </div>
+          <ClientPhoneFact project={project} status={status} />
           <div>
             <dt>Адрес</dt>
             <dd>{[project.address, project.city].filter(Boolean).join(', ') || 'Не указан'}</dd>
           </div>
           <div>
             <dt>Статус</dt>
-            <dd>{projectStatusLabel(project.status || status)}</dd>
+            <dd>{projectStageLabel(project, project.status || status)}{project.refusal && (project.status || status) === 'done' ? ` · ${refusalLine(project).replace(/^Отказ: /, '')}` : ''}</dd>
           </div>
           <div>
             <dt>Менеджер</dt>
@@ -1257,6 +1305,13 @@ function Settings({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!form.name.trim()) return;
+    if (form.status === 'done') {
+      const problem = closeChoiceError(form.outcome, form.reasonKey, form.comment);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+    }
     setBusy(true);
     setError('');
     try {
@@ -1264,10 +1319,14 @@ function Settings({
         name: form.name.trim(),
         description: form.description,
         clientName: form.clientName,
-        clientPhone: form.clientPhone,
+        // Телефон уходит только на стадиях «Замер», «Предложение», «Монтаж».
+        ...(phoneStageAllowed(form.status) ? { clientPhone: form.clientPhone } : {}),
         address: form.address,
         city: form.city,
         status: form.status,
+        ...(form.status === 'done'
+          ? { refusal: form.outcome === 'refused' ? { reasonKey: form.reasonKey, comment: form.comment.trim() } : null }
+          : {}),
         managerUserId: form.managerUserId || null,
         measurerUserId: form.measurerUserId || null,
         crewUserId: form.crewUserId || null,
@@ -1303,16 +1362,32 @@ function Settings({
           onChange={(event) => setForm({ ...form, description: event.target.value })}
         />
       </label>
-      <div className={styles.pair}>
+      <div className={phoneStageAllowed(form.status) ? styles.pair : undefined}>
         <label>
           Клиент
           <input value={form.clientName} maxLength={250} onChange={(event) => setForm({ ...form, clientName: event.target.value })} />
         </label>
-        <label>
-          Телефон
-          <input value={form.clientPhone} maxLength={80} onChange={(event) => setForm({ ...form, clientPhone: event.target.value })} />
-        </label>
+        {phoneStageAllowed(form.status) ? (
+          <label>
+            Телефон клиента (необязательно)
+            <input
+              type="tel"
+              inputMode="tel"
+              autoComplete="off"
+              name="client-phone"
+              value={form.clientPhone}
+              maxLength={40}
+              placeholder={PHONE_EXAMPLE}
+              onChange={(event) => setForm({ ...form, clientPhone: event.target.value })}
+            />
+          </label>
+        ) : null}
       </div>
+      {!phoneStageAllowed(form.status) && form.status !== 'done' ? (
+        <p className={styles.lead} data-phone-hint>
+          Телефон клиента появится на стадии «Замер».
+        </p>
+      ) : null}
       <div className={styles.pair}>
         <label>
           Адрес
@@ -1333,6 +1408,38 @@ function Settings({
           ))}
         </select>
       </label>
+      {form.status === 'done' ? (
+        <fieldset className={styles.outcomeBox} data-close-outcome>
+          <legend>Чем закончился проект</legend>
+          <label className={styles.check}>
+            <input type="radio" name="project-outcome" checked={form.outcome === 'completed'} onChange={() => setForm({ ...form, outcome: 'completed' })} />
+            Завершён: монтаж выполнен
+          </label>
+          <label className={styles.check}>
+            <input type="radio" name="project-outcome" checked={form.outcome === 'refused'} onChange={() => setForm({ ...form, outcome: 'refused' })} />
+            Отказ: клиент отказался
+          </label>
+          {form.outcome === 'refused' ? (
+            <>
+              <label>
+                Причина отказа
+                <select value={form.reasonKey} onChange={(event) => setForm({ ...form, reasonKey: event.target.value })}>
+                  <option value="">Выберите причину</option>
+                  {REFUSAL_REASONS.map((reason) => (
+                    <option key={reason.key} value={reason.key}>
+                      {reason.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Комментарий{form.reasonKey === REFUSAL_OTHER_KEY ? '' : ' (необязательно)'}
+                <textarea value={form.comment} maxLength={REFUSAL_COMMENT_MAX} onChange={(event) => setForm({ ...form, comment: event.target.value })} />
+              </label>
+            </>
+          ) : null}
+        </fieldset>
+      ) : null}
       <PeopleField label="Ответственный менеджер" people={managers} value={form.managerUserId} onChange={(managerUserId) => setForm({ ...form, managerUserId })} />
       <PeopleField label="Замерщик" people={measurers} value={form.measurerUserId} onChange={(measurerUserId) => setForm({ ...form, measurerUserId })} />
       <PeopleField label="Бригада" people={crews} value={form.crewUserId} onChange={(crewUserId) => setForm({ ...form, crewUserId })} />
@@ -1422,5 +1529,8 @@ function draftFrom(project: Project, status: ProjectStatus, rooms: JobObject[], 
     startsAt: project.startsAt || '',
     dueAt: project.dueAt || '',
     archived: Boolean(project.archivedAt),
+    outcome: (project.refusal ? 'refused' : 'completed') as 'completed' | 'refused',
+    reasonKey: project.refusal?.reasonKey || '',
+    comment: project.refusal?.comment || '',
   };
 }

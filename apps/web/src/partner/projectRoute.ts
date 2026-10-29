@@ -130,15 +130,18 @@ export function navigateCompany(tab: CompanyTab, mode: 'push' | 'replace' = 'pus
 
 export type CasesRoute = { kind: 'list' } | { kind: 'case'; objectId: string };
 
-/** #cases — список кейсов с фото, #cases/<id комнаты> — страница кейса. Чужой адрес — null. */
+/** #analytics/photo-reports — «Аналитика → Фото отчёты», …/<id комнаты> — страница отчёта. Старый #cases читается так же. */
 export function parseCasesHash(hash: string): CasesRoute | null {
   const parts = hashParts(hash);
-  if (parts[0] !== 'cases') return null;
-  return parts[1] ? { kind: 'case', objectId: parts[1] } : { kind: 'list' };
+  const rest = parts[0] === 'cases' ? parts.slice(1) : parts[0] === 'analytics' && parts[1] === 'photo-reports' ? parts.slice(2) : null;
+  if (!rest) return null;
+  return rest[0] ? { kind: 'case', objectId: rest[0] } : { kind: 'list' };
 }
 
 export function casesHash(route: CasesRoute): string {
-  return route.kind === 'case' ? `#cases/${encodeURIComponent(route.objectId)}` : '#cases';
+  return route.kind === 'case'
+    ? `#analytics/photo-reports/${encodeURIComponent(route.objectId)}`
+    : '#analytics/photo-reports';
 }
 
 export function navigateCases(route: CasesRoute, mode: 'push' | 'replace' = 'push') {
