@@ -817,6 +817,7 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
+  position: relative;
 }
 
 .kpi[aria-pressed='true'] {
@@ -847,7 +848,6 @@
 }
 
 .kpiDelta {
-  position: relative;
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.1;
@@ -859,17 +859,19 @@
 /* Подсказка «к предыдущему периоду»: наведение, фокус или касание. */
 .kpiTip {
   position: absolute;
-  left: 0;
-  top: calc(100% + 4px);
+  left: 6px;
+  right: 6px;
+  top: calc(100% - 4px);
   z-index: 5;
-  padding: 6px 10px;
+  padding: 6px 4px;
+  text-align: center;
   border-radius: 8px;
   background: var(--cab-ink);
   color: var(--cab-card);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   line-height: 1.25;
-  white-space: nowrap;
+  white-space: normal;
   box-shadow: var(--cab-shadow-sm);
   opacity: 0;
   visibility: hidden;
