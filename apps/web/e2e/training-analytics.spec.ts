@@ -229,3 +229,21 @@ test('телефон 390×844: таблица обучения без гориз
   const back = await page.getByRole('button', { name: 'Назад', exact: true }).boundingBox();
   expect(back!.height).toBeGreaterThanOrEqual(44);
 });
+
+test('показатели сводки: у числа изменения нет подписи «к пред.», есть подсказка «к предыдущему периоду»', async ({ page }) => {
+  await enter(page, 'ui.owner');
+  const nav = page.getByRole('complementary', { name: 'Разделы кабинета' });
+  await nav.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  const deltas = page.getByTestId('kpi-delta');
+  await expect(deltas.first()).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('к пред.');
+  const first = deltas.first();
+  await expect(first).toHaveAttribute('title', 'к предыдущему периоду');
+  await expect(first).toHaveText(/^[+\-−–]?\d[\d\s.,]*к предыдущему периоду$/);
+  const tip = first.getByRole('tooltip');
+  await expect(tip).toBeHidden();
+  await first.hover();
+  await expect(tip).toBeVisible();
+  await expect(tip).toHaveText('к предыдущему периоду');
+  await expect(first).toHaveAttribute('aria-describedby', (await tip.getAttribute('id')) ?? '');
+});

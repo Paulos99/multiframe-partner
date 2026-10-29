@@ -1,5 +1,5 @@
 import { Skeleton } from './Skeleton';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react';
 import type {
   AnalyticsBreakdownItem,
   AnalyticsDashboard as DashData,
@@ -151,6 +151,8 @@ function actionLabel(action: string): string {
   return action;
 }
 
+const DELTA_HINT = 'к предыдущему периоду';
+
 function KpiCard({
   label,
   value,
@@ -167,25 +169,58 @@ function KpiCard({
   onSelect?: () => void;
 }) {
   const delta = showDelta ? deltaText(value, prev) : null;
-  const body = (
-    <>
+  const tipId = useId();
+  // Подсказка показывается при наведении, фокусе и касании; на телефоне гаснет сама.
+  const [tapped, setTapped] = useState(false);
+  useEffect(() => {
+    if (!tapped) return undefined;
+    const timer = window.setTimeout(() => setTapped(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [tapped]);
+  const deltaNode =
+    delta != null ? (
+      <span
+        className={`${styles.kpiDelta} ${deltaClass(value, prev)} ${tapped ? styles.kpiDeltaOpen : ''}`}
+        title={DELTA_HINT}
+        aria-describedby={tipId}
+        data-testid="kpi-delta"
+        onClick={(event) => {
+          // Касание числа только показывает подсказку; переход по карточке — касание вне числа.
+          event.stopPropagation();
+          setTapped(true);
+        }}
+        {...(onSelect ? {} : { tabIndex: 0, onFocus: () => setTapped(true), onBlur: () => setTapped(false) })}
+      >
+        {delta}
+        <span id={tipId} role="tooltip" className={styles.kpiTip}>
+          {DELTA_HINT}
+        </span>
+      </span>
+    ) : (
+      <span className={styles.kpiDelta} aria-hidden>
+        {'\u00a0'}
+      </span>
+    );
+  if (!onSelect) {
+    return (
+      <div className={styles.kpi}>
+        <span className={styles.kpiLabel}>{label}</span>
+        <strong>{formatNum(value)}</strong>
+        {deltaNode}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={styles.kpi}
+      aria-pressed={pressed}
+      onClick={onSelect}
+      onBlur={() => setTapped(false)}
+    >
       <span className={styles.kpiLabel}>{label}</span>
       <strong>{formatNum(value)}</strong>
-      {delta != null ? (
-        <span className={`${styles.kpiDelta} ${deltaClass(value, prev)}`}>
-          {delta} к пред.
-        </span>
-      ) : (
-        <span className={styles.kpiDelta} aria-hidden>
-          {'\u00a0'}
-        </span>
-      )}
-    </>
-  );
-  if (!onSelect) return <div className={styles.kpi}>{body}</div>;
-  return (
-    <button type="button" className={styles.kpi} aria-pressed={pressed} onClick={onSelect}>
-      {body}
+      {deltaNode}
     </button>
   );
 }
