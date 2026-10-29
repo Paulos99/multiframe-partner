@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -12,6 +12,14 @@ const PROGRESS = fixture('ceiling-progress.jpg');
 const AFTER = fixture('ceiling-after.jpg');
 const PORTRAIT = fixture('ceiling-portrait.jpg');
 const THUMB = readFileSync(fixture('ceiling-thumb.jpg')).toString('base64');
+
+const shots = process.env.REVIEW_SHOTS_DIR;
+if (shots) mkdirSync(shots, { recursive: true });
+
+/** Скриншоты пишутся только когда задана папка REVIEW_SHOTS_DIR (локальный разбор). */
+async function shot(page: Page, name: string) {
+  if (shots) await page.screenshot({ path: `${shots}/${name}` });
+}
 
 test.beforeEach(async ({ request }) => {
   await request.post(`${API}/__reset`);
@@ -247,7 +255,7 @@ test('показ клиенту включён по умолчанию: стра
   await client.close();
 });
 
-test('админ СТП: раздел «Отчёты» вместо «Кейсов», обзор, фильтры и страница кейса без личных данных клиента', async ({ page, request }) => {
+test('админ СТП: «Фото отчёты» внутри аналитики вместо вкладок «Кейсы» и «Отчёты», обзор, фильтры и страница кейса без личных данных клиента', async ({ page, request }) => {
   const owner = await token(request, 'ui.owner');
   const crew = await token(request, 'ui.crew');
   await seed(request, owner, 'ui_room', 'before', BEFORE, 'До работ');
@@ -256,15 +264,18 @@ test('админ СТП: раздел «Отчёты» вместо «Кейсо
   await seed(request, crew, 'ui_crew_room', 'before', PORTRAIT);
 
   await enter(page, 'ui.admin', 'Партнёры');
-  await expect(page.getByRole('tab', { name: 'Отчёты', exact: true })).toBeVisible();
-  // Отдельной вкладки «Кейсы» нет: фотоотчёты партнёров лежат в «Отчётах».
+  // Отдельных вкладок «Кейсы» и «Отчёты» нет: фотоотчёты лежат в «Аналитика → Фото отчёты».
   await expect(page.getByRole('tab', { name: 'Кейсы', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('tab')).toHaveCount(6);
-  await page.getByRole('tab', { name: 'Отчёты', exact: true }).click();
-  await expect(page).toHaveURL(/#cases$/);
+  await expect(page.getByRole('tab', { name: 'Отчёты', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('tab')).toHaveCount(5);
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  await page.getByRole('tab', { name: 'Фото отчёты', exact: true }).click();
+  await expect(page).toHaveURL(/#analytics\/photo-reports$/);
+  await expect(page.getByRole('tab', { name: 'Фото отчёты', exact: true })).toHaveAttribute('aria-selected', 'true');
   const cases = page.getByTestId('photo-cases');
-  await expect(cases.getByRole('heading', { name: 'Отчёты', exact: true })).toBeVisible();
+  await expect(cases.getByRole('heading', { name: 'Фото отчёты', exact: true })).toBeVisible();
   await expect(cases.getByTestId('case-card')).toHaveCount(2, { timeout: 20000 });
+  await shot(page, 'item9-photo-reports-desktop.png');
   const complete = cases.getByTestId('case-card').filter({ hasText: 'Спальня' });
   await expect(complete).toContainText('До и после');
   await expect(complete).toContainText('UI test company');
@@ -286,9 +297,9 @@ test('админ СТП: раздел «Отчёты» вместо «Кейсо
   await expect(cases.getByTestId('cases-empty')).toBeVisible();
   await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
 
-  // Страница кейса: адрес #cases/<комната>, три этапа, сравнение, просмотр.
+  // Страница отчёта: адрес #analytics/photo-reports/<комната>, три этапа, сравнение, просмотр.
   await complete.click();
-  await expect(page).toHaveURL(/#cases\/ui_room$/);
+  await expect(page).toHaveURL(/#analytics\/photo-reports\/ui_room$/);
   const casePage = page.getByTestId('photo-case');
   await expect(casePage.getByRole('heading', { name: 'Спальня', exact: true })).toBeVisible();
   for (const stage of ['before', 'progress', 'after']) {
@@ -305,9 +316,23 @@ test('админ СТП: раздел «Отчёты» вместо «Кейсо
 
   // Назад к списку, обновление страницы остаётся на разделе.
   await page.getByTestId('case-back').click();
-  await expect(page).toHaveURL(/#cases$/);
+  await expect(page).toHaveURL(/#analytics\/photo-reports$/);
   await page.reload();
   await expect(page.getByTestId('photo-cases')).toBeVisible();
+
+  // Старые ссылки #cases ведут на «Фото отчёты».
+  await page.evaluate(() => { window.location.hash = '#cases/ui_room'; });
+  await expect(page).toHaveURL(/#analytics\/photo-reports\/ui_room$/);
+  await expect(page.getByTestId('photo-case')).toBeVisible();
+  await page.evaluate(() => { window.location.hash = '#cases'; });
+  await expect(page).toHaveURL(/#analytics\/photo-reports$/);
+  await expect(page.getByTestId('photo-cases')).toBeVisible();
+  await page.goto('/#cases');
+  await page.reload();
+  await expect(page).toHaveURL(/#analytics\/photo-reports$/);
+  await expect(page.getByTestId('photo-cases')).toBeVisible();
+  await page.getByRole('tab', { name: 'Сводка', exact: true }).click();
+  await expect(page.getByTestId('photo-cases')).toHaveCount(0);
 
   // Остальные роли раздела не видят, сервер им отказывает.
   expect((await request.get(`${API}/photo-cases`, { headers: { Authorization: `Bearer ${owner}` } })).status()).toBe(403);
@@ -336,4 +361,24 @@ test('телефон 390×844: фотоотчёт без горизонталь�
   expect(box!.height).toBe(844);
   const close = await page.getByTestId('photo-viewer-close').boundingBox();
   expect(close!.height).toBeGreaterThanOrEqual(44);
+});
+
+test('админ СТП на телефоне 390×844: «Фото отчёты» в аналитике без горизонтальной прокрутки', async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const owner = await token(request, 'ui.owner');
+  await seed(request, owner, 'ui_room', 'before', BEFORE, 'До работ');
+  await seed(request, owner, 'ui_room', 'after', AFTER, 'После работ');
+  await enter(page, 'ui.admin', 'Партнёры');
+  await expect(page.getByRole('tab', { name: 'Отчёты', exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  await shot(page, 'item9-analytics-tabs-phone.png');
+  await page.getByRole('tab', { name: 'Фото отчёты', exact: true }).click();
+  const cases = page.getByTestId('photo-cases');
+  await expect(cases.getByTestId('case-card')).toHaveCount(1, { timeout: 20000 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  await shot(page, 'item9-photo-reports-phone.png');
+  await cases.getByTestId('case-card').click();
+  await expect(page).toHaveURL(/#analytics\/photo-reports\/ui_room$/);
+  await expect(page.getByTestId('photo-case')).toBeVisible();
+  await shot(page, 'item9-photo-report-page-phone.png');
 });

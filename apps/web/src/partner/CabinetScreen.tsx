@@ -11,14 +11,13 @@ import {
 import { personName } from '../../../../packages/shared/personName.js';
 import { Button } from '../ui/Button';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
-import { useCabinetSection } from './analyticsRoute';
+import { redirectLegacyCasesHash, useCabinetSection } from './analyticsRoute';
 import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
 import { trainerHashOpen } from '../trainer/route';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { AnimatePresence, FadeRise, m, motionPresets } from './motionBits';
 import { ObjectsPanel } from './ObjectsPanel';
-import { PhotoCases } from './photos/PhotoCases';
 import { CompanySection } from './CompanySection';
 import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
@@ -28,7 +27,6 @@ import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
 import {
   isLegacyStaffList,
-  navigateCases,
   navigateCompany,
   navigateHash,
   navigateProject,
@@ -138,20 +136,23 @@ function profileOf(user: SessionUser, onLogout: () => void) {
   };
 }
 
-type AdminTab = 'today' | 'partners' | 'cases' | 'tools' | 'analytics' | 'help';
+type AdminTab = 'today' | 'partners' | 'tools' | 'analytics' | 'help';
 
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const partners = useMemo(() => api.adminListPartners(), [api]);
+  // Вкладки «Отчёты» больше нет: старые ссылки #cases ведут в «Аналитика → Фото отчёты».
+  useState(() => redirectLegacyCasesHash());
   const [tab, setTab] = useCabinetSection<AdminTab>('analytics', () => {
     if (consumeReturnToTools()) return 'tools';
     if (trainerHashOpen()) return 'help';
-    if (parseCasesHash(window.location.hash)) return 'cases';
+    if (parseCasesHash(window.location.hash)) return 'analytics';
     return 'today';
   });
   useEffect(() => {
+    // Вкладку «Аналитика» откроет само событие маршрута аналитики.
     const sync = () => {
-      if (parseCasesHash(window.location.hash)) setTab('cases');
+      redirectLegacyCasesHash();
     };
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
@@ -214,7 +215,6 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const adminNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'partners', label: 'Партнёры', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
-    { id: 'cases', label: 'Отчёты', active: tab === 'cases', onSelect: () => { navigateCases({ kind: 'list' }, 'replace'); setTab('cases'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
@@ -444,12 +444,6 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
             </div>
           </div>
           <InstallHint />
-        </TabPanel>
-      ) : null}
-
-      {tab === 'cases' ? (
-        <TabPanel>
-          <PhotoCases />
         </TabPanel>
       ) : null}
 

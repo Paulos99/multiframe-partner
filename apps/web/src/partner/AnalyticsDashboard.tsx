@@ -18,7 +18,7 @@ import {
 import { comfortTransitionLabel, comfortTransitionRank, mergeComfortTransitions } from '../state/simulation';
 import { funnelStopCounts, funnelStopPercents } from '../../../../packages/shared/funnel';
 import type { DrillPeriod } from '../../../../packages/shared/staffDrill.js';
-import { goAnalytics, useAnalyticsRoute } from './analyticsRoute';
+import { goAnalytics, OVERVIEW_LOCATION, useAnalyticsRoute } from './analyticsRoute';
 import {
   applyDashboardProbe,
   composeCabinetAnalytics,
@@ -44,6 +44,7 @@ import { JournalDownload } from './JournalDownload';
 import { spansMoreThanTwoMonths } from './periodSpan';
 import { FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
+import { PhotoCases } from './photos/PhotoCases';
 import { usePartner } from './PartnerContext';
 import { StaffDrillDrawer } from './StaffDrillDrawer';
 import { refusalStats } from '../../../../packages/shared/refusal.js';
@@ -402,7 +403,7 @@ function BreakdownList({
   );
 }
 
-type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'training' | 'objects';
+type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'training' | 'photos' | 'objects';
 
 const DRILL_METRICS = new Set(['staff', 'problemomer', 'calculator', 'pdf', 'area', 'panels', 'avg', 'done']);
 
@@ -445,6 +446,48 @@ export function AnalyticsDashboard({
   useEffect(() => {
     if (!canTraining && section === 'training') setSection('overview');
   }, [canTraining, section]);
+
+  // «Фото отчёты» — только у админа сети; страница отчёта по комнате открывается отдельным адресом.
+  const onPhotoPage = mode === 'admin' && (route.page === 'photos' || route.page === 'photo-case');
+  useEffect(() => {
+    if (onPhotoPage) setSection('photos');
+  }, [onPhotoPage]);
+  useEffect(() => {
+    if (mode !== 'admin' && section === 'photos') setSection('overview');
+  }, [mode, section]);
+  const sectionTabs: Array<{ id: AnalyticsTab; label: string }> = [
+    { id: 'overview', label: 'Сводка' },
+    { id: 'portrait', label: 'Комнаты' },
+    ...(mode === 'admin' ? [{ id: 'companies' as const, label: 'Компании' }] : []),
+    { id: 'team', label: mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники' },
+    ...(canTraining ? [{ id: 'training' as const, label: 'Обучение' }] : []),
+    ...(mode === 'admin' ? [{ id: 'photos' as const, label: 'Фото отчёты' }] : []),
+    { id: 'objects', label: 'Журнал' },
+  ];
+  function openSection(id: AnalyticsTab) {
+    if (id === 'photos') {
+      if (route.page !== 'photos') goAnalytics({ ...OVERVIEW_LOCATION, page: 'photos' }, 'push');
+    } else if (route.page === 'photos' || route.page === 'photo-case') {
+      goAnalytics(OVERVIEW_LOCATION, 'replace');
+    }
+    setSection(id);
+  }
+  const sectionTabBar = (
+    <div className={styles.tabs} role="tablist" aria-label="Разделы аналитики">
+      {sectionTabs.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={section === t.id}
+          className={section === t.id ? styles.tabActive : styles.tab}
+          onClick={() => openSection(t.id)}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
 
   const staffKey = api.partnerListStaff().map((member) => member.id).join('|');
 
@@ -547,6 +590,21 @@ export function AnalyticsDashboard({
     );
   }
 
+  if (onPhotoPage && route.page === 'photo-case') {
+    return <PhotoCases />;
+  }
+  if (onPhotoPage) {
+    return (
+      <div className={`${styles.card} ${styles.dashCard}`}>
+        <div className={styles.dashHead}>
+          <h2>Аналитика</h2>
+        </div>
+        {sectionTabBar}
+        <PhotoCases />
+      </div>
+    );
+  }
+
   if (loading && !data) {
     return (
       <div className={`${styles.card} ${styles.dashCard}`} aria-busy="true">
@@ -575,14 +633,6 @@ export function AnalyticsDashboard({
   const showDelta = Boolean(dash.kpiPrev);
   const prev: AnalyticsKpi | null = dash.kpiPrev;
 
-  const sectionTabs: Array<{ id: AnalyticsTab; label: string }> = [
-    { id: 'overview', label: 'Сводка' },
-    { id: 'portrait', label: 'Комнаты' },
-    ...(mode === 'admin' ? [{ id: 'companies' as const, label: 'Компании' }] : []),
-    { id: 'team', label: mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники' },
-    ...(canTraining ? [{ id: 'training' as const, label: 'Обучение' }] : []),
-    { id: 'objects', label: 'Журнал' },
-  ];
 
   return (
     <div className={`${styles.card} ${styles.dashCard}`}>
@@ -669,20 +719,7 @@ export function AnalyticsDashboard({
 
       {route.page === 'overview' ? (
       <>
-      <div className={styles.tabs} role="tablist" aria-label="Разделы аналитики">
-        {sectionTabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={section === t.id}
-            className={section === t.id ? styles.tabActive : styles.tab}
-            onClick={() => setSection(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {sectionTabBar}
 
       {section === 'overview' ? (
         <div className={styles.dashSection}>
