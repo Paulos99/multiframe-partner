@@ -251,8 +251,9 @@ export function impactClassFor(Lnw: number): ClassLabel {
  * Уровни шкалы на экране результата: ровно три (см. SCALE_LEVELS в types.ts).
  * Соответствие порогам СП 51.13330:
  *   воздух (Rw):  ≥ 54 дБ — «Высокий комфорт» (класс А); 50–53 дБ — «Комфорт» (классы Б, В); < 50 дБ — «Дискомфорт»;
- *   удар (Lnw):   ≤ 60 дБ — «Комфорт» (классы А, Б, В); > 60 дБ — «Дискомфорт».
- * По ударному шуму высокий комфорт не обещаем: верхняя ступень шкалы удара — «Комфорт».
+ *   удар (Lnw):   ≤ 55 дБ — «Высокий комфорт» (класс А); 56–60 дБ — «Комфорт» (классы Б, В); > 60 дБ — «Дискомфорт».
+ * Шкала удара тоже из трёх ступеней, но «с MultiFrame» удар не выше «Комфорта»: потолок не заменяет
+ * звукоизоляцию пола у соседей сверху (см. IMPACT_HIGH_NOTE).
  */
 export type FeltStep = ScaleLevel;
 
@@ -260,8 +261,11 @@ export const FELT_STEPS: FeltStep[] = [...SCALE_LEVELS];
 
 export const FELT_STEP_LABELS: Record<FeltStep, string> = SCALE_LEVEL_LABELS;
 
-/** Какие ступени показываем на шкале удара: «Высокий комфорт» по удару не обещаем. */
-export const IMPACT_SCALE_STEPS: FeltStep[] = ['discomfort', 'comfort'];
+/** Шкала удара — те же три ступени, что и у воздуха. */
+export const IMPACT_SCALE_STEPS: FeltStep[] = [...FELT_STEPS];
+
+/** Подпись у ступени «Высокий комфорт» на шкале удара (экран и PDF). */
+export const IMPACT_HIGH_NOTE = 'достижим только со звукоизоляцией пола у соседей сверху';
 
 /** Уровень по воздуху от Rw. */
 export function airFeltFromIndex(Rw: number): FeltStep {
@@ -270,9 +274,11 @@ export function airFeltFromIndex(Rw: number): FeltStep {
   return 'discomfort';
 }
 
-/** Уровень по удару от Lnw (меньше — лучше). Верхняя ступень — «Комфорт». */
+/** Уровень по удару от Lnw (меньше — лучше). */
 export function impactFeltFromIndex(Lnw: number): FeltStep {
-  return Lnw <= NORMS.V.Lnw ? 'comfort' : 'discomfort';
+  if (Lnw <= NORMS.A.Lnw) return 'high';
+  if (Lnw <= NORMS.V.Lnw) return 'comfort';
+  return 'discomfort';
 }
 
 /**
@@ -291,9 +297,13 @@ export function airFeltAfterMultiFrame(Rw: number): FeltStep {
   return atLeastMultiFrameLevel(airFeltFromIndex(Rw));
 }
 
-/** Уровень по удару «с MultiFrame». */
+/**
+ * Уровень по удару «с MultiFrame»: ровно «Комфорт». Не «Дискомфорт» (правило продукта)
+ * и не «Высокий комфорт»: он достижим только со звукоизоляцией пола у соседей сверху.
+ */
 export function impactFeltAfterMultiFrame(Lnw: number): FeltStep {
-  return atLeastMultiFrameLevel(impactFeltFromIndex(Lnw));
+  const level = atLeastMultiFrameLevel(impactFeltFromIndex(Lnw));
+  return level === 'high' ? 'comfort' : level;
 }
 
 /** Класс комнаты «с MultiFrame»: ниже В не показываем (см. MULTIFRAME_MIN_LEVEL). */

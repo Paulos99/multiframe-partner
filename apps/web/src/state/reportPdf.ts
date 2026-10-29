@@ -28,6 +28,7 @@ import {
   airFeltAfterMultiFrame,
   comfortClassAfterMultiFrame,
   impactFeltAfterMultiFrame,
+  IMPACT_HIGH_NOTE,
 } from './simulation';
 import { noiseKpiLines } from './noiseKpi';
 import { buildLeadHandoff, withDerived } from './session';
@@ -589,6 +590,8 @@ function buildReportDocument(
     padding: 14px 14px; border-radius: 12px; border: 1px solid #dce6e1; background: #f7faf8;
     font-size: 13px; line-height: 1.4;
   }
+  .felt-note { margin: 0; font-size: 11px; line-height: 1.4; color: #68757e; }
+  .felt-note b { color: #1f2a30; font-weight: 700; }
   .comfort-row {
     display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 14px;
   }
@@ -871,6 +874,7 @@ function buildReportDocument(
           <span>Удар · ${FELT_STEP_LABELS[impactNow]} → <b>${FELT_STEP_LABELS[impactAfter]}</b> · удар сверху ≈ ${Math.round(b.Lnw)} → ≈ ${Math.round(a.Lnw)} дБ</span>
           ${pillSvg(`≈ ${sim.perceivedImpactPct}% тише`, { bg: '#dceee8', fg: '#01644f', fontSize: 11, height: 24 })}
         </div>
+        <p class="felt-note"><b>${FELT_STEP_LABELS.high}</b> по удару ${escapeHtml(IMPACT_HIGH_NOTE)}</p>
       </div>
       <div class="comfort-row">
         <div class="rings-card">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FELT_STEPS,
+  IMPACT_HIGH_NOTE,
   IMPACT_SCALE_STEPS,
   NORM_ROWS,
   airFeltAfterMultiFrame,
@@ -151,11 +152,19 @@ describe('шкала Проблемомера: ровно три уровня', 
     expect(airFeltFromIndex(49)).toBe('discomfort');
   });
 
-  it('удар: Lnw до 60 дБ — «Комфорт», выше — «Дискомфорт»; высокого комфорта по удару нет', () => {
-    expect(impactFeltFromIndex(55)).toBe('comfort');
+  it('удар: три уровня — до 55 дБ «Высокий комфорт», до 60 дБ «Комфорт», выше «Дискомфорт»', () => {
+    expect(impactFeltFromIndex(55)).toBe('high');
+    expect(impactFeltFromIndex(56)).toBe('comfort');
     expect(impactFeltFromIndex(60)).toBe('comfort');
     expect(impactFeltFromIndex(61)).toBe('discomfort');
-    expect(IMPACT_SCALE_STEPS).toEqual(['discomfort', 'comfort']);
+    expect(IMPACT_SCALE_STEPS).toEqual(['discomfort', 'comfort', 'high']);
+    expect(IMPACT_HIGH_NOTE).toBe('достижим только со звукоизоляцией пола у соседей сверху');
+  });
+
+  it('удар «с MultiFrame» не выше «Комфорта» даже при малом Lnw', () => {
+    expect(impactFeltAfterMultiFrame(40)).toBe('comfort');
+    expect(impactFeltAfterMultiFrame(55)).toBe('comfort');
+    expect(impactFeltAfterMultiFrame(75)).toBe('comfort');
   });
 
   it('классы СП сводятся к уровням: А → высокий, Б и В → комфорт, ниже В → дискомфорт', () => {

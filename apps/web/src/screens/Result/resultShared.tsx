@@ -88,6 +88,7 @@ export function FeltScale({
   nowIndex,
   afterIndex,
   steps = FELT_STEPS,
+  highNote,
 }: {
   title: string;
   now: FeltStep;
@@ -99,8 +100,10 @@ export function FeltScale({
   indexKind: 'Rw' | 'Lnw';
   nowIndex: number;
   afterIndex?: number;
-  /** Ступени шкалы: для удара — без «Высокого комфорта». */
+  /** Ступени шкалы (по умолчанию все три). */
   steps?: FeltStep[];
+  /** Пояснение у ступени «Высокий комфорт» (для удара: достижим только с полом у соседей). */
+  highNote?: string;
 }) {
   const nowShown = now;
   const afterShown = after;
@@ -189,6 +192,11 @@ export function FeltScale({
           );
         })}
       </div>
+      {highNote ? (
+        <p className={styles.feltNote}>
+          <b>{FELT_STEP_LABELS.high}</b> {highNote}
+        </p>
+      ) : null}
     </div>
   );
 }

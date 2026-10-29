@@ -6,6 +6,7 @@ import {
   MASTER_PLAYBACK_GAIN,
   STEM_CALIBRATION,
   stemIdFromSrc,
+  stemSideGain,
   type StemId,
 } from './stemCalibration';
 import type { RoomAudioShape } from './roomAudioShape';
@@ -319,7 +320,7 @@ function roomProcess(
 
   const limiter = softLimiter(ctx);
   const ceiling = ctx.createGain();
-  ceiling.gain.value = MASTER_PLAYBACK_GAIN;
+  ceiling.gain.value = MASTER_PLAYBACK_GAIN * stemSideGain(stemId, opts.side);
 
   // trim → muffler×2 → room → after → EQ → split dry/wet → merge → limiter
   trim.connect(muffler1);

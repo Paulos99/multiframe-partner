@@ -94,6 +94,17 @@ for (const viewport of [
     await expect(norms).toContainText('Высокий комфорт');
     await page.waitForTimeout(700);
     await shot(page, `item3-comfort-scale-${kind(page)}.png`);
+    // шкала удара: те же три ступени и пояснение у «Высокого комфорта»
+    const impactScale = page.getByRole('img', { name: /^Ударный шум/ });
+    await impactScale.scrollIntoViewIfNeeded();
+    const impactBlock = impactScale.locator('xpath=..');
+    for (const label of ['Дискомфорт', 'Комфорт', 'Высокий комфорт']) {
+      await expect(impactScale).toContainText(label);
+    }
+    await expect(impactBlock).toContainText('Высокий комфорт достижим только со звукоизоляцией пола у соседей сверху');
+    await expect(impactScale).not.toHaveAttribute('aria-label', /с MultiFrame Высокий комфорт/);
+    await impactScale.scrollIntoViewIfNeeded();
+    await shot(page, `item3-impact-scale-${kind(page)}.png`);
   });
 }
 
@@ -131,6 +142,8 @@ test('PDF: три уровня комфорта, без запрещённых �
   }
   expect(html).toContain('Высокий комфорт');
   expect(html).toContain('Дискомфорт');
+  expect(html).toContain('по удару достижим только со звукоизоляцией пола у соседей сверху');
+  expect(html).not.toMatch(/Удар · [^<]*→ <b>Высокий комфорт/);
   await page.setContent(html, { waitUntil: 'load' });
   await page.waitForTimeout(500);
   await shot(page, `item3-pdf-preview.png`, true);
