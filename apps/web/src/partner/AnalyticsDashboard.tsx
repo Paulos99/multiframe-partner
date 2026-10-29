@@ -15,7 +15,7 @@ import {
   type ObjectStageOption,
   type RoomType,
 } from '../state/types';
-import { comfortTransitionLabel, comfortTransitionRank } from '../state/simulation';
+import { comfortTransitionLabel, comfortTransitionRank, mergeComfortTransitions } from '../state/simulation';
 import { funnelStopCounts, funnelStopPercents } from '../../../../packages/shared/funnel';
 import type { DrillPeriod } from '../../../../packages/shared/staffDrill.js';
 import { goAnalytics, useAnalyticsRoute } from './analyticsRoute';
@@ -675,7 +675,7 @@ export function AnalyticsDashboard({
             />
             <BreakdownList
               title="Класс комфорта"
-              items={[...dash.breakdowns.classTransition].sort(
+              items={mergeComfortTransitions(dash.breakdowns.classTransition).sort(
                 (a, b) => comfortTransitionRank(a.key) - comfortTransitionRank(b.key) || b.count - a.count,
               )}
               kind="comfort"

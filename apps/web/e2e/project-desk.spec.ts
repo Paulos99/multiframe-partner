@@ -47,7 +47,7 @@ test('список и канбан запоминаются, карточка о
 
   await page.getByRole('button', { name: 'Список', exact: true }).click();
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await expect(page).toHaveURL(/#project\/ui_project\/work$/);
   await expect(card.getByRole('button', { name: 'Спальня' })).toBeVisible();
   await card.getByRole('button', { name: 'Спальня' }).click();
@@ -57,7 +57,7 @@ test('список и канбан запоминаются, карточка о
   await room.getByRole('button', { name: 'К проекту', exact: true }).click();
   await expect(page).toHaveURL(/#project\/ui_project\/work$/);
   await expect(card).toBeVisible();
-  for (const name of ['Обзор', 'Рабочая информация', 'Команда', 'Задачи', 'Отчёты', 'Документы', 'Настройки']) {
+  for (const name of ['Обзор', 'Комнаты', 'Команда', 'Задачи', 'Отчёты', 'Документы', 'Настройки']) {
     await card.getByRole('tab', { name, exact: true }).click();
     await expect(card.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true');
   }
@@ -97,7 +97,7 @@ test('замерщик читает описание, бригада не вид
   await card.getByRole('button', { name: 'Сохранить', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Сохранить', exact: true })).toBeEnabled();
   // Замерщик видит проект списком своих комнат: назначаем ему кухню.
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await card.getByRole('button', { name: 'Кухня' }).click();
   await page.getByRole('region', { name: 'Комната' }).getByLabel('Исполнитель').selectOption('ui_measurer');
   await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();

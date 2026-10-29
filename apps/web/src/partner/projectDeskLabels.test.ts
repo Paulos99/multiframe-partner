@@ -6,7 +6,7 @@ import { problemomerLine, projectAssigneeId } from './projectDesk.ts';
 const room = (patch: Record<string, unknown>) => ({ id: 'r', room: {}, ...patch }) as unknown as JobObject;
 
 test('класс комфорта показан словами Проблемомера, без латинских кодов', () => {
-  assert.equal(problemomerLine(room({ room: { classBefore: 'below', classAfter: 'V' } })), 'Дискомфорт → Допустимый (В)');
+  assert.equal(problemomerLine(room({ room: { classBefore: 'below', classAfter: 'V' } })), 'Дискомфорт → Комфорт');
   assert.doesNotMatch(problemomerLine(room({ room: { classBefore: 'below', classAfter: 'V' } })), /below|\bV\b/);
   assert.equal(problemomerLine(room({})), 'Проблемомер ещё не заполнен');
 });

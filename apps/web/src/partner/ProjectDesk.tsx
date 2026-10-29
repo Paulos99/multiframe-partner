@@ -58,7 +58,7 @@ type Person = { id: string; role: UserRole; displayName: string };
 
 const TABS = [
   ['overview', 'Обзор'],
-  ['work', 'Рабочая информация'],
+  ['work', 'Комнаты'],
   ['team', 'Команда'],
   ['tasks', 'Задачи'],
   ['reports', 'Отчёты'],

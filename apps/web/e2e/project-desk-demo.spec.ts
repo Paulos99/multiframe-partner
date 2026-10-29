@@ -48,7 +48,7 @@ test('демо ?demo=1 группирует комнаты и открывает
   await desk.getByRole('button', { name: 'Иванова А.', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
   await expect(card).toBeVisible();
-  const tabs = ['Обзор', 'Рабочая информация', 'Команда', 'Задачи', 'Отчёты', 'Документы', 'Настройки'] as const;
+  const tabs = ['Обзор', 'Комнаты', 'Команда', 'Задачи', 'Отчёты', 'Документы', 'Настройки'] as const;
   for (const [index, name] of tabs.entries()) {
     await card.getByRole('tab', { name, exact: true }).click();
     await expect(card.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true');
@@ -57,7 +57,7 @@ test('демо ?demo=1 группирует комнаты и открывает
 
   await card.getByRole('tab', { name: 'Команда', exact: true }).click();
   await expect(card.getByText('Павел Орлов').first()).toBeVisible();
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await card.getByRole('button', { name: /Гостиная/ }).click();
   const room = page.getByRole('region', { name: 'Комната' });
   await expect(room).toBeVisible();

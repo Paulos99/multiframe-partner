@@ -19,13 +19,13 @@ async function assignMeasurerToRooms(page: Page, rooms: string[]) {
   await enter(page, 'owner');
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   for (const room of rooms) {
     await card.getByRole('button', { name: room }).click();
     await page.getByRole('region', { name: 'Комната' }).getByLabel('Исполнитель').selectOption('ui_measurer');
     await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
     await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'К проекту', exact: true }).click();
-    await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+    await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   }
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
 }
@@ -72,7 +72,7 @@ test('проекты замерщика: сумма комнаты в списк
   await enter(page, 'owner');
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await card.getByRole('button', { name: 'Гостиная' }).click();
   await page.getByRole('region', { name: 'Комната' }).getByLabel('Исполнитель').selectOption('ui_measurer');
   await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();

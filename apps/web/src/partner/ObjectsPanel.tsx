@@ -35,7 +35,7 @@ import { SavedResultPage } from './SavedResultPage';
 import listStyles from './ProjectList.module.css';
 import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
 import { ProjectDesk } from './ProjectDesk';
-import { deleteProjectWarning, roomTitle } from './projectDesk';
+import { assigneeCandidates, assigneeRoleLabel, deleteProjectWarning, roomTitle } from './projectDesk';
 import { navigateProject, parseProjectHash, PROJECT_TABS, type ProjectRoute } from './projectRoute';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { RoomPhotoReport } from './photos/RoomPhotoReport';
@@ -885,22 +885,12 @@ export function ObjectsPanel({
             )}
 
             {canAssign && staff.length ? (
-              <label className={styles.field}>
-                Исполнитель
-                <span className={styles.hint}>Замерщик и бригада видят только назначенные им комнаты.</span>
-                <select
-                  value={selected.assignedTo || ''}
-                  disabled={pendingId === selected.id}
-                  onChange={(e) => void patch(selected, { assignedTo: e.target.value || null })}
-                >
-                  <option value="">Не назначен</option>
-                  {staff.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.displayName} · {ROLE_LABELS[s.role as UserRole] || s.role}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <AssigneeField
+                room={selected}
+                staff={staff}
+                disabled={pendingId === selected.id}
+                onChange={(assignedTo) => void patch(selected, { assignedTo })}
+              />
             ) : null}
 
             {selected.clientSummary && !hideMoney ? (
@@ -968,5 +958,53 @@ export function ObjectsPanel({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Исполнитель комнаты. Список зависит от стадии: на «Монтаже» — только монтажники.
+ * Если на комнате остался исполнитель прошлой стадии (замерщик), список показывает «Не назначен»
+ * и просит выбрать нового, а не выдаёт замерщика за исполнителя монтажа.
+ */
+export function AssigneeField({
+  room,
+  staff,
+  disabled,
+  onChange,
+}: {
+  room: JobObject;
+  staff: ReadonlyArray<{ id: string; displayName: string; role: string }>;
+  disabled?: boolean;
+  onChange: (id: string | null) => void;
+}) {
+  const people = assigneeCandidates(staff, room.status);
+  const current = staff.find((person) => person.id === room.assignedTo);
+  const stale = Boolean(room.assignedTo) && !people.some((person) => person.id === room.assignedTo);
+  const value = stale ? '' : room.assignedTo || '';
+  const roleWord = assigneeRoleLabel(room.status);
+  return (
+    <label className={styles.field}>
+      Исполнитель
+      <span className={styles.hint}>
+        {stale
+          ? `Сейчас назначен ${current ? `${current.displayName} (${ROLE_LABELS[current.role as UserRole] || current.role})` : 'сотрудник прошлой стадии'}. Выберите ${roleWord}.`
+          : room.status === 'install' || room.status === 'closed'
+            ? 'На монтаже в списке только монтажники.'
+            : 'Замерщик и бригада видят только назначенные им комнаты.'}
+      </span>
+      <select
+        value={value}
+        disabled={disabled}
+        data-stale={stale ? 'true' : undefined}
+        onChange={(e) => onChange(e.target.value || null)}
+      >
+        <option value="">{stale ? `Выберите ${roleWord}` : 'Не назначен'}</option>
+        {people.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.displayName} · {ROLE_LABELS[s.role as UserRole] || s.role}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

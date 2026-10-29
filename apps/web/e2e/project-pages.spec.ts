@@ -21,7 +21,7 @@ test('вкладки проекта не копят историю: один «�
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
   await expect(page).toHaveURL(/#project\/ui_project\/overview$/);
-  for (const name of ['Рабочая информация', 'Команда', 'Отчёты', 'Настройки']) {
+  for (const name of ['Комнаты', 'Команда', 'Отчёты', 'Настройки']) {
     await card.getByRole('tab', { name, exact: true }).click();
     await expect(card.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true');
   }
@@ -30,22 +30,22 @@ test('вкладки проекта не копят историю: один «�
   await expect(page).not.toHaveURL(/#project\//);
 
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await card.getByRole('button', { name: 'Спальня' }).click();
   await expect(page).toHaveURL(/#project\/ui_project\/room\/ui_room$/);
   await page.goBack();
   await expect(page).toHaveURL(/#project\/ui_project\/work$/);
   await expect(card).toBeVisible();
-  await expect(card.getByRole('tab', { name: 'Рабочая информация', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(card.getByRole('tab', { name: 'Комнаты', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('класс комфорта показан по-русски, без латинских кодов', async ({ page }) => {
   await enter(page, 'owner');
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
-  for (const tab of ['Рабочая информация', 'Отчёты']) {
+  for (const tab of ['Комнаты', 'Отчёты']) {
     await card.getByRole('tab', { name: tab, exact: true }).click();
-    await expect(card.getByText('Дискомфорт → Допустимый (В)').first()).toBeVisible();
+    await expect(card.getByText('Дискомфорт → Комфорт').first()).toBeVisible();
     await expect(card).not.toContainText(/below/i);
     await expect(card).not.toContainText(/Класс\s+(below|V|B|A)\b/);
   }
@@ -55,7 +55,7 @@ test('страница комнаты: нет формы новой комнат
   await enter(page, 'owner');
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await expect(card.getByLabel('Новая комната')).toBeVisible();
   await card.getByRole('button', { name: 'Спальня' }).click();
   const room = page.getByRole('region', { name: 'Комната' });
@@ -85,7 +85,7 @@ test('исполнитель комнаты виден в команде про�
   const card = page.getByRole('region', { name: 'Проект' });
   await card.getByRole('tab', { name: 'Команда', exact: true }).click();
   await expect(card.locator('dl > div', { hasText: 'Замерщик' })).toContainText('Не назначен');
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await card.getByRole('button', { name: 'Спальня' }).click();
   const room = page.getByRole('region', { name: 'Комната' });
   const saved = page.waitForRequest((r) => /\/projects\/ui_project$/.test(new URL(r.url()).pathname) && r.method() !== 'GET');
@@ -105,7 +105,7 @@ test('замерщик видит цены в калькуляторе из ко
   await enter(page, 'owner');
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
-  await card.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await card.getByRole('button', { name: 'Спальня' }).click();
   await page.getByRole('region', { name: 'Комната' }).getByLabel('Исполнитель').selectOption('ui_measurer');
   await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
