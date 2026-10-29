@@ -167,7 +167,7 @@ describe('фотоотчёт комнаты', { concurrency: false }, () => {
     assert.equal((await call('GET', filePath, { query: {} })).statusCode, 404);
   });
 
-  test('замерщик видит только «До»; монтажник добавляет все три', async () => {
+  test('замерщик видит все этапы, но добавляет только «До»; монтажник добавляет все три', async () => {
     const crewRoom = otherRoom.id;
     for (const stage of ['before', 'progress', 'after']) {
       const res = await call('POST', `/objects/${crewRoom}/photos`, {
@@ -187,14 +187,15 @@ describe('фотоотчёт комнаты', { concurrency: false }, () => {
     });
     assert.equal(hidden.statusCode, 404);
 
-    // менеджер докладывает «После» в комнату замерщика, замерщик его не видит
+    // менеджер докладывает «После» в комнату замерщика, замерщик его видит (все этапы), но сам не добавляет
     const afterByManager = await call('POST', `/objects/${room.id}/photos`, {
       token: tokens.sales,
       body: { stage: 'after', image: b64(makeJpeg()), thumb: b64(makeJpeg()) },
     });
     assert.equal(afterByManager.statusCode, 200, afterByManager.body);
     const asMeasurer = readJson(await call('GET', `/objects/${room.id}/photos`, { token: tokens.measurer }));
-    assert.deepEqual(asMeasurer.photos.map((p) => p.stage), ['before']);
+    assert.deepEqual(asMeasurer.photos.map((p) => p.stage), ['before', 'after']);
+    assert.deepEqual(asMeasurer.stages, ['before', 'progress', 'after']);
     assert.deepEqual(asMeasurer.canAdd, ['before']);
     const asOwner = readJson(await call('GET', `/objects/${room.id}/photos`, { token: tokens.owner }));
     assert.deepEqual(asOwner.photos.map((p) => p.stage).sort(), ['after', 'before']);
@@ -202,7 +203,7 @@ describe('фотоотчёт комнаты', { concurrency: false }, () => {
 
   test('число фото в списке комнат зависит от роли, ключей бакета там нет', async () => {
     const asMeasurer = readJson(await call('GET', '/objects', { token: tokens.measurer })).objects.find((o) => o.id === room.id);
-    assert.deepEqual(asMeasurer.photoCounts, { before: 1, progress: 0, after: 0 });
+    assert.deepEqual(asMeasurer.photoCounts, { before: 1, progress: 0, after: 1 });
     const asOwner = readJson(await call('GET', '/objects', { token: tokens.owner })).objects.find((o) => o.id === room.id);
     assert.deepEqual(asOwner.photoCounts, { before: 1, progress: 0, after: 1 });
     const raw = (await call('GET', '/objects', { token: tokens.owner })).body;
@@ -293,11 +294,19 @@ describe('фотоотчёт комнаты', { concurrency: false }, () => {
     assert.equal((await call('GET', `/photo-cases/${room.id}`, { token: tokens.owner })).statusCode, 403);
   });
 
-  test('клиентская страница: фото только после включения, без подписей и авторов', async () => {
+  test('клиентская страница: фото показываются по умолчанию, без подписей и авторов; выключатель работает', async () => {
     const answers = { roomType: 'bedroom', ceilingAreaM2: 18 };
     const link = readJson(await call('POST', `/objects/${room.id}/share`, { token: tokens.sales, body: { answers } })).link;
-    const before = readJson(await call('GET', `/public/rooms/${link.token}`));
-    assert.ok(!('photos' in before.share), 'по умолчанию фото клиенту не показываются');
+    const first = readJson(await call('GET', `/objects/${room.id}/photos`, { token: tokens.sales }));
+    assert.equal(first.clientVisible, true, 'новая настройка по умолчанию включена');
+    const byDefault = readJson(await call('GET', `/public/rooms/${link.token}`));
+    assert.deepEqual(byDefault.share.photos.map((p) => p.stage), ['before', 'after'], 'без настройки фото видны клиенту');
+
+    // выключили явно: фото уходят
+    const off = await call('PATCH', `/objects/${room.id}/photos`, { token: tokens.owner, body: { clientVisible: false } });
+    assert.equal(off.statusCode, 200, off.body);
+    assert.ok(!('photos' in readJson(await call('GET', `/public/rooms/${link.token}`)).share));
+    assert.equal(readJson(await call('GET', `/objects/${room.id}/photos`, { token: tokens.sales })).clientVisible, false);
 
     assert.equal((await call('PATCH', `/objects/${room.id}/photos`, { token: tokens.measurer, body: { clientVisible: true } })).statusCode, 403);
     assert.equal((await call('PATCH', `/objects/${room.id}/photos`, { token: tokens.sales, body: { clientVisible: 'yes' } })).statusCode, 400);
@@ -308,7 +317,7 @@ describe('фотоотчёт комнаты', { concurrency: false }, () => {
     const body = readJson(response);
     assert.deepEqual(body.share.photos.map((p) => p.stage), ['before', 'after']);
     for (const photo of body.share.photos) {
-      assert.deepEqual(Object.keys(photo).sort(), ['createdAt', 'height', 'id', 'stage', 'thumbUrl', 'url', 'width']);
+      assert.deepEqual(Object.keys(photo).sort(), ['createdAt', 'height', 'id', 'pdfUrl', 'stage', 'thumbUrl', 'url', 'width']);
     }
     for (const secret of ['Потолок до', 'Клиент Секретов', 'Тайная', '424242', 'storageKey', ids.exec1, ids.sales1]) {
       assert.ok(!response.body.includes(secret), `клиент не видит «${secret}»`);
@@ -317,6 +326,13 @@ describe('фотоотчёт комнаты', { concurrency: false }, () => {
     const [filePath, search] = body.share.photos[0].url.split('?');
     const file = await call('GET', filePath, { query: Object.fromEntries(new URLSearchParams(search)) });
     assert.equal(file.statusCode, 200);
+    // ссылка для PDF ведёт на API (с CORS), а не в бакет, и отдаёт миниатюру
+    assert.match(body.share.photos[0].pdfUrl, /^\/photo-file\/ph_.*v=thumb/);
+    const [pdfPath, pdfSearch] = body.share.photos[0].pdfUrl.split('?');
+    const pdfFile = await call('GET', pdfPath, { query: Object.fromEntries(new URLSearchParams(pdfSearch)) });
+    assert.equal(pdfFile.statusCode, 200);
+    assert.equal(pdfFile.headers['Content-Type'], 'image/jpeg');
+    assert.ok(pdfFile.headers['Access-Control-Allow-Origin'], 'CORS нужен, чтобы PDF собирался в браузере');
 
     // отключённая ссылка — 404 и без фото
     await call('DELETE', `/objects/${room.id}/share`, { token: tokens.owner });

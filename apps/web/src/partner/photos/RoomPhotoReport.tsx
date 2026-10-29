@@ -17,6 +17,7 @@ import {
 } from '../apiClient';
 import { usePartner } from '../PartnerContext';
 import { PhotoViewer } from './PhotoViewer';
+import { PhotoReportActions } from './PhotoReportActions';
 import { formatPhotoDate, groupByStage } from './photoFormat';
 import { PhotoPrepError, prepareImage } from './imagePrep';
 import styles from './RoomPhotoReport.module.css';
@@ -42,7 +43,8 @@ const REFRESH_MS = 4 * 60_000;
 
 /** Фотоотчёт комнаты: этапы «До», «В процессе», «После», съёмка и загрузка, просмотр на весь экран. */
 export function RoomPhotoReport({ objectId }: { objectId: string }) {
-  const { user, remote } = usePartner();
+  const { user, remote, objects } = usePartner();
+  const room = objects.find((item) => item.id === objectId);
   const [data, setData] = useState<RoomPhotoList | null>(null);
   const [loadError, setLoadError] = useState('');
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -200,7 +202,7 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
           <p className={styles.lead}>
             {data
               ? canAdd.length === 1 && canAdd[0] === 'before'
-                ? 'Снимите комнату до работ: фото попадёт в карточку.'
+                ? 'Снимите комнату до работ: фото попадёт в карточку. «В процессе» и «После» добавляет бригада, их здесь можно смотреть.'
                 : 'Снимки до, во время и после монтажа. По ним можно показать клиенту результат.'
               : 'Загружаем фото…'}
           </p>
@@ -216,6 +218,17 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
           </button>
         ) : null}
       </div>
+
+      {data && photos.length ? (
+        <PhotoReportActions
+          objectId={objectId}
+          roomName={room?.roomName || ''}
+          photos={flat}
+          role={user?.role}
+          clientVisible={data.clientVisible}
+          answers={room?.room?.answers ?? null}
+        />
+      ) : null}
 
       {loadError ? (
         <p className={styles.error} role="alert">
@@ -349,7 +362,7 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
             <span>
               Показывать фото клиенту
               <small>
-                Клиент увидит снимки на своей странице по ссылке. Подписи и имена сотрудников не показываются.
+                Включено по умолчанию. Клиент увидит снимки на своей странице по ссылке и в PDF. Подписи и имена сотрудников не показываются.
               </small>
             </span>
           </label>

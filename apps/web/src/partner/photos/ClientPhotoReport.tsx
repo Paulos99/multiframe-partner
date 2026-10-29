@@ -3,11 +3,12 @@ import { PHOTO_STAGES, PHOTO_STAGE_LABELS } from '../../../../../packages/shared
 import type { PublicRoomPhoto } from '../apiClient';
 import { PhotoCompare } from './PhotoCompare';
 import { PhotoViewer } from './PhotoViewer';
+import { ClientPdfButton } from './PhotoReportActions';
 import { formatPhotoDate, groupByStage } from './photoFormat';
 import styles from './ClientPhotoReport.module.css';
 
 /** Фото работ на странице клиента: до, в процессе, после. Без подписей, имён и цен. */
-export function ClientPhotoReport({ photos }: { photos: readonly PublicRoomPhoto[] }) {
+export function ClientPhotoReport({ photos, roomName = '' }: { photos: readonly PublicRoomPhoto[]; roomName?: string }) {
   const [viewer, setViewer] = useState<{ index: number; compare: boolean } | null>(null);
   const groups = useMemo(() => groupByStage(photos), [photos]);
   const flat = useMemo(() => PHOTO_STAGES.flatMap((stage) => groups[stage]), [groups]);
@@ -18,6 +19,8 @@ export function ClientPhotoReport({ photos }: { photos: readonly PublicRoomPhoto
     <section className={styles.panel} aria-labelledby="client-photos-title" data-testid="client-photo-report" data-reveal>
       <h2 id="client-photos-title">Фото работ</h2>
       <p className={styles.lead}>Как комната выглядела до, во время и после монтажа. Нажмите на снимок, чтобы открыть его.</p>
+
+      <ClientPdfButton roomName={roomName} photos={photos} />
 
       {comparable ? <PhotoCompare befores={groups.before} afters={groups.after} /> : null}
 
