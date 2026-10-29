@@ -636,6 +636,8 @@ export interface RoomPhoto {
   /** Короткоживущие ссылки: после просмотра список лучше запросить заново. */
   url: string;
   thumbUrl: string;
+  /** Подписанная ссылка на миниатюру через API (с CORS): из неё собирается PDF-отчёт. */
+  pdfUrl?: string;
 }
 
 export interface RoomPhotoList {
@@ -652,11 +654,12 @@ export function resolvePhotoUrl(url: string): string {
   return url.startsWith('/') ? `${apiBase()}${url}` : url;
 }
 
-function withUrls<T extends { url?: string; thumbUrl?: string }>(photo: T): T {
+function withUrls<T extends { url?: string; thumbUrl?: string; pdfUrl?: string }>(photo: T): T {
   return {
     ...photo,
     ...(photo.url ? { url: resolvePhotoUrl(photo.url) } : {}),
     ...(photo.thumbUrl ? { thumbUrl: resolvePhotoUrl(photo.thumbUrl) } : {}),
+    ...(photo.pdfUrl ? { pdfUrl: resolvePhotoUrl(photo.pdfUrl) } : {}),
   };
 }
 
@@ -784,4 +787,4 @@ export async function apiGetPhotoCase(
 }
 
 /** Фото клиентской страницы: этап и ссылки, без подписей и авторов. */
-export type PublicRoomPhoto = Pick<RoomPhoto, 'id' | 'stage' | 'createdAt' | 'width' | 'height' | 'url' | 'thumbUrl'>;
+export type PublicRoomPhoto = Pick<RoomPhoto, 'id' | 'stage' | 'createdAt' | 'width' | 'height' | 'url' | 'thumbUrl' | 'pdfUrl'>;

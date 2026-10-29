@@ -6,12 +6,14 @@
  * (миниатюра). В platform JSON у комнаты лежит только список записей (без байтов).
  *
  * Права — в packages/shared/roomPhotos.js, здесь они проверяются на сервере:
- * замерщик видит и добавляет только «До», монтажник и менеджер — все этапы, админ StP только смотрит
- * и может удалить. Комната видна роли по тем же правилам, что и документы (objectVisibleTo).
+ * замерщик видит все этапы, но добавляет только «До»; монтажник и менеджер видят и добавляют все этапы;
+ * админ StP только смотрит и может удалить. Комната видна роли по тем же правилам, что и документы (objectVisibleTo).
  *
  * Фото отдаются по короткоживущим ссылкам: подписанный GET в бакет (10 минут) или,
  * без бакета, подписанная ссылка на GET /photo-file/<id> (HMAC, 10 минут).
- * Клиентская страница по токену получает фото, только если владелец или менеджер включил показ.
+ * Клиентская страница по токену получает фото, пока владелец или менеджер не выключил показ (по умолчанию он включён).
+ * Для PDF-отчёта каждое фото отдаётся ещё и подписанной ссылкой на API (pdfUrl): у неё есть CORS,
+ * а у ссылки на бакет его может не быть, и браузер не даст положить снимок в PDF.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
@@ -25,6 +27,7 @@ import {
   cleanPhotoCaption,
   isPhotoStage,
   photoCountsFor,
+  photoReportVisibleToClient,
   photoStagesRoleAdds,
   photoStagesRoleSees,
 } from '../../packages/shared/roomPhotos.js';
@@ -90,6 +93,12 @@ function decodeJpeg(raw, maxBytes, maxSide) {
   return cleaned;
 }
 
+/** Подписанный адрес API (не бакета): для PDF-отчёта. Путь от корня API, клиент добавляет адрес сам. */
+function apiUrlFor(photo, variant) {
+  const exp = Math.floor(Date.now() / 1000) + PHOTO_URL_TTL_SECONDS;
+  return `/photo-file/${encodeURIComponent(photo.id)}?v=${variant}&e=${exp}&s=${sign(photo.id, variant, exp)}`;
+}
+
 /** Ссылка на байты: бакет или подписанный адрес API. */
 async function urlFor(ctx, photo, variant) {
   const bucket = partnerBucket();
@@ -102,9 +111,8 @@ async function urlFor(ctx, photo, variant) {
       expiresIn: PHOTO_URL_TTL_SECONDS,
     });
   }
-  const exp = Math.floor(Date.now() / 1000) + PHOTO_URL_TTL_SECONDS;
   // Относительный адрес: клиент добавляет адрес API сам.
-  return `/photo-file/${encodeURIComponent(photo.id)}?v=${variant}&e=${exp}&s=${sign(photo.id, variant, exp)}`;
+  return apiUrlFor(photo, variant);
 }
 
 /** Запись для людей: без ключей бакета. */
@@ -123,6 +131,7 @@ export async function photoView(ctx, photo, { withUrls = true } = {}) {
   if (withUrls) {
     view.url = await urlFor(ctx, photo, 'image');
     view.thumbUrl = await urlFor(ctx, photo, 'thumb');
+    view.pdfUrl = apiUrlFor(photo, 'thumb');
   }
   return view;
 }
@@ -137,6 +146,7 @@ export async function clientPhotoView(ctx, photo) {
     height: photo.height || null,
     url: await urlFor(ctx, photo, 'image'),
     thumbUrl: await urlFor(ctx, photo, 'thumb'),
+    pdfUrl: apiUrlFor(photo, 'thumb'),
   };
 }
 
@@ -155,7 +165,7 @@ export function photoCountsForObject(obj, role) {
 
 /** Фото для клиентской страницы или null: показ выключен или фото нет. */
 export async function clientReport(ctx, obj) {
-  if (obj.photoReport?.clientVisible !== true) return null;
+  if (!photoReportVisibleToClient(obj)) return null;
   const rows = photoRows(obj);
   if (!rows.length) return null;
   const sorted = [...rows].sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
@@ -323,7 +333,7 @@ export async function handleRoomPhotos(ctx) {
       canAdd: photoStagesRoleAdds(role),
       stages: seen,
       limit: PHOTO_LIMIT_PER_ROOM,
-      clientVisible: obj.photoReport?.clientVisible === true,
+      clientVisible: photoReportVisibleToClient(obj),
       canShareWithClient: canShareReportWithClient(role),
     });
   }

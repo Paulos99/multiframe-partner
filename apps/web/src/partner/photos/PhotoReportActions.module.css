@@ -1,0 +1,100 @@
+.row,
+.rowCompact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rowCompact {
+  gap: 8px;
+}
+
+.primary,
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--cab-radius-md, 16px);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.primary {
+  background: var(--cab-accent, #01644f);
+  color: var(--cab-on-accent, #fff);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--cab-accent-hover, #014e3e);
+}
+
+.ghost {
+  background: var(--cab-card, #fff);
+  border-color: var(--cab-border-strong, #d3d8de);
+  color: var(--cab-accent-text, #01644f);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--cab-accent-soft, #e6f4ef);
+  border-color: var(--cab-accent, #01644f);
+}
+
+.primary:disabled,
+.ghost:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.note,
+.error {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  color: var(--cab-muted, #4e5d56);
+}
+
+.error {
+  color: var(--cab-danger, #9f2c24);
+}
+
+@media (max-width: 520px) {
+  .primary,
+  .ghost {
+    flex: 1 1 100%;
+  }
+}
+
+/* Страница клиента: свои цвета, без переменных кабинета. */
+.clientBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--border-color, #d3d8de);
+  border-radius: 14px;
+  background: var(--bg-card, #fff);
+  color: var(--text-primary, #152018);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.clientBtn:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
