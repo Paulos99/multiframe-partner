@@ -140,7 +140,7 @@ export function Quotes({ quotes, videos, copyable = false }: { quotes: SourceQuo
         ) : (
           <li key={q.id}>
             <blockquote>«{q.quote}»</blockquote>
-            <span className={styles.quoteSrc}>Видео {q.videoCode}: {videoTitle(videos, q.videoCode)}</span>
+            <span className={styles.quoteSrc}>Источник: обучающее видео {q.videoCode} «{videoTitle(videos, q.videoCode)}»</span>
             {copyable ? (
               <button
                 type="button"
