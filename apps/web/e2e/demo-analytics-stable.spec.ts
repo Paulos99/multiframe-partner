@@ -683,16 +683,20 @@ test('вход владельца через интерфейс: монтажн�
   await page.route('**/auth/me', (route) => route.abort());
 
   async function signIn(login: string, password: string) {
+    // В демо экран входа начинается с выбора роли: заходим по логину.
+    const byLogin = page.getByRole('button', { name: 'Войти по логину' });
+    if (await byLogin.isVisible().catch(() => false)) await byLogin.click();
     await page.getByLabel('Логин', { exact: true }).fill(login);
     await page.getByLabel('Пароль', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
   }
 
-  await page.goto('/');
+  // Демо-вход без связи с сервером разрешён только в демо-режиме (в обычном входе отказ сервера остаётся отказом).
+  await page.goto('/?demo=1');
   await signIn('exec1', 'exec1234');
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
-  await expect(page.getByLabel('Логин', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Логин', { exact: true }).or(page.getByRole('button', { name: 'Войти по логину' }))).toBeVisible();
   await signIn('partner1', 'demo1234');
 
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
