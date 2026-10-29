@@ -20,6 +20,7 @@ import {
   saveStoredDocument,
 } from './platformStore.js';
 import { handleRoomShare } from './roomShare.js';
+import { handleTraining } from './training.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
@@ -930,6 +931,17 @@ export async function handler(event = {}) {
       pushActivity,
     });
     if (roomShareResponse) return roomShareResponse;
+
+    const trainingResponse = await handleTraining({
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      getQuery: () => getQuery(event),
+      json,
+      getBody: () => getBody(event),
+      normalizeRole,
+    });
+    if (trainingResponse) return trainingResponse;
 
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
