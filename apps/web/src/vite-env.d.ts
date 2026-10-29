@@ -15,3 +15,6 @@ interface ImportMeta {
 declare module 'pdfjs-dist/legacy/build/pdf.worker.min.mjs' {
   export const WorkerMessageHandler: unknown;
 }
+
+/** Номер сборки: подставляется при сборке, совпадает с version.json. */
+declare const __BUILD_ID__: string;
