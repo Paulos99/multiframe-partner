@@ -4,9 +4,11 @@
     <meta charset="UTF-8" />
     <title>Партнёрская сеть StP MultiFrame</title>
     <script>
-      // SPA fallback for GitHub Pages project site
+      // SPA fallback for GitHub Pages project site: the base is the first path segment
+      // (/multiframe-partner/, /cabinet/). Other hosts use the server-side fallback (see docs/handover).
       sessionStorage.setItem('mf-spa-redirect', location.pathname + location.search + location.hash);
-      location.replace('/multiframe-partner/');
+      var seg = location.pathname.split('/')[1];
+      location.replace(seg ? '/' + seg.replace(/[^A-Za-z0-9._-]/g, '') + '/' : '/');
     </script>
   </head>
   <body></body>

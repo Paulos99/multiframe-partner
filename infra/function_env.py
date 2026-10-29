@@ -5,6 +5,8 @@ from urllib.parse import urlencode
 
 SECRET_NAMES = ("JWT_SECRET", "JWT_SECRET_PREVIOUS", "ANALYTICS_ADMIN_KEY")
 MIN_SECRET_LENGTH = 32
+# Необязательные настройки поведения: меняются только если заданы в окружении развёртывания (GitHub Variables).
+OPTIONAL_SETTINGS = ("DEMO_SEED", "ALLOW_DEMO_RESET", "SHARE_LINK_TTL_DAYS", "BCRYPT_COST")
 
 
 def legacy_derived_key(folder_id, sa_id):
@@ -26,6 +28,10 @@ def version_environment(token, function_id, request, storage_env, compromised=()
     environment.setdefault("PLATFORM_KEY", "platform-v2.json")
     environment.update(storage_env)
     environment["CORS_ORIGIN"] = os.environ.get("CORS_ORIGIN") or "https://paulos99.github.io"
+    for name in OPTIONAL_SETTINGS:
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            environment[name] = value
     for name in SECRET_NAMES:
         value = os.environ.get(name)
         if value:

@@ -6,6 +6,7 @@ const PARTNERS = 'multiframe-partner-data';
 const MATERIALS = 'multiframe-partner-materials';
 
 process.env.PARTNERS_BUCKET = PARTNERS;
+process.env.DEMO_SEED = '1';
 process.env.MATERIALS_BUCKET = MATERIALS;
 process.env.JWT_SECRET = 'materials-bucket-test';
 process.env.YC_ACCESS_KEY_ID = 'YCAJEtestaccesskey123';

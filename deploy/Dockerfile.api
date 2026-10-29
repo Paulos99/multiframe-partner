@@ -1,0 +1,19 @@
+# API кабинета: тот же обработчик, что и в облачной функции, но как обычный HTTP-сервер.
+# Сборка из корня репозитория: docker build -f deploy/Dockerfile.api .
+FROM node:22-alpine AS deps
+WORKDIR /app/apps/api
+COPY apps/api/package.json apps/api/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+FROM node:22-alpine
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 TRUST_PROXY=1
+WORKDIR /app
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+COPY apps/api ./apps/api
+COPY packages/shared ./packages/shared
+RUN rm -f apps/api/*.test.js && rm -rf apps/api/scripts && chown -R node:node /app
+USER node
+WORKDIR /app/apps/api
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1
+CMD ["node", "server.mjs"]

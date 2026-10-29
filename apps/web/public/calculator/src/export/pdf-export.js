@@ -1,3 +1,4 @@
+import { escapeHtml } from '../core/html-escape.js';
 import { OPENING_TYPES } from '../core/constants.js';
 import { buildWallSurfaceStats } from '../calculators/materials-bom.js';
 import { getBounds } from '../core/polygon-geometry.js';
@@ -50,7 +51,7 @@ function statsBlock(rows, { compact = false, columns = 1 } = {}) {
     .map(
       (row) => `
       <div style="display:flex;justify-content:space-between;gap:8px;padding:${pad};border-bottom:1px solid #eef1f3;font-size:${font};line-height:1.25;break-inside:avoid">
-        <span style="color:#5f6b73;min-width:0">${row.label}</span>
+        <span style="color:#5f6b73;min-width:0">${escapeHtml(row.label)}</span>
         <strong style="text-align:right;white-space:nowrap;flex-shrink:0">${row.value}</strong>
       </div>`
     )
@@ -65,7 +66,7 @@ function statsBlock(rows, { compact = false, columns = 1 } = {}) {
         .map(
           (row) => `
         <div style="display:flex;justify-content:space-between;gap:6px;padding:${pad};border-bottom:1px solid #eef1f3;font-size:${font};line-height:1.25">
-          <span style="color:#5f6b73;min-width:0">${row.label}</span>
+          <span style="color:#5f6b73;min-width:0">${escapeHtml(row.label)}</span>
           <strong style="text-align:right;white-space:nowrap;flex-shrink:0">${row.value}</strong>
         </div>`
         )
@@ -128,7 +129,7 @@ function buildSchemeSummaryBody({ bom, room, dateStr, planImage, hidePrices = fa
   if (bom.walls?.wallResults) {
     bom.walls.wallResults.forEach((wr) => {
       const ws = buildWallSurfaceStats(wr, bom.wallMounting, room.wallHeight);
-      surfacesList += `<li>${wr.wall.label} — ${ws.withReserve} пан.</li>`;
+      surfacesList += `<li>${escapeHtml(wr.wall.label)} — ${Number(ws.withReserve) || 0} пан.</li>`;
     });
   }
 
@@ -412,7 +413,7 @@ function buildWallBody({ wr, stats, image, mountingLabel, areaEstimate = false, 
 
   return `
     <div style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
-      <h1 style="font-size:14px;margin:0 0 6px;color:${BRAND};flex-shrink:0">${wr.wall.label}</h1>
+      <h1 style="font-size:14px;margin:0 0 6px;color:${BRAND};flex-shrink:0">${escapeHtml(wr.wall.label)}</h1>
       ${statsBlock(rows, { compact: true, columns: 2 })}
       ${openingsBlock}
       ${
