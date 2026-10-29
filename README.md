@@ -17,6 +17,7 @@
 | Роль | Логин | Пароль | Компания |
 |------|-------|--------|----------|
 | Админ StP | `admin` | `admin1234` | — |
+| Менеджер StP | `stpmgr1` | `exec1234` | StP (внутренняя) |
 | Владелец | `partner1` / `partner2` | `demo1234` | Москва / СПб |
 | Менеджер | `sales1` / `sales2` | `exec1234` | Москва / СПб |
 | Замерщик | `exec1` / `exec2` | `exec1234` | Москва / СПб |
@@ -29,6 +30,14 @@
 Презентация для руководства: [docs/leadership-demo/](docs/leadership-demo/).
 
 В кабинете — вкладка **Обучение** (у замерщика и монтажника — кнопка в шапке). Внутри — методические материалы STP MultiFrame (папки и файлы, правка только у админа). Личной инструкции «Кабинет» в обучении больше нет.
+
+### Менеджер StP
+
+Внутренняя роль `stp_manager` («Менеджер StP»): в кабинете только **Обучение** (материалы и тренажёр) и **Инструменты** (карточки «Диагностика шума» и «Калькулятор» — клиентские версии по внешним ссылкам). Проектов, комнат, команды, цен партнёров и аналитики у роли нет. Права описаны в одном месте — `packages/shared/rolePermissions.js`: сервер (`requireAuth`) пропускает роль только по списку разрешённых вызовов, всё остальное закрыто с 403 по умолчанию. Менеджеры живут во внутренней компании `org_stp` («StP»).
+
+Создаёт, меняет пароль и удаляет менеджеров админ StP: вкладка «Партнёры» → «Менеджеры StP» (`GET|POST /admin/stp-managers`, `DELETE /admin/stp-managers/:id`; новый пароль — через `POST /admin/partners/reset-password`).
+
+Ссылки на инструменты задаются в одном месте: константа `STP_TOOL_URLS` в `apps/web/src/partner/stpToolLinks.ts` или переменные сборки `VITE_STP_PROBLEMOMER_URL` и `VITE_STP_CALCULATOR_URL` (они сильнее константы). Принимаются только адреса `https://`. Пока ссылки нет, карточка неактивна и подписана «Ссылка появится позже».
 
 Город партнёра выбирается из справочника городов РФ (`apps/api/data/ru-cities.tsv`, источник — статья Википедии «Список городов России», лицензия CC BY-SA 4.0). Произвольный текст не сохраняется. Уже записанный город не из справочника остаётся на карточке и подсвечивается админу.
 
@@ -66,6 +75,7 @@ npm run dev
 - `GET /auth/me`
 - `PATCH /org/settings`
 - `GET|POST /admin/partners`, `DELETE /admin/partners/:id`
+- `GET|POST /admin/stp-managers`, `DELETE /admin/stp-managers/:id` — менеджеры StP (только `admin`)
 - `GET|POST /org/staff`, `DELETE /org/staff/:id`
 - `GET|POST /objects`, `PATCH /objects/:id`, `POST /objects/:id/documents`, `GET /objects/:id/documents/:docId`
 - Analytics: `/analytics/events`, `/analytics/dashboard`

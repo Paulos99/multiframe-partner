@@ -1,0 +1,24 @@
+/* Карточки инструментов менеджера StP: клик только по кнопке или ссылке, без ссылки — приглушённый вид. */
+.card {
+  cursor: default;
+}
+
+.cardOff {
+  filter: saturate(0.55);
+}
+
+.cardOff:hover,
+.cardOff:active {
+  background-color: var(--cab-accent);
+  box-shadow: var(--cab-shadow);
+}
+
+
+.card a {
+  text-decoration: none;
+}
+
+.card :global(button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.85;
+}

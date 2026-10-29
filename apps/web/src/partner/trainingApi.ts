@@ -40,7 +40,7 @@ function readLocal(): Record<string, TrainingDoc> {
 const roleOf = (role?: string) => normalizeRole(role);
 
 function localStaff(orgId: string) {
-  return loadDb().users.filter((u) => u.orgId === orgId && (STAFF_ROLES as string[]).includes(roleOf(u.role)));
+  return loadDb().users.filter((u) => u.orgId === orgId && ([...STAFF_ROLES, 'stp_manager'] as string[]).includes(roleOf(u.role)));
 }
 
 export async function sendTrainingSync(body: { attempts: unknown[]; materials: unknown[] }): Promise<TrainingSyncAck> {

@@ -30,7 +30,7 @@ import {
   isLegacyAttempt,
   isLegacyCard,
   objectionsForRole,
-  scenariosForRole,
+  scenariosForRole, questionsForRole,
   seededShuffle,
   shuffledOptions,
   streakOf,
@@ -77,6 +77,16 @@ const drillInput = (o: Objection, picks: [Pick, Pick], at = t0, cards: ReviewCar
 
 test('роли кабинета сопоставляются ролям тренажёра', () => {
   assert.deepEqual(['admin', 'owner', 'sales', 'measurer', 'crew'].map(trainerRoleOf), ['stp_admin', 'owner', 'manager', 'measurer', 'crew']);
+});
+
+test('менеджер StP видит все сценарии, возражения и вопросы всех ролей без настройки', () => {
+  assert.equal(trainerRoleOf('stp_manager'), 'stp_manager');
+  assert.equal(trainerRoleOf('sales'), 'manager');
+  assert.equal(scenariosForRole(content, 'stp_manager', false).length, content.scenarios.scenarios.length);
+  assert.equal(objectionsForRole(content, 'stp_manager', false).length, content.objections.objections.length);
+  assert.equal(questionsForRole(content, 'stp_manager', false).length, content.quiz.questions.length);
+  assert.ok(scenariosForRole(content, 'stp_manager', false).length > scenariosForRole(content, 'manager', false).length);
+  assert.ok(buildQuiz(content, 'stp_manager', false, 'quick', { seed: 's' }).length > 0);
 });
 
 test('у каждой из пяти ролей есть возражения, сценарии и вопросы', () => {

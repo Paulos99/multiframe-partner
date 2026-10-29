@@ -26,7 +26,7 @@ test('приветствие берёт личное имя и молчит, е�
 
 test('в локальном демо у каждой роли своё имя, старая подпись роли заменяется', () => {
   const users = buildLocalDemoUsers();
-  assert.equal(users.length, 10);
+  assert.equal(users.length, 11);
   for (const user of users) {
     const name = personName(user.displayName);
     assert.ok(name, user.login);

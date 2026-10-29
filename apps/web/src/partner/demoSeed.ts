@@ -42,6 +42,7 @@ export type DemoAccount = {
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
   { login: 'admin', password: 'admin1234', role: 'admin', company: 'StP', label: 'Admin StP' },
+  { login: 'stpmgr1', password: 'exec1234', role: 'stp_manager', company: 'StP', label: 'Менеджер StP' },
   {
     login: 'partner1',
     password: 'demo1234',
@@ -301,6 +302,7 @@ export function buildLocalDemoUsers(): DemoUser[] {
   const now = new Date().toISOString();
   return [
     { id: 'u_admin', login: 'admin', password: 'admin1234', role: 'admin', displayName: DEMO_PERSONAL_NAMES.u_admin, orgId: null, createdAt: now },
+    { id: 'u_stpmgr1', login: 'stpmgr1', password: 'exec1234', role: 'stp_manager', displayName: DEMO_PERSONAL_NAMES.u_stpmgr1, orgId: 'org_stp', createdAt: now },
     { id: 'u_partner1', login: 'partner1', password: 'demo1234', role: 'owner', displayName: DEMO_PERSONAL_NAMES.u_partner1, orgId: 'org_demo', createdAt: now },
     { id: 'u_sales1', login: 'sales1', password: 'exec1234', role: 'sales', displayName: DEMO_PERSONAL_NAMES.u_sales1, orgId: 'org_demo', createdAt: now },
     { id: 'u_exec1', login: 'exec1', password: 'exec1234', role: 'measurer', displayName: DEMO_PERSONAL_NAMES.u_exec1, orgId: 'org_demo', createdAt: now },
@@ -315,6 +317,12 @@ export function buildLocalDemoUsers(): DemoUser[] {
 
 export function buildLocalDemoOrgs(): DemoOrg[] {
   return [
+    {
+      id: 'org_stp',
+      createdAt: daysAgo(41),
+      createdBy: 'u_admin',
+      settings: orgSettings('StP', ''),
+    },
     {
       id: 'org_demo',
       createdAt: daysAgo(40),

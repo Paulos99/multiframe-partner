@@ -39,10 +39,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             ))}
           </select>
         </label>
-        <label className={styles.checkLine}>
-          <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />
-          <span>Показывать материалы всех ролей. Прогресс всё равно считается по вашей роли.</span>
-        </label>
+        {t.role === 'stp_manager' ? (
+          <p className={styles.hint}>Вам открыты материалы всех ролей: сценарии, возражения и вопросы. Это нужно для общего развития.</p>
+        ) : (
+          <label className={styles.checkLine}>
+            <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />
+            <span>Показывать материалы всех ролей. Прогресс всё равно считается по вашей роли.</span>
+          </label>
+        )}
         <div className={styles.actions}>
           <button type="submit" className={styles.primary}>
             Сохранить

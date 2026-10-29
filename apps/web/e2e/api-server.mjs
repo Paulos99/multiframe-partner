@@ -73,6 +73,16 @@ const base = {
 for (const role of ['sales', 'measurer']) {
   base.users.push({ ...base.users[0], id: `ui_${role}`, login: `ui.${role}`, displayName: `UI ${role}`, role });
 }
+// Менеджер StP: внутренний сотрудник в своей внутренней компании, без проектов и комнат.
+base.users.push({
+  ...base.users[0],
+  id: 'ui_stp_manager',
+  login: 'ui.stp_manager',
+  displayName: 'UI stp_manager',
+  role: 'stp_manager',
+  orgId: 'org_stp',
+});
+base.orgs.push({ id: 'org_stp', internal: true, settings: { ...settings, companyName: 'StP', city: '' }, createdAt: now });
 // Вторая компания — для проверок видимости: владелец одной компании не видит сотрудников другой.
 base.orgs.push({ id: 'ui_org_b', settings: { ...settings, companyName: 'UI other company' }, createdAt: now });
 for (const [id, role] of [['owner_b', 'owner'], ['sales_b', 'sales']]) {

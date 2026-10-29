@@ -9,6 +9,7 @@ import { boostCapitalEvents, boostCapitalStaff } from '../../packages/shared/dem
 import { demoHistoryReady, supplementDemoHistory } from '../../packages/shared/demoHistory.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { DEMO_PERSONAL_NAMES } from '../../packages/shared/personName.js';
+import { STP_MANAGER_ROLE, STP_ORG_ID, STP_ORG_NAME } from '../../packages/shared/rolePermissions.js';
 import { sealDisabledDemoUsers } from './sealDemoUsers.js';
 
 const OFFICIAL_PANEL = 2396;
@@ -19,6 +20,7 @@ const PANEL_AREA = 0.75 * 0.55;
 
 export const DEMO_ACCOUNTS = [
   { login: 'admin', password: 'admin1234', role: 'admin', company: 'StP', label: 'Admin StP' },
+  { login: 'stpmgr1', password: 'exec1234', role: 'stp_manager', company: 'StP', label: 'Менеджер StP' },
   {
     login: 'partner1',
     password: 'demo1234',
@@ -319,6 +321,14 @@ export function buildDemoPlatform(opts = {}) {
       orgId: null,
     }),
     user({
+      id: 'u_stpmgr1',
+      login: 'stpmgr1',
+      password: 'exec1234',
+      role: STP_MANAGER_ROLE,
+      displayName: DEMO_PERSONAL_NAMES.u_stpmgr1,
+      orgId: STP_ORG_ID,
+    }),
+    user({
       id: 'u_partner1',
       login: 'partner1',
       password: 'demo1234',
@@ -385,6 +395,13 @@ export function buildDemoPlatform(opts = {}) {
   ];
 
   const orgs = [
+    {
+      id: STP_ORG_ID,
+      createdAt: daysAgo(40),
+      createdBy: 'u_admin',
+      internal: true,
+      settings: orgSettings(STP_ORG_NAME, ''),
+    },
     {
       id: 'org_demo',
       createdAt: daysAgo(40),
@@ -679,4 +696,34 @@ export function extendDemoAnalyticsHistory(events) {
   if (!list.some((event) => event && DEMO_ORG_IDS.has(event.orgId))) return list;
   if (demoHistoryReady(list)) return list;
   return supplementDemoHistory(list, buildDemoAnalyticsEvents());
+}
+
+/**
+ * Демо-менеджер StP для уже развёрнутой демо-сети: добавляется один раз, данные партнёров не трогаются.
+ * Только если в платформе есть демо-компании; настоящие данные без демо этим не меняются.
+ * Возвращает true, если платформа изменилась.
+ */
+export function ensureDemoStpManager(platform, now = new Date().toISOString()) {
+  if (!platform?.users || !platform?.orgs) return false;
+  if (!platform.orgs.some((org) => org.id === 'org_demo')) return false;
+  if (platform.users.some((user) => user.id === 'u_stpmgr1' || user.login === 'stpmgr1')) return false;
+  if (!platform.orgs.some((org) => org.id === STP_ORG_ID)) {
+    platform.orgs.push({
+      id: STP_ORG_ID,
+      createdAt: now,
+      createdBy: 'u_admin',
+      internal: true,
+      settings: orgSettings(STP_ORG_NAME, ''),
+    });
+  }
+  platform.users.push({
+    id: 'u_stpmgr1',
+    login: 'stpmgr1',
+    passwordHash: bcrypt.hashSync('exec1234', 10),
+    role: STP_MANAGER_ROLE,
+    displayName: DEMO_PERSONAL_NAMES.u_stpmgr1,
+    orgId: STP_ORG_ID,
+    createdAt: now,
+  });
+  return true;
 }

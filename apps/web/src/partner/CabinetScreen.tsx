@@ -23,6 +23,8 @@ import { generatePassword, usePartner } from './PartnerContext';
 import { SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
 import { ToolsPanel } from './ToolsPanel';
+import { StpManagersAdmin } from './StpManagersAdmin';
+import { StpToolsPanel } from './StpToolsPanel';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
 import {
@@ -443,6 +445,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
               {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
             </div>
           </div>
+          <StpManagersAdmin />
           <InstallHint />
         </TabPanel>
       ) : null}
@@ -904,6 +907,32 @@ function FieldCabinet({
   );
 }
 
+/**
+ * Кабинет менеджера StP: только «Обучение» (материалы и тренажёр) и «Инструменты» (клиентские версии).
+ * Проектов, комнат, команды, цен партнёров и аналитики здесь нет, сервер их этой роли тоже не отдаёт.
+ */
+function StpManagerCabinet() {
+  const api = usePartner();
+  const user = api.user!;
+  const [view, setView] = useState<'help' | 'tools'>(() => (consumeReturnToTools() ? 'tools' : 'help'));
+  return (
+    <CabinetChrome
+      title="StP · MultiFrame"
+      lead="Обучение и инструменты менеджера"
+      items={[
+        { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => setView('help') },
+        { id: 'tools', label: 'Инструменты', active: view === 'tools', onSelect: () => setView('tools') },
+      ]}
+      extra={<InstallAppButton />}
+      profile={profileOf(user, api.logout)}
+    >
+      <FrameBody>
+        <TabPanel>{view === 'tools' ? <StpToolsPanel /> : <HelpTrainingPanel role="stp_manager" />}</TabPanel>
+      </FrameBody>
+    </CabinetChrome>
+  );
+}
+
 export function CabinetScreen({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const user = api.user;
@@ -918,6 +947,7 @@ export function CabinetScreen({ onNavigate }: { onNavigate: (r: Route) => void }
   if (user.role === 'sales') {
     return <SalesCabinet onNavigate={onNavigate} onOpenCalc={openCalc} />;
   }
+  if (user.role === 'stp_manager') return <StpManagerCabinet />;
   if (user.role === 'crew' || user.role === 'measurer') {
     return <FieldCabinet role={user.role} onNavigate={onNavigate} onOpenCalc={openCalc} />;
   }

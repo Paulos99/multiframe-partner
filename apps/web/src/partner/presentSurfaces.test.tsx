@@ -15,7 +15,7 @@ function equal(actual: unknown, expected: unknown) {
 const groups = demoGroups();
 equal(groups.map((group) => group.title), ['StP', 'Потолки Столицы', 'Северный Потолок']);
 equal(groups.map((group) => group.place), ['Сеть', 'Москва', 'Санкт-Петербург']);
-equal(groups[0]?.accounts.map((account) => account.login), ['admin']);
+equal(groups[0]?.accounts.map((account) => account.login), ['admin', 'stpmgr1']);
 equal(groups[1]?.accounts.map((account) => account.login), ['partner1', 'sales1', 'exec1', 'crew1', 'crew1b']);
 equal(groups[2]?.accounts.map((account) => account.login), ['partner2', 'sales2', 'exec2', 'crew2']);
 equal(
@@ -27,9 +27,12 @@ for (const account of DEMO_ACCOUNTS) {
   const label = `${demoRoleLabel(account)} ${demoRoleHint(account)}`;
   if (label.includes(account.password)) throw new Error('Подпись роли содержит пароль');
 }
-equal(demoRoleLabel(DEMO_ACCOUNTS[1]!), 'Владелец');
-equal(demoRoleHint(DEMO_ACCOUNTS[5]!), 'Вторая бригада');
-equal(demoRoleHint(DEMO_ACCOUNTS[4]!), 'Задания на монтаж');
+const demoByLogin = (login: string) => DEMO_ACCOUNTS.find((account) => account.login === login)!;
+equal(demoRoleLabel(demoByLogin('partner1')), 'Владелец');
+equal(demoRoleHint(demoByLogin('crew1b')), 'Вторая бригада');
+equal(demoRoleHint(demoByLogin('crew1')), 'Задания на монтаж');
+equal(demoRoleLabel(demoByLogin('stpmgr1')), 'Менеджер StP');
+equal(demoRoleHint(demoByLogin('stpmgr1')), 'Обучение и инструменты');
 
 equal(folderCountLabel(0), 'Пока пусто');
 equal(folderCountLabel(1), '1 материал');

@@ -10,6 +10,9 @@ export function trainerRoleOf(role: string): TrainerRole {
   switch (role) {
     case 'admin':
       return 'stp_admin';
+    case 'stp_manager':
+      // Менеджер StP видит все сценарии всех ролей «для общего развития».
+      return 'stp_manager';
     case 'sales':
       return 'manager';
     case 'owner':
@@ -27,22 +30,28 @@ export const ROLE_TITLES: Record<TrainerRole, string> = {
   measurer: 'Замерщик',
   crew: 'Монтажник',
   stp_admin: 'Администратор StP',
+  stp_manager: 'Менеджер StP',
 };
+
+/** Роли, которым тренажёр показывает материалы всех ролей. */
+export function seesAllRoles(role: TrainerRole): boolean {
+  return role === 'stp_admin' || role === 'stp_manager';
+}
 
 export const DEFAULT_DECK_SIZE = 5;
 export const DECK_SIZES = [3, 5, 10] as const;
 
 export function objectionsForRole(content: TrainerContent, role: TrainerRole, showAll: boolean): Objection[] {
   const all = content.objections.objections;
-  return showAll || role === 'stp_admin' ? all : all.filter((o) => o.roles.includes(role));
+  return showAll || seesAllRoles(role) ? all : all.filter((o) => o.roles.includes(role));
 }
 export function scenariosForRole(content: TrainerContent, role: TrainerRole, showAll: boolean): Scenario[] {
   const all = content.scenarios.scenarios;
-  return showAll || role === 'stp_admin' ? all : all.filter((s) => s.roles.includes(role));
+  return showAll || seesAllRoles(role) ? all : all.filter((s) => s.roles.includes(role));
 }
 export function questionsForRole(content: TrainerContent, role: TrainerRole, showAll: boolean): QuizQuestion[] {
   const all = content.quiz.questions;
-  return showAll || role === 'stp_admin' ? all : all.filter((q) => q.roles.includes(role));
+  return showAll || seesAllRoles(role) ? all : all.filter((q) => q.roles.includes(role));
 }
 
 /* ---------- текст ответа ---------- */

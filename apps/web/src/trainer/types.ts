@@ -1,6 +1,6 @@
 /** Типы содержимого и данных пользователя тренажёра продаж (см. content/spec.md). */
 
-export type TrainerRole = 'owner' | 'manager' | 'measurer' | 'crew' | 'stp_admin';
+export type TrainerRole = 'owner' | 'manager' | 'measurer' | 'crew' | 'stp_admin' | 'stp_manager';
 export type CriterionId = 'discovery' | 'listening' | 'objection' | 'value' | 'honesty' | 'nextstep';
 export type Mode = 'objection' | 'roleplay' | 'quiz';
 

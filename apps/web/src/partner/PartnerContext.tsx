@@ -22,6 +22,7 @@ import { loadCities, resolveCity } from './cityCatalog';
 import { startTrainingSync } from './trainingSync';
 import {
   canCreateObjects,
+  isStpManagerRole,
   toPartnerProfile,
   type JobObjectDocument,
 } from '../../../../packages/shared/partner';
@@ -294,7 +295,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const refreshObjects = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = Boolean(opts?.silent);
     const session = loadSession();
-    if (!session) {
+    // У менеджера StP нет ни комнат, ни проектов: на сервер за ними не ходим.
+    if (!session || isStpManagerRole(session.role)) {
       if (!silent) {
         setObjects([]);
         setPendingSyncCount(0);
@@ -327,7 +329,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const refreshProjects = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = Boolean(opts?.silent);
     const session = loadSession();
-    if (!session) {
+    if (!session || isStpManagerRole(session.role)) {
       if (!silent) {
         setProjects([]);
         setProjectsError(null);
@@ -357,7 +359,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   const flushObjectQueue = useCallback(async () => {
     const session = loadSession();
-    if (!session) return;
+    if (!session || isStpManagerRole(session.role)) return;
     const result = await flushOutbox(session, remote);
     const projectsResult = await flushProjectOutbox(session, remote);
     if (result === 'auth' || projectsResult === 'auth') setAuthHold(true);

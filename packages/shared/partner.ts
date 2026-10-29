@@ -1,6 +1,7 @@
 /** Shared types — partner portal roles, org settings, job objects. */
 
 import { computeAnalyticsFunnel } from './funnel.ts';
+import { STP_MANAGER_LABEL, STP_MANAGER_ROLE } from './rolePermissions.js';
 import type { RefusalRecord } from './refusal.js';
 import {
   PROJECT_STATUSES as PROJECT_STATUS_VALUES,
@@ -11,7 +12,7 @@ import {
   roleSeesProjectMoney,
 } from './projectAccess.js';
 
-export type UserRole = 'admin' | 'owner' | 'sales' | 'measurer' | 'crew';
+export type UserRole = 'admin' | 'owner' | 'sales' | 'measurer' | 'crew' | 'stp_manager';
 
 /** @deprecated migrated to owner / staff roles */
 export type LegacyUserRole = 'partner' | 'executor';
@@ -22,6 +23,14 @@ export const ORG_ROLES: UserRole[] = ['owner', 'sales', 'measurer', 'crew'];
 /** Staff under an owner (analytics “executors” table). */
 export const STAFF_ROLES: UserRole[] = ['sales', 'measurer', 'crew'];
 
+/**
+ * Менеджер StP — внутренний сотрудник MultiFrame, не партнёр. Права и список разрешённых вызовов API
+ * заданы в rolePermissions.js: обучение (материалы и тренажёр) и ссылки на клиентские инструменты.
+ */
+export function isStpManagerRole(role: string | null | undefined): boolean {
+  return role === STP_MANAGER_ROLE;
+}
+
 /** Название партнёрской сети в кабинете и демо-материалах. */
 export const PARTNER_NETWORK_NAME = 'Партнёрская сеть StP MultiFrame';
 
@@ -31,6 +40,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   sales: 'Менеджер',
   measurer: 'Замерщик',
   crew: 'Монтажник',
+  stp_manager: STP_MANAGER_LABEL,
 };
 
 export function isOrgRole(role: string): role is UserRole {
@@ -52,7 +62,8 @@ export function normalizeRole(role: string | null | undefined): UserRole {
     role === 'owner' ||
     role === 'sales' ||
     role === 'measurer' ||
-    role === 'crew'
+    role === 'crew' ||
+    role === STP_MANAGER_ROLE
   ) {
     return role;
   }

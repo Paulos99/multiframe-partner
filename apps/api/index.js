@@ -22,7 +22,12 @@ import {
 import { signToken as signAuthToken, verifyToken } from './authTokens.js';
 import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
 import ruCitiesTsv from './data/ru-cities.js';
-import { buildDemoAnalyticsEvents, buildDemoPlatform, extendDemoAnalyticsHistory } from './demoSeed.js';
+import {
+  buildDemoAnalyticsEvents,
+  buildDemoPlatform,
+  ensureDemoStpManager,
+  extendDemoAnalyticsHistory,
+} from './demoSeed.js';
 import { findVisibleDocument, incomingDocumentKind, visibleDocuments } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
 import { handleMaterialPreview } from './materialsPreview.js';
@@ -45,6 +50,13 @@ import { estimateForRole } from '../../packages/shared/projectAccess.js';
 import { cleanClientPhone, phoneRoomStatusAllowed, roleSeesClientPhone } from '../../packages/shared/clientPhone.js';
 import { cleanRefusal } from '../../packages/shared/refusal.js';
 import { applyDemoPersonalNames, normalizePersonName } from '../../packages/shared/personName.js';
+import {
+  STP_MANAGER_ROLE,
+  STP_ORG_ID,
+  STP_ORG_NAME,
+  isStpManager,
+  stpManagerMayCall,
+} from '../../packages/shared/rolePermissions.js';
 import {
   deleteObject,
   getObjectBuffer,
@@ -110,7 +122,7 @@ function normalizeRole(role) {
   if (role === 'executor' || role === 'exec') return 'measurer';
   if (role === 'manager') return 'sales';
   if (role === 'installer' || role === 'install') return 'crew';
-  if (['admin', 'owner', 'sales', 'measurer', 'crew'].includes(role)) return role;
+  if (['admin', 'owner', 'sales', 'measurer', 'crew', STP_MANAGER_ROLE].includes(role)) return role;
   return 'measurer';
 }
 
@@ -154,7 +166,8 @@ function normalizeOrgSettings(partial = {}) {
 
 function publicUser(user, org) {
   const role = normalizeRole(user.role);
-  let settings = org ? normalizeOrgSettings(org.settings) : null;
+  // У менеджера StP нет прайса партнёра: цены компании ему не отдаются.
+  let settings = org && !isStpManager(role) ? normalizeOrgSettings(org.settings) : null;
   return {
     id: user.id,
     login: user.login,
@@ -389,7 +402,8 @@ async function loadPlatform() {
   const platform = await loadStoredDocument(platformDocumentSpec());
   const names = Boolean(platform?.users && applyDemoPersonalNames(platform.users));
   const grouped = groupOrphanRooms(platform);
-  if (names || grouped) {
+  const stpDemo = Boolean(platform?.users && ensureDemoStpManager(platform));
+  if (names || grouped || stpDemo) {
     try {
       await savePlatform(platform);
     } catch (error) {
@@ -508,7 +522,12 @@ async function requireAuth(event) {
   // подойти новой учётной записи с тем же логином.
   const user = (platform.users || []).find((u) => u.id === payload.sub) || null;
   if (!user || user.loginDisabled || (payload.sessionVersion || 0) !== (user.sessionVersion || 0)) throw Object.assign(new Error('Unauthorized'), { status: 401 });
-  return { platform, user: { ...user, role: normalizeRole(user.role) }, payload, usedPreviousKey };
+  const role = normalizeRole(user.role);
+  // Менеджеру StP закрыто всё, чего нет в списке разрешённого (packages/shared/rolePermissions.js).
+  if (isStpManager(role) && !stpManagerMayCall(getMethod(event), getPath(event))) {
+    throw Object.assign(new Error('Недостаточно прав'), { status: 403 });
+  }
+  return { platform, user: { ...user, role }, payload, usedPreviousKey };
 }
 
 function assertRole(user, roles) {
@@ -1412,6 +1431,87 @@ async function handleRequest(event = {}) {
       return json(200, { login, password, user: publicUser(owner, org) });
     }
 
+    /* —— Менеджеры StP: внутренние сотрудники MultiFrame, обучение и ссылки на инструменты —— */
+    if (method === 'GET' && path.endsWith('/admin/stp-managers')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const managers = platform.users
+        .filter((u) => normalizeRole(u.role) === STP_MANAGER_ROLE)
+        .map((u) => {
+          const last = (platform.activity || []).find((a) => a.userId === u.id && a.action === 'login');
+          return {
+            id: u.id,
+            login: u.login,
+            role: STP_MANAGER_ROLE,
+            displayName: u.displayName,
+            orgId: u.orgId || null,
+            createdAt: u.createdAt,
+            lastLogin: last?.at || null,
+          };
+        });
+      return json(200, { managers });
+    }
+
+    if (method === 'POST' && path.endsWith('/admin/stp-managers')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const body = getBody(event);
+      const login = String(body.login || '').trim();
+      const password = String(body.password || '').trim();
+      const displayName = String(body.displayName || login).trim() || login;
+      if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
+      if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
+      const now = new Date().toISOString();
+      if (!findOrg(platform, STP_ORG_ID)) {
+        platform.orgs.push({
+          id: STP_ORG_ID,
+          createdAt: now,
+          createdBy: user.id,
+          internal: true,
+          settings: normalizeOrgSettings({ companyName: STP_ORG_NAME, city: '' }),
+        });
+      }
+      const manager = {
+        id: uid('u'),
+        login,
+        passwordHash: bcrypt.hashSync(password, 10),
+        role: STP_MANAGER_ROLE,
+        displayName,
+        orgId: STP_ORG_ID,
+        createdAt: now,
+      };
+      platform.users.push(manager);
+      pushActivity(platform, {
+        orgId: STP_ORG_ID,
+        userId: user.id,
+        login: user.login,
+        action: 'create_stp_manager',
+        detail: login,
+      });
+      await savePlatform(platform);
+      return json(200, { id: manager.id, login, password, role: STP_MANAGER_ROLE, displayName });
+    }
+
+    if (method === 'DELETE' && /\/admin\/stp-managers\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const managerId = decodeURIComponent(path.split('/').pop() || '');
+      const target = platform.users.find((u) => u.id === managerId);
+      if (!target || normalizeRole(target.role) !== STP_MANAGER_ROLE) {
+        return json(404, { message: 'Менеджер StP не найден' });
+      }
+      platform.users = platform.users.filter((u) => u.id !== managerId);
+      pushActivity(platform, {
+        orgId: STP_ORG_ID,
+        userId: user.id,
+        login: user.login,
+        action: 'delete_stp_manager',
+        detail: target.login,
+      });
+      await savePlatform(platform);
+      return json(200, { ok: true });
+    }
+
     if (method === 'POST' && path.endsWith('/admin/demo/reset')) {
       const { user } = await requireAuth(event);
       assertRole(user, ['admin']);
@@ -1435,8 +1535,11 @@ async function handleRequest(event = {}) {
       const { platform, user } = await requireAuth(event);
       assertRole(user, ['admin']);
       const { partnerUserId, password } = getBody(event);
+      // Сброс пароля — тот же вызов для владельца партнёра и для менеджера StP.
       const idx = platform.users.findIndex(
-        (u) => u.id === partnerUserId && normalizeRole(u.role) === 'owner',
+        (u) =>
+          u.id === partnerUserId &&
+          (normalizeRole(u.role) === 'owner' || normalizeRole(u.role) === STP_MANAGER_ROLE),
       );
       if (idx < 0) return json(404, { message: 'Партнёр не найден' });
       const pw = String(password || '').trim();

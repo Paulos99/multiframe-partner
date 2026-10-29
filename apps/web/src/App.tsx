@@ -6,7 +6,7 @@ import { AppShell } from './app-shell/AppShell';
 import { InstallPromptHost } from './app-shell/InstallAppButton';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
-import { type SessionUser } from '../../../packages/shared/partner';
+import { isStpManagerRole, type SessionUser } from '../../../packages/shared/partner';
 import { isCabinetCalcMessage, type CabinetCalcMessage } from './partner/cabinetCalc';
 import { CalcSaveToProject } from './partner/CalcSaveToProject';
 import { canSaveToProject } from './partner/toolSave';
@@ -170,7 +170,9 @@ function PartnerShell() {
     openObject,
     cabinetLeaveNonce,
   } = usePartner();
-  const [route, setRoute] = useState<Route>('cabinet');
+  const [routeState, setRoute] = useState<Route>('cabinet');
+  // Менеджеру StP открыт только кабинет: страницы Проблемомера и калькулятора партнёров для него закрыты.
+  const route: Route = user && isStpManagerRole(user.role) ? 'cabinet' : routeState;
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
   const [calcNotice, setCalcNotice] = useState<string | null>(null);
   /** Расчёт без комнаты, ждущий «куда сохранить». */

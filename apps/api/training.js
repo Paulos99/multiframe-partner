@@ -30,7 +30,9 @@ import { loadStoredDocument, saveStoredDocument } from './platformStore.js';
 
 export { mergeTrainingDocument };
 
-const WRITE_ROLES = ['owner', ...STAFF_ROLES];
+// Менеджер StP учится так же, как сотрудник: его журнал виден администратору в компании StP.
+const TRAINEE_ROLES = [...STAFF_ROLES, 'stp_manager'];
+const WRITE_ROLES = ['owner', ...TRAINEE_ROLES];
 const ORG_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 function docSpec(orgId) {
@@ -51,7 +53,7 @@ export async function handleTraining({ path, method, requireAuth, getQuery, json
   const { platform, user } = await requireAuth();
   const role = normalizeRole(user.role);
   const staffOf = (orgId) =>
-    (platform.users || []).filter((u) => u.orgId === orgId && STAFF_ROLES.includes(normalizeRole(u.role)));
+    (platform.users || []).filter((u) => u.orgId === orgId && TRAINEE_ROLES.includes(normalizeRole(u.role)));
   const orgOf = (orgId) => (platform.orgs || []).find((o) => o.id === orgId) || null;
   const loadDoc = (orgId) => loadStoredDocument(docSpec(orgId));
   const deny = (status, message) => json(status, { message });
@@ -105,7 +107,7 @@ export async function handleTraining({ path, method, requireAuth, getQuery, json
   // action === 'user'
   const target = (platform.users || []).find((u) => u.id === param);
   const targetRole = target ? normalizeRole(target.role) : null;
-  const isStaff = Boolean(target?.orgId && STAFF_ROLES.includes(targetRole));
+  const isStaff = Boolean(target?.orgId && TRAINEE_ROLES.includes(targetRole));
   const isSelf = Boolean(target && target.id === user.id);
   if (!target || !isStaff) {
     // Чужую и несуществующую запись не различаем: ответ один.

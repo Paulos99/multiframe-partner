@@ -6,7 +6,7 @@ import type {
   AnalyticsTool,
   UserRole,
 } from '../../../../packages/shared/partner';
-import { aggregateAnalyticsDashboard, isStaffRole, networkAdminScope } from '../../../../packages/shared/partner';
+import { aggregateAnalyticsDashboard, isStaffRole, isStpManagerRole, networkAdminScope } from '../../../../packages/shared/partner';
 import { buildStaffDrill, type DrillPeriod, type StaffDrillResult } from '../../../../packages/shared/staffDrill.js';
 import { getAnalyticsSessionId } from '../analytics/sessionId';
 import { cacheAnalyticsEvents, loadCachedAnalyticsEvents, rememberCalculation } from './offlineDb';
@@ -69,6 +69,8 @@ export function trackPartnerAnalytics(input: {
 }): void {
   const session = loadSession();
   if (!session) return;
+  // Менеджеры StP — не партнёры: их действия в аналитику партнёров не попадают.
+  if (isStpManagerRole(session.role)) return;
   if (input.action === 'open') {
     const userKey = session.id || session.login;
     if (!allowOpenEvent(userKey, input.tool)) return;

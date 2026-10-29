@@ -25,7 +25,7 @@ import {
   statMaterialObject,
 } from './materialsStorage.js';
 
-const READ_ROLES = ['admin', 'owner', 'sales', 'measurer', 'crew'];
+const READ_ROLES = ['admin', 'owner', 'sales', 'measurer', 'crew', 'stp_manager'];
 const PREVIEW_PATH = /\/materials\/([^/]+)\/preview$/;
 export const PREVIEW_MAX_BYTES = 300 * 1024 * 1024;
 const DIRECT_MAX_BYTES = 2_000_000;
