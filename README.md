@@ -63,6 +63,11 @@ npm run dev
 - `GET|POST /org/staff`, `DELETE /org/staff/:id`
 - `GET|POST /objects`, `PATCH /objects/:id`, `POST /objects/:id/documents`, `GET /objects/:id/documents/:docId`
 - Analytics: `/analytics/events`, `/analytics/dashboard`
+- Обучение в аналитике (`apps/api/training.js`, хранится в том же бакете, один файл `training/<компания>.json`, новых ресурсов нет):
+  - `POST /training/sync` — кабинет отправляет итоги попыток тренажёра и открытия материалов `{ attempts, materials }` (до 100 за раз). Запись по `id`: повтор не плодит дублей, сервер подтверждает принятые `id`, кабинет убирает их из очереди. Кто пишет — берётся из токена; свободный текст ответов на сервер не уходит.
+  - `GET /training/me` — свои итоги. `GET /training/org` — таблица сотрудников: владелец — своей компании, админ — любой (`?orgId=`). `GET /training/companies` — сводка по компаниям, только админ. `GET /training/user/:id` — страница сотрудника: владелец — своей компании, админ — любого, сотрудник — свою.
+  - Менеджер, замерщик и монтажник чужого обучения не видят. У демо-компаний к настоящим записям добавляются готовые данные (`packages/shared/trainingDemo.js`), в бакет они не пишутся.
+  - Новые маршруты шлюза: `/training/sync`, `/training/me`, `/training/org`, `/training/companies`, `/training/user/{userId}` — в `infra/deploy_yc.py`.
 - Материалы: `GET /materials` (все роли кабинета), папки и файлы — только `admin`. Метаданные: поле `materials` в `platform-v2.json`. Пока админ ничего не менял, API отдаёт демо-набор и не записывает его в бакет. `GET /materials/{id}/content` для файла в бакете возвращает `{ name, mime, url }` — подписанная ссылка на 15 минут. Ответ с `base64` остаётся для встроенного `contentBase64`, поле `stub` — для заглушек. Загрузка через кабинет — до 2 МБ.
 
 Новые маршруты шлюза (`/objects/{objectId}/documents`, `/objects/{objectId}/documents/{docId}`, `/materials`, `/materials/folders`, `/materials/files`, `/materials/{materialId}`, `/materials/{materialId}/content`) попадают в API Gateway при следующем `infra/deploy_yc.py`.

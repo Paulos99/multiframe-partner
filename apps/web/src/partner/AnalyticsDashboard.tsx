@@ -1,5 +1,5 @@
 import { Skeleton } from './Skeleton';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react';
 import type {
   AnalyticsBreakdownItem,
   AnalyticsDashboard as DashData,
@@ -46,6 +46,8 @@ import { FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import { StaffDrillDrawer } from './StaffDrillDrawer';
+import { TrainingCompanyPage, TrainingTab, TrainingUserPage } from './TrainingAnalytics';
+import { normalizeRole } from '../../../../packages/shared/partner';
 import styles from './partner.module.css';
 import { FunnelIcon } from '../icons';
 
@@ -149,6 +151,8 @@ function actionLabel(action: string): string {
   return action;
 }
 
+const DELTA_HINT = 'к предыдущему периоду';
+
 function KpiCard({
   label,
   value,
@@ -165,25 +169,58 @@ function KpiCard({
   onSelect?: () => void;
 }) {
   const delta = showDelta ? deltaText(value, prev) : null;
-  const body = (
-    <>
+  const tipId = useId();
+  // Подсказка показывается при наведении, фокусе и касании; на телефоне гаснет сама.
+  const [tapped, setTapped] = useState(false);
+  useEffect(() => {
+    if (!tapped) return undefined;
+    const timer = window.setTimeout(() => setTapped(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [tapped]);
+  const deltaNode =
+    delta != null ? (
+      <span
+        className={`${styles.kpiDelta} ${deltaClass(value, prev)} ${tapped ? styles.kpiDeltaOpen : ''}`}
+        title={DELTA_HINT}
+        aria-describedby={tipId}
+        data-testid="kpi-delta"
+        onClick={(event) => {
+          // Касание числа только показывает подсказку; переход по карточке — касание вне числа.
+          event.stopPropagation();
+          setTapped(true);
+        }}
+        {...(onSelect ? {} : { tabIndex: 0, onFocus: () => setTapped(true), onBlur: () => setTapped(false) })}
+      >
+        {delta}
+        <span id={tipId} role="tooltip" className={styles.kpiTip}>
+          {DELTA_HINT}
+        </span>
+      </span>
+    ) : (
+      <span className={styles.kpiDelta} aria-hidden>
+        {'\u00a0'}
+      </span>
+    );
+  if (!onSelect) {
+    return (
+      <div className={styles.kpi}>
+        <span className={styles.kpiLabel}>{label}</span>
+        <strong>{formatNum(value)}</strong>
+        {deltaNode}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={styles.kpi}
+      aria-pressed={pressed}
+      onClick={onSelect}
+      onBlur={() => setTapped(false)}
+    >
       <span className={styles.kpiLabel}>{label}</span>
       <strong>{formatNum(value)}</strong>
-      {delta != null ? (
-        <span className={`${styles.kpiDelta} ${deltaClass(value, prev)}`}>
-          {delta} к пред.
-        </span>
-      ) : (
-        <span className={styles.kpiDelta} aria-hidden>
-          {'\u00a0'}
-        </span>
-      )}
-    </>
-  );
-  if (!onSelect) return <div className={styles.kpi}>{body}</div>;
-  return (
-    <button type="button" className={styles.kpi} aria-pressed={pressed} onClick={onSelect}>
-      {body}
+      {deltaNode}
     </button>
   );
 }
@@ -364,7 +401,7 @@ function BreakdownList({
   );
 }
 
-type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'objects';
+type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'training' | 'objects';
 
 const DRILL_METRICS = new Set(['staff', 'problemomer', 'calculator', 'pdf', 'area', 'panels', 'avg', 'done']);
 
@@ -397,6 +434,16 @@ export function AnalyticsDashboard({
   useEffect(() => {
     if (mode !== 'admin' && section === 'companies') setSection('overview');
   }, [mode, section]);
+
+  // Обучение видят владелец (свою компанию) и администратор (все компании); остальным вкладки нет.
+  const canTraining = mode === 'admin' || normalizeRole(user.role) === 'owner';
+  const onTrainingPage = route.page === 'training-user' || route.page === 'training-company';
+  useEffect(() => {
+    if (onTrainingPage) setSection('training');
+  }, [onTrainingPage]);
+  useEffect(() => {
+    if (!canTraining && section === 'training') setSection('overview');
+  }, [canTraining, section]);
 
   const staffKey = api.partnerListStaff().map((member) => member.id).join('|');
 
@@ -488,6 +535,17 @@ export function AnalyticsDashboard({
     });
   }, [mode, data, partnersList]);
 
+  if (onTrainingPage && canTraining) {
+    return (
+      <div className={`${styles.card} ${styles.dashCard}`}>
+        {route.page === 'training-user' && route.userId ? <TrainingUserPage userId={route.userId} /> : null}
+        {route.page === 'training-company' && route.orgId && mode === 'admin' ? (
+          <TrainingCompanyPage orgId={route.orgId} />
+        ) : null}
+      </div>
+    );
+  }
+
   if (loading && !data) {
     return (
       <div className={`${styles.card} ${styles.dashCard}`} aria-busy="true">
@@ -511,6 +569,7 @@ export function AnalyticsDashboard({
     { id: 'portrait', label: 'Комнаты' },
     ...(mode === 'admin' ? [{ id: 'companies' as const, label: 'Компании' }] : []),
     { id: 'team', label: mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники' },
+    ...(canTraining ? [{ id: 'training' as const, label: 'Обучение' }] : []),
     { id: 'objects', label: 'Журнал' },
   ];
 
@@ -553,7 +612,7 @@ export function AnalyticsDashboard({
         </label>
       ) : null}
 
-      {route.page !== 'overview' && model ? (
+      {(route.page === 'rating' || route.page === 'staff') && model ? (
         <StaffDrillDrawer
           metric={route.metric || 'staff'}
           mode={mode}
@@ -769,6 +828,8 @@ export function AnalyticsDashboard({
           </div>
         </div>
       ) : null}
+
+      {section === 'training' && canTraining ? <TrainingTab mode={mode} /> : null}
 
       {section === 'objects' ? (
         <div className={styles.dashSection}>

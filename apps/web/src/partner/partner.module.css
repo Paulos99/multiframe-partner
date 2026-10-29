@@ -803,7 +803,7 @@
 
 .kpi {
   display: grid;
-  grid-template-rows: 2.4em auto 1.1em;
+  grid-template-rows: 2.4em auto auto;
   gap: 6px;
   padding: 16px 16px 14px;
   border-radius: var(--cab-radius-lg);
@@ -817,6 +817,7 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
+  position: relative;
 }
 
 .kpi[aria-pressed='true'] {
@@ -851,6 +852,50 @@
   font-weight: 700;
   line-height: 1.1;
   align-self: end;
+  justify-self: start;
+  cursor: help;
+}
+
+/* Подсказка «к предыдущему периоду»: наведение, фокус или касание. */
+.kpiTip {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: calc(100% - 4px);
+  z-index: 5;
+  padding: 6px 4px;
+  text-align: center;
+  border-radius: 8px;
+  background: var(--cab-ink);
+  color: var(--cab-card);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
+  box-shadow: var(--cab-shadow-sm);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+@media (pointer: coarse) {
+  .kpiDelta {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
+    margin: -8px 0 -14px;
+    padding-right: 12px;
+  }
+}
+
+.kpiDelta:hover .kpiTip,
+.kpiDelta:focus .kpiTip,
+.kpi:focus-visible .kpiTip,
+.kpiDeltaOpen .kpiTip {
+  opacity: 1;
+  visibility: visible;
 }
 
 .kpiUp {

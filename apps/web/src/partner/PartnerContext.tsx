@@ -19,6 +19,7 @@ import type {
   UserRole,
 } from '../../../../packages/shared/partner';
 import { loadCities, resolveCity } from './cityCatalog';
+import { startTrainingSync } from './trainingSync';
 import {
   canCreateObjects,
   toPartnerProfile,
@@ -432,6 +433,12 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [remote, flushObjectQueue]);
+
+  // Результаты обучения и открытия материалов уходят на сервер сами, пока кабинет открыт (админ без компании не пишет).
+  useEffect(() => {
+    if (!user?.id || !user.orgId || user.role === 'admin') return;
+    return startTrainingSync(user.id);
+  }, [user?.id, user?.orgId, user?.role]);
 
   useEffect(() => {
     if (user) {

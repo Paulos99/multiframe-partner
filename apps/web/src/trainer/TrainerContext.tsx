@@ -3,6 +3,7 @@ import { loadTrainerContent } from './content';
 import { defaultSettings, type Built, type Who } from './attempts';
 import { isLegacyAttempt, isLegacyCard } from './engine';
 import { trainerStore, type TrainerStore } from './store';
+import { backfillQueue, buildAttemptRecord } from './sync';
 import type { LearningAttempt, ReviewCard, ScenarioDraft, TrainerContent, TrainerRole, TrainerSettings } from './types';
 
 export type TrainerApi = {
@@ -43,6 +44,7 @@ export function TrainerProvider({
   role,
   loading,
   failed,
+  onQueued,
   children,
 }: {
   userId: string;
@@ -50,6 +52,8 @@ export function TrainerProvider({
   role: TrainerRole;
   loading: ReactNode;
   failed: (retry: () => void) => ReactNode;
+  /** Вызывается, когда в очереди отправки появились новые записи: кабинет пробует отправить их на сервер. */
+  onQueued?: () => void;
   children: ReactNode;
 }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -102,6 +106,14 @@ export function TrainerProvider({
 
   useEffect(() => {
     if (!loaded) return;
+    // Элементы очереди из прежних версий получают сжатую запись, когда содержимое загружено.
+    backfillQueue(loaded.store, userId, loaded.content)
+      .then(() => onQueued?.())
+      .catch(() => undefined);
+  }, [loaded, userId]);
+
+  useEffect(() => {
+    if (!loaded) return;
     let alive = true;
     setData(null);
     read(loaded).catch(() => {
@@ -128,9 +140,10 @@ export function TrainerProvider({
         await read(loaded);
       },
       commit: async (built) => {
-        await store.addAttempt(built.attempt);
+        await store.addAttempt(built.attempt, buildAttemptRecord(built.attempt, content));
         await store.putCards(built.cards);
         await read(loaded);
+        onQueued?.();
       },
       resetAll: async () => {
         await store.reset(userId);
@@ -138,7 +151,7 @@ export function TrainerProvider({
       },
       refresh: () => read(loaded),
     };
-  }, [loaded, data, userId, partnerId, role, read]);
+  }, [loaded, data, userId, partnerId, role, read, onQueued]);
 
   if (error) return <>{failed(() => setAttempt((n) => n + 1))}</>;
   if (!api) return <>{loading}</>;

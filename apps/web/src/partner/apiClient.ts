@@ -12,6 +12,13 @@ import type {
 } from '../../../../packages/shared/partner';
 import type { PhotoStage } from '../../../../packages/shared/roomPhotos.js';
 import { loadToken, saveToken } from './localStore';
+import type {
+  TrainingCompanyRow,
+  TrainingOrgView,
+  TrainingUserView,
+} from '../../../../packages/shared/trainingService.js';
+
+export type TrainingSyncAck = { acceptedAttemptIds: string[]; acceptedMaterialIds: string[]; rejected?: number; stored?: number };
 
 export function apiBase(): string {
   return (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
@@ -596,6 +603,23 @@ export async function apiPublicRoom(token: string, signal?: AbortSignal): Promis
   return data.share.photos ? { ...data.share, photos: data.share.photos.map(withUrls) } : data.share;
 }
 
+/* —— Обучение в аналитике (см. apps/api/training.js) —— */
+
+export async function apiTrainingSync(body: { attempts: unknown[]; materials: unknown[] }): Promise<TrainingSyncAck> {
+  return request<TrainingSyncAck>('/training/sync', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function apiTrainingOrg(orgId?: string | null): Promise<TrainingOrgView> {
+  return request<TrainingOrgView>(`/training/org${orgId ? `?orgId=${encodeURIComponent(orgId)}` : ''}`);
+}
+
+export async function apiTrainingCompanies(): Promise<{ companies: TrainingCompanyRow[] }> {
+  return request<{ companies: TrainingCompanyRow[] }>('/training/companies');
+}
+
+export async function apiTrainingUser(userId: string): Promise<TrainingUserView> {
+  return request<TrainingUserView>(`/training/user/${encodeURIComponent(userId)}`);
+}
 
 /* —— Фотоотчёт комнаты —— */
 
