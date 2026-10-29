@@ -97,7 +97,7 @@ test('API: запись идемпотентна, чужое обучение з
   // Администратор: все компании.
   const admin = auth(await tokenOf(request, 'ui.admin'));
   const companies = (await (await request.get(`${API}/training/companies`, { headers: admin })).json()).companies as { id: string }[];
-  expect(companies.map((c) => c.id).sort()).toEqual(['ui_org', 'ui_org_b']);
+  expect(companies.map((c) => c.id).sort()).toEqual(['org_stp', 'ui_org', 'ui_org_b']);
   expect((await request.get(`${API}/training/user/ui_sales_b`, { headers: admin })).status()).toBe(200);
   expect((await request.get(`${API}/training/org?orgId=ui_org_b`, { headers: admin })).status()).toBe(200);
   expect((await request.post(`${API}/training/sync`, { headers: admin, data: { attempts: [attempt('x', 1)], materials: [] } })).status()).toBe(403);
