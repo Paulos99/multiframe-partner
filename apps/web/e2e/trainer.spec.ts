@@ -137,7 +137,7 @@ test('цитаты с сайтов: «Производитель указыва�
   await openAt(page, 'owner', '#trainer/drill/obj-eco-child-allergy');
   await expect(page.getByText('Возражение 1 из 1')).toBeVisible();
   await playDrillCard(page);
-  const sources = page.getByText('Из видео и с сайтов');
+  const sources = page.getByText('Источники', { exact: true });
   await sources.click();
   const claim = page.getByText('Производитель указывает', { exact: false }).first();
   await expect(claim).toBeVisible();
@@ -233,7 +233,7 @@ test('викторина: десять вопросов, верный ответ
     }
     await page.getByRole('button', { name: 'Проверить', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Разбор вопроса' })).toContainText('Верно');
-    await expect(page.getByRole('region', { name: 'Разбор вопроса' })).toContainText('Видео');
+    await expect(page.getByRole('region', { name: 'Разбор вопроса' })).toContainText('Источник');
     await page.getByRole('button', { name: i === 10 ? 'Показать итог' : 'Дальше', exact: true }).click();
   }
   await expect(page).toHaveURL(/#trainer\/quiz\/result$/);

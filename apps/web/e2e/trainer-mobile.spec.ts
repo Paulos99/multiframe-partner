@@ -177,7 +177,7 @@ test.describe('телефон 390 на 844', () => {
     await page.evaluate(() => { location.hash = '#trainer/drill/obj-eco-child-allergy'; });
     await expect(page.getByText('Возражение 1 из 1')).toBeVisible();
     await playDrillCard(page);
-    await page.getByText('Из видео и с сайтов').click();
+    await page.getByText('Источники', { exact: true }).click();
     await expect(page.getByText('Производитель указывает', { exact: false }).first()).toBeVisible();
     await expect(page.getByText('Клиенту не говорить').first()).toBeVisible();
     await fits(page, 'источники');

@@ -302,9 +302,9 @@ function Review({
         <Fold title="Что содержит хороший ответ" hint="подсказки, не оценка">
           <HintPoints points={o.requiredPoints} />
         </Fold>
-        <Fold title="Из видео и с сайтов" hint={`источников: ${o.sourceQuotes.length}`}>
+        <Fold title="Источники" hint={`источников: ${o.sourceQuotes.length}`}>
           <Quotes quotes={o.sourceQuotes} videos={t.content.objections.videos} copyable={t.role === 'stp_admin'} />
-          <p className={styles.hint}>Видео лежат в разделе «Материалы». Если ролик не открывается без сети, цитаты выше остаются доступны.</p>
+          <p className={styles.hint}>Обучающие видео лежат в разделе «Материалы». Цитаты выше доступны и без сети.</p>
         </Fold>
         <Fold title="Типичная ошибка">
           <p className={styles.plain}>{o.commonMistake}</p>

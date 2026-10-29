@@ -78,7 +78,11 @@ export function ChoiceBlock({
                 <div id={`${hintId}-fb-${o.id}`} className={o.correct ? styles.fbRight : styles.fbWrong}>
                   <p className={styles.fbHead}>{o.correct ? 'Почему это верно' : `Почему неверно: ${errorLabel(o.errorType).toLowerCase()}`}</p>
                   <p className={styles.fbText}>{o.explanation}</p>
-                  {o.correct ? <Quotes quotes={quotesFor(o)} videos={videos} copyable={copyable} /> : null}
+                  {o.correct && quotesFor(o).length ? (
+                    <Fold title="Источник" hint={`источников: ${quotesFor(o).length}`}>
+                      <Quotes quotes={quotesFor(o)} videos={videos} copyable={copyable} />
+                    </Fold>
+                  ) : null}
                 </div>
               ) : null}
             </li>

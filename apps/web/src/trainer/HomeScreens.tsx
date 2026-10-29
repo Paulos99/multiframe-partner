@@ -83,7 +83,7 @@ export function Home({
         <div className={styles.homeTitle}>
           <h3 className={styles.pageTitle}>Тренажёр продаж</h3>
           <p className={styles.lead}>
-            Учитесь отвечать клиентам на возражения: выбираете лучший из четырёх ответов, сразу видите, почему другие не подходят, и опираетесь на факты из обучающих видео. Ваша роль: {ROLE_TITLES[t.role]}. Результаты хранятся на этом устройстве.
+            Учитесь отвечать клиентам на возражения: выбираете лучший из четырёх ответов, сразу видите, почему другие не подходят, и опираетесь на проверенные факты. Ваша роль: {ROLE_TITLES[t.role]}. Результаты хранятся на этом устройстве.
           </p>
         </div>
         <button type="button" className={styles.secondary} onClick={onOpenSettings}>
@@ -158,7 +158,7 @@ export function Home({
               <ChecklistIcon size={26} />
             </span>
             <strong>Проверка знаний</strong>
-            <span className={styles.tileText}>Вопросы по видео: сразу виден верный ответ и цитата.</span>
+            <span className={styles.tileText}>Вопросы по продукту: сразу виден верный ответ и источник.</span>
             <span className={styles.chips}>
               <span className={styles.chip}>Вопросов: {qs}</span>
               <span className={styles.chip}>10 за раз</span>
@@ -202,7 +202,7 @@ export function Home({
           <h4>Содержимое тренажёра</h4>
           <p className={styles.hint}>
             Версия: {t.content.contentVersion}. Возражений: {t.content.objections.objections.length}, сценариев: {t.content.scenarios.scenarios.length}, вопросов: {t.content.quiz.questions.length}.
-            Каждый эталон и вопрос подтверждён дословной цитатой из видео. Факты с сайтов производителей показаны со ссылкой и словами «производитель указывает».
+            Каждый эталон и вопрос подтверждён цитатой: она лежит в блоке «Источник». Факты с сайтов производителей показаны со ссылкой и словами «производитель указывает».
           </p>
           {t.content.hidden.length ? (
             <p className={styles.notice}>
@@ -446,7 +446,7 @@ export function BankScreen({ id, onTrain }: { id?: string; onTrain: (objectionId
           <h4>Типичная ошибка</h4>
           <p>{o.commonMistake}</p>
         </section>
-        <Fold title="Из видео и с сайтов" hint={`источников: ${o.sourceQuotes.length}`}>
+        <Fold title="Источники" hint={`источников: ${o.sourceQuotes.length}`}>
           <Quotes quotes={o.sourceQuotes} videos={t.content.objections.videos} copyable={t.role === 'stp_admin'} />
         </Fold>
         <div className={`${styles.stickyBar} ${styles.actions}`}>
@@ -465,7 +465,7 @@ export function BankScreen({ id, onTrain }: { id?: string; onTrain: (objectionId
     );
   }
   return (
-    <Page title="Банк возражений" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Справочник: что ответить, что показать и откуда это в видео.">
+    <Page title="Банк возражений" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Справочник: что ответить, что показать и чем это подтверждено.">
       <label className={styles.fieldLine}>
         Причина отказа
         <select value={reason} onChange={(e) => setReason(e.target.value)}>
