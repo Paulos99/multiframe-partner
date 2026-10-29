@@ -4,14 +4,14 @@
  * Единственное место, где они задаются:
  *  — константа STP_TOOL_URLS ниже (вписать адрес и выпустить новую версию), либо
  *  — переменные сборки VITE_STP_PROBLEMOMER_URL и VITE_STP_CALCULATOR_URL (перекрывают константу).
- * Пока адрес пуст, карточка в кабинете неактивна и подписана «Ссылка появится позже».
+ * Адреса боевых клиентских версий присланы Павлом. Если адрес пуст, карточка в кабинете неактивна и подписана «Ссылка появится позже».
  * Принимаются только адреса https://, чтобы случайная опечатка не открыла чужую схему ссылки.
  */
 export type StpToolId = 'problemomer' | 'calculator';
 
 export const STP_TOOL_URLS: Record<StpToolId, string> = {
-  problemomer: '',
-  calculator: '',
+  problemomer: 'https://stp-multiframe.ru/problemomer/',
+  calculator: 'https://stp-multiframe.ru/calc/',
 };
 
 /** Адрес годится, если это абсолютная ссылка https://. Иначе — пустая строка. */

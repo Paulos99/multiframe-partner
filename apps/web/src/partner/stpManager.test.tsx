@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ROLE_LABELS, isStpManagerRole, normalizeRole } from '../../../../packages/shared/partner.ts';
 import { STP_TOOL_CARDS, STP_TOOLS_PENDING_LABEL, StpToolsPanel } from './StpToolsPanel.tsx';
-import { cleanStpToolUrl, stpToolUrl } from './stpToolLinks.ts';
+import { STP_TOOL_URLS, cleanStpToolUrl, stpToolUrl } from './stpToolLinks.ts';
 import { trainerRoleOf } from '../trainer/engine.ts';
 
 function equal(actual: unknown, expected: unknown) {
@@ -15,7 +15,7 @@ equal(normalizeRole('stp_manager'), 'stp_manager');
 equal(isStpManagerRole('stp_manager'), true);
 equal(isStpManagerRole('admin'), false);
 equal(ROLE_LABELS.stp_manager, 'Менеджер StP');
-equal(trainerRoleOf('stp_manager'), 'manager');
+equal(trainerRoleOf('stp_manager'), 'stp_manager');
 
 // Ссылки: только https, пусто по умолчанию, переменные сборки перекрывают константу
 equal(cleanStpToolUrl(''), '');
@@ -25,6 +25,11 @@ equal(cleanStpToolUrl('http://example.com/a'), '');
 equal(cleanStpToolUrl('example.com/a'), '');
 equal(cleanStpToolUrl(undefined), '');
 equal(cleanStpToolUrl(' https://example.com/a '), 'https://example.com/a');
+// Боевые адреса по умолчанию
+equal(STP_TOOL_URLS.problemomer, 'https://stp-multiframe.ru/problemomer/');
+equal(STP_TOOL_URLS.calculator, 'https://stp-multiframe.ru/calc/');
+equal(stpToolUrl('problemomer', {}), 'https://stp-multiframe.ru/problemomer/');
+equal(stpToolUrl('calculator', {}), 'https://stp-multiframe.ru/calc/');
 const empty = { problemomer: '', calculator: '' };
 equal(stpToolUrl('problemomer', {}, empty), null);
 equal(stpToolUrl('calculator', { VITE_STP_CALCULATOR_URL: 'https://calc.example.com/' }, empty), 'https://calc.example.com/');
@@ -56,7 +61,10 @@ equal((ready.match(/rel="noopener noreferrer"/g) || []).length, 2);
 if (ready.includes(STP_TOOLS_PENDING_LABEL)) throw new Error('Подпись ожидания осталась при готовой ссылке');
 
 // Язык и обещания
-const text = renderToStaticMarkup(<StpToolsPanel links={{}} />);
+const text = renderToStaticMarkup(<StpToolsPanel />);
+if (!text.includes('href="https://stp-multiframe.ru/problemomer/"') || !text.includes('href="https://stp-multiframe.ru/calc/"')) {
+  throw new Error('Карточки по умолчанию должны вести на боевые адреса');
+}
 for (const banned of ['сильный дискомфорт', 'важно для вас', 'до 17 дБ', 'гарант']) {
   if (text.includes(banned)) throw new Error(`Запрещённая формулировка: ${banned}`);
 }

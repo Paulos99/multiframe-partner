@@ -44,16 +44,32 @@ test('менеджер StP: тренажёр открывается внутри
   await expect(page.locator('[class*="drawer" i]')).toHaveCount(0);
 });
 
-test('менеджер StP: «Инструменты» — две карточки, без ссылок кнопки неактивны', async ({ page }) => {
+test('менеджер StP: в тренажёре видны сценарии всех ролей, настройка «все роли» не нужна', async ({ page }) => {
+  await enter(page);
+  await page.getByRole('tab', { name: 'Тренажёр', exact: true }).click();
+  await page.getByRole('button', { name: /Ролевые разговоры/ }).click();
+  await expect(page.getByRole('heading', { name: 'Ролевые разговоры' })).toBeVisible();
+  // Сценарии замерщика и монтажника открыты менеджеру StP «для общего развития».
+  await expect(page.getByRole('button', { name: /Замерщик на объекте/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Монтажник на объекте/ })).toBeVisible();
+  await expect(page.getByRole('list').getByRole('listitem')).toHaveCount(12);
+});
+
+test('менеджер StP: «Инструменты» — две карточки с рабочими ссылками на клиентские версии', async ({ page }) => {
   await enter(page);
   await nav(page).getByRole('tab', { name: 'Инструменты', exact: true }).click();
   const region = page.getByRole('region', { name: 'Инструменты' });
   await expect(region).toBeVisible();
   await expect(region.getByRole('heading', { level: 3 })).toHaveText(['Диагностика шума', 'Калькулятор']);
-  const buttons = region.getByRole('button', { name: 'Ссылка появится позже' });
-  await expect(buttons).toHaveCount(2);
-  for (const index of [0, 1]) await expect(buttons.nth(index)).toBeDisabled();
-  await expect(region.getByRole('link')).toHaveCount(0);
+  await expect(region.getByRole('button', { name: 'Ссылка появится позже' })).toHaveCount(0);
+  const diagnostics = region.getByRole('link', { name: /Открыть диагностику/ });
+  const calculator = region.getByRole('link', { name: /Открыть калькулятор/ });
+  await expect(diagnostics).toHaveAttribute('href', 'https://stp-multiframe.ru/problemomer/');
+  await expect(calculator).toHaveAttribute('href', 'https://stp-multiframe.ru/calc/');
+  for (const link of [diagnostics, calculator]) {
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', /noopener/);
+  }
   // Партнёрских инструментов нет.
   await expect(page.getByRole('button', { name: 'Открыть Проблемомер', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Открыть Калькулятор', exact: true })).toHaveCount(0);
