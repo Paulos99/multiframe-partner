@@ -48,6 +48,37 @@ const ANDRIANOVA_DISO: readonly number[] = [
   0.2, -2.8, -1.9,
 ];
 
+/**
+ * MultiFrame airborne gain ΔRw, dB — the ONE editable table (approved 2026-10-29).
+ * Rows: slab kind as resolved from the answers (slab «Не знаю» → by house type:
+ * panel/block → hollow, brick/monolith/«Не знаю» → solid, wood → wood).
+ * Columns: slab thickness; «Не знаю» thickness uses the resolver default
+ * (hollow 220, solid 180 / 200 in a monolith house, wood 200).
+ * Mass law: light slabs gain more, heavy less. Hard cap MF_AIR_GAIN_MAX.
+ * Used as-is (no marketing ×1.3 on top); applies to a floating floor above too.
+ */
+export const MF_AIR_GAIN = {
+  hollow: { up_to_160: 11, about_160_200: 10, about_200_250: 10, over_250: 9 },
+  solid: { up_to_160: 11, about_160_200: 8, about_200_250: 6, over_250: 6 },
+  wood: { up_to_160: 15, about_160_200: 15, about_200_250: 15, over_250: 15 },
+} as const;
+
+export const MF_AIR_GAIN_MAX = 15;
+
+export type MfThicknessKey = keyof (typeof MF_AIR_GAIN)['solid'];
+
+export function thicknessKeyFor(mm: number): MfThicknessKey {
+  if (mm <= 150) return 'up_to_160';
+  if (mm <= 190) return 'about_160_200';
+  if (mm <= 225) return 'about_200_250';
+  return 'over_250';
+}
+
+export function airGainFor(before: Pick<ConstructionResult, 'resolved'>): number {
+  const row = MF_AIR_GAIN[before.resolved.kind as keyof typeof MF_AIR_GAIN] ?? MF_AIR_GAIN.solid;
+  return Math.min(MF_AIR_GAIN_MAX, row[thicknessKeyFor(before.resolved.thicknessMm)]);
+}
+
 /** Protocol single-number targets at field anchors. */
 const ANCHOR_FOAM_RW = 38;
 const ANCHOR_KOSTROMA_RW = 49;
@@ -173,7 +204,7 @@ const MIN_AFTER_LNW = 56;
 
 export function applyMultiFrame(before: ConstructionResult): MultiFrameResult {
   const floating = before.floor === 'floating';
-  const dRwTarget = scaleIndexDelta(targetDeltaRw(before.Rw, floating));
+  const dRwTarget = airGainFor(before);
   const dLnwTarget = scaleIndexDelta(targetDeltaLnw(before.Rw, before.Lnw, floating));
 
   const airShape = floating ? [...ANDRIANOVA_DR] : bareAirShape(before.Rw);
@@ -209,7 +240,7 @@ export function applyMultiFrame(before: ConstructionResult): MultiFrameResult {
     deltaRw,
     deltaLnw,
     deltaRange: {
-      Rw: [Math.max(0, deltaRw - 1), Math.min(16, deltaRw + 2)] as const,
+      Rw: [Math.max(0, deltaRw - 1), Math.min(MF_AIR_GAIN_MAX, deltaRw + 2)] as const,
       Lnw: [Math.max(0, absLnw - 1), Math.min(14, absLnw + 2)] as const,
     },
   };
