@@ -47,7 +47,7 @@ export function QuizStart({ setSession }: { setSession: (s: QuizSession | null) 
   }
 
   return (
-    <Page title="Проверка знаний" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Один вопрос на экране. После ответа сразу видно верный вариант и цитату из видео. Засчитывается от 80 % верных.">
+    <Page title="Проверка знаний" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Один вопрос на экране. После ответа сразу видно верный вариант и источник. Засчитывается от 80 % верных.">
       {empty ? (
         <p className={styles.notice} role="status">
           {empty}
@@ -169,7 +169,7 @@ export function QuizRun({ session, setSession }: { session: QuizSession | null; 
         <section className={styles.block} aria-live="polite" aria-label="Разбор вопроса">
           <p className={lastAnswer?.correct ? styles.okLine : styles.failLine}>{lastAnswer?.correct ? '✔ Верно' : '✖ Неверно'}</p>
           <p>{q.explanation}</p>
-          <Fold title="Цитата из видео" hint={`цитат: ${q.sourceQuotes.length}`} label="Из видео">
+          <Fold title="Источник" hint={`цитат: ${q.sourceQuotes.length}`} label="Источник">
             <Quotes quotes={q.sourceQuotes} videos={t.content.quiz.videos} copyable={t.role === 'stp_admin'} />
           </Fold>
         </section>
