@@ -27,7 +27,7 @@ export interface TrainerStore {
 
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const draftKey = (userId: string, scenarioId: string) => `${userId}:${scenarioId}`;
-const fresh = (d: ScenarioDraft | null | undefined, now = Date.now()) => (d && now - new Date(d.savedAt).getTime() <= DRAFT_TTL_MS ? d : null);
+const fresh = (d: ScenarioDraft | null | undefined, now = Date.now()) => (d && Array.isArray(d.picks) && now - new Date(d.savedAt).getTime() <= DRAFT_TTL_MS ? d : null);
 
 export class MemoryStore implements TrainerStore {
   readonly kind = 'memory' as const;
