@@ -68,10 +68,10 @@ export function materialsUseApi(): boolean {
   return hasRemoteApi();
 }
 
-export const MATERIALS_SESSION_EXPIRED = 'Сессия истекла. Выйдите и войдите заново, чтобы открыть материалы.';
+export const MATERIALS_SESSION_EXPIRED = 'Сессия истекла. Войдите заново.';
 /** Вход был без сервера (нет связи или демо-логин): токена нет, сервер материалы не отдаст. */
 export const MATERIALS_NO_SERVER_SESSION =
-  'Вы вошли без связи с сервером, поэтому материалы не открываются. Проверьте интернет, выйдите и войдите заново.';
+  'Вход без связи с сервером. Войдите заново.';
 export const MATERIALS_FORBIDDEN = 'Для вашей роли материалы недоступны. Обратитесь к владельцу кабинета.';
 export const MATERIALS_SERVER_DOWN = 'Сервер материалов временно недоступен. Повторите позже.';
 

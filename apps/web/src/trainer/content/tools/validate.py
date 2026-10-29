@@ -147,7 +147,7 @@ for _id, _i in IDEAS.items():
 _fire = next(o for o in OB['objections'] if o['id'] == 'obj-eco-fire')
 _sc, _, _cov, _miss = R.score_step('Система не поддерживает горения, и вообще вот сертификат, посмотрите.', 'Ну да.', _fire, 0, SC)
 if _miss: E(f'регрессия «огонь»: сказанное в первой реплике не засчитано: {_miss}')
-for _txt in ['не поддерживает горение, сертификаты есть', 'Скажу точнее, не горит совсем я не говорю: не поддерживает горения. Ознакомьтесь с сертификацией по QR']:
+for _txt in ['не поддерживает горение, сертификаты есть', 'Скажу точнее, не горит совсем я не говорю: не поддерживает горения. Сертификаты есть в разделе «Обучение» → Материалы']:
     _c, _m = R.coverage(_fire['requiredPoints'], _txt)
     if _m: E(f'регрессия «огонь»: «{_txt[:30]}» не засчитан: {_m}')
 # факты об огне: у верных вариантов нет «негорючий», «не горит»; из классов допустимы только заявленные компанией Г2 и КМ2
@@ -217,7 +217,7 @@ for q in QZ['questions']:
     qids.add(w)
     oids = {o['id'] for o in q['options']}
     if len(oids) < 2 or not q['correctOptionIds'] or not set(q['correctOptionIds']) <= oids: E(f'{w}: варианты')
-    if not q['sourceQuotes']: E(f'{w}: нет цитаты')
+    if not q['sourceQuotes'] and not q.get('basis'): E(f'{w}: нет цитаты или основания (basis)')
     for x in q['sourceQuotes']: check_quote(x, w)
     if not set(q['roles']) <= ROLES: E(f'{w}: роли')
     for r in q['relatedObjectionIds']:

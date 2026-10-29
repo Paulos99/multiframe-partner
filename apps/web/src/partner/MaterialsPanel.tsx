@@ -46,6 +46,12 @@ type NotedMaterial = {
 };
 
 /** Текст причины часто сам кончается точкой: без этого в «…материалы.. Показаны» выходило две. */
+/** Одна короткая фраза над списком сохранённых копий. */
+export function offlineBannerText(relogin: boolean, noNetwork: boolean): string {
+  if (noNetwork) return 'Нет сети — показаны сохранённые копии.';
+  return relogin ? 'Вход без сервера — показаны сохранённые копии.' : 'Нет связи с сервером — показаны сохранённые копии.';
+}
+
 export function noTrailingDot(text: string): string {
   return text.replace(/[.\s]+$/u, '');
 }
@@ -278,11 +284,16 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
     >
       <p className={styles.lead}>Инструкции и презентации по продукту.</p>
       {offlineView ? (
-        <p className={styles.status} role="status" data-testid="materials-offline-note">
-          {noTrailingDot(typeof navigator !== 'undefined' && navigator.onLine === false ? 'Нет сети' : offlineView.reason)}.
-          {' '}Показаны офлайн-копии
-          {offlineView.at ? ` от ${new Date(offlineView.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}` : ''}
-          . Открываются файлы со значком «Офлайн».
+        <div
+          className={styles.status}
+          role="status"
+          data-testid="materials-offline-note"
+          title={offlineView.at ? `Копии от ${new Date(offlineView.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}` : undefined}
+        >
+          <span>{offlineBannerText(offlineView.relogin, typeof navigator !== 'undefined' && navigator.onLine === false)}</span>{' '}
+          <button type="button" className={styles.ghost} onClick={() => void reload()} data-testid="materials-refresh">
+            Обновить
+          </button>
           {offlineView.relogin ? (
             <>
               {' '}
@@ -291,7 +302,7 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
               </button>
             </>
           ) : null}
-        </p>
+        </div>
       ) : null}
       {materialsUseApi() ? <OfflineMaterialsCard list={serverList} offline={!!offlineView} /> : null}
       <nav className={styles.crumbs} aria-label="Папки">

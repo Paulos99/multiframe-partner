@@ -157,7 +157,7 @@ export function DemoLoginPicker() {
     setErr(null);
     setBusy(account.login);
     try {
-      await login(account.login, account.password);
+      await login(account.login, account.password, { demoAccount: true });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось войти');
     } finally {
@@ -197,7 +197,7 @@ export function DemoSwitcherFab({ inline = false, menu = false }: { inline?: boo
     setErr(null);
     setBusy(account.login);
     try {
-      await login(account.login, account.password);
+      await login(account.login, account.password, { demoAccount: true });
       setOpen(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось войти');
