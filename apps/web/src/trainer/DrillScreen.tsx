@@ -3,7 +3,7 @@ import { buildDrillAttempt, drillPhrasing } from './attempts';
 import { drillChoice, drillLines, errorLabel, makePick, scoreChoices } from './choice';
 import { ChoiceBlock, PracticeBox } from './ChoiceParts';
 import { buildDeck } from './engine';
-import { Fold, HintPoints, Page, Quotes, StepBar, go } from './ui';
+import { Fold, HintPoints, Page, Quotes, StepBar, go, useWideScreen } from './ui';
 import { CriteriaList, ResultHead } from './Results';
 import { SettingsIcon } from '../icons';
 import { useTrainer } from './TrainerContext';
@@ -100,6 +100,15 @@ function Card({
   const total = session.deck.length;
   const phase = session.phase;
   const saving = useRef(false);
+  const firstPhase = useRef(true);
+  useEffect(() => {
+    // новый экран подхода (вторая реплика, разбор, итог) показываем с начала страницы
+    if (firstPhase.current) {
+      firstPhase.current = false;
+      return;
+    }
+    window.scrollTo?.({ top: 0 });
+  }, [session.phase, session.index]);
   const last = session.index + 1 >= total;
   const attempt = phase === 'review' ? (session.results[session.results.length - 1]?.attempt ?? null) : null;
 
@@ -187,8 +196,9 @@ function Card({
 
 function HelpAside({ o }: { o: Objection }) {
   const t = useTrainer();
+  const wide = useWideScreen();
   return (
-    <details open>
+    <details key={wide ? 'wide' : 'narrow'} open={wide}>
       <summary>Как это работает</summary>
       <ul>
         <li>В зачёт идёт первый выбор в каждой реплике.</li>

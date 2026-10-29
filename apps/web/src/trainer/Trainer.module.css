@@ -1119,9 +1119,11 @@ details[open] > summary::after {
   text-align: left;
   cursor: pointer;
 }
-.option:hover:not(:disabled) {
-  border-color: var(--cab-accent);
-  background: var(--cab-accent-soft);
+@media (hover: hover) {
+  .option:hover:not(:disabled) {
+    border-color: var(--cab-accent);
+    background: var(--cab-accent-soft);
+  }
 }
 .option:focus-visible {
   outline: 2px solid var(--cab-accent);

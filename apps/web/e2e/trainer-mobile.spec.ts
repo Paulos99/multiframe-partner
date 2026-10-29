@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { pickChoice, playDrillCard, playScenario, shownOptions } from './trainer-helpers';
 
 const password = 'ui-fixture-password-only';
 
@@ -46,6 +47,8 @@ async function stickyAboveNav(page: Page, button: ReturnType<Page['getByRole']>,
   expect(box!.y + box!.height, `${where}: кнопка ниже экрана`).toBeLessThanOrEqual(view!.height);
 }
 
+const next = (page: Page, name: string | RegExp) => page.getByRole('button', { name, exact: typeof name === 'string' });
+
 test.describe('телефон 390 на 844', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
@@ -60,42 +63,60 @@ test.describe('телефон 390 на 844', () => {
     await fits(page, 'главная');
   });
 
-  test('отработка: «Ответить» всегда над нижней панелью, шаги и итог карточки на виду', async ({ page }) => {
+  test('отработка: четыре варианта, ошибка с пояснением, «Дальше» над нижней панелью, разбор на виду', async ({ page }) => {
     await enter(page);
     await page.getByRole('button', { name: 'Подход на 5 минут', exact: true }).click();
     await expect(page.getByText('Возражение 1 из 5')).toBeVisible();
-    await expect(page.getByText(/Шаг 1 из 2/)).toBeVisible();
-    await stickyAboveNav(page, page.getByRole('button', { name: 'Ответить', exact: true }), 'шаг 1');
-    await fits(page, 'шаг 1');
-    await page.getByLabel('Ваш ответ клиенту').fill('Понимаю вас, цена кажется высокой, давайте посмотрим, что вы получаете за эти деньги в вашей комнате');
-    await page.getByRole('button', { name: 'Ответить', exact: true }).click();
-    await expect(page.getByText(/Шаг 2 из 2/)).toBeVisible();
-    await stickyAboveNav(page, page.getByRole('button', { name: 'Ответить', exact: true }), 'шаг 2');
-    await page.getByLabel('Ваш ответ клиенту').fill('Понимаю, но по шуму вы получаете реальное снижение, а не обещание, и это измеримо в вашей квартире');
-    await page.getByRole('button', { name: 'Ответить', exact: true }).click();
+    await expect(page.locator('[data-option]')).toHaveCount(4);
+    await fits(page, 'выбор: до ответа');
+
+    // ошибка: вариант помечен, пояснение видно целиком выше нижней панели
+    const options = await shownOptions(page);
+    const wrong = options.find((o) => !o.correct)!;
+    await wrong.button.tap();
+    await expect(wrong.button).toHaveAttribute('data-state', 'wrong');
+    const why = page.getByText(/^Почему неверно:/).first();
+    await expect(why).toBeVisible();
+    const nav = (await page.getByRole('complementary', { name: 'Разделы кабинета' }).boundingBox())!;
+    await expect
+      .poll(async () => {
+        const box = (await why.boundingBox())!;
+        return box.y + box.height;
+      }, { message: 'пояснение закрыто нижней панелью' })
+      .toBeLessThanOrEqual(nav.y + 0.5);
+    await fits(page, 'выбор: после ошибки');
+
+    const right = options.find((o) => o.correct)!;
+    await right.button.tap();
+    await stickyAboveNav(page, next(page, 'Дальше: клиент повторяет'), 'шаг 1: дальше');
+    await fits(page, 'выбор: верно');
+    await next(page, 'Дальше: клиент повторяет').tap();
+
+    await expect(page.getByText('Клиент не согласен и повторяет')).toBeVisible();
+    await pickChoice(page);
+    await stickyAboveNav(page, next(page, 'К разбору'), 'шаг 2: к разбору');
+    await next(page, 'К разбору').tap();
+
     await expect(page.getByRole('heading', { level: 3, name: 'Разбор ответа' })).toBeVisible();
-    await expect(trainer(page)).toContainText('Что названо');
+    await expect(page.getByRole('region', { name: 'Итог карточки' })).toContainText('1 из 2');
+    await stickyAboveNav(page, next(page, 'Следующее возражение'), 'итог карточки');
     await fits(page, 'разбор');
-    await page.getByRole('button', { name: 'Сохранить оценку' }).click();
-    const next = page.getByRole('button', { name: 'Следующее возражение', exact: true });
-    await next.scrollIntoViewIfNeeded();
-    await stickyAboveNav(page, next, 'итог карточки');
-    await fits(page, 'итог карточки');
   });
 
-  test('«Не знаю», подсказка и разделы разбора раскрываются нажатием', async ({ page }) => {
+  test('разделы разбора раскрываются нажатием, свободная практика не мешает', async ({ page }) => {
     await enter(page);
     await page.getByRole('button', { name: 'Подход на 5 минут', exact: true }).click();
     const hint = page.getByRole('complementary', { name: 'Подсказки' });
     await expect(hint.locator('details')).not.toHaveAttribute('open', '');
-    await hint.getByText('На что смотрим').click();
+    await hint.getByText('Как это работает').click();
     await expect(hint.locator('details')).toHaveAttribute('open', '');
-    await page.getByRole('button', { name: 'Не знаю', exact: true }).click();
-    const video = page.getByRole('region', { name: 'Из видео' });
-    await expect(video.locator('details')).not.toHaveAttribute('open', '');
-    await video.getByText('Из видео').click();
-    await expect(video.locator('details')).toHaveAttribute('open', '');
-    await fits(page, 'разбор «Не знаю»');
+    await playDrillCard(page);
+    const fold = page.getByText('Ответить своими словами');
+    await fold.scrollIntoViewIfNeeded();
+    await fold.click();
+    await expect(page.getByRole('textbox').first()).toBeVisible();
+    expect(await page.getByRole('textbox').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+    await fits(page, 'разбор со свободной практикой');
   });
 
   test('разговор, проверка знаний, прогресс и банк: без прокрутки вбок, с возвратом назад', async ({ page }) => {
@@ -109,8 +130,11 @@ test.describe('телефон 390 на 844', () => {
     await fits(page, 'ситуация');
     await page.getByRole('button', { name: /Начать разговор|Продолжить/ }).click();
     await expect(page.getByText(/Шаг 1 из/)).toBeVisible();
-    await stickyAboveNav(page, page.getByRole('button', { name: 'Ответить', exact: true }), 'разговор');
-    await fits(page, 'разговор');
+    await expect(page.locator('[data-option]')).toHaveCount(4);
+    await fits(page, 'разговор: выбор');
+    await pickChoice(page);
+    await stickyAboveNav(page, next(page, /^Дальше/), 'разговор: дальше');
+    await fits(page, 'разговор: верно');
 
     await page.evaluate(() => { location.hash = '#trainer/quiz'; });
     await expect(page.getByRole('heading', { level: 3, name: 'Проверка знаний' })).toBeVisible();
@@ -136,18 +160,77 @@ test.describe('телефон 390 на 844', () => {
     await page.getByRole('button', { name: /Банк возражений/ }).first().click();
     await expect(page.getByRole('heading', { level: 3, name: 'Банк возражений' })).toBeVisible();
   });
+
+  test('сценарий до итога: итог и критерии помещаются, кнопки над панелью', async ({ page }) => {
+    await enter(page);
+    await page.evaluate(() => { location.hash = '#trainer/scenarios'; });
+    await trainer(page).locator('ul li button').first().click();
+    await page.getByRole('button', { name: /Начать разговор|Продолжить/ }).click();
+    await playScenario(page, { slip: [1] });
+    await expect(page.getByRole('region', { name: 'Итог разговора' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Критерии', exact: true })).toBeVisible();
+    await fits(page, 'итог разговора');
+  });
+
+  test('источники с сайтов: ссылка и оговорка читаются на телефоне', async ({ page }) => {
+    await enter(page);
+    await page.evaluate(() => { location.hash = '#trainer/drill/obj-eco-child-allergy'; });
+    await expect(page.getByText('Возражение 1 из 1')).toBeVisible();
+    await playDrillCard(page);
+    await page.getByText('Из видео и с сайтов').click();
+    await expect(page.getByText('Производитель указывает', { exact: false }).first()).toBeVisible();
+    await expect(page.getByText('Клиенту не говорить').first()).toBeVisible();
+    await fits(page, 'источники');
+  });
+});
+
+test.describe('телефон 390 на 844, тёмная тема', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, colorScheme: 'dark' });
+
+  test('варианты, ошибка и верный ответ различимы, ничего не вылезает', async ({ page }) => {
+    await enter(page);
+    await page.getByRole('button', { name: 'Подход на 5 минут', exact: true }).click();
+    const options = await shownOptions(page);
+    const colors = async (b: (typeof options)[number]['button']) => b.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const idle = await colors(options[0].button);
+    const wrong = options.find((o) => !o.correct)!;
+    await wrong.button.tap();
+    const wrongBg = await colors(wrong.button);
+    expect(wrongBg, 'неверный вариант отличается цветом').not.toBe(idle);
+    const right = options.find((o) => o.correct)!;
+    await right.button.tap();
+    const rightBg = await colors(right.button);
+    expect(rightBg).not.toBe(wrongBg);
+    await fits(page, 'тёмная тема');
+    await stickyAboveNav(page, next(page, 'Дальше: клиент повторяет'), 'тёмная тема: дальше');
+  });
 });
 
 test.describe('компьютер 1280 на 800', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test('главная в три колонки, подсказка отработки раскрыта сразу', async ({ page }) => {
+  test('главная в три колонки, подсказка отработки раскрыта сразу, выбор помещается', async ({ page }) => {
     await enter(page);
     const home = page.getByRole('region', { name: 'Тренажёр продаж' });
     const boxes = await Promise.all(['Быстрая отработка', 'Ролевые разговоры', 'Проверка знаний'].map((m) => home.getByRole('button', { name: new RegExp(m) }).boundingBox()));
     expect(new Set(boxes.map((b) => Math.round(b!.y))).size, 'режимы в один ряд').toBe(1);
     await page.getByRole('button', { name: 'Подход на 5 минут', exact: true }).click();
     await expect(page.getByRole('complementary', { name: 'Подсказки' }).locator('details')).toHaveAttribute('open', '');
+    await expect(page.locator('[data-option]')).toHaveCount(4);
     await fits(page, 'отработка на компьютере');
+    await playDrillCard(page, true);
+    await expect(page.getByRole('region', { name: 'Итог карточки' })).toBeVisible();
+    await fits(page, 'разбор на компьютере');
+  });
+});
+
+test.describe('компьютер 1280 на 800, тёмная тема', () => {
+  test.use({ viewport: { width: 1280, height: 800 }, colorScheme: 'dark' });
+
+  test('разбор читается в тёмной теме', async ({ page }) => {
+    await enter(page);
+    await page.getByRole('button', { name: 'Подход на 5 минут', exact: true }).click();
+    await playDrillCard(page, true);
+    await fits(page, 'разбор, тёмная тема');
   });
 });

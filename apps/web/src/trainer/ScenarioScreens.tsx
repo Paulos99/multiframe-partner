@@ -146,6 +146,17 @@ export function ScenarioTalk({ id, session, setSession }: { id: string; session:
     else if (finished && !session!.reaction) go({ page: 'scenario', id, step: 'result' }, 'replace');
   }, [valid, finished, id]);
 
+  const shown = useRef(false);
+  const progress = valid ? `${session!.picks.length}:${session!.reaction ? 1 : 0}` : '';
+  useEffect(() => {
+    // каждая новая реплика или ответ клиента начинается с верха страницы
+    if (!shown.current) {
+      shown.current = true;
+      return;
+    }
+    window.scrollTo?.({ top: 0 });
+  }, [progress]);
+
   if (!valid || !s || !session) return null;
   const objById = new Map(t.content.objections.objections.map((o) => [o.id, o]));
   const stepsTotal = s.steps.length + 1;

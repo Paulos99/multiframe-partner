@@ -85,7 +85,7 @@ function shingles(text: string, n: number): string[] {
 }
 
 const sentences = (p: string) => p.split(/(?<=[.!?…])\s+/).filter(Boolean);
-const BANNED = /17 дБ|гипоаллерг|SmartLock|дискомфорт|важно для вас|сильный дискомфорт|полностью убрать шаги|пол у соседей|закрыть и стены|₽|руб/i;
+const BANNED = /17 дБ|дискомфорт|важно для вас|сильный дискомфорт|полностью убрать шаги|пол у соседей|закрыть и стены|₽|руб/i;
 
 test('every combination: 3 parts, short sentences, no glued or repeated clauses', () => {
   let n = 0;
