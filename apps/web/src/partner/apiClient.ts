@@ -41,7 +41,7 @@ export function isApiError(err: unknown): err is ApiError {
   return err instanceof ApiError;
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   opts: RequestInit & { token?: string | null } = {},
 ): Promise<T> {

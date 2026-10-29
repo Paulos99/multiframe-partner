@@ -23,7 +23,7 @@ export function demoGroups(accounts: DemoAccount[] = DEMO_ACCOUNTS): DemoGroup[]
       id: 'stp',
       title: 'StP',
       place: 'Сеть',
-      accounts: accounts.filter((account) => account.role === 'admin'),
+      accounts: accounts.filter((account) => account.role === 'admin' || account.role === 'stp_manager'),
     },
     {
       id: 'capital',
@@ -49,6 +49,8 @@ export function demoRoleHint(account: DemoAccount): string {
   switch (account.role) {
     case 'admin':
       return 'Сеть и компании';
+    case 'stp_manager':
+      return 'Обучение и инструменты';
     case 'owner':
       return 'Прайс и команда';
     case 'sales':

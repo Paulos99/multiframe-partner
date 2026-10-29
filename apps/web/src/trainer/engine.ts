@@ -11,6 +11,8 @@ export function trainerRoleOf(role: string): TrainerRole {
     case 'admin':
       return 'stp_admin';
     case 'sales':
+    case 'stp_manager':
+      // Менеджер StP проходит тот же курс, что менеджер по продажам партнёра.
       return 'manager';
     case 'owner':
     case 'measurer':

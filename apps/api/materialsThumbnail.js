@@ -24,7 +24,7 @@ import {
   statMaterialObject,
 } from './materialsStorage.js';
 
-const READ_ROLES = ['admin', 'owner', 'sales', 'measurer', 'crew'];
+const READ_ROLES = ['admin', 'owner', 'sales', 'measurer', 'crew', 'stp_manager'];
 const THUMB_PATH = /\/materials\/([^/]+)\/thumbnail$/;
 export const THUMB_MAX_BYTES = 1024 * 1024;
 const DIRECT_MAX_BYTES = 700 * 1024;

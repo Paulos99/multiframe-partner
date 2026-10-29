@@ -8,6 +8,7 @@ const ROLE_WORD =
 
 export const DEMO_PERSONAL_NAMES = {
   u_admin: 'Марина Белова',
+  u_stpmgr1: 'Виктор Руднев',
   u_partner1: 'Андрей Соколов',
   u_sales1: 'Елена Крылова',
   u_measurer1: 'Игорь Лебедев',

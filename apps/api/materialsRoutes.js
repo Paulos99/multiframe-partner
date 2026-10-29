@@ -38,7 +38,7 @@ import {
 const MAX_FILE_BYTES = 2_000_000;
 const MAX_BASE64 = 2_800_000;
 
-const READ_ROLES = ['admin', 'owner', 'sales', 'measurer', 'crew'];
+const READ_ROLES = ['admin', 'owner', 'sales', 'measurer', 'crew', 'stp_manager'];
 
 /** Белого списка типов нет: загрузить можно любой файл. Тип только для показа. */
 const EXT_MIME = {

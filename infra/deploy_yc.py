@@ -48,6 +48,8 @@ GATEWAY_PATHS = (
     "/admin/partners",
     "/admin/partners/reset-password",
     "/admin/partners/{partnerUserId}",
+    "/admin/stp-managers",
+    "/admin/stp-managers/{managerId}",
     "/admin/demo/reset",
     "/objects",
     "/objects/{objectId}",
