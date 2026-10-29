@@ -1,5 +1,7 @@
 /** Демо-режим: ?demo=1, флаг сборки или переключатель в localStorage. */
 export function isDemoModeEnabled(): boolean {
+  // Боевая сборка (VITE_DISABLE_DEMO=1 или true): демо недоступно ни флагом, ни адресом, ни localStorage.
+  if (['1', 'true'].includes(String(import.meta.env.VITE_DISABLE_DEMO))) return false;
   try {
     if (import.meta.env.VITE_DEMO_MODE === 'true') return true;
     if (typeof window !== 'undefined') {

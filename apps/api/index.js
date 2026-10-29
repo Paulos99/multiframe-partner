@@ -3,7 +3,22 @@ import { handleProfile, profileWithAvatar } from './profileRoutes.js';
  * Yandex Cloud Function HTTP handler — multi-role partner platform.
  * Storage: Object Storage JSON or in-memory seed.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import {
+  LOGIN_LOCK,
+  SECURITY_HEADERS,
+  clientIp,
+  corsOriginFor,
+  dummyCompare,
+  hashPassword,
+  passwordProblem,
+  rateCheck,
+  rateHit,
+  rateReset,
+  safeEqual,
+} from './security.js';
 import { signToken as signAuthToken, verifyToken } from './authTokens.js';
 import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
 import ruCitiesTsv from './data/ru-cities.js';
@@ -59,15 +74,27 @@ const OFFICIAL_M2 = 5990;
 const DEFAULT_INSTALL = 1500;
 const DEFAULT_DOWEL = 25;
 
+/** Origin текущего запроса. Нужен, чтобы отвечать одним разрешённым origin из списка CORS_ORIGIN. */
+const requestContext = new AsyncLocalStorage();
+
+/** Объект с геттерами: при разворачивании (...CORS) отдаёт origin текущего запроса. */
 const CORS = {
-  'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || 'https://paulos99.github.io',
+  get 'Access-Control-Allow-Origin'() {
+    return corsOriginFor(requestContext.getStore()?.origin);
+  },
   'Access-Control-Allow-Headers':
     'Content-Type, Authorization, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
+  'Access-Control-Max-Age': '600',
+  Vary: 'Origin',
+  ...SECURITY_HEADERS,
 };
 
+const MAX_BODY_BYTES = Math.max(100_000, Number(process.env.MAX_BODY_BYTES) || 6_000_000);
+const OBJECT_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
 function uid(prefix) {
-  return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
+  return `${prefix}_${randomBytes(9).toString('hex')}${Date.now().toString(36).slice(-4)}`;
 }
 
 function cityOrThrow(raw, previous) {
@@ -99,27 +126,29 @@ function assignableStaffRole(raw) {
   return null;
 }
 
+function clampNumber(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 function normalizeOrgSettings(partial = {}) {
+  const optional = (value, max) =>
+    value == null || value === '' || !Number.isFinite(Number(value)) ? null : clampNumber(value, 0, max, null);
   return {
-    companyName: String(partial.companyName || '').trim(),
-    city: String(partial.city || '').trim(),
+    companyName: String(partial.companyName || '').trim().slice(0, 120),
+    city: String(partial.city || '').trim().slice(0, 120),
     panelPriceRub:
       partial.panelPriceRub != null && Number(partial.panelPriceRub) > 0
-        ? Number(partial.panelPriceRub)
+        ? clampNumber(partial.panelPriceRub, 1, 1_000_000, OFFICIAL_PANEL)
         : OFFICIAL_PANEL,
     pricePerM2:
       partial.pricePerM2 != null && Number(partial.pricePerM2) > 0
-        ? Number(partial.pricePerM2)
+        ? clampNumber(partial.pricePerM2, 1, 1_000_000, OFFICIAL_M2)
         : OFFICIAL_M2,
-    installPricePerM2:
-      partial.installPricePerM2 == null || Number.isNaN(Number(partial.installPricePerM2))
-        ? null
-        : Number(partial.installPricePerM2),
-    dowelsPerPanel: Math.max(1, Number(partial.dowelsPerPanel) || 2),
-    dowelPriceRub:
-      partial.dowelPriceRub == null || Number.isNaN(Number(partial.dowelPriceRub))
-        ? null
-        : Number(partial.dowelPriceRub),
+    installPricePerM2: optional(partial.installPricePerM2, 1_000_000),
+    dowelsPerPanel: clampNumber(Number(partial.dowelsPerPanel) || 2, 1, 50, 2),
+    dowelPriceRub: optional(partial.dowelPriceRub, 100_000),
   };
 }
 
@@ -148,7 +177,52 @@ async function sessionUser(user, platform) {
   }
 }
 
+/** Демо-данные нужны только пока нет своего хранилища или явно включён DEMO_SEED=1.
+ * Для боевого стенда задайте ADMIN_BOOTSTRAP_LOGIN и ADMIN_BOOTSTRAP_PASSWORD: создаётся один администратор. */
+function demoSeedEnabled() {
+  const flag = String(process.env.DEMO_SEED || '').trim().toLowerCase();
+  if (flag === '1' || flag === 'true') return true;
+  if (flag === '0' || flag === 'false') return false;
+  // Без явного флага демо поднимается только при локальной разработке: без бакета и вне NODE_ENV=production.
+  return !partnerBucket() && process.env.NODE_ENV !== 'production';
+}
+
+export function bootstrapAdminPlatform() {
+  const login = String(process.env.ADMIN_BOOTSTRAP_LOGIN || '').trim();
+  const password = String(process.env.ADMIN_BOOTSTRAP_PASSWORD || '');
+  if (!login || passwordProblem(password)) return null;
+  return {
+    version: 2,
+    users: [
+      {
+        id: 'u_admin',
+        login,
+        passwordHash: bcrypt.hashSync(password, 12),
+        role: 'admin',
+        displayName: String(process.env.ADMIN_BOOTSTRAP_NAME || 'Администратор').trim() || 'Администратор',
+        orgId: null,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    orgs: [],
+    objects: [],
+    activity: [],
+  };
+}
+
 function defaultPlatform() {
+  if (!demoSeedEnabled()) {
+    const boot = bootstrapAdminPlatform();
+    if (boot) return boot;
+    throw Object.assign(
+      new Error('Хранилище пусто. Задайте ADMIN_BOOTSTRAP_LOGIN и ADMIN_BOOTSTRAP_PASSWORD (не короче 10 символов).'),
+      { status: 503, expose: true },
+    );
+  }
+  return demoPlatform();
+}
+
+function demoPlatform() {
   const platform = buildDemoPlatform({ withHashes: true });
   platform.orgs = platform.orgs.map((o) => ({
     ...o,
@@ -162,7 +236,8 @@ function migrateLegacyPartners(list) {
   if (list[0]?.passwordHash != null && list[0]?.companyName != null && !list.users) {
     const now = new Date().toISOString();
     const platform = { version: 2, users: [], orgs: [], objects: [], activity: [] };
-    const adminHash = bcrypt.hashSync('admin1234', 10);
+    // Пароль админа при миграции старого файла не задаётся: вход возможен только после ADMIN_BOOTSTRAP_* или сброса.
+    const adminHash = bcrypt.hashSync(randomBytes(24).toString('hex'), 10);
     platform.users.push({
       id: 'u_admin',
       login: 'admin',
@@ -257,6 +332,12 @@ async function s3Delete(key) {
 function platformFilePath() {
   if (partnerBucket()) return '';
   return String(process.env.PLATFORM_FILE || '').trim();
+}
+
+/** Только для тестов: кладёт события в журнал как есть, минуя проверку личности на входе. */
+export async function seedAnalyticsEventsForTests(events) {
+  const existing = await loadEvents();
+  await saveEvents([...events, ...existing], existing);
 }
 
 export function resetPlatformMemoryForTests() {
@@ -369,6 +450,51 @@ function findUser(platform, idOrLogin) {
   );
 }
 
+/** Логин без учёта регистра. Раньше совпадал и идентификатор записи; это сохранено только для точного совпадения. */
+function findUserByLogin(platform, login) {
+  const text = String(login || '');
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const users = platform.users || [];
+  return (
+    users.find((u) => u.login === text) ||
+    users.find((u) => String(u.login || '').toLowerCase() === lower) ||
+    users.find((u) => u.id === text) ||
+    null
+  );
+}
+
+/** Счётчик неверных паролей хранится в записи пользователя: общий для всех экземпляров функции. */
+async function recordLoginFailure(platform, user, nowMs) {
+  const row = user.failedLogins;
+  const fresh = row && nowMs - Number(row.since || 0) < LOGIN_LOCK.windowMs;
+  const next = { count: (fresh ? Number(row.count) || 0 : 0) + 1, since: fresh ? row.since : nowMs };
+  user.failedLogins = next;
+  if (next.count >= LOGIN_LOCK.failures) {
+    user.lockedUntil = new Date(nowMs + LOGIN_LOCK.lockMs).toISOString();
+    user.failedLogins = { count: 0, since: nowMs };
+    pushActivity(platform, {
+      orgId: user.orgId,
+      userId: user.id,
+      login: user.login,
+      action: 'login_locked',
+      detail: 'Серия неверных паролей',
+    });
+  }
+  try {
+    await savePlatform(platform);
+  } catch (error) {
+    console.warn('login failure counter not saved', error?.message || error);
+  }
+}
+
+function loginTaken(platform, login) {
+  const lower = String(login || '').toLowerCase();
+  return (platform.users || []).some(
+    (u) => u.id === login || String(u.login || '').toLowerCase() === lower,
+  );
+}
+
 async function signToken(user) {
   return signAuthToken({ ...user, role: normalizeRole(user.role) });
 }
@@ -378,7 +504,9 @@ async function requireAuth(event) {
   if (!token) throw Object.assign(new Error('Unauthorized'), { status: 401 });
   const { payload, usedPreviousKey } = await verifyToken(token);
   const platform = await loadPlatform();
-  const user = findUser(platform, payload.sub) || findUser(platform, payload.login);
+  // Только по идентификатору из токена: совпадение по логину позволило бы старому токену
+  // подойти новой учётной записи с тем же логином.
+  const user = (platform.users || []).find((u) => u.id === payload.sub) || null;
   if (!user || user.loginDisabled || (payload.sessionVersion || 0) !== (user.sessionVersion || 0)) throw Object.assign(new Error('Unauthorized'), { status: 401 });
   return { platform, user: { ...user, role: normalizeRole(user.role) }, payload, usedPreviousKey };
 }
@@ -487,22 +615,44 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
   const finalStatus = allowed.includes(status) ? status : 'draft';
   const phone = objectPhone(body, existing, finalStatus);
   const refusal = objectRefusal(body, existing, finalStatus, actor, now);
+  if (!existing && body.id != null && !OBJECT_ID_RE.test(String(body.id))) {
+    throw Object.assign(new Error('Некорректный идентификатор комнаты'), { status: 400 });
+  }
+  const assignedRaw = body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null;
+  const assignedTo = assignedRaw === '' ? null : assignedRaw;
+  if (assignedTo != null && assignedTo !== existing?.assignedTo) {
+    const targetOrg = existing?.orgId || actor.orgId;
+    const assignee = (platform?.users || []).find((u) => u.id === assignedTo);
+    if (
+      typeof assignedTo !== 'string' ||
+      !assignee ||
+      assignee.orgId !== targetOrg ||
+      !['measurer', 'crew', 'sales', 'owner'].includes(normalizeRole(assignee.role))
+    ) {
+      throw Object.assign(new Error('Исполнитель не найден в вашей компании'), { status: 400 });
+    }
+  }
+  for (const field of ['room', 'estimate']) {
+    if (body[field] != null && JSON.stringify(body[field]).length > 400_000) {
+      throw Object.assign(new Error('Слишком большие данные расчёта'), { status: 413 });
+    }
+  }
   return {
-    id: existing?.id || body.id || uid('obj'),
+    id: existing?.id || (body.id != null ? String(body.id) : uid('obj')),
     orgId: existing?.orgId || actor.orgId,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     createdBy: existing?.createdBy || actor.id,
-    assignedTo: body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null,
+    assignedTo,
     status: finalStatus,
     stageOrder: stageOrderInput(body, existing),
-    clientName: String(body.clientName ?? existing?.clientName ?? '').trim(),
+    clientName: String(body.clientName ?? existing?.clientName ?? '').trim().slice(0, 200),
     clientPhone: phone,
-    address: String(body.address ?? existing?.address ?? '').trim(),
+    address: String(body.address ?? existing?.address ?? '').trim().slice(0, 300),
     city: String(body.city ?? existing?.city ?? org?.settings?.city ?? '').trim(),
     room: body.room || existing?.room || {},
     estimate: body.estimate !== undefined ? body.estimate : existing?.estimate ?? null,
-    clientSummary: String(body.clientSummary ?? existing?.clientSummary ?? ''),
+    clientSummary: String(body.clientSummary ?? existing?.clientSummary ?? '').slice(0, 5000),
     history: existing?.history || [],
     // PDF только через POST /objects/:id/documents — обычный PATCH их не затирает.
     documents: Array.isArray(existing?.documents) ? existing.documents : [],
@@ -834,13 +984,14 @@ export function aggregateAnalyticsDashboard(allEvents, opts) {
   };
 }
 
-function json(statusCode, body) {
+function json(statusCode, body, extraHeaders = {}) {
   return {
     statusCode,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
       ...CORS,
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   };
@@ -867,9 +1018,15 @@ function getMethod(event) {
 
 function getBody(event) {
   if (!event.body) return {};
+  if (String(event.body).length > MAX_BODY_BYTES * 1.4) {
+    throw Object.assign(new Error('Запрос слишком большой'), { status: 413, expose: true });
+  }
   const raw = event.isBase64Encoded
     ? Buffer.from(event.body, 'base64').toString('utf8')
     : event.body;
+  if (raw.length > MAX_BODY_BYTES) {
+    throw Object.assign(new Error('Запрос слишком большой'), { status: 413, expose: true });
+  }
   try {
     return JSON.parse(raw);
   } catch {
@@ -906,33 +1063,70 @@ function getQuery(event) {
   return {};
 }
 
-function normalizeIncomingEvent(raw) {
+const EVENT_TEXT = (value, max) => String(value ?? '').slice(0, max);
+
+/** Объект события: только простые поля, не больше 2 КБ после сериализации. */
+function sanitizeEventObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  try {
+    const text = JSON.stringify(value);
+    if (text.length > 2048) return null;
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function eventTime(value) {
+  const ms = Date.parse(value || '');
+  if (Number.isNaN(ms)) return new Date().toISOString();
+  if (ms > Date.now() + 24 * 60 * 60 * 1000) return new Date().toISOString();
+  if (ms < Date.parse('2020-01-01')) return new Date().toISOString();
+  return new Date(ms).toISOString();
+}
+
+/**
+ * Приводит событие к виду для хранилища. Если запрос пришёл с действующим токеном,
+ * личность (организация, сотрудник, логин, роль) берётся из токена, а не из тела:
+ * иначе любой мог бы писать события «от имени» чужой компании.
+ */
+function normalizeIncomingEvent(raw, actor = null, org = null) {
   if (!raw || typeof raw !== 'object') return null;
-  const action = String(raw.action || '');
-  const tool = String(raw.tool || '');
+  const action = EVENT_TEXT(raw.action, 64);
+  const tool = EVENT_TEXT(raw.tool, 64);
   if (!action || !tool) return null;
+  const object = sanitizeEventObject(raw.object);
+  const identity = actor
+    ? {
+        orgId: actor.orgId ?? null,
+        userId: actor.id,
+        login: actor.login,
+        role: normalizeRole(actor.role),
+        companyName: org?.settings?.companyName || '',
+      }
+    : { orgId: null, userId: null, login: 'anonymous', role: 'public', companyName: '' };
   return {
-    id: String(raw.id || uid('ae')),
-    at: String(raw.at || new Date().toISOString()),
-    orgId: raw.orgId ?? null,
-    userId: raw.userId ?? null,
-    login: String(raw.login || 'unknown'),
-    role: String(raw.role || 'owner'),
-    companyName: String(raw.companyName || ''),
-    city: String(raw.city || raw.object?.city || ''),
+    id: EVENT_TEXT(raw.id || uid('ae'), 80),
+    at: eventTime(raw.at),
+    ...identity,
+    city: EVENT_TEXT(raw.city || object?.city, 120),
     tool,
     action,
     sessionId:
       raw.sessionId == null || String(raw.sessionId).trim() === ''
         ? null
         : String(raw.sessionId).trim().slice(0, 80),
-    object: raw.object || null,
+    object,
   };
 }
 
 export async function handler(event = {}) {
+  return requestContext.run({ origin: header(event, 'Origin') || '' }, () => handleRequest(event));
+}
+
+async function handleRequest(event = {}) {
   if (getMethod(event) === 'OPTIONS') {
-    return { statusCode: 204, headers: CORS, body: '' };
+    return { statusCode: 204, headers: { ...CORS }, body: '' };
   }
 
   const path = getPath(event).replace(/\/+$/, '') || '/';
@@ -1030,16 +1224,42 @@ export async function handler(event = {}) {
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
       const { login, password } = getBody(event);
+      const ip = clientIp(event) || 'unknown';
+      const ipKey = `login-ip:${ip}`;
+      const ipLimit = { limit: 30, windowMs: 10 * 60 * 1000 };
+      const blocked = rateCheck(ipKey, ipLimit);
+      if (!blocked.allowed) {
+        return json(
+          429,
+          { message: 'Слишком много попыток входа. Подождите и повторите.' },
+          { 'Retry-After': String(blocked.retryAfter) },
+        );
+      }
       const platform = await loadPlatform();
-      const user = findUser(platform, String(login || '').trim());
-      if (
-        !user ||
-        user.loginDisabled === true ||
-        typeof user.passwordHash !== 'string' ||
-        !user.passwordHash ||
-        !bcrypt.compareSync(String(password || ''), user.passwordHash)
-      ) {
+      const loginText = String(login || '').trim().slice(0, 200);
+      const user = findUserByLogin(platform, loginText);
+      const nowMs = Date.now();
+      if (user && Date.parse(user.lockedUntil || '') > nowMs) {
+        rateHit(ipKey, ipLimit);
+        const wait = Math.ceil((Date.parse(user.lockedUntil) - nowMs) / 1000);
+        return json(
+          429,
+          { message: 'Слишком много неверных паролей. Вход временно закрыт, повторите позже.' },
+          { 'Retry-After': String(Math.max(1, wait)) },
+        );
+      }
+      const hasHash = Boolean(user) && typeof user.passwordHash === 'string' && user.passwordHash;
+      const valid = hasHash ? await bcrypt.compare(String(password || ''), user.passwordHash) : false;
+      if (!hasHash) await dummyCompare(password);
+      if (!user || user.loginDisabled === true || !valid) {
+        rateHit(ipKey, ipLimit);
+        if (user && hasHash && !valid) await recordLoginFailure(platform, user, nowMs);
         return json(401, { message: 'Неверный логин или пароль' });
+      }
+      rateReset(ipKey);
+      if (user.failedLogins || user.lockedUntil) {
+        delete user.failedLogins;
+        delete user.lockedUntil;
       }
       const token = await signToken(user);
       pushActivity(platform, {
@@ -1149,7 +1369,10 @@ export async function handler(event = {}) {
       const companyName = String(body.companyName || '').trim() || login;
       const city = cityOrThrow(body.city ?? '', null);
       if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
-      if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
+      if (login.length > 64) return json(400, { message: 'Логин слишком длинный' });
+      const weak = passwordProblem(password);
+      if (weak) return json(400, { message: weak });
+      if (loginTaken(platform, login)) return json(409, { message: 'Такой логин уже есть' });
       const now = new Date().toISOString();
       const orgId = uid('org');
       const userId = uid('u');
@@ -1170,7 +1393,7 @@ export async function handler(event = {}) {
       const owner = {
         id: userId,
         login,
-        passwordHash: bcrypt.hashSync(password, 10),
+        passwordHash: await hashPassword(password),
         role: 'owner',
         displayName: companyName,
         orgId,
@@ -1192,7 +1415,10 @@ export async function handler(event = {}) {
     if (method === 'POST' && path.endsWith('/admin/demo/reset')) {
       const { user } = await requireAuth(event);
       assertRole(user, ['admin']);
-      const platform = defaultPlatform();
+      if (partnerBucket() && String(process.env.ALLOW_DEMO_RESET || '') !== '1') {
+        return json(403, { message: 'Сброс к демо-данным отключён на этом стенде' });
+      }
+      const platform = demoPlatform();
       const events = buildDemoAnalyticsEvents();
       await savePlatform(platform);
       await saveEvents(events);
@@ -1214,11 +1440,15 @@ export async function handler(event = {}) {
       );
       if (idx < 0) return json(404, { message: 'Партнёр не найден' });
       const pw = String(password || '').trim();
-      if (!pw) return json(400, { message: 'Пустой пароль' });
+      const weakPartner = passwordProblem(pw);
+      if (weakPartner) return json(400, { message: weakPartner });
       platform.users[idx] = {
         ...platform.users[idx],
-        passwordHash: bcrypt.hashSync(pw, 10),
+        passwordHash: await hashPassword(pw),
+        sessionVersion: (Number(platform.users[idx].sessionVersion) || 0) + 1,
       };
+      delete platform.users[idx].failedLogins;
+      delete platform.users[idx].lockedUntil;
       pushActivity(platform, {
         orgId: platform.users[idx].orgId,
         userId: user.id,
@@ -1316,11 +1546,14 @@ export async function handler(event = {}) {
         return json(400, { message: 'Роль: sales, measurer или crew' });
       }
       if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
-      if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
+      if (login.length > 64) return json(400, { message: 'Логин слишком длинный' });
+      const weak = passwordProblem(password);
+      if (weak) return json(400, { message: weak });
+      if (loginTaken(platform, login)) return json(409, { message: 'Такой логин уже есть' });
       const staff = {
         id: uid('u'),
         login,
-        passwordHash: bcrypt.hashSync(password, 10),
+        passwordHash: await hashPassword(password),
         role,
         displayName,
         orgId: user.orgId,
@@ -1363,11 +1596,15 @@ export async function handler(event = {}) {
       const idx = platform.users.findIndex((u) => u.id === staffUserId);
       if (idx < 0) return json(404, { message: 'Сотрудник не найден' });
       const pw = String(password || '').trim();
-      if (!pw) return json(400, { message: 'Пустой пароль' });
+      const weakStaff = passwordProblem(pw);
+      if (weakStaff) return json(400, { message: weakStaff });
       const nextUser = {
         ...platform.users[idx],
-        passwordHash: bcrypt.hashSync(pw, 10),
+        passwordHash: await hashPassword(pw),
+        sessionVersion: (Number(platform.users[idx].sessionVersion) || 0) + 1,
       };
+      delete nextUser.failedLogins;
+      delete nextUser.lockedUntil;
       delete nextUser.password;
       platform.users[idx] = nextUser;
       pushActivity(platform, {
@@ -1747,9 +1984,26 @@ export async function handler(event = {}) {
 
     /* —— Analytics —— */
     if (method === 'POST' && path.endsWith('/analytics/events')) {
+      const eventsLimit = rateHit(`events-ip:${clientIp(event) || 'unknown'}`, { limit: 60, windowMs: 60 * 1000 });
+      if (!eventsLimit.allowed) {
+        return json(429, { message: 'Слишком часто' }, { 'Retry-After': String(eventsLimit.retryAfter) });
+      }
       const body = getBody(event);
-      const incoming = Array.isArray(body.events) ? body.events : body.event ? [body.event] : [];
-      const normalized = incoming.map(normalizeIncomingEvent).filter(Boolean);
+      let incoming = Array.isArray(body.events) ? body.events : body.event ? [body.event] : [];
+      incoming = incoming.slice(0, 100);
+      let actor = null;
+      let actorOrg = null;
+      if (getAuth(event)) {
+        try {
+          const auth = await requireAuth(event);
+          actor = auth.user;
+          actorOrg = actor.orgId ? findOrg(auth.platform, actor.orgId) : null;
+        } catch (error) {
+          if (error?.status !== 401) throw error;
+          // Просроченный токен: события принимаются как анонимные.
+        }
+      }
+      const normalized = incoming.map((raw) => normalizeIncomingEvent(raw, actor, actorOrg)).filter(Boolean);
       if (!normalized.length) return json(400, { message: 'No events' });
       const existing = await loadEvents();
       const ids = new Set(existing.map((e) => e.id));
@@ -1777,7 +2031,7 @@ export async function handler(event = {}) {
       let orgId = role === 'admin' ? query.orgId || null : auth.user.orgId;
       if (role === 'admin') {
         const key = header(event, 'X-Analytics-Key');
-        if (key && key !== ANALYTICS_ADMIN_KEY()) {
+        if (key && !safeEqual(key, ANALYTICS_ADMIN_KEY())) {
           return json(403, { message: 'Admin key required' });
         }
       }
@@ -1810,74 +2064,68 @@ export async function handler(event = {}) {
 
     if (method === 'GET' && path.endsWith('/analytics/dashboard')) {
       const query = getQuery(event);
-      let orgId = query.orgId || header(event, 'X-Analytics-Org') || null;
-      let role = String(header(event, 'X-Analytics-Role') || 'owner');
-
+      let auth = null;
       try {
-        const auth = await requireAuth(event);
-        role = auth.user.role;
-        if (role !== 'admin') {
-          if (!['owner', 'sales'].includes(role)) {
-            return json(403, { message: 'Аналитика недоступна' });
-          }
-          orgId = auth.user.orgId;
-        } else {
-          const key = header(event, 'X-Analytics-Key');
-          if (key && key !== ANALYTICS_ADMIN_KEY()) {
-            return json(403, { message: 'Admin key required' });
-          }
-        }
-        const platform = auth.platform;
+        auth = await requireAuth(event);
+      } catch (error) {
+        if (error?.status !== 401) throw error;
+      }
+
+      // Без входа: только служебный запрос скриптов развёртывания с ключом администратора.
+      // Роль и организация из заголовков больше не принимаются.
+      if (!auth) {
+        const key = header(event, 'X-Analytics-Key');
+        if (!key) return json(401, { message: 'Unauthorized' });
+        if (!safeEqual(key, ANALYTICS_ADMIN_KEY())) return json(403, { message: 'Admin key required' });
         const events = await eventsForAnalytics();
-        const staffDir = platform.users
-          .filter((u) => STAFF_ROLES.includes(normalizeRole(u.role)))
-          .map((u) => ({
-            userId: u.id,
-            login: u.login,
-            displayName: u.displayName,
-            orgId: u.orgId,
-            role: normalizeRole(u.role),
-          }));
-        const dash = aggregateAnalyticsDashboard(events, {
-          source: 'api',
-          from: query.from || null,
-          to: query.to || null,
-          orgId: role === 'admin' && !query.orgId ? null : orgId,
-          partnerCount: platform.users.filter((u) => normalizeRole(u.role) === 'owner').length,
-          executorCount: staffDir.filter((e) => !orgId || e.orgId === orgId).length,
-          executorDirectory: staffDir,
-          journalAll: query.journal === '1',
-          ...networkAdminScope(platform),
-        });
-        return json(200, dash);
-      } catch {
-        /* fallback header-key admin for deploy scripts */
-        if (role === 'admin') {
-          const key = header(event, 'X-Analytics-Key');
-          if (key !== ANALYTICS_ADMIN_KEY()) {
-            return json(403, { message: 'Admin key required' });
-          }
-          const events = await eventsForAnalytics();
-          const dash = aggregateAnalyticsDashboard(events, {
+        return json(
+          200,
+          aggregateAnalyticsDashboard(events, {
             source: 'api',
             from: query.from || null,
             to: query.to || null,
             orgId: query.orgId || null,
             journalAll: query.journal === '1',
-          });
-          return json(200, dash);
-        }
-        if (!orgId) return json(400, { message: 'orgId required' });
-        const events = await eventsForAnalytics();
-        const dash = aggregateAnalyticsDashboard(events, {
-          source: 'api',
-          from: query.from || null,
-          to: query.to || null,
-          orgId,
-          journalAll: query.journal === '1',
-        });
-        return json(200, dash);
+          }),
+        );
       }
+
+      const role = auth.user.role;
+      let orgId = query.orgId || null;
+      if (role !== 'admin') {
+        if (!['owner', 'sales'].includes(role)) {
+          return json(403, { message: 'Аналитика недоступна' });
+        }
+        orgId = auth.user.orgId;
+      } else {
+        const key = header(event, 'X-Analytics-Key');
+        if (key && !safeEqual(key, ANALYTICS_ADMIN_KEY())) {
+          return json(403, { message: 'Admin key required' });
+        }
+      }
+      const platform = auth.platform;
+      const events = await eventsForAnalytics();
+      const staffDir = platform.users
+        .filter((u) => STAFF_ROLES.includes(normalizeRole(u.role)))
+        .map((u) => ({
+          userId: u.id,
+          login: u.login,
+          displayName: u.displayName,
+          orgId: u.orgId,
+          role: normalizeRole(u.role),
+        }));
+      const dash = aggregateAnalyticsDashboard(events, {
+        source: 'api',
+        from: query.from || null,
+        to: query.to || null,
+        orgId: role === 'admin' && !query.orgId ? null : orgId,
+        partnerCount: platform.users.filter((u) => normalizeRole(u.role) === 'owner').length,
+        executorCount: staffDir.filter((e) => !orgId || e.orgId === orgId).length,
+        executorDirectory: staffDir,
+        journalAll: query.journal === '1',
+        ...networkAdminScope(platform),
+      });
+      return json(200, dash);
     }
 
     if (method === 'GET' && (path.endsWith('/health') || path === '/' || path.endsWith('/'))) {
@@ -1886,7 +2134,12 @@ export async function handler(event = {}) {
 
     return json(404, { message: `Not found: ${method} ${path}` });
   } catch (e) {
-    const status = e.status || 500;
-    return json(status, { message: e.message || 'Server error' });
+    const status = Number(e.status) >= 400 && Number(e.status) < 600 ? Number(e.status) : 500;
+    // Тексты ошибок со статусом 4xx написаны для пользователя. Внутренние сбои наружу не уходят.
+    if (status >= 500 && !e.expose) {
+      console.error('api error', method, path, e?.stack || e);
+      return json(500, { message: 'Внутренняя ошибка сервера' });
+    }
+    return json(status, { message: e.message || 'Ошибка запроса' });
   }
 }

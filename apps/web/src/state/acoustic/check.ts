@@ -2,7 +2,7 @@
  * Golden anchors for the acoustic model (Trofimov + material shapes + MultiFrame caps).
  * Run: npx tsx src/state/acoustic/check.ts
  */
-import { applyMultiFrame } from './multiframe';
+import { airGainFor, applyMultiFrame } from './multiframe';
 import { buildConstruction, constructionFixture } from './construction';
 import { SPECTRUM_HZ, clamp, round1 } from './bands';
 import {
@@ -104,9 +104,9 @@ export function assertModelAnchors(): string[] {
   if (mfBare.Lnw <= NORMS.A.Lnw) {
     errors.push(`MultiFrame on bare slab must not reach Lnw ≤ ${NORMS.A.Lnw}, got ${mfBare.Lnw}`);
   }
-  // Marketing +30% on Kostroma-zone solid (~Rw 54): ΔRw ~1–6, |ΔLnw| ~5–11
-  if (mfBare.deltaRw < 1 || mfBare.deltaRw > 6) {
-    errors.push(`MultiFrame ΔRw out of 1–6 (bare + marketing), got ${mfBare.deltaRw}`);
+  // Air gain comes from MF_AIR_GAIN (solid 180 → +8); |ΔLnw| ~5–11
+  if (mfBare.deltaRw !== airGainFor(solid180)) {
+    errors.push(`MultiFrame ΔRw must follow MF_AIR_GAIN (${airGainFor(solid180)}), got ${mfBare.deltaRw}`);
   }
   if (Math.abs(mfBare.deltaLnw) < 5 || Math.abs(mfBare.deltaLnw) > 11) {
     errors.push(`MultiFrame |ΔLnw| on bare slab should be 5–11, got ${mfBare.deltaLnw}`);
@@ -116,8 +116,8 @@ export function assertModelAnchors(): string[] {
   if (Math.abs(mfFloat.deltaLnw) > 4) {
     errors.push(`floating floor should shrink MultiFrame |ΔLnw| to ≤4, got ${mfFloat.deltaLnw}`);
   }
-  if (mfFloat.deltaRw < 0 || mfFloat.deltaRw > 4) {
-    errors.push(`floating MultiFrame ΔRw should be ~0–4, got ${mfFloat.deltaRw}`);
+  if (mfFloat.deltaRw !== airGainFor(floating)) {
+    errors.push(`floating MultiFrame ΔRw must follow MF_AIR_GAIN, got ${mfFloat.deltaRw}`);
   }
 
   const thinner = constructionFixture({

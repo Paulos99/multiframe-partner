@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_ANALYTICS_INGEST_URL?: string;
   readonly VITE_API_URL?: string;
   readonly VITE_DEMO_MODE?: string;
+  /** "true" — боевая сборка: демо-режим недоступен. */
+  readonly VITE_DISABLE_DEMO?: string;
 }
 
 interface ImportMeta {

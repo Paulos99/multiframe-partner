@@ -10,13 +10,14 @@ import {
   labelForIndex,
 } from './polygon-geometry.js';
 import { roundMeters } from './geometry.js';
+import { safeId, safeLabel } from './html-escape.js';
 
 let openingIdCounter = 1;
 
 export class Opening {
   constructor({ id, wallId, type, offset, width, height, sillHeight = 0.9 }) {
-    this.id = id ?? `opening-${openingIdCounter++}`;
-    this.wallId = wallId;
+    this.id = safeId(id, `opening-${openingIdCounter++}`);
+    this.wallId = safeId(wallId);
     this.type = type ?? OPENING_TYPES.DOOR;
     this.offset = offset;
     this.width = width;
@@ -31,8 +32,8 @@ export class Opening {
 
 export class WallSegment {
   constructor({ id, label, length, planStart, planEnd }) {
-    this.id = id;
-    this.label = label;
+    this.id = safeId(id);
+    this.label = String(label ?? '').replace(/[^\p{L}\p{N} .'_-]/gu, '').slice(0, 40);
     this.length = length;
     this.planStart = planStart;
     this.planEnd = planEnd;
@@ -90,9 +91,9 @@ export class Room {
     const edges = getEdges(this.vertices);
     const n = this.vertices.length;
     this.walls = edges.map((e, i) => {
-      const from = String(e.a?.label || labelForIndex(i));
+      const from = safeLabel(e.a?.label, labelForIndex(i));
       const nextIdx = (i + 1) % Math.max(n, 1);
-      const to = String(e.b?.label || this.vertices[nextIdx]?.label || labelForIndex(nextIdx));
+      const to = safeLabel(e.b?.label || this.vertices[nextIdx]?.label, labelForIndex(nextIdx));
       return new WallSegment({
         id: `wall-${i}`,
         label: `Стена ${from}${to}`,

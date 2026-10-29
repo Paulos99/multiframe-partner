@@ -6,11 +6,20 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { ICON_FILES, MANIFEST_ICONS } from './src/pwa/icons';
 
-const base = process.env.VITE_BASE || '/';
+/** Базовый путь сайта: '/cabinet' и 'cabinet/' приводятся к '/cabinet/'. */
+export function normalizeBase(raw: string | undefined): string {
+  const text = String(raw || '/').trim();
+  if (!text || text === '/') return '/';
+  return `/${text.replace(/^\/+|\/+$/g, '')}/`;
+}
+
+const base = normalizeBase(process.env.VITE_BASE);
 
 /** Один номер на сборку: в бандле (__BUILD_ID__) и в version.json рядом с сайтом. */
 const BUILD_ID =
-  (process.env.GITHUB_SHA || '').slice(0, 12) || `local-${Date.now().toString(36)}`;
+  (process.env.BUILD_ID || '').trim().slice(0, 40) ||
+  (process.env.GITHUB_SHA || '').slice(0, 12) ||
+  `local-${Date.now().toString(36)}`;
 
 function buildVersionFile(): Plugin {
   return {

@@ -95,6 +95,15 @@ function publicView(row) {
   };
 }
 
+/** SHARE_LINK_TTL_DAYS > 0: ссылка перестаёт открываться через столько дней после последнего обновления. 0 или пусто — без срока (отключает владелец). */
+function shareExpired(row, now = Date.now()) {
+  const days = Number(process.env.SHARE_LINK_TTL_DAYS);
+  if (!Number.isFinite(days) || days <= 0) return false;
+  const since = Date.parse(row.updatedAt || row.createdAt || '');
+  if (Number.isNaN(since)) return false;
+  return now - since > days * 24 * 60 * 60 * 1000;
+}
+
 const SHARE_PATH = /\/objects\/([^/]+)\/share$/;
 const PUBLIC_PATH = /\/public\/rooms\/([^/]+)$/;
 
@@ -114,14 +123,14 @@ export async function handleRoomShare(ctx) {
     if (!TOKEN_RE.test(token)) return notFound();
     const platform = await ctx.loadPlatform();
     const row = shareRows(platform).find((item) => item.enabled === true && item.token === token);
-    if (!row) return notFound();
+    if (!row || shareExpired(row)) return notFound();
     const obj = (platform.objects || []).find((o) => o.id === row.objectId && o.orgId === row.orgId);
     if (!obj) return notFound();
     const share = publicView(row);
     // Фотоотчёт — только если владелец или менеджер включил показ клиенту и фото есть.
     const report = ctx.clientReport ? await ctx.clientReport(ctx, obj) : null;
     if (report) share.photos = report.photos;
-    return ctx.json(200, { share });
+    return ctx.json(200, { share }, { 'X-Robots-Tag': 'noindex, nofollow' });
   }
 
   const match = path.match(SHARE_PATH);

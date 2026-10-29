@@ -35,6 +35,11 @@ writeFileSync(
   }),
 );
 const { handler, aggregateAnalyticsDashboard, networkAdminScope } = await import('./index.js');
+const seedEvents = async (body) => {
+  const { seedAnalyticsEventsForTests } = await import('./index.js');
+  await seedAnalyticsEventsForTests(body.events);
+  return { status: 200 };
+};
 after(() => rmSync(dir, { recursive: true, force: true }));
 
 async function call(method, p, body, token, query) {
@@ -88,7 +93,7 @@ test('админ STP и его организация не попадают в �
 });
 
 test('GET /analytics/dashboard для админа: без «StP» и «Администратор StP», данные не удалены', async () => {
-  assert.equal((await call('POST', '/analytics/events', { events: [...adminEvents, ...partnerEvents] })).status, 200);
+  assert.equal((await seedEvents({ events: [...adminEvents, ...partnerEvents] })).status, 200);
   const login = await call('POST', '/auth/login', { login: 'stp.admin', password: adminPassword });
   assert.equal(login.status, 200);
   const dash = await call('GET', '/analytics/dashboard', null, login.body.token, { journal: '1' });
