@@ -42,7 +42,7 @@ for (const role of roles) {
       await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
       await expect(page).toHaveURL(/#project\/ui_project\/overview$/);
       await noDrawers(page, 'страница проекта');
-      await page.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+      await page.getByRole('tab', { name: 'Комнаты', exact: true }).click();
       await page.getByRole('button', { name: 'Спальня' }).click();
       await expect(page).toHaveURL(/#project\/ui_project\/room\//);
       await noDrawers(page, 'страница комнаты');

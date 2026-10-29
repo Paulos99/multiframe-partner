@@ -1,9 +1,10 @@
 import type { JobObjectHistoryEntry } from '../../../../packages/shared/partner';
+import { REFUSAL_REASONS, refusalReasonPlain } from '../../../../packages/shared/refusal.js';
 
 export type HistoryPerson = { id: string; displayName: string };
 const statuses: Record<string, string> = {
   draft: 'Черновик', measured: 'Замер', quote_sent: 'КП отправлено',
-  install: 'Монтаж', closed: 'Закрыто',
+  install: 'Монтаж', closed: 'Завершён',
 };
 
 export function describeHistory(entry: JobObjectHistoryEntry, people: HistoryPerson[]) {
@@ -14,6 +15,10 @@ export function describeHistory(entry: JobObjectHistoryEntry, people: HistoryPer
     case 'calc_pdf': return 'Смета сохранена';
     case 'profile_pdf': return 'Профиль сохранён';
     case 'conflict_kept_server': return 'Сохранена более свежая версия комнаты';
+    case 'refusal': {
+      const known = REFUSAL_REASONS.some(item => item.key === detail);
+      return known ? `Отказ: ${refusalReasonPlain(detail)}` : 'Отказ клиента';
+    }
     case 'assign': {
       if (!detail || detail === '—') return 'Назначение исполнителя снято';
       const name = people.find(person => person.id === detail)?.displayName;

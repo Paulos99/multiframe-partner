@@ -414,3 +414,22 @@
 .overlay {
   margin: 0;
 }
+
+/* Итог закрытой комнаты: «Завершён» или «Отказ · причина». */
+.outcome {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.outcomeDone {
+  background: var(--cab-accent-soft, #01644f1a);
+  color: var(--cab-accent, #01644f);
+}
+.outcomeRefused {
+  background: #b3261e1a;
+  color: #b3261e;
+}

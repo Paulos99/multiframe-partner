@@ -81,19 +81,20 @@ test('калькулятор из комнаты сразу показывает
   await expect(frame.getByText('вкладка «Стены»').filter({ visible: true })).toHaveCount(0);
 });
 
-test('замерщик видит только назначенную комнату и её цену', async ({ page }) => {
-  await enter(page);
-  await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
-  const { drawer } = await openProjectRoom(page, 'Гостиная');
-  const saved = page.waitForResponse(
-    (res) => res.request().method() === 'PATCH' && res.url().includes('/objects/ui_crew_room') && res.ok(),
-  );
-  await drawer.getByLabel('Исполнитель').selectOption('ui_measurer');
-  await saved;
-  await expect(drawer.getByLabel('Исполнитель')).toHaveValue('ui_measurer');
-  await drawer.getByRole('button', { name: 'К проекту', exact: true }).click();
-  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
-
+test('замерщик видит только назначенную комнату и её цену', async ({ page, request }) => {
+  // Комната на монтаже: в списке исполнителей там только монтажники (проверено в review-fixes.spec),
+  // поэтому замерщика назначаем запросом, как это сделал бы менеджер на стадии замера.
+  const login = await request.post('http://127.0.0.1:4181/auth/login', {
+    data: { login: 'ui.sales', password },
+  });
+  expect(login.ok()).toBeTruthy();
+  const { token } = (await login.json()) as { token: string };
+  const saved = await request.patch('http://127.0.0.1:4181/objects/ui_crew_room', {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { assignedTo: 'ui_measurer' },
+  });
+  expect(saved.ok()).toBeTruthy();
+  await page.goto('/');
   await page.getByLabel('Логин', { exact: true }).fill('ui.measurer');
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();

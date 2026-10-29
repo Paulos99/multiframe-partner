@@ -301,7 +301,7 @@ test('клиентская ссылка: токен длинный, срок д�
   const owner = await tokenFor('owner.a');
   const created = await call('POST', '/objects', {
     token: owner,
-    body: { clientName: 'Иван Секретов', clientPhone: '+79990001122', address: 'ул. Тайная, 1', roomName: 'Кухня', room: { answers: { roomType: 'kitchen' } } },
+    body: { status: 'measured', clientName: 'Иван Секретов', clientPhone: '+79990001122', address: 'ул. Тайная, 1', roomName: 'Кухня', room: { answers: { roomType: 'kitchen' } } },
   });
   assert.equal(created.status, 200, JSON.stringify(created.body));
   const link = await call('POST', `/objects/${created.body.object.id}/share`, { token: owner, body: {} });

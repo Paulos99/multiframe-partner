@@ -1,6 +1,7 @@
 import type { ClassLabel, SessionState } from '../state/types';
 import {
   airClassFor,
+  comfortClassAfterMultiFrame,
   comfortClassFor,
   impactClassFor,
 } from '../state/simulation';
@@ -8,13 +9,15 @@ import { withDerived } from '../state/session';
 import { channelLabel, getChannel, type ChannelAttribution } from './channel';
 import { getAnalyticsSessionId } from './sessionId';
 
-function classSide(Rw: number, Lnw: number) {
+/** «С MultiFrame» ниже класса В не показываем (см. MULTIFRAME_MIN_LEVEL в simulation.ts). */
+function classSide(Rw: number, Lnw: number, afterMultiFrame = false) {
+  const floor = (cls: ClassLabel): ClassLabel => (afterMultiFrame && cls === 'below' ? 'V' : cls);
   return {
     Rw,
     Lnw,
-    air: airClassFor(Rw) as ClassLabel,
-    impact: impactClassFor(Lnw) as ClassLabel,
-    hybrid: comfortClassFor(Rw, Lnw) as ClassLabel,
+    air: floor(airClassFor(Rw)),
+    impact: floor(impactClassFor(Lnw)),
+    hybrid: afterMultiFrame ? comfortClassAfterMultiFrame(Rw, Lnw) : comfortClassFor(Rw, Lnw),
   };
 }
 
@@ -49,7 +52,7 @@ export function buildAnalyticsPayload(session: SessionState): AnalyticsPayload |
     room: full.answers.room,
     sim: {
       before: classSide(sim.before.Rw, sim.before.Lnw),
-      after: classSide(sim.after.Rw, sim.after.Lnw),
+      after: classSide(sim.after.Rw, sim.after.Lnw, true),
       delta: sim.delta,
       perceivedAirPct: sim.perceivedAirPct,
       perceivedImpactPct: sim.perceivedImpactPct,
@@ -74,6 +77,6 @@ export function eventParamsFromSession(
     roomWishes: room.roomWishes.join('|') || undefined,
     roomSubstep: session.roomSubstep,
     classBefore: sim ? comfortClassFor(sim.before.Rw, sim.before.Lnw) : undefined,
-    classAfter: sim ? comfortClassFor(sim.after.Rw, sim.after.Lnw) : undefined,
+    classAfter: sim ? comfortClassAfterMultiFrame(sim.after.Rw, sim.after.Lnw) : undefined,
   };
 }

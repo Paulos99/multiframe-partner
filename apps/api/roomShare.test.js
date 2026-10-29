@@ -101,6 +101,7 @@ describe('ссылка для клиента', { concurrency: false }, () => {
         body: {
           clientName: 'СекретныйКлиент',
           clientPhone: '+7 999 123-45-67',
+          status: 'measured',
           address: 'ул. Секретная, 7',
           city: 'Москва',
           roomName: 'Спальня',

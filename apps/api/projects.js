@@ -10,10 +10,16 @@ import {
   cleanProjectDate,
   cleanProjectStatus,
 } from '../../packages/shared/projectAccess.js';
+import {
+  cleanClientPhone,
+  phoneStageAllowed,
+  projectStageOf,
+  roleSeesClientPhone,
+} from '../../packages/shared/clientPhone.js';
+import { cleanRefusal } from '../../packages/shared/refusal.js';
 
 const NAME_MAX = 250;
 const TEXT_MAX = 250;
-const PHONE_MAX = 80;
 const CITY_MAX = 120;
 const ROOM_MAX = 120;
 const DESCRIPTION_MAX = 4000;
@@ -30,19 +36,27 @@ function projectRows(platform) {
   return Array.isArray(platform?.projects) ? platform.projects : [];
 }
 
-/** Ответ клиенту: поля проекта, без смет и итогов. Статус пуст, пока его не сохранили. */
-export function publicProject(project) {
+/**
+ * Ответ клиенту: поля проекта, без смет и итогов. Статус пуст, пока его не сохранили.
+ * Телефон клиента отдаётся владельцу, менеджеру, замерщику и монтажнику, только с этапа «Замер».
+ * Без роли (viewer) и для админа сети он всегда пустой.
+ */
+export function publicProject(project, viewer = null, platform = null) {
   const status = PROJECT_STATUSES.includes(project.status) ? project.status : undefined;
+  const rooms = (platform?.objects || []).filter((obj) => obj.projectId === project.id);
+  const showPhone =
+    Boolean(viewer) && roleSeesClientPhone(viewer.role) && phoneStageAllowed(projectStageOf(project, rooms));
   return {
     id: project.id,
     orgId: project.orgId,
     name: project.name,
     clientName: project.clientName || '',
-    clientPhone: project.clientPhone || '',
+    clientPhone: showPhone ? project.clientPhone || '' : '',
     address: project.address || '',
     city: project.city || '',
     description: project.description || '',
     ...(status ? { status } : {}),
+    ...(status === 'done' && project.refusal ? { refusal: project.refusal } : {}),
     managerUserId: project.managerUserId || null,
     measurerUserId: project.measurerUserId || null,
     crewUserId: project.crewUserId || null,
@@ -107,6 +121,39 @@ function statusField(body, existing) {
   return cleaned.value;
 }
 
+/**
+ * Телефон клиента проекта. Новый номер принимается только с этапа «Замер»:
+ * стадия берётся из итогового статуса проекта или из комнат. Очистка и неизменённое значение проходят всегда.
+ */
+function phoneField(body, existing, status, platform) {
+  const current = String(existing?.clientPhone ?? '').trim();
+  if (!Object.prototype.hasOwnProperty.call(body, 'clientPhone')) return current;
+  const raw = String(body.clientPhone ?? '').trim();
+  if (raw === current) return current;
+  const cleaned = cleanClientPhone(raw);
+  if (cleaned.error) throw httpError(400, cleaned.error);
+  if (cleaned.value) {
+    const rooms = (platform?.objects || []).filter((obj) => existing && obj.projectId === existing.id);
+    const stage = projectStageOf({ status }, rooms);
+    if (!phoneStageAllowed(stage)) {
+      throw httpError(400, 'Телефон клиента можно указать с этапа «Замер»');
+    }
+  }
+  return cleaned.value;
+}
+
+/** Отказ клиента: запись есть только у проекта в статусе «Завершён» (done), причина обязательна. */
+function refusalField(body, existing, status, actor, now) {
+  if (status !== 'done') return null;
+  const cleaned = cleanRefusal(body.refusal, {
+    userId: actor.id,
+    now,
+    existing: existing?.status === 'done' ? existing?.refusal || null : null,
+  });
+  if (cleaned.error) throw httpError(400, cleaned.error);
+  return cleaned.value || null;
+}
+
 function archiveField(body, existing) {
   if (!Object.prototype.hasOwnProperty.call(body, 'archived')) return existing?.archivedAt || null;
   if (body.archived) return existing?.archivedAt || new Date().toISOString();
@@ -127,16 +174,19 @@ function writeProject(body, existing, actor, uid, platform) {
   const orgId = existing?.orgId || actor.orgId;
   const now = new Date().toISOString();
   const status = statusField(source, existing);
+  const clientPhone = phoneField(source, existing, status, platform);
+  const refusal = refusalField(source, existing, status, actor, now);
   return {
     id: existing?.id || clientProjectId(source.id) || uid('prj'),
     orgId,
     name,
     clientName: pick('clientName', TEXT_MAX),
-    clientPhone: pick('clientPhone', PHONE_MAX),
+    clientPhone,
     address: pick('address', TEXT_MAX),
     city: pick('city', CITY_MAX),
     description: pick('description', DESCRIPTION_MAX),
     ...(status ? { status } : {}),
+    ...(refusal ? { refusal } : {}),
     managerUserId: assignee(source, existing, 'managerUserId', platform, orgId, ['owner', 'sales'], 'Менеджер'),
     measurerUserId: assignee(source, existing, 'measurerUserId', platform, orgId, ['measurer'], 'Замерщик'),
     crewUserId: assignee(source, existing, 'crewUserId', platform, orgId, ['crew'], 'Бригада'),
@@ -203,7 +253,6 @@ export function ensureProjectForNewObject(platform, body, actor, uid) {
         text(source.roomName, ROOM_MAX) ||
         'Проект',
       clientName: source.clientName,
-      clientPhone: source.clientPhone,
       address: source.address,
       city: source.city,
     },
@@ -234,7 +283,7 @@ export async function handleProjects(ctx) {
   if (method === 'GET' && listRoute) {
     const projects = rows
       .filter((project) => projectVisible(user, project, platform, ctx.objectVisibleTo))
-      .map(publicProject);
+      .map((project) => publicProject(project, user, platform));
     return ctx.json(200, { projects });
   }
 
@@ -266,7 +315,7 @@ export async function handleProjects(ctx) {
       });
     }
     await ctx.savePlatform(platform);
-    return ctx.json(200, { project: publicProject(project) });
+    return ctx.json(200, { project: publicProject(project, user, platform) });
   }
 
   const projectId = decodeURIComponent(path.split('/').pop() || '');
@@ -311,5 +360,5 @@ export async function handleProjects(ctx) {
   if (!Array.isArray(platform.projects)) platform.projects = rows.slice();
   platform.projects[idx] = project;
   await ctx.savePlatform(platform);
-  return ctx.json(200, { project: publicProject(project) });
+  return ctx.json(200, { project: publicProject(project, user, platform) });
 }

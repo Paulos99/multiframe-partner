@@ -17,10 +17,12 @@ import {
 import {
   FELT_STEP_LABELS,
   FELT_STEPS,
-  NORMS,
+  airFeltAfterMultiFrame,
   airFeltFromIndex,
+  comfortClassAfterMultiFrame,
   comfortClassFor,
   deriveSimulation,
+  impactFeltAfterMultiFrame,
   impactFeltFromIndex,
   officialComfortLabel,
   type FeltStep,
@@ -41,20 +43,7 @@ import { eventParamsFromSession, track } from '../../analytics';
 import { trackPartnerAnalytics } from '../../partner/analytics';
 import styles from './resultShared.module.css';
 
-/** Official SP thresholds А/Б/В + explicit «ниже допустимого» band. */
-export const NORM_ROWS: { key: string; label: string; rw: string; lnw: string; muted?: boolean }[] =
-  [
-    { key: 'A', label: 'Высокий комфорт (А)', rw: `≥ ${NORMS.A.Rw}`, lnw: `≤ ${NORMS.A.Lnw}` },
-    { key: 'B', label: 'Комфорт (Б)', rw: `≥ ${NORMS.B.Rw}`, lnw: `≤ ${NORMS.B.Lnw}` },
-    { key: 'V', label: 'Допустимый (В)', rw: `≥ ${NORMS.V.Rw}`, lnw: `≤ ${NORMS.V.Lnw}` },
-    {
-      key: 'below',
-      label: 'Ниже допустимого',
-      rw: `< ${NORMS.V.Rw}`,
-      lnw: `> ${NORMS.V.Lnw}`,
-      muted: true,
-    },
-  ];
+export { NORM_ROWS, normRowKey } from '../../state/simulation';
 
 /** StP site pillars — title + one line, no vs-comparison with plain stretch film. */
 export const MULTIFRAME_PILLARS = [
@@ -88,17 +77,6 @@ export function optionLabel<T extends string>(
   return options.find((o) => o.id === id)?.label ?? 'не указано';
 }
 
-/** Шкала без ступени «сильный дискомфорт»: и подпись, и отметка сняты. */
-const SCALE_STEPS = FELT_STEPS.filter((step) => step !== 'danger');
-
-function shownStep(step: FeltStep): Exclude<FeltStep, 'danger'> {
-  return step === 'danger' ? 'uncomfortable' : step;
-}
-
-function feltIndex(step: FeltStep): number {
-  return SCALE_STEPS.indexOf(shownStep(step));
-}
-
 export function FeltScale({
   title,
   now,
@@ -109,6 +87,8 @@ export function FeltScale({
   indexKind,
   nowIndex,
   afterIndex,
+  steps = FELT_STEPS,
+  highNote,
 }: {
   title: string;
   now: FeltStep;
@@ -120,11 +100,15 @@ export function FeltScale({
   indexKind: 'Rw' | 'Lnw';
   nowIndex: number;
   afterIndex?: number;
+  /** Ступени шкалы (по умолчанию все три). */
+  steps?: FeltStep[];
+  /** Пояснение у ступени «Высокий комфорт» (для удара: достижим только с полом у соседей). */
+  highNote?: string;
 }) {
-  const nowShown = shownStep(now);
-  const afterShown = after ? shownStep(after) : undefined;
-  const nowIdx = feltIndex(now);
-  const afterIdx = after ? feltIndex(after) : -1;
+  const nowShown = now;
+  const afterShown = after;
+  const nowIdx = steps.indexOf(now);
+  const afterIdx = after ? steps.indexOf(after) : -1;
   const same = mode === 'nowAndAfter' && Boolean(afterShown) && nowShown === afterShown;
   const nowVal = Math.round(nowIndex);
   const afterVal = afterIndex != null ? Math.round(afterIndex) : null;
@@ -180,17 +164,17 @@ export function FeltScale({
 
       <div className={styles.feltTrack} aria-hidden>
         <span className={styles.feltLine} />
-        {SCALE_STEPS.map((step, i) => {
+        {steps.map((step, i) => {
           const isNow = i === nowIdx;
           const isAfter = mode === 'nowAndAfter' && i === afterIdx;
           const both = same && isNow;
-          const edge = i === 0 ? 'start' : i === SCALE_STEPS.length - 1 ? 'end' : 'mid';
+          const edge = i === 0 ? 'start' : i === steps.length - 1 ? 'end' : 'mid';
           return (
             <span
               key={step}
               className={`${styles.feltStep} ${isNow || isAfter || both ? styles.feltStepActive : ''}`}
               data-edge={edge}
-              style={{ left: `${(i / (SCALE_STEPS.length - 1)) * 100}%` }}
+              style={{ left: `${(i / (steps.length - 1)) * 100}%` }}
             >
               {both ? (
                 <span className={`${styles.feltMark} ${styles.feltMarkBoth}`}>Сейчас · После</span>
@@ -208,6 +192,11 @@ export function FeltScale({
           );
         })}
       </div>
+      {highNote ? (
+        <p className={styles.feltNote}>
+          <b>{FELT_STEP_LABELS.high}</b> {highNote}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -240,14 +229,14 @@ export function deriveResultView(session: SessionState) {
   const room = session.answers.room;
   const sim = session.derived?.simulation ?? deriveSimulation(session.answers);
   const hybridBefore = comfortClassFor(sim.before.Rw, sim.before.Lnw);
-  const hybridAfter = comfortClassFor(sim.after.Rw, sim.after.Lnw);
+  const hybridAfter = comfortClassAfterMultiFrame(sim.after.Rw, sim.after.Lnw);
   const beforeOfficial = officialComfortLabel(hybridBefore);
   const afterOfficial = officialComfortLabel(hybridAfter);
 
   const airNowFelt = airFeltFromIndex(sim.before.Rw);
-  const airAfterFelt = airFeltFromIndex(sim.after.Rw);
+  const airAfterFelt = airFeltAfterMultiFrame(sim.after.Rw);
   const impactNowFelt = impactFeltFromIndex(sim.before.Lnw);
-  const impactAfterFelt = impactFeltFromIndex(sim.after.Lnw);
+  const impactAfterFelt = impactFeltAfterMultiFrame(sim.after.Lnw);
 
   const roomLabel = room.roomType ? roomTypeLabel(room) : null;
   const slabTypeLabel = optionLabel(SLAB_TYPE_OPTIONS, room.slabType);

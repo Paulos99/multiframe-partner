@@ -10,7 +10,7 @@ export const PROJECT_STATUS_LABELS = {
   measure: 'Замер',
   proposal: 'Предложение',
   install: 'Монтаж',
-  done: 'Готово',
+  done: 'Завершён',
 };
 
 const MONEY_KEYS = [

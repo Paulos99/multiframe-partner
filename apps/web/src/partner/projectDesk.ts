@@ -197,6 +197,29 @@ export function projectAssigneeId(
   return null;
 }
 
+export type AssigneeCandidate = { id: string; role: string };
+
+/**
+ * Кого предлагать исполнителем комнаты на её стадии.
+ * Замер — замерщики, монтаж и закрытие — монтажники (бригады), КП — любой сотрудник.
+ * Раньше список был один на все стадии, и при переводе в «Монтаж» в нём оставался замерщик.
+ */
+export function assigneeCandidates<T extends AssigneeCandidate>(
+  staff: ReadonlyArray<T>,
+  status: JobObject['status'],
+): T[] {
+  if (status === 'install' || status === 'closed') return staff.filter((person) => person.role === 'crew');
+  if (status === 'draft' || status === 'measured') return staff.filter((person) => person.role === 'measurer');
+  return [...staff];
+}
+
+/** Роль исполнителя, которого нужно выбрать на этой стадии. Для подсказки над списком. */
+export function assigneeRoleLabel(status: JobObject['status']): string {
+  if (status === 'install' || status === 'closed') return 'монтажника';
+  if (status === 'draft' || status === 'measured') return 'замерщика';
+  return 'исполнителя';
+}
+
 export function personName(
   staff: ReadonlyArray<{ id: string; displayName: string }>,
   id: string | null | undefined,

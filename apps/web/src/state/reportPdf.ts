@@ -13,17 +13,22 @@ import {
   shouldAskNoiseKind,
   type SessionState,
 } from './types';
+import { HYBRID_CLASS_LABELS } from './types';
 import { caseVerdictParts, productAbout } from './recommendations';
 import {
   airClassFor,
   airFeltFromIndex,
-  CLASS_CYR,
   comfortClassFor,
   FELT_STEP_LABELS,
   impactClassFor,
   impactFeltFromIndex,
-  NORMS,
+  NORM_ROWS,
+  normRowKey,
   officialComfortLabel,
+  airFeltAfterMultiFrame,
+  comfortClassAfterMultiFrame,
+  impactFeltAfterMultiFrame,
+  IMPACT_HIGH_NOTE,
 } from './simulation';
 import { noiseKpiLines } from './noiseKpi';
 import { buildLeadHandoff, withDerived } from './session';
@@ -83,8 +88,7 @@ function optLabel<T extends string>(
 }
 
 function chipLabel(cls: ClassLabel): string {
-  if (cls === 'below') return 'вне нормы';
-  return CLASS_CYR[cls];
+  return HYBRID_CLASS_LABELS[cls].toLowerCase();
 }
 
 function escapeHtml(s: string): string {
@@ -243,7 +247,7 @@ function buildReportDocument(
   const b = sim.before;
   const a = sim.after;
   const hybridBefore = comfortClassFor(b.Rw, b.Lnw);
-  const hybridAfter = comfortClassFor(a.Rw, a.Lnw);
+  const hybridAfter = comfortClassAfterMultiFrame(a.Rw, a.Lnw);
   const roomName = roomTypeLabel(room);
   const area = room.ceilingAreaM2 != null ? `${room.ceilingAreaM2} м²` : 'н/д';
   const roomLine = `${roomName} · ${area}`;
@@ -256,9 +260,9 @@ function buildReportDocument(
       : `${slabTypeLabel}, ${optLabel(SLAB_THICKNESS_OPTIONS, room.slabThickness)}`;
 
   const airNow = airFeltFromIndex(b.Rw);
-  const airAfter = airFeltFromIndex(a.Rw);
+  const airAfter = airFeltAfterMultiFrame(a.Rw);
   const impactNow = impactFeltFromIndex(b.Lnw);
-  const impactAfter = impactFeltFromIndex(a.Lnw);
+  const impactAfter = impactFeltAfterMultiFrame(a.Lnw);
   const noiseType = session.derived?.noiseType ?? 'mixed';
   const verdictHtml = caseVerdictParts(room, noiseType, {
     perceivedAirPct: sim.perceivedAirPct,
@@ -327,17 +331,19 @@ function buildReportDocument(
       `<li class="pillar"><span class="pillar-mark"></span><div><strong>${escapeHtml(p.title)}</strong><p>${escapeHtml(p.text)}</p></div></li>`,
   ).join('');
 
-  const normRow = (key: string, label: string, rw: string, lnw: string, muted?: boolean) => {
-    const isNow = key === hybridBefore;
-    const isMf = key === hybridAfter;
+  const rowKeyNow = normRowKey(hybridBefore);
+  const rowKeyMf = normRowKey(hybridAfter);
+  const normRow = (row: (typeof NORM_ROWS)[number]) => {
+    const isNow = row.key === rowKeyNow;
+    const isMf = row.key === rowKeyMf;
     const mark = isMf
       ? pillSvg('MultiFrame', { bg: '#01644f', fg: '#ffffff', fontSize: 9, padX: 8, height: 20 })
       : isNow
         ? pillSvg('Сейчас', { bg: '#68757e', fg: '#ffffff', fontSize: 9, padX: 8, height: 20 })
         : '';
-    return `<tr class="${muted ? 'muted' : ''} ${isNow || isMf ? 'marked' : ''}">
-      <td><span class="norm-name">${escapeHtml(label)}</span></td>
-      <td>${rw}</td><td>${lnw}</td>
+    return `<tr class="${row.muted ? 'muted' : ''} ${isNow || isMf ? 'marked' : ''}">
+      <td><span class="norm-name">${escapeHtml(row.label)}</span> <span class="muted">${escapeHtml(row.sp)}</span></td>
+      <td>${escapeHtml(row.rw)}</td><td>${escapeHtml(row.lnw)}</td>
       <td>${mark}</td>
     </tr>`;
   };
@@ -349,10 +355,7 @@ function buildReportDocument(
       <table class="norms">
         <thead><tr><th>Уровень</th><th>Rw</th><th>Lnw</th><th></th></tr></thead>
         <tbody>
-          ${normRow('A', 'Высокий комфорт (А)', `≥ ${NORMS.A.Rw}`, `≤ ${NORMS.A.Lnw}`)}
-          ${normRow('B', 'Комфорт (Б)', `≥ ${NORMS.B.Rw}`, `≤ ${NORMS.B.Lnw}`)}
-          ${normRow('V', 'Допустимый (В)', `≥ ${NORMS.V.Rw}`, `≤ ${NORMS.V.Lnw}`)}
-          ${normRow('below', 'Ниже допустимого', `&lt; ${NORMS.V.Rw}`, `&gt; ${NORMS.V.Lnw}`, true)}
+          ${NORM_ROWS.map(normRow).join('')}
         </tbody>
       </table>
     </div>`;
@@ -587,6 +590,8 @@ function buildReportDocument(
     padding: 14px 14px; border-radius: 12px; border: 1px solid #dce6e1; background: #f7faf8;
     font-size: 13px; line-height: 1.4;
   }
+  .felt-note { margin: 0; font-size: 11px; line-height: 1.4; color: #68757e; }
+  .felt-note b { color: #1f2a30; font-weight: 700; }
   .comfort-row {
     display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 14px;
   }
@@ -869,6 +874,7 @@ function buildReportDocument(
           <span>Удар · ${FELT_STEP_LABELS[impactNow]} → <b>${FELT_STEP_LABELS[impactAfter]}</b> · удар сверху ≈ ${Math.round(b.Lnw)} → ≈ ${Math.round(a.Lnw)} дБ</span>
           ${pillSvg(`≈ ${sim.perceivedImpactPct}% тише`, { bg: '#dceee8', fg: '#01644f', fontSize: 11, height: 24 })}
         </div>
+        <p class="felt-note"><b>${FELT_STEP_LABELS.high}</b> по удару ${escapeHtml(IMPACT_HIGH_NOTE)}</p>
       </div>
       <div class="comfort-row">
         <div class="rings-card">

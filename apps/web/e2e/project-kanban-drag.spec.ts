@@ -99,7 +99,7 @@ test('у замерщика доски нет, проект не перенос�
   await page.getByRole('combobox', { name: 'Замерщик', exact: true }).selectOption('ui_measurer');
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeEnabled();
-  await page.getByRole('region', { name: 'Проект' }).getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+  await page.getByRole('region', { name: 'Проект' }).getByRole('tab', { name: 'Комнаты', exact: true }).click();
   await page.getByRole('region', { name: 'Проект' }).getByRole('button', { name: 'Кухня' }).click();
   await page.getByRole('region', { name: 'Комната' }).getByLabel('Исполнитель').selectOption('ui_measurer');
   await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();

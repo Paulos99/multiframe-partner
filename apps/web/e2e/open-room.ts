@@ -11,7 +11,7 @@ export async function openProjectRoom(page: Page, room: string) {
   } else {
     await project.click();
     await expect(page).toHaveURL(/#project\/ui_project\/overview/);
-    await page.getByRole('tab', { name: 'Рабочая информация', exact: true }).click();
+    await page.getByRole('tab', { name: 'Комнаты', exact: true }).click();
     await page.getByRole('button', { name: room }).click();
   }
   await expect(page).toHaveURL(/#project\/ui_project\/room\//);

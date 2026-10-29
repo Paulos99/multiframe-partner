@@ -1315,3 +1315,116 @@ details[open] > summary::after {
     padding-left: 38px;
   }
 }
+
+/* Быстрый поиск по банку возражений и вопросов */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.searchPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-card);
+}
+.searchPanel h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+.searchField {
+  position: relative;
+  display: flex;
+}
+.searchField input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 48px 8px 12px;
+  border: 1px solid var(--cab-border-strong);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-field);
+  color: var(--cab-ink);
+  font: inherit;
+  font-size: 1rem; /* не меньше 16 px: iOS не увеличивает страницу при вводе */
+}
+.searchClear {
+  appearance: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 48px;
+  height: 48px;
+  border: none;
+  background: none;
+  color: var(--cab-muted);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.searchStatus {
+  min-height: 1.2em;
+  color: var(--cab-muted);
+  font-size: 0.9rem;
+}
+.searchList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.searchItem {
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-subtle);
+  overflow: hidden;
+}
+.searchHead {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-height: var(--touch-min);
+  padding: 12px 14px;
+  border: none;
+  background: none;
+  color: var(--cab-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.searchKind {
+  color: var(--cab-accent-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.searchBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 14px;
+  line-height: 1.5;
+}
+.searchBody h5 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+.searchBody p {
+  margin: 0;
+}

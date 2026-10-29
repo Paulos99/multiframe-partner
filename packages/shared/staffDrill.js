@@ -141,6 +141,8 @@ function roomHasMeasurement(object) {
 }
 
 function isMounted(object) {
+  // Отказ клиента — это не монтаж: комната закрыта, но ничего не смонтировано.
+  if (object?.refusal && object.refusal.reasonKey) return false;
   const status = String(object?.status || object?.stage || object?.column || object?.state || '').toLowerCase();
   if (['install', 'closed', 'installed', 'mounted', 'done', 'complete', 'finished'].includes(status)) return true;
   if (status.includes('монтаж') || status.includes('закры')) return true;
@@ -1096,6 +1098,7 @@ export function buildStaffDrill(input) {
     boardInsteadOfEmptyPeriod: 0,
     installByUser: {},
     closedByUser: {},
+    refused: 0,
   };
   const companyRooms = [];
   for (const object of drillObjects) {
@@ -1109,7 +1112,9 @@ export function buildStaffDrill(input) {
   drops.rooms = companyRooms.length;
   for (const object of companyRooms) {
     const who = assigneeById.get(object.id) || object.assignedTo || '—';
-    const bucket = object.status === 'closed' ? drops.closedByUser : object.status === 'install' ? drops.installByUser : null;
+    const refused = Boolean(object.refusal && object.refusal.reasonKey);
+    if (refused) drops.refused = (drops.refused || 0) + 1;
+    const bucket = refused ? null : object.status === 'closed' ? drops.closedByUser : object.status === 'install' ? drops.installByUser : null;
     if (bucket) bucket[who] = (bucket[who] || 0) + 1;
   }
   // Если в окне нет ни одной смонтированной комнаты, а на доске они есть — берём их.

@@ -96,6 +96,7 @@ export type StaffDrillDrops = {
   /** userId монтажных и закрытых комнат, как их увидел рейтинг. */
   installByUser: Record<string, number>;
   closedByUser: Record<string, number>;
+  refused?: number;
   tilePanels: number;
   tileArea: number;
   /** События того же окна, из которого собрана плитка. */

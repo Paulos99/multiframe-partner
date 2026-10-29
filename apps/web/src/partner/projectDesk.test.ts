@@ -4,6 +4,8 @@ import type { JobObject, Project } from '../../../../packages/shared/partner';
 import { estimateForRole, roleSeesProjectMoney } from '../../../../packages/shared/partner';
 import {
   areaSum,
+  assigneeCandidates,
+  assigneeRoleLabel,
   crewProjectLists,
   effectiveProjectStatus,
   nextSteps,
@@ -185,4 +187,26 @@ test('roomProjectStatuses: комнаты берут стадию проекта
   const auto = roomProjectStatuses([{ ...project, status: undefined } as Project], [draft, install]);
   assert.equal(auto.r1, effectiveProjectStatus({ ...project, status: undefined } as Project, [draft, install]));
   assert.equal(auto.r1, 'install');
+});
+
+const STAFF = [
+  { id: 'm1', role: 'sales', displayName: 'Менеджер' },
+  { id: 'z1', role: 'measurer', displayName: 'Замерщик' },
+  { id: 'c1', role: 'crew', displayName: 'Бригада 1' },
+  { id: 'c2', role: 'crew', displayName: 'Бригада 2' },
+];
+
+test('при переводе в «Монтаж» исполнителя выбирают только из монтажников, замерщика в списке нет', () => {
+  const ids = (status: JobObject['status']) => assigneeCandidates(STAFF, status).map((p) => p.id);
+  assert.deepEqual(ids('install'), ['c1', 'c2']);
+  assert.deepEqual(ids('closed'), ['c1', 'c2']);
+  assert.ok(!ids('install').includes('z1'));
+  assert.equal(assigneeRoleLabel('install'), 'монтажника');
+});
+
+test('на замере исполнитель — замерщик, на КП — любой сотрудник', () => {
+  assert.deepEqual(assigneeCandidates(STAFF, 'measured').map((p) => p.id), ['z1']);
+  assert.deepEqual(assigneeCandidates(STAFF, 'draft').map((p) => p.id), ['z1']);
+  assert.equal(assigneeCandidates(STAFF, 'quote_sent').length, STAFF.length);
+  assert.equal(assigneeRoleLabel('measured'), 'замерщика');
 });

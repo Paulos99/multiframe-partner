@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  FELT_STEPS,
+  IMPACT_HIGH_NOTE,
+  IMPACT_SCALE_STEPS,
+  NORM_ROWS,
+  airFeltAfterMultiFrame,
+  airFeltFromIndex,
+  comfortClassAfterMultiFrame,
   comfortClassFor,
   comfortTransitionLabel,
+  comfortTransitionRank,
   deriveSimulation,
+  impactFeltAfterMultiFrame,
+  impactFeltFromIndex,
+  mergeComfortTransitions,
 } from './simulation';
 import { applyMultiFrame } from './acoustic/multiframe';
 import { buildConstruction } from './acoustic/construction';
@@ -14,13 +25,16 @@ import {
   PLANNED_CEILING_OPTIONS,
   SLAB_THICKNESS_OPTIONS,
   SLAB_TYPE_OPTIONS,
+  HYBRID_CLASS_LABELS,
+  SCALE_LEVELS,
+  SCALE_LEVEL_LABELS,
   type ClassLabel,
   type RoomAnswers,
   type SessionAnswers,
 } from './types';
 import { DEMO_CLASS_PAIRS } from '../partner/demoSeed';
 
-/** СП 51: А > Б > В > ниже В («Дискомфорт»). */
+/** СП 51: А > Б > В > ниже В (уровень «Дискомфорт»). */
 const RANK: Record<ClassLabel, number> = { below: 0, V: 1, B: 2, A: 3 };
 
 function* allRooms(): Generator<RoomAnswers> {
@@ -92,9 +106,89 @@ describe('MultiFrame never lowers the comfort class', () => {
 });
 
 describe('analytics «→» pair order', () => {
-  it('renders before on the left and after on the right', () => {
-    expect(comfortTransitionLabel('below', 'V')).toBe('Дискомфорт → Допустимый (В)');
-    expect(comfortTransitionLabel('V', 'B')).toBe('Допустимый (В) → Комфорт (Б)');
-    expect(comfortTransitionLabel('B', 'A')).toBe('Комфорт (Б) → Высокий комфорт (А)');
+  it('renders before on the left and after on the right, in three levels', () => {
+    expect(comfortTransitionLabel('below', 'V')).toBe('Дискомфорт → Комфорт');
+    expect(comfortTransitionLabel('V', 'B')).toBe('Комфорт → Комфорт');
+    expect(comfortTransitionLabel('B', 'A')).toBe('Комфорт → Высокий комфорт');
+    expect(comfortTransitionLabel('below', 'A')).toBe('Дискомфорт → Высокий комфорт');
   });
+
+  it('merges the old four classes into three levels', () => {
+    const merged = mergeComfortTransitions([
+      { key: 'below→V', count: 4 },
+      { key: 'V→B', count: 2 },
+      { key: 'B→B', count: 1 },
+      { key: 'V→V', count: 3 },
+      { key: 'B→A', count: 5 },
+    ]);
+    expect(Object.fromEntries(merged.map((m) => [m.key, m.count]))).toEqual({
+      'discomfort→comfort': 4,
+      'comfort→comfort': 6,
+      'comfort→high': 5,
+    });
+    expect(comfortTransitionLabel('comfort', 'high')).toBe('Комфорт → Высокий комфорт');
+    expect(comfortTransitionRank('comfort→comfort')).toBeLessThan(comfortTransitionRank('discomfort→high'));
+  });
+});
+
+describe('шкала Проблемомера: ровно три уровня', () => {
+  it('имеет три названия и никаких «допустимо / ниже допустимого»', () => {
+    expect(SCALE_LEVELS).toEqual(['discomfort', 'comfort', 'high']);
+    expect(FELT_STEPS).toEqual(SCALE_LEVELS);
+    const names = [
+      ...Object.values(SCALE_LEVEL_LABELS),
+      ...Object.values(HYBRID_CLASS_LABELS),
+      ...NORM_ROWS.map((r) => `${r.label} ${r.sp}`),
+    ].join(' | ');
+    expect(Object.values(SCALE_LEVEL_LABELS)).toEqual(['Дискомфорт', 'Комфорт', 'Высокий комфорт']);
+    expect(names).not.toMatch(/допустим|сильный дискомфорт|важно для вас|до 17 дБ/i);
+    expect(new Set(NORM_ROWS.map((r) => r.label)).size).toBe(3);
+  });
+
+  it('воздух: Rw от порогов СП (54 и 50 дБ)', () => {
+    expect(airFeltFromIndex(54)).toBe('high');
+    expect(airFeltFromIndex(53)).toBe('comfort');
+    expect(airFeltFromIndex(50)).toBe('comfort');
+    expect(airFeltFromIndex(49)).toBe('discomfort');
+  });
+
+  it('удар: три уровня — до 55 дБ «Высокий комфорт», до 60 дБ «Комфорт», выше «Дискомфорт»', () => {
+    expect(impactFeltFromIndex(55)).toBe('high');
+    expect(impactFeltFromIndex(56)).toBe('comfort');
+    expect(impactFeltFromIndex(60)).toBe('comfort');
+    expect(impactFeltFromIndex(61)).toBe('discomfort');
+    expect(IMPACT_SCALE_STEPS).toEqual(['discomfort', 'comfort', 'high']);
+    expect(IMPACT_HIGH_NOTE).toBe('достижим только со звукоизоляцией пола у соседей сверху');
+  });
+
+  it('удар «с MultiFrame» не выше «Комфорта» даже при малом Lnw', () => {
+    expect(impactFeltAfterMultiFrame(40)).toBe('comfort');
+    expect(impactFeltAfterMultiFrame(55)).toBe('comfort');
+    expect(impactFeltAfterMultiFrame(75)).toBe('comfort');
+  });
+
+  it('классы СП сводятся к уровням: А → высокий, Б и В → комфорт, ниже В → дискомфорт', () => {
+    expect(HYBRID_CLASS_LABELS.A).toBe('Высокий комфорт');
+    expect(HYBRID_CLASS_LABELS.B).toBe('Комфорт');
+    expect(HYBRID_CLASS_LABELS.V).toBe('Комфорт');
+    expect(HYBRID_CLASS_LABELS.below).toBe('Дискомфорт');
+  });
+
+  it('«с MultiFrame» никогда не «Дискомфорт», «сейчас» — может быть', () => {
+    expect(airFeltAfterMultiFrame(41)).toBe('comfort');
+    expect(impactFeltAfterMultiFrame(75)).toBe('comfort');
+    expect(comfortClassAfterMultiFrame(41, 75)).toBe('V');
+    expect(airFeltFromIndex(41)).toBe('discomfort');
+    let afterDiscomfort = 0;
+    let impactAfterHigh = 0;
+    for (const room of allRooms()) {
+      const sim = deriveSimulation(answers(room));
+      if (airFeltAfterMultiFrame(sim.after.Rw) === 'discomfort') afterDiscomfort++;
+      if (impactFeltAfterMultiFrame(sim.after.Lnw) === 'discomfort') afterDiscomfort++;
+      if (comfortClassAfterMultiFrame(sim.after.Rw, sim.after.Lnw) === 'below') afterDiscomfort++;
+      if (impactFeltAfterMultiFrame(sim.after.Lnw) === ('high' as string)) impactAfterHigh++;
+    }
+    expect(afterDiscomfort).toBe(0);
+    expect(impactAfterHigh).toBe(0);
+  }, 60_000);
 });
