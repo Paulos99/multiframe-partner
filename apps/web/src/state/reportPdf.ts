@@ -42,8 +42,8 @@ import {
 import type { ClassLabel } from './types';
 
 /** A4 @ 96 CSS px */
-const PAGE_W = 794;
-const PAGE_H = 1123;
+export const PAGE_W = 794;
+export const PAGE_H = 1123;
 
 const SITE_URL = 'https://stp-multiframe.ru';
 
@@ -1018,7 +1018,7 @@ export function prefetchAcousticProfilePdf(): void {
   void Promise.all([import('html2canvas'), import('jspdf')]);
 }
 
-function waitFrames(n: number): Promise<void> {
+export function waitFrames(n: number): Promise<void> {
   return new Promise((resolve) => {
     const step = (left: number) => {
       if (left <= 0) resolve();
@@ -1028,7 +1028,7 @@ function waitFrames(n: number): Promise<void> {
   });
 }
 
-function loadIframeDocument(iframe: HTMLIFrameElement, html: string): Promise<Document> {
+export function loadIframeDocument(iframe: HTMLIFrameElement, html: string): Promise<Document> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (err?: Error) => {
@@ -1051,7 +1051,7 @@ function loadIframeDocument(iframe: HTMLIFrameElement, html: string): Promise<Do
   });
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
+export function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

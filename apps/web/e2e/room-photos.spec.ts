@@ -135,7 +135,7 @@ test('монтажник добавляет фото до, в процессе �
   await expect(page.getByTestId('photo-stage-after')).toContainText('Фото пока нет');
 });
 
-test('замерщик видит и добавляет только «До» и не удаляет чужие фото', async ({ page, request }) => {
+test('замерщик видит все этапы, добавляет только «До» и не удаляет чужие фото', async ({ page, request }) => {
   const owner = await token(request, 'ui.owner');
   await request.patch(`${API}/objects/ui_room`, { headers: { Authorization: `Bearer ${owner}` }, data: { assignedTo: 'ui_measurer' } });
   await seed(request, owner, 'ui_room', 'before', BEFORE, 'Трещина у окна');
@@ -143,14 +143,16 @@ test('замерщик видит и добавляет только «До» и
 
   await enter(page, 'ui.measurer');
   const { report } = await openBedroom(page);
-  await expect(page.getByTestId('photo-stage-before')).toBeVisible();
-  await expect(page.getByTestId('photo-stage-progress')).toHaveCount(0);
-  await expect(page.getByTestId('photo-stage-after')).toHaveCount(0);
-  await expect(report.getByTestId('photo-tile')).toHaveCount(1);
-  await expect(report).not.toContainText('Готово');
+  for (const stage of ['before', 'progress', 'after']) {
+    await expect(page.getByTestId(`photo-stage-${stage}`)).toBeVisible();
+  }
+  await expect(report.getByTestId('photo-tile')).toHaveCount(2);
+  await expect(report).toContainText('Готово');
+  // Добавлять замерщик может только «До»: у «В процессе» и «После» нет кнопок съёмки.
   await expect(page.getByTestId('photo-camera-before')).toBeVisible();
-  await expect(page.getByTestId('photo-compare-toggle')).toHaveCount(0);
-  await expect(page.getByTestId('photo-open-compare')).toHaveCount(0);
+  await expect(page.getByTestId('photo-camera-progress')).toHaveCount(0);
+  await expect(page.getByTestId('photo-camera-after')).toHaveCount(0);
+  await expect(page.getByTestId('photo-open-compare')).toBeVisible();
 
   // Замерщик добавляет «До».
   await page.getByTestId('photo-gallery-before').setInputFiles(PROGRESS);
@@ -165,8 +167,13 @@ test('замерщик видит и добавляет только «До» и
   await tiles.nth(1).click();
   await expect(page.getByTestId('photo-delete')).toBeVisible();
   await page.keyboard.press('Escape');
+  // Чужое «После» тоже не удаляется.
+  await page.getByTestId('photo-stage-after').getByTestId('photo-tile').click();
+  await expect(page.getByTestId('photo-viewer')).toBeVisible();
+  await expect(page.getByTestId('photo-delete')).toHaveCount(0);
+  await page.keyboard.press('Escape');
 
-  // Сервер не верит интерфейсу: другие этапы замерщику закрыты.
+  // Сервер не верит интерфейсу: добавлять другие этапы замерщику закрыто.
   const measurer = await token(request, 'ui.measurer');
   const b64 = readFileSync(AFTER).toString('base64');
   const denied = await request.post(`${API}/objects/ui_room/photos`, {
@@ -177,10 +184,10 @@ test('замерщик видит и добавляет только «До» и
   const mine = (await (await request.get(`${API}/objects/ui_room/photos`, { headers: { Authorization: `Bearer ${measurer}` } })).json()) as {
     photos: Array<{ stage: string }>;
   };
-  expect(mine.photos.every((p) => p.stage === 'before')).toBe(true);
+  expect(mine.photos.map((p) => p.stage).sort()).toEqual(['after', 'before', 'before']);
 });
 
-test('владелец включает показ клиенту: страница клиента получает фото без подписей и имён', async ({ page, browser, request }) => {
+test('показ клиенту включён по умолчанию: страница клиента получает фото без подписей и имён, владелец может выключить', async ({ page, browser, request }) => {
   const owner = await token(request, 'ui.owner');
   await seed(request, owner, 'ui_room', 'before', BEFORE, 'Секретная подпись');
   await seed(request, owner, 'ui_room', 'progress', PROGRESS);
@@ -196,15 +203,13 @@ test('владелец включает показ клиенту: страни�
   expect(tokenValue).toMatch(/^[A-Za-z0-9_-]{32}$/);
   const link = `http://127.0.0.1:4180/#/r/${tokenValue}`;
 
-  // По умолчанию клиент фото не видит.
-  const closed = (await (await request.get(`${API}/public/rooms/${tokenValue}`)).json()) as { share: Record<string, unknown> };
-  expect(closed.share.photos).toBeUndefined();
+  // По умолчанию клиент фото видит.
+  const open = (await (await request.get(`${API}/public/rooms/${tokenValue}`)).json()) as { share: { photos?: unknown[] } };
+  expect(open.share.photos).toHaveLength(3);
 
   await enter(page, 'ui.owner');
   await openBedroom(page);
   const toggle = page.getByTestId('photo-share-toggle');
-  await expect(toggle).not.toBeChecked();
-  await toggle.click();
   await expect(toggle).toBeChecked();
 
   const client = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -228,15 +233,21 @@ test('владелец включает показ клиенту: страни�
   const overflow = await clientPage.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 
-  // Выключили — страница снова без фото.
+  // Выключили — страница снова без фото; включили — вернулись.
   await toggle.click();
   await expect(toggle).not.toBeChecked();
-  const reload = (await (await request.get(`${API}/public/rooms/${tokenValue}`)).json()) as { share: Record<string, unknown> };
-  expect(reload.share.photos).toBeUndefined();
+  await expect
+    .poll(async () => ((await (await request.get(`${API}/public/rooms/${tokenValue}`)).json()) as { share: Record<string, unknown> }).share.photos)
+    .toBeUndefined();
+  await toggle.click();
+  await expect(toggle).toBeChecked();
+  await expect
+    .poll(async () => ((await (await request.get(`${API}/public/rooms/${tokenValue}`)).json()) as { share: { photos?: unknown[] } }).share.photos?.length)
+    .toBe(3);
   await client.close();
 });
 
-test('админ СТП: раздел «Кейсы», обзор, фильтры и страница кейса без личных данных клиента', async ({ page, request }) => {
+test('админ СТП: раздел «Отчёты» вместо «Кейсов», обзор, фильтры и страница кейса без личных данных клиента', async ({ page, request }) => {
   const owner = await token(request, 'ui.owner');
   const crew = await token(request, 'ui.crew');
   await seed(request, owner, 'ui_room', 'before', BEFORE, 'До работ');
@@ -245,13 +256,14 @@ test('админ СТП: раздел «Кейсы», обзор, фильтры
   await seed(request, crew, 'ui_crew_room', 'before', PORTRAIT);
 
   await enter(page, 'ui.admin', 'Партнёры');
-  await expect(page.getByRole('tab', { name: 'Кейсы', exact: true })).toBeVisible();
-  // Раздел небольшой: добавили один пункт.
+  await expect(page.getByRole('tab', { name: 'Отчёты', exact: true })).toBeVisible();
+  // Отдельной вкладки «Кейсы» нет: фотоотчёты партнёров лежат в «Отчётах».
+  await expect(page.getByRole('tab', { name: 'Кейсы', exact: true })).toHaveCount(0);
   await expect(page.getByRole('tab')).toHaveCount(6);
-  await page.getByRole('tab', { name: 'Кейсы', exact: true }).click();
+  await page.getByRole('tab', { name: 'Отчёты', exact: true }).click();
   await expect(page).toHaveURL(/#cases$/);
   const cases = page.getByTestId('photo-cases');
-  await expect(cases.getByRole('heading', { name: 'Кейсы', exact: true })).toBeVisible();
+  await expect(cases.getByRole('heading', { name: 'Отчёты', exact: true })).toBeVisible();
   await expect(cases.getByTestId('case-card')).toHaveCount(2, { timeout: 20000 });
   const complete = cases.getByTestId('case-card').filter({ hasText: 'Спальня' });
   await expect(complete).toContainText('До и после');

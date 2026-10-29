@@ -29,7 +29,7 @@ function useCasesRoute(): CasesRoute {
   return route;
 }
 
-/** Раздел админа «Кейсы»: комнаты с фото всех партнёров. Список — обзор, кейс — отдельная страница. */
+/** Раздел админа «Отчёты» (фотоотчёты партнёров, база кейсов): комнаты с фото всех партнёров. Список — обзор, кейс — отдельная страница. */
 export function PhotoCases() {
   const route = useCasesRoute();
   return route.kind === 'case' ? <CasePage objectId={route.objectId} /> : <CasesList />;
@@ -100,7 +100,7 @@ function CasesList() {
   return (
     <section className={styles.page} data-testid="photo-cases">
       <header className={styles.head}>
-        <h1>Кейсы</h1>
+        <h1>Отчёты</h1>
         <p className={styles.lead}>
           Комнаты, где партнёры приложили фото до, во время и после монтажа. База для примеров и разбора работ.
         </p>

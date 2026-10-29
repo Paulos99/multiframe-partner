@@ -8,15 +8,25 @@ import {
   canShareReportWithClient,
   cleanPhotoCaption,
   photoCountsFor,
+  photoReportVisibleToClient,
   photoStagesRoleAdds,
   photoStagesRoleSees,
 } from '../../../../packages/shared/roomPhotos.js';
 
-test('замерщик видит и добавляет только «До»', () => {
-  assert.deepEqual(photoStagesRoleSees('measurer'), ['before']);
+test('замерщик видит все этапы, а добавляет только «До»', () => {
+  assert.deepEqual(photoStagesRoleSees('measurer'), PHOTO_STAGES);
   assert.deepEqual(photoStagesRoleAdds('measurer'), ['before']);
   assert.equal(canAddPhoto('measurer', 'after'), false);
-  assert.equal(canSeePhotoStage('measurer', 'progress'), false);
+  assert.equal(canSeePhotoStage('measurer', 'progress'), true);
+  assert.equal(canSeePhotoStage('measurer', 'after'), true);
+});
+
+test('показ клиенту по умолчанию включён, выключает только явная настройка', () => {
+  assert.equal(photoReportVisibleToClient({}), true);
+  assert.equal(photoReportVisibleToClient({ photoReport: {} }), true);
+  assert.equal(photoReportVisibleToClient({ photoReport: { clientVisible: true } }), true);
+  assert.equal(photoReportVisibleToClient({ photoReport: { clientVisible: false } }), false);
+  assert.equal(photoReportVisibleToClient(null), true);
 });
 
 test('монтажник, владелец и менеджер работают со всеми этапами', () => {
@@ -58,5 +68,5 @@ test('подпись: пробелы, переводы строк и длина'
 test('счётчики по ролям', () => {
   const photos = [{ stage: 'before' }, { stage: 'before' }, { stage: 'after' }, { stage: 'progress' }];
   assert.deepEqual(photoCountsFor(photos, 'owner'), { before: 2, progress: 1, after: 1 });
-  assert.deepEqual(photoCountsFor(photos, 'measurer'), { before: 2, progress: 0, after: 0 });
+  assert.deepEqual(photoCountsFor(photos, 'measurer'), { before: 2, progress: 1, after: 1 });
 });

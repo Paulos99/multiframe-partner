@@ -52,6 +52,7 @@ import {
 } from './projectDesk';
 import type { ProjectTab } from './projectRoute';
 import { preliminaryRoomTotal } from './projectSummary';
+import { ProjectPhotoReports } from './photos/ProjectPhotoReports';
 import styles from './ProjectDesk.module.css';
 
 type Person = { id: string; role: UserRole; displayName: string };
@@ -1132,8 +1133,8 @@ function Reports({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room:
         )}
       </section>
       <section className={styles.group}>
-        <h4>Фото</h4>
-        <p className={styles.lead}>Снимков замера и монтажа в карточках пока нет.</p>
+        <h4>Фотоотчёт</h4>
+        <ProjectPhotoReports rooms={rooms} onOpenRoom={onOpenRoom} />
       </section>
     </div>
   );
