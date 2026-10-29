@@ -220,3 +220,34 @@
     flex-direction: column;
   }
 }
+
+table.wide th,
+table.wide td {
+  white-space: normal;
+  vertical-align: top;
+}
+
+table.wide td {
+  overflow-wrap: anywhere;
+}
+
+table.wide th {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+table.wide {
+  min-width: 0;
+}
+
+.roleLine {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--cab-muted);
+}
+
+.tileText {
+  font-size: 1.05rem;
+  line-height: 1.25;
+}

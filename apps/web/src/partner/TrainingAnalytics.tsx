@@ -77,11 +77,11 @@ function Status<T>({ state, children }: { state: Loaded<T>; children: (data: T) 
   return state.data ? <>{children(state.data)}</> : null;
 }
 
-function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
+function Tile({ label, value, note, text }: { label: string; value: string; note?: string; text?: boolean }) {
   return (
     <li className={ui.tile}>
       <span className={ui.tileLabel}>{label}</span>
-      <strong className={ui.tileValue}>{value}</strong>
+      <strong className={`${ui.tileValue} ${text ? ui.tileText : ''}`}>{value}</strong>
       {note ? <span className={ui.tileNote}>{note}</span> : null}
     </li>
   );
@@ -128,7 +128,7 @@ function EmployeesTable({ rows }: { rows: TrainingOrgView['employees'] }) {
   if (!rows.length) return <p className={styles.hint}>В компании пока нет сотрудников.</p>;
   return (
     <div className={styles.dashTableScroll}>
-      <table className={styles.dashTable} data-testid="training-employees">
+      <table className={`${styles.dashTable} ${ui.wide}`} data-testid="training-employees">
         <thead>
           <tr>
             <th scope="col">Сотрудник</th>
@@ -154,7 +154,7 @@ function EmployeesTable({ rows }: { rows: TrainingOrgView['employees'] }) {
                 >
                   {row.displayName}
                 </button>
-                <span className={ui.muted}> {ROLE_TITLES[row.role] ?? ''}</span>
+                <span className={ui.roleLine}>{ROLE_TITLES[row.role] ?? ''}</span>
               </td>
               <td data-label="Уровень">
                 <LevelChip id={row.level.id} title={row.level.title} />
@@ -184,7 +184,7 @@ function CompaniesTable({ rows }: { rows: TrainingCompanyRow[] }) {
     goAnalytics({ page: 'training-company', metric: null, role: null, userId: null, period: null, orgId: id }, 'push');
   return (
     <div className={styles.dashTableScroll}>
-      <table className={styles.dashTable} data-testid="training-companies">
+      <table className={`${styles.dashTable} ${ui.wide}`} data-testid="training-companies">
         <thead>
           <tr>
             <th scope="col">Компания</th>
@@ -337,7 +337,7 @@ function UserBody({ view }: { view: TrainingUserView }) {
         <Tile label="Попыток" value={String(summary.sets)} note={`засчитано: ${summary.passedSets}`} />
         <Tile label="Викторина" value={percent(summary.quizShare)} note={`подходов: ${summary.quizSets}`} />
         <Tile label="Открыл материалов" value={String(summary.materialsOpened)} note={`открытий: ${summary.materialOpens}`} />
-        <Tile label="Последнее занятие" value={sinceLabel(summary.lastActivityAt)} note={dateLabel(summary.lastActivityAt)} />
+        <Tile label="Последнее занятие" value={sinceLabel(summary.lastActivityAt)} note={dateLabel(summary.lastActivityAt)} text />
       </ul>
 
       <div className={ui.section}>
@@ -401,7 +401,7 @@ function UserBody({ view }: { view: TrainingUserView }) {
         <h4 className={ui.sectionTitle}>Последние попытки</h4>
         {view.attempts.length ? (
           <div className={styles.dashTableScroll}>
-            <table className={styles.dashTable} data-testid="training-attempts">
+            <table className={`${styles.dashTable} ${ui.wide}`} data-testid="training-attempts">
               <thead>
                 <tr>
                   <th scope="col">Когда</th>
@@ -412,7 +412,7 @@ function UserBody({ view }: { view: TrainingUserView }) {
                 </tr>
               </thead>
               <tbody>
-                {view.attempts.map((a) => (
+                {view.attempts.slice(0, 10).map((a) => (
                   <tr key={a.id}>
                     <td data-label="Когда">{dateLabel(a.finishedAt)}</td>
                     <td data-label="Режим">{MODE_LABELS[a.mode] ?? a.mode}</td>

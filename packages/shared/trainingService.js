@@ -126,8 +126,16 @@ export function viewTrainingOrg({ org, staff, doc, nowMs, roleOf }) {
     summary: summarizeCompanyTraining(rows.map((r) => r.summary), nowMs),
     employees: rows
       .map((r) => compactRow(r.u, roleOf(r.u.role), r.summary))
-      .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName), 'ru')),
+      .sort(byActivityThenName),
   };
+}
+
+/** Сначала те, кто занимался (свежие выше), потом не начавшие, внутри — по имени. */
+function byActivityThenName(a, b) {
+  const x = a.lastActivityAt ? Date.parse(a.lastActivityAt) : 0;
+  const y = b.lastActivityAt ? Date.parse(b.lastActivityAt) : 0;
+  if (x !== y) return y - x;
+  return String(a.displayName).localeCompare(String(b.displayName), 'ru');
 }
 
 export function companyTrainingSummary({ org, staff, doc, nowMs }) {

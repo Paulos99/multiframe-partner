@@ -151,6 +151,10 @@ describe('обучение в аналитике', { concurrency: false }, () =>
     assert.equal((await call('GET', '/training/org?orgId=../x', { token: t.admin })).statusCode, 400);
     const org = readJson(await call('GET', '/training/org?orgId=org_demo', { token: t.admin }));
     assert.equal(org.org.id, 'org_demo');
+    assert.equal(org.org.name, 'Потолки Столицы', 'название компании берётся из настроек');
+    assert.ok(list.companies.every((c) => c.name && c.name !== c.id));
+    const times = org.employees.map((e) => (e.lastActivityAt ? Date.parse(e.lastActivityAt) : 0));
+    assert.deepEqual(times, [...times].sort((a, b) => b - a), 'сначала те, кто занимался недавно');
     assert.equal((await call('GET', `/training/user/${ids.crew1}`, { token: t.admin })).statusCode, 200);
     assert.equal((await call('GET', '/training/user/u_nope', { token: t.admin })).statusCode, 404);
   });
