@@ -16,21 +16,6 @@ async function enter(page: Page, role: string) {
 }
 
 const nav = (page: Page) => page.getByRole('complementary', { name: 'Разделы кабинета' });
-/**
- * Влезают ли шесть вкладок, зависит от шрифта. На телефонах это Roboto / SF, а на CI
- * system-ui — широкий DejaVu. Для проверок «влезает без прокрутки» берём Arial
- * (на CI — метрически совместимый Liberation Sans), близкий по ширине к Roboto.
- */
-async function pinPhoneFont(page: Page) {
-  await page.addInitScript(() => {
-    document.addEventListener('DOMContentLoaded', () => {
-      const style = document.createElement('style');
-      style.textContent = ':root, body { --font: Arial, sans-serif !important; }';
-      document.head.append(style);
-    });
-  });
-}
-
 const strip = (page: Page) => nav(page).locator('[class*="scroll"]').first();
 
 /** Прокрутка ленты вкладок к началу или к концу (без анимации). */
@@ -114,39 +99,11 @@ for (const width of [360, 390]) {
   }
 }
 
-test('360px · admin: все шесть вкладок помещаются без прокрутки панели', async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 800 });
-  await pinPhoneFont(page);
-  await enter(page, 'admin');
-  const tabs = nav(page).getByRole('tab');
-  await expect(tabs).toHaveCount(6);
-  for (let i = 0; i < 6; i += 1) await expect(tabs.nth(i)).toBeInViewport({ ratio: 1 });
-});
-
-test('360px · admin: вкладки стоят ровно, без прокрутки и затухания', async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 800 });
-  await pinPhoneFont(page);
-  await enter(page, 'admin');
-  const el = strip(page);
-  expect(await el.evaluate((e) => e.scrollWidth - e.clientWidth)).toBeLessThanOrEqual(1);
-  await expect(el).not.toHaveAttribute('data-overflow', /.*/);
-  await expect(el).not.toHaveAttribute('data-fade-end', /.*/);
-  expect(await el.evaluate((e) => getComputedStyle(e).maskImage)).toBe('none');
-  // Равномерно: промежутки между вкладками одинаковые, ряд занимает всю ширину.
-  const rects = await nav(page)
-    .getByRole('tab')
-    .evaluateAll((tabs) => tabs.map((t) => t.getBoundingClientRect()).map((r) => [r.left, r.right]));
-  const gaps = rects.slice(1).map((r, i) => r[0]! - rects[i]![1]!);
-  for (const g of gaps) expect(Math.abs(g - gaps[0]!)).toBeLessThanOrEqual(1);
-  expect(rects.at(-1)![1]).toBeGreaterThan(360 - 24);
-  await expectNoOverlap(page);
-});
-
-for (const width of [360, 390]) {
-  test(`${width}px · owner: панель — горизонтальная лента, «Профиль» последний и доступен прокруткой`, async ({ page }) => {
+for (const [role, width] of [['owner', 360], ['owner', 390], ['admin', 360], ['admin', 390]] as const) {
+  test(`${width}px · ${role}: панель — горизонтальная лента, «Профиль» последний и доступен прокруткой`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await enter(page, 'owner');
+    await enter(page, role);
     const el = strip(page);
     const tabs = nav(page).getByRole('tab');
     await expect(tabs).toHaveCount(7);
