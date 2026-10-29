@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 process.env.PARTNERS_BUCKET = 'multiframe-partner-data';
+process.env.DEMO_SEED = '1';
 process.env.MATERIALS_BUCKET = 'multiframe-partner-materials';
 process.env.YC_ACCESS_KEY_ID = 'YCAJEtestaccesskey123';
 process.env.YC_SECRET_ACCESS_KEY = 'test-secret-key-with-enough-length';

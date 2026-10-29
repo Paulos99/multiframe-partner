@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+apps/web/test-results
+e2e
+docs
+.env
+.env.*
+deploy/.env
+.release

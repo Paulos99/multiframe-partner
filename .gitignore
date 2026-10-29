@@ -19,3 +19,6 @@ crew-test-pdfs/
 
 apps/web/test-results/
 apps/web/playwright-report/
+
+.release/
+deploy/.env

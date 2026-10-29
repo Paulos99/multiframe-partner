@@ -1,0 +1,34 @@
+# ПРИМЕР рабочего процесса для репозитория команды, которая размещает сервис.
+# Он не запускается из этого репозитория (лежит вне .github/workflows). Скопируйте в свой CI и подставьте значения.
+# Идея: по ручному запуску с номером выпуска зайти на сервер по SSH и выполнить ./deploy/release.sh <метка>.
+# Код не редактируется: на сервере лежит чистая копия репозитория владельца, скрипт сам берёт нужную метку.
+name: Установка выпуска кабинета
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Метка выпуска, например v1.2.0 (для отката — предыдущая метка)'
+        required: true
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production        # включите ручное подтверждение в настройках окружения
+    steps:
+      - name: Ключ SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Установка выпуска
+        env:
+          TAG: ${{ inputs.tag }}
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$ ]] || { echo "Неверное имя выпуска"; exit 1; }
+          ssh "$TARGET" "cd /opt/multiframe-cabinet && ./deploy/release.sh $TAG"

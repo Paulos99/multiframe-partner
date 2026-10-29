@@ -392,7 +392,7 @@ test('сервер: реальные события с чужими id попа�
   }
   expect(
     (
-      await request.post('http://127.0.0.1:4181/analytics/events', {
+      await request.post('http://127.0.0.1:4181/__seed-events', {
         data: {
           events: [
             item({

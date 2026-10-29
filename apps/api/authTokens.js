@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 
+let warnedShortKey = false;
+
 function currentKey() {
   const key = process.env.JWT_SECRET;
   if (!key) throw new Error('JWT_SECRET must be configured');
+  if (key.length < 32 && !warnedShortKey) {
+    warnedShortKey = true;
+    console.warn('JWT_SECRET короче 32 символов: замените на случайный ключ (openssl rand -hex 32)');
+  }
   return key;
 }
 

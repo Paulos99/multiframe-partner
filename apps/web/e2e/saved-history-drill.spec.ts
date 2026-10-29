@@ -173,7 +173,8 @@ test('сохранённая история: плитки и рейтинг из
     path: '/opt/cursor/artifacts/screenshots/analytics-room-card.png',
     fullPage: true,
   });
-  expect(dashboardStatuses).toContain(200);
+  // Без входа сводка с сервера закрыта (раньше роль принималась из заголовков): интерфейс берёт данные из локальной демонстрации.
+  expect(dashboardStatuses.every((status) => status === 200 || status === 401)).toBe(true);
   expect(drillRequests).toEqual([]);
 
   // Без ?debug=1 служебного абзаца нет, у рейтинга площади главное число своё, с единицей.

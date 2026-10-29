@@ -99,6 +99,18 @@ export function trackPartnerAnalytics(input: {
   void postEvents([event]);
 }
 
+/** С токеном сервер сам подставляет личность и организацию; без токена событие считается анонимным. */
+function analyticsPostHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const token = localStorage.getItem('mf_partner_token_v1');
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    /* ignore */
+  }
+  return headers;
+}
+
 async function postEvents(events: AnalyticsEvent[]): Promise<void> {
   const queued = peekAnalyticsQueue();
   const batch = [...queued, ...events];
@@ -110,7 +122,7 @@ async function postEvents(events: AnalyticsEvent[]): Promise<void> {
   try {
     const res = await fetch(`${API_BASE}/analytics/events`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: analyticsPostHeaders(),
       body: JSON.stringify({ events: batch }),
     });
     if (!res.ok) throw new Error(`analytics ${res.status}`);

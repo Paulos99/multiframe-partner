@@ -1,3 +1,4 @@
+import { escapeHtml } from '../core/html-escape.js';
 import { Room, Opening } from '../core/room-model.js';
 import { OPENING_TYPES, VALIDATION } from '../core/constants.js';
 import { roundMeters } from '../core/geometry.js';
@@ -146,7 +147,7 @@ export function bindOpeningForm(form, getRoom, planEditor, onChange, onRender, o
 
     if (wallSelect) {
       wallSelect.innerHTML = room.walls
-        .map((w) => `<option value="${w.id}">${w.label} (${w.length.toFixed(2)} м)</option>`)
+        .map((w) => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.label)} (${Number(w.length).toFixed(2)} м)</option>`)
         .join('');
       if (selectedId) wallSelect.value = selectedId;
     }
@@ -157,8 +158,8 @@ export function bindOpeningForm(form, getRoom, planEditor, onChange, onRender, o
       .map((w) => {
         const active = w.id === selectedId ? ' active' : '';
         const short = w.label.replace('Стена ', '');
-        return `<button type="button" class="wall-chip${active}" data-wall-id="${w.id}" role="tab" aria-selected="${w.id === selectedId}">
-          <span>${short}</span>
+        return `<button type="button" class="wall-chip${active}" data-wall-id="${escapeHtml(w.id)}" role="tab" aria-selected="${w.id === selectedId}">
+          <span>${escapeHtml(short)}</span>
           <span class="wall-chip-meta">${w.length.toFixed(1)} м</span>
         </button>`;
       })
@@ -192,9 +193,9 @@ export function bindOpeningForm(form, getRoom, planEditor, onChange, onRender, o
         const label = o.type === OPENING_TYPES.DOOR ? 'Дверь' : 'Окно';
         const selected = o.id === editingId ? ' opening-item--selected' : '';
         const shortWall = wall?.label.replace('Стена ', '') ?? o.wallId;
-        return `<div class="opening-item${selected}" data-id="${o.id}" role="button" tabindex="0">
-          <span>${label} · ${shortWall} · ${o.width}×${o.height} м</span>
-          <button type="button" class="btn-icon btn-remove-opening" data-id="${o.id}" title="Удалить">×</button>
+        return `<div class="opening-item${selected}" data-id="${escapeHtml(o.id)}" role="button" tabindex="0">
+          <span>${label} · ${escapeHtml(shortWall)} · ${Number(o.width)}×${Number(o.height)} м</span>
+          <button type="button" class="btn-icon btn-remove-opening" data-id="${escapeHtml(o.id)}" title="Удалить">×</button>
         </div>`;
       })
       .join('');
