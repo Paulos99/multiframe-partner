@@ -28,6 +28,10 @@ services:
         VITE_BASE: ${VITE_BASE:-/cabinet}
         VITE_API_URL: ${VITE_API_URL:-/cabinet-api}
         VITE_DISABLE_DEMO: ${VITE_DISABLE_DEMO:-1}
+        VITE_YM_ID: ${VITE_YM_ID:-}
+        VITE_ANALYTICS_INGEST_URL: ${VITE_ANALYTICS_INGEST_URL:-}
+        VITE_STP_PROBLEMOMER_URL: ${VITE_STP_PROBLEMOMER_URL:-}
+        VITE_STP_CALCULATOR_URL: ${VITE_STP_CALCULATOR_URL:-}
     restart: unless-stopped
     depends_on:
       - api

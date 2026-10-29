@@ -10,7 +10,7 @@
 
 - Linux, Docker с плагином `docker compose`, `git`, `curl`.
 - Внешний обратный прокси с HTTPS (nginx/Caddy/Traefik), который уже обслуживает `stp-multiframe.ru`.
-- S3-совместимое хранилище и два бакета (кабинет и материалы) либо ваша база по [DATA_LAYER.md](DATA_LAYER.md).
+- S3-совместимое хранилище и два бакета (кабинет и материалы) либо ваша база по [DATA_LAYER.md](DATA_LAYER.md). Кабинет целиком (интерфейс, API, хранилище) живёт у вас; сервер стенда владельца не нужен. Полный порядок и проверки — [SELF_HOST.md](SELF_HOST.md).
 - Доступ на чтение к репозиторию `https://github.com/Paulos99/multiframe-partner` (он открытый).
 
 ## 1. Первая установка (один раз)
@@ -25,6 +25,9 @@ chmod 600 deploy/.env
 # Заполните deploy/.env: секреты (openssl rand -hex 32 — для каждого свой), бакеты, ключи хранилища,
 # CORS_ORIGIN=https://stp-multiframe.ru, ADMIN_BOOTSTRAP_LOGIN / ADMIN_BOOTSTRAP_PASSWORD.
 # Названия всех переменных — в ENV.md. Значения не присылайте владельцу и не коммитьте.
+
+# Перед первым запуском проверьте хранилище (SELF_HOST.md, шаг 4):
+# docker compose --env-file deploy/.env -f deploy/docker-compose.yml run --rm --no-deps api node checkStorage.mjs
 
 ./deploy/release.sh v1.0.0        # подставьте актуальную метку из раздела «Выпуски» на GitHub
 ```
