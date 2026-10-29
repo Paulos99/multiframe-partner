@@ -7,6 +7,31 @@ import type { ObjectionsFile, QuizFile, ScenariosFile, ScoringFile, TrainerConte
 
 export type RawContent = { objections: ObjectionsFile; scenarios: ScenariosFile; quiz: QuizFile; scoring: ScoringFile };
 
+/**
+ * Возражение с открытым вопросом (`openIssues`) ждёт решения методолога и в тренажёре скрыто:
+ * нет в колоде, банке и сценариях. Сейчас это «А она не загорится?» (документы на горючесть).
+ */
+export function hideOpenIssues(raw: RawContent): { content: RawContent; hidden: TrainerContent['hidden'] } {
+  const hiddenObjections = raw.objections.objections.filter((o) => (o.openIssues ?? []).length > 0);
+  if (!hiddenObjections.length) return { content: raw, hidden: [] };
+  const ids = new Set(hiddenObjections.map((o) => o.id));
+  return {
+    hidden: hiddenObjections.map((o) => ({ id: o.id, title: o.panel.title, issues: o.openIssues ?? [] })),
+    content: {
+      ...raw,
+      objections: { ...raw.objections, objections: raw.objections.objections.filter((o) => !ids.has(o.id)) },
+      scenarios: {
+        ...raw.scenarios,
+        scenarios: raw.scenarios.scenarios.map((s) => ({ ...s, steps: s.steps.filter((st) => !ids.has(st.objectionId)) })),
+      },
+      quiz: {
+        ...raw.quiz,
+        questions: raw.quiz.questions.map((q) => ({ ...q, relatedObjectionIds: q.relatedObjectionIds.filter((id) => !ids.has(id)) })),
+      },
+    },
+  };
+}
+
 /** Хэш (FNV-1a) от четырёх файлов: версия содержимого в каждой попытке. */
 export function contentVersionOf(raw: RawContent): string {
   const text = JSON.stringify([raw.objections, raw.scenarios, raw.quiz, raw.scoring]);
@@ -19,7 +44,8 @@ export function contentVersionOf(raw: RawContent): string {
 }
 
 export function buildContent(raw: RawContent): TrainerContent {
-  return { ...raw, contentVersion: contentVersionOf(raw) };
+  const { content, hidden } = hideOpenIssues(raw);
+  return { ...content, contentVersion: contentVersionOf(raw), hidden };
 }
 
 let pending: Promise<TrainerContent> | null = null;

@@ -1,26 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { buildDrillAttempt, drillPhrasing } from './attempts';
-import { DRILL_CRITERIA, answerError, buildDeck, evaluateDrill, wordCount, MIN_WORDS } from './engine';
-import { Fold, Flags, Highlighted, Page, Points, Quotes, SavedNote, Score, SelfAssess, StepBar, go, useWideScreen } from './ui';
+import { drillChoice, drillLines, errorLabel, makePick, scoreChoices } from './choice';
+import { ChoiceBlock, PracticeBox } from './ChoiceParts';
+import { buildDeck } from './engine';
+import { Fold, HintPoints, Page, Quotes, StepBar, go } from './ui';
+import { CriteriaList, ResultHead } from './Results';
 import { SettingsIcon } from '../icons';
 import { useTrainer } from './TrainerContext';
-import type { CriterionId, LearningAttempt, Objection, Scores } from './types';
+import type { AttemptAnswer, LearningAttempt, Objection, Pick } from './types';
 import styles from './Trainer.module.css';
 
 export type DrillSession = {
   deck: string[];
   phrasings: number[];
   index: number;
-  phase: 'beat1' | 'beat2' | 'review' | 'saved' | 'summary';
-  beat1: string;
-  beat2: string;
-  skipped: boolean;
-  manual: boolean;
+  phase: 'beat1' | 'beat2' | 'review' | 'summary';
+  /** Выборы по текущему возражению (после первой реплики один, после второй два). */
+  picks: Pick[];
   startedAt: number;
-  results: { objectionId: string; total: number; passed: boolean; skipped: boolean }[];
+  cardStartedAt: number;
+  results: { objectionId: string; attempt: LearningAttempt }[];
   /** Только одна карточка (из банка или после ошибки в викторине). */
   single: boolean;
-  lastAttempt: LearningAttempt | null;
   id: number;
 };
 
@@ -36,15 +37,12 @@ export function useStartDrill() {
       deck: deck.map((o) => o.id),
       phrasings: deck.map((o) => drillPhrasing(o, cardsMap, t.who.userId)),
       index: 0,
-      phase: t.settings.autoScoring ? 'beat1' : 'review',
-      beat1: '',
-      beat2: '',
-      skipped: false,
-      manual: !t.settings.autoScoring,
+      phase: 'beat1',
+      picks: [],
       startedAt: now.getTime(),
+      cardStartedAt: now.getTime(),
       results: [],
       single: Boolean(objectionId),
-      lastAttempt: null,
       id: now.getTime(),
     };
   };
@@ -73,8 +71,16 @@ export function DrillScreen({
   if (!session) return null;
   if (session.phase === 'summary') return <Summary session={session} setSession={setSession} />;
   const o = t.content.objections.objections.find((x) => x.id === session.deck[session.index]);
-  if (!o) return null;
-  return <Card key={`${session.id}-${session.index}-${session.startedAt}`} session={session} setSession={setSession} objection={o} onOpenSettings={onOpenSettings} />;
+  if (!o) return <EmptyDeck />;
+  return <Card key={`${session.id}-${session.index}-${session.cardStartedAt}`} session={session} setSession={setSession} objection={o} onOpenSettings={onOpenSettings} />;
+}
+
+function EmptyDeck() {
+  return (
+    <Page title="Быстрая отработка" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }}>
+      <p className={styles.notice}>Для вашей роли пока нет возражений. Включите «Показывать материалы всех ролей» в настройках подхода.</p>
+    </Page>
+  );
 }
 
 function Card({
@@ -90,108 +96,16 @@ function Card({
 }) {
   const t = useTrainer();
   const phrasing = session.phrasings[session.index] ?? 0;
-  const [text, setText] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const beatStart = useRef(Date.now());
-  const msRef = useRef<[number, number]>([0, 0]);
-  const area = useRef<HTMLTextAreaElement>(null);
+  const lines = drillLines(o, phrasing);
   const total = session.deck.length;
   const phase = session.phase;
-  const wide = useWideScreen();
-
-  useEffect(() => {
-    if (phase === 'beat1' || phase === 'beat2') {
-      beatStart.current = Date.now();
-      area.current?.focus();
-    }
-  }, [phase]);
-
-  const cardsMap = useMemo(() => new Map(t.cards.map((c) => [c.key, c])), [t.cards]);
-  const evalResult = useMemo(
-    () => (phase === 'review' || phase === 'saved' ? evaluateDrill(o, phrasing, session.beat1, session.beat2, t.content, session.skipped) : null),
-    [phase, o, phrasing, session.beat1, session.beat2, session.skipped, t.content],
-  );
-
-  async function save(selfScores: Scores | null, selfNotes: Partial<Record<CriterionId, string>>, skipped: boolean) {
-    setBusy(true);
-    try {
-      const built = buildDrillAttempt({
-        who: t.who,
-        content: t.content,
-        startedAt: new Date(session.startedAt),
-        now: new Date(),
-        cards: cardsMap,
-        objection: o,
-        phrasing,
-        beat1: session.beat1,
-        beat2: session.beat2,
-        ms: msRef.current,
-        skipped,
-        manual: session.manual,
-        selfScores,
-        selfNotes,
-      });
-      await t.commit(built);
-      setSession({
-        ...session,
-        phase: 'saved',
-        lastAttempt: built.attempt,
-        results: [...session.results, { objectionId: o.id, total: built.attempt.total, passed: built.attempt.passed, skipped }],
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function submit() {
-    const problem = answerError(text);
-    if (problem) {
-      setError(problem);
-      area.current?.focus();
-      return;
-    }
-    setError(null);
-    const ms = Date.now() - beatStart.current;
-    if (phase === 'beat1') {
-      msRef.current[0] = ms;
-      setSession({ ...session, phase: 'beat2', beat1: text.trim() });
-      setText('');
-    } else {
-      msRef.current[1] = ms;
-      setSession({ ...session, phase: 'review', beat2: text.trim() });
-    }
-  }
-
-  function dontKnow() {
-    setError(null);
-    setSession({ ...session, phase: 'review', skipped: true, beat1: '', beat2: '' });
-  }
-
-  // «Не знаю»: сразу пишем попытку с одним баллом и показываем эталон.
-  const savedSkip = useRef(false);
-  useEffect(() => {
-    if (phase === 'review' && session.skipped && !savedSkip.current) {
-      savedSkip.current = true;
-      void save(null, {}, true);
-    }
-  }, [phase, session.skipped]);
-
-  const clientLine = phase === 'beat2' ? o.pushback : o.clientPhrasing[phrasing];
-  const words = wordCount(text);
+  const saving = useRef(false);
   const last = session.index + 1 >= total;
-
-  function next() {
-    if (last) setSession({ ...session, phase: 'summary' });
-    else setSession({ ...session, index: session.index + 1, phase: t.settings.autoScoring ? 'beat1' : 'review', beat1: '', beat2: '', skipped: false, lastAttempt: null, startedAt: Date.now() });
-  }
-  function repeat() {
-    setSession({ ...session, phase: t.settings.autoScoring ? 'beat1' : 'review', beat1: '', beat2: '', skipped: false, lastAttempt: null, startedAt: Date.now(), results: session.results.slice(0, -1) });
-  }
+  const attempt = phase === 'review' ? (session.results[session.results.length - 1]?.attempt ?? null) : null;
 
   const header = (
     <StepBar
-      current={phase === 'saved' ? session.index + 1 : session.index}
+      current={phase === 'review' ? session.index + 1 : session.index}
       total={total}
       label={`Возражение ${session.index + 1} из ${total}`}
       extra={
@@ -203,176 +117,222 @@ function Card({
     />
   );
 
+  async function finish(picks: Pick[]) {
+    if (saving.current) return;
+    saving.current = true;
+    try {
+      const built = buildDrillAttempt({
+        who: t.who,
+        content: t.content,
+        startedAt: new Date(session.cardStartedAt),
+        now: new Date(),
+        cards: new Map(t.cards.map((c) => [c.key, c])),
+        objection: o,
+        picks: [picks[0], picks[1]],
+      });
+      await t.commit(built);
+      setSession({ ...session, phase: 'review', picks, results: [...session.results, { objectionId: o.id, attempt: built.attempt }] });
+    } finally {
+      saving.current = false;
+    }
+  }
+
+  function next() {
+    if (last) setSession({ ...session, phase: 'summary' });
+    else setSession({ ...session, index: session.index + 1, phase: 'beat1', picks: [], cardStartedAt: Date.now() });
+  }
+  function repeat() {
+    setSession({ ...session, phase: 'beat1', picks: [], cardStartedAt: Date.now(), results: session.results.slice(0, -1) });
+  }
+
   if (phase === 'beat1' || phase === 'beat2') {
+    const beat: 1 | 2 = phase === 'beat1' ? 1 : 2;
     return (
-      <Page title="Быстрая отработка" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Ответьте клиенту так, как сказали бы по телефону: сначала на возражение, потом на повтор. Затем разбор.">
+      <Page title="Быстрая отработка" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }} lead="Клиент возражает. Выберите ответ из четырёх: сначала на возражение, потом на повтор. Затем разбор.">
         {header}
         <div className={styles.twoCols}>
           <div className={styles.talk}>
-            <p className={styles.beat}>{phase === 'beat1' ? 'Шаг 1 из 2 · Реплика клиента' : 'Шаг 2 из 2 · Клиент не согласен и повторяет'}</p>
-            <blockquote className={styles.client}>{clientLine}</blockquote>
-            <label className={styles.answerLabel} htmlFor="drill-answer">
-              Ваш ответ клиенту
-            </label>
-            <textarea
-              id="drill-answer"
-              ref={area}
-              className={styles.answer}
-              rows={6}
-              value={text}
-              placeholder="Напишите своими словами, не меньше восьми слов"
-              onChange={(e) => {
-                setText(e.target.value);
-                if (error) setError(null);
+            <p className={styles.beat}>{beat === 1 ? 'Реплика 1 из 2 · Клиент возражает' : 'Реплика 2 из 2 · Клиент не согласен и повторяет'}</p>
+            <blockquote className={styles.client}>{lines[beat - 1]}</blockquote>
+            <ChoiceBlock
+              key={`${session.cardStartedAt}-${beat}`}
+              choice={drillChoice(o, beat)}
+              seed={`${session.id}:${session.cardStartedAt}:${o.id}:${beat}`}
+              quotes={o.sourceQuotes}
+              videos={t.content.objections.videos}
+              copyable={t.role === 'stp_admin'}
+              nextLabel={beat === 1 ? 'Дальше: клиент повторяет' : 'К разбору'}
+              onDone={(tries) => {
+                const pick = makePick({ stepId: o.id, objectionId: o.id, beat, clientLine: lines[beat - 1], tries, choice: drillChoice(o, beat) });
+                if (beat === 1) setSession({ ...session, phase: 'beat2', picks: [pick] });
+                else void finish([...session.picks, pick]);
               }}
-              aria-describedby="drill-count"
-              aria-invalid={error ? true : undefined}
             />
-            <p id="drill-count" className={styles.count}>
-              Слов: {words} из {MIN_WORDS}
-            </p>
-            {error ? (
-              <p className={styles.error} role="alert">
-                {error}
-              </p>
-            ) : null}
-            <div className={styles.stickyBar}>
-              <button type="button" className={styles.primary} onClick={submit}>
-                Ответить
-              </button>
-              <button type="button" className={styles.secondary} onClick={dontKnow}>
-                Не знаю
-              </button>
-            </div>
           </div>
           <aside className={styles.side} aria-label="Подсказки">
-            <details key={wide ? 'wide' : 'narrow'} open={wide}>
-              <summary>На что смотрим</summary>
-              <ul>
-                <li>Вы признали позицию клиента и повторили его слова.</li>
-                <li>Назвали факты из обучающих видео, а не общие слова.</li>
-                <li>Не пообещали тишину и не назвали чужие цифры.</li>
-                <li>Показали выгоду для клиента.</li>
-              </ul>
-              <p className={styles.hint}>Тема: {t.content.objections.refusalReasons.find((r) => r.key === o.refusalReasonKey)?.title}</p>
-            </details>
+            <HelpAside o={o} />
           </aside>
         </div>
       </Page>
     );
   }
 
-  // разбор
-  const answered = !session.skipped && !session.manual;
-  const patterns = (beat: 1 | 2) => o.requiredPoints.filter((p) => p.beat === beat).flatMap((p) => p.anyOf);
-  const attempt = session.lastAttempt;
   return (
     <Page title="Разбор ответа" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }}>
       {header}
-      <div className={styles.twoCols}>
-        <div className={styles.review}>
-          {answered ? (
-            <section aria-label="Ваш ответ" className={styles.block}>
-              <h4>Ваш ответ</h4>
-              <p className={styles.client}>Клиент: {o.clientPhrasing[phrasing]}</p>
-              <p className={styles.mine}>
-                <Highlighted text={session.beat1} patterns={patterns(1)} />
-              </p>
-              <p className={styles.client}>Клиент: {o.pushback}</p>
-              <p className={styles.mine}>
-                <Highlighted text={session.beat2} patterns={patterns(2)} />
-              </p>
-            </section>
-          ) : (
-            <p className={styles.notice}>
-              {session.skipped ? 'Вы ответили «Не знаю». Это один балл. Изучите эталон ниже и повторите карточку позже.' : 'Ответ даёте устно. Сравните его с эталоном и оцените себя по описаниям.'}
-            </p>
-          )}
-          {answered && evalResult ? (
-            <>
-              <section aria-label="Пункты ответа" className={styles.block}>
-                <h4>Что названо · {evalResult.matchedPointIds.length} из {o.requiredPoints.length}</h4>
-                <Points objection={o} matched={evalResult.matchedPointIds} content={t.content} />
-              </section>
-              <section aria-label="Нарушения" className={styles.block}>
-                <h4>Что нарушено</h4>
-                <Flags flags={evalResult.flags} content={t.content} objection={o} />
-              </section>
-            </>
-          ) : null}
-          <section aria-label="Эталон" className={styles.block}>
-            <h4>Эталон ответа</h4>
-            <p className={styles.beat}>На первую реплику</p>
-            <p className={styles.refAnswer}>{o.referenceAnswer}</p>
-            <p className={styles.beat}>На повтор клиента</p>
-            <p className={styles.refAnswer}>{o.pushbackReferenceAnswer}</p>
-          </section>
-          <Fold title="Из видео" hint={`цитат: ${o.sourceQuotes.length}`}>
-            <Quotes quotes={o.sourceQuotes} videos={t.content.objections.videos} copyable={t.role === 'stp_admin'} />
-            <p className={styles.hint}>Видео лежат в разделе «Материалы». Если ролик не открывается без сети, цитаты выше остаются доступны.</p>
-          </Fold>
-          <Fold title="Типичная ошибка">
-            <p className={styles.plain}>{o.commonMistake}</p>
-          </Fold>
-        </div>
-        <div className={styles.reviewSide}>
-          {phase === 'review' && !session.skipped ? (
-            <SelfAssess
-              criteria={DRILL_CRITERIA}
-              content={t.content}
-              auto={session.manual ? {} : (evalResult?.autoScores ?? {})}
-              busy={busy}
-              onSubmit={(scores, notes) => void save(scores, notes, false)}
-            />
-          ) : null}
-          {phase === 'saved' && attempt ? (
-            <section className={styles.result} aria-label="Итог карточки" aria-live="polite">
-              {attempt.selfScores ? <SavedNote /> : <SavedNote>Попытка сохранена.</SavedNote>}
-              <h4>Итог по карточке</h4>
-              <p className={styles.bigScore}>
-                <Score value={attempt.total} /> <span>из 5</span>
-              </p>
-              <p className={attempt.passed ? styles.okLine : styles.failLine}>{attempt.passed ? '✔ Засчитано' : '✖ Не засчитано'}</p>
-              {attempt.autoScores.objection !== undefined && attempt.selfScores ? (
-                <p className={styles.hint}>Предварительная оценка и ваша сохранены отдельно.</p>
-              ) : null}
-              <div className={`${styles.actions} ${styles.stickyBar}`}>
-                <button type="button" className={styles.primary} onClick={next}>
-                  {last ? 'Закончить подход' : 'Следующее возражение'}
-                </button>
-                <button type="button" className={styles.secondary} onClick={repeat}>
-                  Повторить это
-                </button>
-                {!last ? (
-                  <button type="button" className={styles.secondary} onClick={() => setSession({ ...session, phase: 'summary' })}>
-                    Закончить
-                  </button>
-                ) : null}
-              </div>
-            </section>
-          ) : null}
-        </div>
-      </div>
+      <Review session={session} objection={o} attempt={attempt} lines={lines} last={last} next={next} repeat={repeat} setSession={setSession} />
     </Page>
+  );
+}
+
+function HelpAside({ o }: { o: Objection }) {
+  const t = useTrainer();
+  return (
+    <details open>
+      <summary>Как это работает</summary>
+      <ul>
+        <li>В зачёт идёт первый выбор в каждой реплике.</li>
+        <li>Если ошиблись, покажем, почему вариант не подходит, и дадим выбрать снова.</li>
+        <li>Порядок вариантов каждый раз разный: смотрите на смысл, а не на положение.</li>
+      </ul>
+      <p className={styles.hint}>Тема: {t.content.objections.refusalReasons.find((r) => r.key === o.refusalReasonKey)?.title}</p>
+    </details>
+  );
+}
+
+function Review({
+  session,
+  objection: o,
+  attempt,
+  lines,
+  last,
+  next,
+  repeat,
+  setSession,
+}: {
+  session: DrillSession;
+  objection: Objection;
+  attempt: LearningAttempt | null;
+  lines: [string, string];
+  last: boolean;
+  next: () => void;
+  repeat: () => void;
+  setSession: (s: DrillSession | null) => void;
+}) {
+  const t = useTrainer();
+  const picks = attempt?.picks ?? session.picks;
+  const options = useMemo(() => new Map([...o.choices.beat1.options, ...o.choices.beat2.options].map((x) => [x.id, x])), [o]);
+  const firstCount = picks.filter((p) => p.firstTry).length;
+  const mistakes = picks.flatMap((p, i) => (p.tries.length > 1 || !p.firstTry ? [{ p, i }] : []));
+  const saveAnswers = async (answers: AttemptAnswer[]) => {
+    if (!attempt) return;
+    const updated = { ...attempt, answers, synced: false };
+    await t.commit({ attempt: updated, cards: [] });
+    setSession({ ...session, results: session.results.map((r) => (r.attempt.id === attempt.id ? { ...r, attempt: updated } : r)) });
+  };
+  return (
+    <div className={`${styles.twoCols} ${styles.twoColsRev}`}>
+      <div className={styles.reviewSide}>
+        <section className={styles.result} aria-label="Итог карточки" aria-live="polite">
+          <ResultHead count={picks.length} firstTry={firstCount} passed={Boolean(attempt?.passed)} kind="objection" />
+          <div className={`${styles.actions} ${styles.stickyBar}`}>
+            <button type="button" className={styles.primary} onClick={next}>
+              {last ? 'Закончить подход' : 'Следующее возражение'}
+            </button>
+            <button type="button" className={styles.secondary} onClick={repeat}>
+              Повторить это
+            </button>
+            {!last ? (
+              <button type="button" className={styles.secondary} onClick={() => setSession({ ...session, phase: 'summary' })}>
+                Закончить
+              </button>
+            ) : null}
+          </div>
+        </section>
+      </div>
+      <div className={styles.review}>
+        <section aria-label="Верные ответы" className={styles.block}>
+          <h4>Верные ответы</h4>
+          {picks.map((p, i) => (
+            <div key={i} className={styles.dialogPair}>
+              <p className={styles.client}>Клиент: {lines[i]}</p>
+              <p className={styles.mine}>
+                <strong>{p.firstTry ? '✔ С первой попытки: ' : `✖ С ${p.tries.length}-й попытки: `}</strong>
+                {options.get(p.optionId)?.text}
+              </p>
+            </div>
+          ))}
+        </section>
+        {mistakes.length ? (
+          <section aria-label="Ошибки" className={styles.block}>
+            <h4>Какие ошибки выбраны</h4>
+            <ul className={styles.plainList}>
+              {mistakes.flatMap(({ p, i }) =>
+                p.tries
+                  .filter((tr) => !options.get(tr.optionId)?.correct)
+                  .map((tr) => {
+                    const op = options.get(tr.optionId);
+                    return (
+                      <li key={`${i}-${tr.optionId}`}>
+                        <strong>{errorLabel(op?.errorType)}.</strong> «{op?.text}» {op?.explanation}
+                      </li>
+                    );
+                  }),
+              )}
+            </ul>
+          </section>
+        ) : null}
+        <section aria-label="Эталон" className={styles.block}>
+          <h4>Эталон ответа</h4>
+          <p className={styles.beat}>На первую реплику</p>
+          <p className={styles.refAnswer}>{o.referenceAnswer}</p>
+          <p className={styles.beat}>На повтор клиента</p>
+          <p className={styles.refAnswer}>{o.pushbackReferenceAnswer}</p>
+        </section>
+        <Fold title="Что содержит хороший ответ" hint="подсказки, не оценка">
+          <HintPoints points={o.requiredPoints} />
+        </Fold>
+        <Fold title="Из видео и с сайтов" hint={`источников: ${o.sourceQuotes.length}`}>
+          <Quotes quotes={o.sourceQuotes} videos={t.content.objections.videos} copyable={t.role === 'stp_admin'} />
+          <p className={styles.hint}>Видео лежат в разделе «Материалы». Если ролик не открывается без сети, цитаты выше остаются доступны.</p>
+        </Fold>
+        <Fold title="Типичная ошибка">
+          <p className={styles.plain}>{o.commonMistake}</p>
+        </Fold>
+        <PracticeBox lines={lines} points={o.requiredPoints} onSave={saveAnswers} />
+      </div>
+    </div>
   );
 }
 
 function Summary({ session, setSession }: { session: DrillSession; setSession: (s: DrillSession | null) => void }) {
   const t = useTrainer();
   const results = session.results;
-  const avg = results.length ? results.reduce((s, r) => s + r.total, 0) / results.length : 0;
-  const passed = results.filter((r) => r.passed).length;
-  const repeatList = results.filter((r) => !r.passed);
+  const picks = results.flatMap((r) => r.attempt.picks ?? []);
+  const played = results.flatMap((r) => {
+    const o = t.content.objections.objections.find((x) => x.id === r.objectionId);
+    return o ? [...o.choices.beat1.options, ...o.choices.beat2.options] : [];
+  });
+  const score = scoreChoices(picks, played, t.content.scoring);
+  const passed = results.filter((r) => r.attempt.passed).length;
+  const repeatList = results.filter((r) => !r.attempt.passed);
   const start = useStartDrill();
   return (
     <Page title="Итог подхода" back={{ label: 'Тренажёр продаж', to: { page: 'home' } }}>
       <div className={styles.summary}>
-        <p className={styles.bigScore}>
-          <Score value={Math.round(avg * 100) / 100} /> <span>средний балл из 5</span>
-        </p>
-        <p>
-          Засчитано: <strong>{passed}</strong> из {results.length}
-        </p>
+        {results.length ? (
+          <>
+            <p className={styles.bigScore}>
+              <span className={styles.scoreNum}>{Math.round(score.share * 100)} %</span> <span>верно с первой попытки</span>
+            </p>
+            <p>
+              Верно с первого раза: <strong>{score.firstTryCount}</strong> из {score.count} реплик. Засчитано возражений: <strong>{passed}</strong> из {results.length}.
+            </p>
+            <CriteriaList scores={score.criteria} content={t.content} />
+          </>
+        ) : (
+          <p className={styles.notice}>В этом подходе вы не прошли ни одного возражения.</p>
+        )}
         {repeatList.length ? (
           <>
             <h4>Что повторить</h4>
@@ -380,8 +340,8 @@ function Summary({ session, setSession }: { session: DrillSession; setSession: (
               {repeatList.map((r) => {
                 const o = t.content.objections.objections.find((x) => x.id === r.objectionId);
                 return (
-                  <li key={r.objectionId}>
-                    <span>{o?.panel.title ?? r.objectionId}{r.skipped ? ' · «Не знаю»' : ''}</span>
+                  <li key={r.attempt.id}>
+                    <span>{o?.panel.title ?? r.objectionId}</span>
                     <button type="button" className={styles.linkBtn} onClick={() => { setSession(start(r.objectionId)); go({ page: 'drill', objectionId: r.objectionId }, 'replace'); }}>
                       Потренировать
                     </button>

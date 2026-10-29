@@ -1,26 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildScenarioAttempt } from './attempts';
-import { ROLEPLAY_CRITERIA, answerError, evaluateScenario, scenariosForRole, wordCount, MIN_WORDS } from './engine';
+import { useEffect, useMemo, useRef } from 'react';
+import { buildScenarioAttempt, scenarioCriteria, scenarioPlayed } from './attempts';
+import { errorLabel, makePick, scenarioSlots, slotChoice, slotClientLine, scoreChoices } from './choice';
+import { ChoiceBlock } from './ChoiceParts';
+import { scenariosForRole } from './engine';
+import { CriteriaList, ResultHead } from './Results';
 import { draftKey } from './store';
-import { scoreStep } from './scoring';
 import { useTrainer } from './TrainerContext';
-import { Fold, Flags, Page, SavedNote, Score, SelfAssess, StepBar, go } from './ui';
-import type { AttemptAnswer, CriterionId, LearningAttempt, Scenario, Scores } from './types';
+import { Fold, Page, StepBar, go } from './ui';
+import type { LearningAttempt, Pick, Scenario } from './types';
 import styles from './Trainer.module.css';
 
 export type ScenarioSession = {
   scenarioId: string;
-  stepIndex: number;
-  answers: AttemptAnswer[];
+  /** Завершённые выборы по порядку реплик; позиция в разговоре = их число. */
+  picks: Pick[];
   hintsUsed: string[];
   startedAt: number;
+  /** Реплика клиента после шага (показывается один раз, в черновик не пишется). */
   reaction: string | null;
   attempt: LearningAttempt | null;
+  id: number;
 };
 
 const stars = (n: number) => '●'.repeat(n) + '○'.repeat(Math.max(0, 5 - n));
 const DIFFICULTY = ['', 'очень лёгкий', 'лёгкий', 'средний', 'сложный', 'очень сложный'];
-
 export function ScenarioList() {
   const t = useTrainer();
   const list = scenariosForRole(t.content, t.role, t.settings.showAllRoles);
@@ -66,12 +69,12 @@ export function ScenarioSituation({ id, setSession }: { id: string; setSession: 
     }
     setSession({
       scenarioId: id,
-      stepIndex: fromDraft && draft ? draft.stepIndex : 0,
-      answers: fromDraft && draft ? draft.answers : [],
+      picks: fromDraft && draft ? draft.picks : [],
       hintsUsed: fromDraft && draft ? draft.hintsUsed : [],
       startedAt: fromDraft && draft ? new Date(draft.startedAt).getTime() : Date.now(),
       reaction: null,
       attempt: null,
+      id: Date.now(),
     });
     go({ page: 'scenario', id, step: 'talk' });
   };
@@ -92,11 +95,12 @@ export function ScenarioSituation({ id, setSession }: { id: string; setSession: 
         <p className={styles.chips}>
           <span className={styles.chip}>{s.callType}</span>
           <span className={styles.chip}>около {s.estimatedMinutes} мин</span>
-          <span className={styles.chip}>шагов: {s.steps.length + 1}</span>
+          <span className={styles.chip}>возражений: {s.steps.length}, затем следующий шаг</span>
         </p>
       </section>
       <section className={styles.block} aria-label="Что считается успехом">
         <h4>Что будет считаться успехом</h4>
+        <p className={styles.hint}>Клиент говорит, вы выбираете ответ из четырёх. В зачёт идёт первый выбор.</p>
         <ul>
           {s.successCriteria.map((c) => (
             <li key={c.id}>{c.text}</li>
@@ -131,54 +135,33 @@ function Missing() {
   );
 }
 
-export function ScenarioTalk({
-  id,
-  session,
-  setSession,
-}: {
-  id: string;
-  session: ScenarioSession | null;
-  setSession: (s: ScenarioSession | null) => void;
-}) {
+export function ScenarioTalk({ id, session, setSession }: { id: string; session: ScenarioSession | null; setSession: (s: ScenarioSession | null) => void }) {
   const t = useTrainer();
   const s = t.content.scenarios.scenarios.find((x) => x.id === id);
-  const [text, setText] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [hintOpen, setHintOpen] = useState(false);
-  const beatStart = useRef(Date.now());
-  const area = useRef<HTMLTextAreaElement>(null);
-
-  const valid = session && s && session.scenarioId === id;
+  const valid = Boolean(session && s && session.scenarioId === id);
+  const slots = useMemo(() => (s ? scenarioSlots(s) : []), [s]);
+  const finished = valid && session!.picks.length >= slots.length;
   useEffect(() => {
     if (!valid) go({ page: 'scenario', id, step: 'situation' }, 'replace');
-  }, [valid, id]);
-  useEffect(() => {
-    beatStart.current = Date.now();
-    setText('');
-    setHintOpen(false);
-    area.current?.focus();
-  }, [session?.stepIndex, session?.answers.length, session?.reaction]);
+    else if (finished && !session!.reaction) go({ page: 'scenario', id, step: 'result' }, 'replace');
+  }, [valid, finished, id]);
 
-  if (!valid || !s) return null;
+  if (!valid || !s || !session) return null;
   const objById = new Map(t.content.objections.objections.map((o) => [o.id, o]));
-  const isClosing = session.stepIndex >= s.steps.length;
-  const step = isClosing ? null : s.steps[session.stepIndex];
-  const stepKey = isClosing ? 'closing' : step!.id;
-  const doneBeats = session.answers.filter((a) => a.stepId === stepKey).length;
-  const beat: 1 | 2 = doneBeats >= 1 ? 2 : 1;
-  const obj = step ? objById.get(step.objectionId) : undefined;
-  const clientLine = isClosing ? s.closing.clientLine : beat === 1 ? (obj?.clientPhrasing[step!.clientPhrasingIndex] ?? '') : (obj?.pushback ?? '');
+  const stepsTotal = s.steps.length + 1;
+  const slot = slots[Math.min(session.picks.length, slots.length - 1)];
+  const stepNo = slot.beat === 'closing' ? stepsTotal : s.steps.findIndex((x) => x.id === slot.stepId) + 1;
+  const stepDone = finished ? stepsTotal : stepNo - 1;
 
   async function persist(next: ScenarioSession) {
     setSession(next);
-    if (next.stepIndex <= s!.steps.length) {
+    if (next.picks.length < slots.length) {
       await t.store.putDraft({
         key: draftKey(t.who.userId, id),
         userId: t.who.userId,
         scenarioId: id,
         savedAt: new Date().toISOString(),
-        stepIndex: next.stepIndex,
-        answers: next.answers.filter((a) => a.stepId !== 'closing'),
+        picks: next.picks,
         hintsUsed: next.hintsUsed,
         startedAt: new Date(next.startedAt).toISOString(),
       });
@@ -186,116 +169,77 @@ export function ScenarioTalk({
     }
   }
 
-  function submit() {
-    const problem = answerError(text);
-    if (problem) {
-      setError(problem);
-      area.current?.focus();
-      return;
+  function reactionAfter(picks: Pick[]): string | null {
+    const last = slots[picks.length - 1];
+    if (last.beat === 'closing') return s!.closing.afterCorrect;
+    if (last.beat === 2) {
+      const step = s!.steps.find((x) => x.id === last.stepId)!;
+      const both = picks.filter((p) => p.stepId === step.id).every((p) => p.firstTry);
+      return both ? step.afterPass : step.afterFail;
     }
-    setError(null);
-    const answer: AttemptAnswer = {
-      stepId: stepKey,
-      beat,
-      clientLine,
-      text: text.trim(),
-      ms: Date.now() - beatStart.current,
-      usedHint: step ? session!.hintsUsed.includes(step.id) : false,
-    };
-    const answers = [...session!.answers, answer];
-    if (isClosing) {
-      void persist({ ...session!, answers, reaction: null });
-      go({ page: 'scenario', id, step: 'result' });
-      return;
-    }
-    if (beat < step!.beats) {
-      void persist({ ...session!, answers });
-      return;
-    }
-    // шаг закончен: реакция клиента
-    const b1 = answers.find((a) => a.stepId === step!.id && a.beat === 1)?.text ?? '';
-    const b2 = answers.find((a) => a.stepId === step!.id && a.beat === 2)?.text ?? '';
-    const r = scoreStep(b1, b2, obj!, step!.clientPhrasingIndex, t.content.scoring);
-    const passed = r.cov >= 0.6 && !r.hits.some((h) => h.severity === 'critical');
-    void persist({ ...session!, answers, stepIndex: session!.stepIndex + 1, reaction: passed ? step!.afterPass : step!.afterFail });
+    return null;
   }
 
-  const transcript = session.answers.filter((a) => a.stepId !== stepKey || a.beat < beat);
-  const total = s.steps.length + 1;
+  const transcript = session.picks.map((p, i) => ({ p, text: slotChoice(s, slots[i]).options.find((o) => o.id === p.optionId)?.text ?? '' }));
+  const label = finished ? `Шаг ${stepsTotal} из ${stepsTotal}` : `Шаг ${stepNo} из ${stepsTotal}`;
 
   return (
     <Page title={s.title} back={{ label: 'Выйти (разговор сохранится)', to: { page: 'scenario', id, step: 'situation' } }}>
-      <StepBar current={Math.min(session.stepIndex, total)} total={total} label={`Шаг ${session.reaction ? session.stepIndex : Math.min(session.stepIndex + 1, total)} из ${total}`} />
+      <StepBar current={session.reaction && !finished ? stepDone + 1 : stepDone} total={stepsTotal} label={label} />
       {transcript.length ? (
         <ol className={styles.chat} aria-label="Разговор">
-          {transcript.map((a, i) => (
+          {transcript.map(({ p, text }, i) => (
             <li key={i}>
-              <p className={styles.client}>Клиент: {a.clientLine}</p>
-              <p className={styles.mine}>Вы: {a.text}</p>
+              <p className={styles.client}>Клиент: {p.clientLine}</p>
+              <p className={styles.mine}>Вы: {text}</p>
             </li>
           ))}
         </ol>
       ) : null}
       {session.reaction ? (
         <div className={styles.block} aria-live="polite">
-          <p className={styles.client}>Клиент: {session.reaction}</p>
+          <p className={styles.client}>{session.reaction.startsWith(s.persona.name) ? session.reaction : `Клиент: ${session.reaction}`}</p>
           <div className={styles.stickyBar}>
-            <button type="button" className={styles.primary} onClick={() => setSession({ ...session, reaction: null })}>
-              Дальше
+            <button
+              type="button"
+              className={styles.primary}
+              onClick={() => (finished ? go({ page: 'scenario', id, step: 'result' }) : setSession({ ...session, reaction: null }))}
+            >
+              {finished ? 'К итогу разговора' : 'Дальше'}
             </button>
           </div>
         </div>
       ) : (
         <div className={styles.talk}>
-          <blockquote className={styles.client}>{clientLine}</blockquote>
-          <label className={styles.answerLabel} htmlFor="scenario-answer">
-            {isClosing ? 'Ваша заключительная реплика' : 'Ваш ответ клиенту'}
-          </label>
-          <textarea
-            id="scenario-answer"
-            ref={area}
-            className={styles.answer}
-            rows={6}
-            value={text}
-            placeholder="Говорите так, как сказали бы по телефону"
-            onChange={(e) => {
-              setText(e.target.value);
-              if (error) setError(null);
+          {slot.beat === 'closing' ? <p className={styles.beat}>Заключительная реплика · выберите следующий шаг</p> : <p className={styles.beat}>{slot.beat === 1 ? 'Реплика клиента' : 'Клиент не согласен и повторяет'}</p>}
+          <blockquote className={styles.client}>{slotClientLine(s, slot)}</blockquote>
+          <ChoiceBlock
+            key={`${session.id}-${slot.key}`}
+            choice={slotChoice(s, slot)}
+            seed={`${session.id}:${slot.key}`}
+            quotes={slot.objectionId ? (objById.get(slot.objectionId)?.sourceQuotes ?? []) : []}
+            videos={t.content.objections.videos}
+            copyable={t.role === 'stp_admin'}
+            coachHint={slot.beat === 'closing' ? undefined : s.steps.find((x) => x.id === slot.stepId)?.coachHint}
+            wrongNote={slot.beat === 'closing' ? s.closing.afterWrong : undefined}
+            onHint={() => {
+              if (slot.stepId && !session.hintsUsed.includes(slot.stepId)) setSession({ ...session, hintsUsed: [...session.hintsUsed, slot.stepId] });
             }}
-            aria-invalid={error ? true : undefined}
+            nextLabel={slot.beat === 'closing' ? 'Закончить разговор' : slot.beat === 1 ? 'Дальше: клиент отвечает' : 'Дальше'}
+            onDone={(tries, usedHint) => {
+              const pick = makePick({
+                stepId: slot.stepId,
+                objectionId: slot.objectionId,
+                beat: slot.beat,
+                clientLine: slotClientLine(s, slot),
+                tries,
+                choice: slotChoice(s, slot),
+                usedHint,
+              });
+              const picks = [...session.picks, pick];
+              void persist({ ...session, picks, reaction: reactionAfter(picks) });
+            }}
           />
-          <p className={styles.count}>
-            Слов: {wordCount(text)} из {MIN_WORDS}
-          </p>
-          {error ? (
-            <p className={styles.error} role="alert">
-              {error}
-            </p>
-          ) : null}
-          {hintOpen && step ? (
-            <p className={styles.coach} role="note">
-              <strong>Подсказка наставника:</strong> {step.coachHint}
-            </p>
-          ) : null}
-          {isClosing ? <p className={styles.hint}>Закрепите следующий шаг: что, когда и кто делает.</p> : null}
-          <div className={styles.stickyBar}>
-            <button type="button" className={styles.primary} onClick={submit}>
-              Ответить
-            </button>
-            {step && !hintOpen ? (
-              <button
-                type="button"
-                className={styles.secondary}
-                onClick={() => {
-                  setHintOpen(true);
-                  if (!session.hintsUsed.includes(step.id)) setSession({ ...session, hintsUsed: [...session.hintsUsed, step.id] });
-                }}
-              >
-                Подсказка
-              </button>
-            ) : null}
-          </div>
-          {step && !hintOpen ? <p className={styles.hint}>Подсказка снижает оценку за ответ на возражение на один балл.</p> : null}
         </div>
       )}
     </Page>
@@ -305,106 +249,103 @@ export function ScenarioTalk({
 export function ScenarioResult({ id, session, setSession }: { id: string; session: ScenarioSession | null; setSession: (s: ScenarioSession | null) => void }) {
   const t = useTrainer();
   const s = t.content.scenarios.scenarios.find((x) => x.id === id) as Scenario | undefined;
-  const ok = Boolean(session && s && session.scenarioId === id && session.answers.some((a) => a.stepId === 'closing'));
+  const slotsLen = s ? scenarioSlots(s).length : 0;
+  const ok = Boolean(session && s && session.scenarioId === id && session.picks.length >= slotsLen);
+  const saving = useRef(false);
   useEffect(() => {
-    if (!ok) go({ page: 'scenario', id, step: 'situation' }, 'replace');
-  }, [ok, id]);
-  const evaluation = useMemo(() => (ok && s && session ? evaluateScenario(s, session.answers, session.hintsUsed, t.content) : null), [ok, s, session, t.content]);
-  const [manual, setManual] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  if (!ok || !s || !session || !evaluation) return null;
-  const attempt = session.attempt;
-  const objById = new Map(t.content.objections.objections.map((o) => [o.id, o]));
-
-  async function save(scores: Scores, notes: Partial<Record<CriterionId, string>>) {
-    setBusy(true);
-    try {
-      const built = buildScenarioAttempt({
-        who: t.who,
-        content: t.content,
-        startedAt: new Date(session!.startedAt),
-        now: new Date(),
-        cards: new Map(t.cards.map((c) => [c.key, c])),
-        scenario: s!,
-        answers: session!.answers,
-        evaluation: evaluation!,
-        selfScores: scores,
-        selfNotes: notes,
-        manualChecks: manual,
-      });
+    if (!ok) {
+      go({ page: 'scenario', id, step: 'situation' }, 'replace');
+      return;
+    }
+    if (session!.attempt || saving.current) return;
+    saving.current = true;
+    const built = buildScenarioAttempt({
+      who: t.who,
+      content: t.content,
+      startedAt: new Date(session!.startedAt),
+      now: new Date(),
+      cards: new Map(t.cards.map((c) => [c.key, c])),
+      scenario: s!,
+      picks: session!.picks,
+    });
+    void (async () => {
       await t.commit(built);
       await t.store.deleteDraft(t.who.userId, id);
       await t.refresh();
       setSession({ ...session!, attempt: built.attempt });
-    } finally {
-      setBusy(false);
-    }
-  }
+    })();
+  }, [ok]);
+  if (!ok || !s || !session) return null;
+  const attempt = session.attempt;
+  if (!attempt) return <Page title={`Итог: ${s.title}`}><p className={styles.hint} role="status">Сохраняем разговор…</p></Page>;
+  const picks = attempt.picks ?? [];
+  const criteria = scenarioCriteria(s, picks);
+  const score = scoreChoices(picks, scenarioPlayed(s), t.content.scoring);
+  const objById = new Map(t.content.objections.objections.map((o) => [o.id, o]));
+  const slots = scenarioSlots(s);
+  const optionOf = (_pick: Pick, i: number, optionId: string) => slotChoice(s, slots[i]).options.find((o) => o.id === optionId);
+  const closingPick = picks.find((p) => p.beat === 'closing');
 
   return (
     <Page title={`Итог: ${s.title}`} back={{ label: 'Ролевые разговоры', to: { page: 'scenarios' } }}>
+      <section className={styles.result} aria-label="Итог разговора" aria-live="polite">
+        <ResultHead count={picks.length} firstTry={score.firstTryCount} passed={attempt.passed} kind="scenario" />
+      </section>
       <section className={styles.block} aria-label="Критерии успеха">
         <h4>Достигли ли цели</h4>
         <ul className={styles.points}>
-          {evaluation.criteria.map((c) => {
-            const isManual = c.ok === null;
-            const checked = isManual ? manual.includes(c.id) : c.ok;
-            return (
-              <li key={c.id} className={checked ? styles.pointOk : styles.pointMiss}>
-                {isManual ? (
-                  <label className={styles.manualCheck}>
-                    <input
-                      type="checkbox"
-                      checked={manual.includes(c.id)}
-                      disabled={Boolean(attempt)}
-                      onChange={(e) => setManual((m) => (e.target.checked ? [...m, c.id] : m.filter((x) => x !== c.id)))}
-                    />
-                    <span>{c.text} (отметьте сами)</span>
-                  </label>
-                ) : (
-                  <>
-                    <span className={styles.mark2} aria-hidden="true">{c.ok ? '✔' : '✖'}</span>
-                    <span>{c.text}</span>
-                  </>
-                )}
-              </li>
-            );
-          })}
+          {criteria.map((c) => (
+            <li key={c.id} className={c.ok ? styles.pointOk : styles.pointMiss}>
+              <span className={styles.mark2} aria-hidden="true">{c.ok ? '✔' : '✖'}</span>
+              <span>{c.text}</span>
+            </li>
+          ))}
         </ul>
       </section>
-      <Fold title="Разбор по шагам" hint={`шагов: ${evaluation.steps.length}`} label="Разбор шагов">
-        {evaluation.steps.map((st) => {
-          const o = objById.get(st.objectionId);
+      <CriteriaList scores={score.criteria} content={t.content} />
+      <Fold title="Разбор по шагам" hint={`возражений: ${s.steps.length}`} label="Разбор шагов">
+        {s.steps.map((step) => {
+          const o = objById.get(step.objectionId);
+          const stepPicks = picks.map((p, i) => ({ p, i })).filter(({ p }) => p.stepId === step.id);
+          const clean = stepPicks.every(({ p }) => p.firstTry);
           return (
-            <div key={st.stepId} className={styles.stepResult}>
-              <strong>{o?.panel.title ?? st.stepId}</strong> {st.passed ? <span className={styles.tagOk}>Засчитан</span> : <span className={styles.tag}>Не засчитан</span>}
-              {st.usedHint ? <span className={styles.tag}> Подсказка</span> : null}
-              {o ? (
-                <ul className={styles.points}>
-                  {o.requiredPoints.map((p) => {
-                    const hit = st.matchedPointIds.includes(`${o.id}:${p.id}`);
-                    return (
-                      <li key={p.id} className={hit ? styles.pointOk : styles.pointMiss}>
-                        <span className={styles.mark2} aria-hidden="true">{hit ? '✔' : '✖'}</span>
-                        <span>{hit ? 'Названо' : 'Не названо'}: {p.text}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
+            <div key={step.id} className={styles.stepResult}>
+              <strong>{o?.panel.title ?? step.id}</strong> {clean ? <span className={styles.tagOk}>Верно с первой попытки</span> : <span className={styles.tag}>Были ошибки</span>}
+              {stepPicks.some(({ p }) => p.usedHint) ? <span className={styles.tag}> Подсказка</span> : null}
+              <ul className={styles.plainList}>
+                {stepPicks.map(({ p, i }) => {
+                  const right = optionOf(p, i, p.optionId);
+                  return (
+                    <li key={i}>
+                      <span>{p.firstTry ? '✔' : '✖'} Реплика {p.beat}: </span>
+                      «{right?.text}»
+                      {p.tries
+                        .filter((tr) => !optionOf(p, i, tr.optionId)?.correct)
+                        .map((tr) => {
+                          const w = optionOf(p, i, tr.optionId);
+                          return (
+                            <span key={tr.optionId} className={styles.fbInline}>
+                              <br />
+                              <strong>Вы выбрали ошибочный ответ ({errorLabel(w?.errorType).toLowerCase()}):</strong> «{w?.text}» {w?.explanation}
+                            </span>
+                          );
+                        })}
+                    </li>
+                  );
+                })}
+              </ul>
               {o ? (
                 <details className={styles.checkSelf}>
                   <summary>Эталон</summary>
                   <p className={styles.refAnswer}>{o.referenceAnswer}</p>
-                  {s.steps.find((x) => x.id === st.stepId)?.beats === 2 ? <p className={styles.refAnswer}>{o.pushbackReferenceAnswer}</p> : null}
+                  <p className={styles.refAnswer}>{o.pushbackReferenceAnswer}</p>
                 </details>
               ) : null}
             </div>
           );
         })}
-        <h4>Что нарушено</h4>
-        <Flags flags={evaluation.flags} content={t.content} />
         <h4>Закрытие разговора</h4>
+        {closingPick ? <p>{closingPick.firstTry ? '✔' : '✖'} Выбранный следующий шаг: «{optionOf(closingPick, slots.length - 1, closingPick.optionId)?.text}»</p> : null}
         <p className={styles.hint}>Примеры хорошего завершения:</p>
         <ul>
           {s.closing.goodExamples.map((e) => (
@@ -412,26 +353,24 @@ export function ScenarioResult({ id, session, setSession }: { id: string; sessio
           ))}
         </ul>
       </Fold>
-      {attempt ? (
-        <section className={styles.result} aria-label="Итог разговора" aria-live="polite">
-          <SavedNote />
-          <p className={styles.bigScore}>
-            <Score value={attempt.total} /> <span>из 5</span>
-          </p>
-          <p className={attempt.passed ? styles.okLine : styles.failLine}>{attempt.passed ? '✔ Разговор засчитан' : '✖ Разговор не засчитан'}</p>
-          <p className={styles.hint}>Предварительная оценка и ваша сохранены отдельно.</p>
-          <div className={`${styles.stickyBar} ${styles.actions}`}>
-            <button type="button" className={styles.primary} onClick={() => { setSession(null); go({ page: 'scenario', id, step: 'situation' }); }}>
-              Пройти ещё раз
-            </button>
-            <button type="button" className={styles.secondary} onClick={() => { setSession(null); go({ page: 'scenarios' }); }}>
-              К списку разговоров
-            </button>
-          </div>
-        </section>
-      ) : (
-        <SelfAssess criteria={ROLEPLAY_CRITERIA} content={t.content} auto={evaluation.autoScores} busy={busy} onSubmit={(sc, n) => void save(sc, n)} />
-      )}
+      {s.practiceFocus.length ? (
+        <Fold title="Для свободной практики" hint="по желанию, без оценки" label="Свободная практика">
+          <p className={styles.hint}>Проговорите этот разговор вслух своими словами. Оценку это не меняет.</p>
+          <ul className={styles.plainList}>
+            {s.practiceFocus.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </Fold>
+      ) : null}
+      <div className={`${styles.stickyBar} ${styles.actions}`}>
+        <button type="button" className={styles.primary} onClick={() => { setSession(null); go({ page: 'scenario', id, step: 'situation' }); }}>
+          Пройти ещё раз
+        </button>
+        <button type="button" className={styles.secondary} onClick={() => { setSession(null); go({ page: 'scenarios' }); }}>
+          К списку разговоров
+        </button>
+      </div>
     </Page>
   );
 }
