@@ -69,6 +69,7 @@ export { calcUrlFromOrg } from './calcUrl';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { withDemoDocuments } from './demoDocuments';
 import { isDemoModeEnabled } from './demoMode';
+import { allowDeviceLogin } from './loginFallback';
 import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
 import {
   bootstrapHistoryReset,
@@ -162,7 +163,7 @@ type PartnerApi = {
   calculations: CachedCalculation[];
   /** JWT expired while the outbox still has rows. Queue is kept until the next login. */
   authHold: boolean;
-  login: (login: string, password: string) => Promise<void>;
+  login: (login: string, password: string, options?: { demoAccount?: boolean }) => Promise<void>;
   logout: () => void;
   saveOrg: (patch: Partial<OrgSettings>) => Promise<void>;
   adminCreatePartner: (input: {
@@ -556,7 +557,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const login = useCallback(
-    async (loginName: string, password: string) => {
+    async (loginName: string, password: string, options?: { demoAccount?: boolean }) => {
       setError(null);
       setCalcRequest(null);
       setDiagnosisRequest(null);
@@ -584,8 +585,19 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
             saveSession(session);
             setLocalOnlySession(false);
           } catch (apiError) {
-            // Демо-логины, закрытые на сервере, входят только на устройстве (без токена).
-            // Настоящий аккаунт при обрыве связи так «войти» не может: говорим про связь, а не про пароль.
+            // Вход только на устройстве (без токена) — это исключение для демо:
+            //  • выбранная демо-роль, закрытая на сервере;
+            //  • обрыв связи, когда демо включено.
+            // Неверный пароль настоящего аккаунта (в том числе старый, до смены) сюда не попадает:
+            // иначе вход «проходит» по демо-паролю из сборки, а материалы потом не открываются.
+            const allowDevice = allowDeviceLogin({
+              demoEnabled: isDemoModeEnabled(),
+              demoAccount: options?.demoAccount === true,
+              transientError: isTransientApiError(apiError),
+            });
+            if (!allowDevice) {
+              throw isTransientApiError(apiError) ? new Error(NETWORK_ERROR_MESSAGE) : apiError;
+            }
             try {
               session = localLogin(loginName, password);
               setLocalOnlySession(true);

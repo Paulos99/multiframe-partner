@@ -169,9 +169,11 @@ export function QuizRun({ session, setSession }: { session: QuizSession | null; 
         <section className={styles.block} aria-live="polite" aria-label="Разбор вопроса">
           <p className={lastAnswer?.correct ? styles.okLine : styles.failLine}>{lastAnswer?.correct ? '✔ Верно' : '✖ Неверно'}</p>
           <p>{q.explanation}</p>
-          <Fold title="Источник" hint={`цитат: ${q.sourceQuotes.length}`} label="Источник">
-            <Quotes quotes={q.sourceQuotes} videos={t.content.quiz.videos} copyable={t.role === 'stp_admin'} />
-          </Fold>
+          {q.sourceQuotes.length > 0 ? (
+            <Fold title="Источник" hint={`цитат: ${q.sourceQuotes.length}`} label="Источник">
+              <Quotes quotes={q.sourceQuotes} videos={t.content.quiz.videos} copyable={t.role === 'stp_admin'} />
+            </Fold>
+          ) : null}
         </section>
       ) : null}
       <div className={styles.stickyBar}>

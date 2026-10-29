@@ -52,7 +52,7 @@ test('менеджер StP: в тренажёре видны сценарии в
   // Сценарии замерщика и монтажника открыты менеджеру StP «для общего развития».
   await expect(page.getByRole('button', { name: /Замерщик на объекте/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Монтажник на объекте/ })).toBeVisible();
-  await expect(page.getByRole('list').getByRole('listitem')).toHaveCount(12);
+  await expect(page.getByRole('list').getByRole('listitem')).toHaveCount(11);
 });
 
 test('менеджер StP: «Инструменты» — две карточки с рабочими ссылками на клиентские версии', async ({ page }) => {

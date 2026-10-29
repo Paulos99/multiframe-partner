@@ -1,2508 +1,2295 @@
 {
-  "schemaVersion": 1,
-  "language": "ru",
-  "description": "Вопросы по продукту. Каждый вопрос подтверждён цитатой (поле sourceQuotes). Порядок вариантов уже перемешан; при показе можно перемешивать заново.",
-  "topics": [
+ "schemaVersion": 1,
+ "language": "ru",
+ "description": "Вопросы по продукту. Каждый вопрос подтверждён цитатой (поле sourceQuotes). Порядок вариантов уже перемешан; при показе можно перемешивать заново.",
+ "topics": [
+  {
+   "id": "material",
+   "title": "Материал и состав"
+  },
+  {
+   "id": "product",
+   "title": "Панели Wave и Flat"
+  },
+  {
+   "id": "principle",
+   "title": "Принцип работы"
+  },
+  {
+   "id": "install",
+   "title": "Монтаж"
+  },
+  {
+   "id": "space",
+   "title": "Высота потолка"
+  },
+  {
+   "id": "tests",
+   "title": "Проблемомер и сравнение материалов"
+  },
+  {
+   "id": "safety",
+   "title": "Безопасность и экология"
+  },
+  {
+   "id": "honesty",
+   "title": "Честные формулировки"
+  },
+  {
+   "id": "sales",
+   "title": "Как продавать"
+  }
+ ],
+ "questions": [
+  {
+   "id": "quiz-frame-material",
+   "topic": "material",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Из какого материала сделан каркас панели MultiFrame?",
+   "options": [
     {
-      "id": "material",
-      "title": "Материал и состав"
+     "id": "o1",
+     "text": "Из гипсокартона с металлическим профилем"
     },
     {
-      "id": "product",
-      "title": "Панели Wave и Flat"
+     "id": "o2",
+     "text": "Из экструдированного полистирола высокой плотности"
     },
     {
-      "id": "principle",
-      "title": "Принцип работы"
+     "id": "o3",
+     "text": "Из вспененного полипропилена (ВПП)"
     },
     {
-      "id": "install",
-      "title": "Монтаж"
-    },
-    {
-      "id": "space",
-      "title": "Высота и площадь"
-    },
-    {
-      "id": "tests",
-      "title": "Испытания"
-    },
-    {
-      "id": "safety",
-      "title": "Безопасность и экология"
-    },
-    {
-      "id": "honesty",
-      "title": "Честные формулировки"
-    },
-    {
-      "id": "sales",
-      "title": "Как продавать"
+     "id": "o4",
+     "text": "Из минеральной ваты в плотной оболочке"
     }
-  ],
-  "questions": [
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Каркас — формованный, из вспененного полипропилена, а наполнитель — мягкий акустический.",
+   "sourceQuotes": [
     {
-      "id": "quiz-frame-material",
-      "topic": "material",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Из какого материала сделан каркас панели MultiFrame?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Из гипсокартона с металлическим профилем"
-        },
-        {
-          "id": "o2",
-          "text": "Из экструдированного полистирола"
-        },
-        {
-          "id": "o3",
-          "text": "Из минеральной ваты в оболочке"
-        },
-        {
-          "id": "o4",
-          "text": "Из вспененного полипропилена (ВПП)"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "Каркас — формованный, из вспененного полипропилена, а наполнитель — мягкий акустический.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "формованного каркаса из вспененного полипропилена и мягкого акустического наполнителя",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-eco-polystyrene"
-      ]
-    },
-    {
-      "id": "quiz-vpp-not-foam",
-      "topic": "material",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Вспененный полипропилен — это пенопласт?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Да, это одно и то же"
-        },
-        {
-          "id": "o2",
-          "text": "Зависит от цвета панели"
-        },
-        {
-          "id": "o3",
-          "text": "Да, но с добавлением масел"
-        },
-        {
-          "id": "o4",
-          "text": "Нет: пенопластом принято считать изделия из экструдированного полистирола"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "ВПП — не пенопласт, пенопласт — это изделия из полистирола.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "Вспененный полипропилен – это не пенопласт",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В2",
-          "quote": "Пенопластом принято считать изделия из экструдированного полистирола",
-          "id": "q2"
-        }
-      ],
-      "isTrap": true,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-eco-polystyrene"
-      ]
-    },
-    {
-      "id": "quiz-compose-none",
-      "topic": "safety",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Чего нет в составе панелей MultiFrame?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Вспененного полипропилена"
-        },
-        {
-          "id": "o2",
-          "text": "Полистирола, масел, полимерных мембран и других опасных связующих"
-        },
-        {
-          "id": "o3",
-          "text": "Акустического наполнителя на основе пенополиуретана"
-        },
-        {
-          "id": "o4",
-          "text": "Сквозной перфорации"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "В составе нет полистирола, масел, полимерных мембран и других опасных связующих.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "В составе панелей STP-MultiFrame нет полистирола, масел, полимерных мембран и других опасных связующих",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-eco-safe"
-      ]
-    },
-    {
-      "id": "quiz-wave-flat-effect",
-      "topic": "product",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Какая из панелей, Wave или Flat, сильнее снижает шум?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Обе одинаковы по эффекту звукоизоляции"
-        },
-        {
-          "id": "o2",
-          "text": "Зависит от высоты потолка"
-        },
-        {
-          "id": "o3",
-          "text": "Flat, из-за плотного наполнителя"
-        },
-        {
-          "id": "o4",
-          "text": "Wave, из-за волнообразной поверхности"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "Обе панели одинаковы по эффекту звукоизоляции; отличаются лицевой стороной и удобством.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "Обе панели одинаковы по эффекту звукоизоляции",
-          "id": "q1"
-        }
-      ],
-      "isTrap": true,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-tech-wave-flat"
-      ]
-    },
-    {
-      "id": "quiz-wave-surface",
-      "topic": "product",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Какая лицевая поверхность у панели MultiFrame Wave?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Ячеистая"
-        },
-        {
-          "id": "o2",
-          "text": "Волнообразная"
-        },
-        {
-          "id": "o3",
-          "text": "Абсолютно ровная"
-        },
-        {
-          "id": "o4",
-          "text": "Покрытая тканью"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "У версии Wave поверхность волнообразная, у Flat — абсолютно ровная.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "У версии MultiFrame Wave это волнообразная поверхность, у версии MultiFrame Flat абсолютно ровная",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-tech-wave-flat"
-      ]
-    },
-    {
-      "id": "quiz-flat-install",
-      "topic": "product",
-      "difficulty": 2,
-      "type": "single",
-      "question": "На какую панель удобнее монтировать коммуникации и крепежи?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "На MultiFrame Flat"
-        },
-        {
-          "id": "o2",
-          "text": "На MultiFrame Wave"
-        },
-        {
-          "id": "o3",
-          "text": "Одинаково удобно"
-        },
-        {
-          "id": "o4",
-          "text": "Ни на какую, коммуникации монтируют только на стены"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "На Flat удобнее монтировать коммуникации и крепежи; Wave придаёт дополнительный акустический комфорт.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "На панель MultiFrame Flat удобнее монтировать коммуникации и крепежи",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-tech-wave-flat"
-      ]
-    },
-    {
-      "id": "quiz-filler",
-      "topic": "product",
-      "difficulty": 3,
-      "type": "single",
-      "question": "Чем отличается наполнитель у Flat и у Wave?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "У Flat мягче, у Wave плотнее"
-        },
-        {
-          "id": "o2",
-          "text": "У Wave наполнитель из минеральной ваты"
-        },
-        {
-          "id": "o3",
-          "text": "Наполнитель одинаковый"
-        },
-        {
-          "id": "o4",
-          "text": "У Flat плотнее, с ним проще работать мастеру; у Wave мягче и восстанавливается после поджатия"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "У Flat наполнитель плотнее, с ним проще работать мастеру; у Wave мягче, и после поджатия он восстанавливается.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "В версии панели MultiFrame Flat наполнитель плотнее, с ним проще работать мастеру",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В2",
-          "quote": "В версии MultiFrame Wave наполнитель мягче, восстанавливается после поджатия",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "measurer",
-        "crew",
-        "owner",
-        "stp_admin",
-        "manager"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-principle",
-      "topic": "principle",
-      "difficulty": 2,
-      "type": "single",
-      "question": "На каком принципе работает сквозная перфорация панели?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Принцип Гельмгольца: забирает звуковую энергию и гасит её внутри панели"
-        },
-        {
-          "id": "o2",
-          "text": "Утяжеление конструкции, чем тяжелее, тем лучше"
-        },
-        {
-          "id": "o3",
-          "text": "Отражение звука обратно в источник"
-        },
-        {
-          "id": "o4",
-          "text": "Нагрев воздуха внутри панели"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "Перфорация работает по системе Гельмгольца, гасит энергию внутри панели, а не просто отражает обратно.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "Сквозная перфорация панели работает по системе Гельмгольца, забирает звуковую энергию и гасит ее внутри панели, а не просто отражает обратно",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-mass-vs-filter",
-      "topic": "principle",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Чем принцип MultiFrame отличается от классической звукоизоляции?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Они ничем не отличаются"
-        },
-        {
-          "id": "o2",
-          "text": "Классическая основана на массе конструкции, MultiFrame — на фильтрации и перераспределении звуковых волн"
-        },
-        {
-          "id": "o3",
-          "text": "Классическая основана на фильтрации, MultiFrame — на массе"
-        },
-        {
-          "id": "o4",
-          "text": "MultiFrame основан только на отражении"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Классика — масса; современные технологии, в том числе MultiFrame, используют фильтрацию и перераспределение волн.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "Существует классическая система звукоизоляции, основанная на массе конструкции",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В2",
-          "quote": "фильтрацию и перераспределение звуковых волн в широком диапазоне частот",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-two-way",
-      "topic": "principle",
-      "difficulty": 1,
-      "type": "single",
-      "question": "В каких направлениях работает MultiFrame?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Только снижает внешний шум"
-        },
-        {
-          "id": "o2",
-          "text": "Только уменьшает передачу звука наружу"
-        },
-        {
-          "id": "o3",
-          "text": "Только внутри комнаты, на эхо"
-        },
-        {
-          "id": "o4",
-          "text": "В обе стороны: снижает проникновение внешнего шума и уменьшает передачу звука наружу"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "Система работает сразу в двух направлениях и формирует акустический комфорт внутри.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "STP Multiframe работает сразу в двух направлениях",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-need-quiet-neighbors"
-      ]
-    },
-    {
-      "id": "quiz-comfort",
-      "topic": "principle",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Что значит «акустический комфорт» внутри комнаты?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Усиление громкости музыки"
-        },
-        {
-          "id": "o2",
-          "text": "Полная тишина внутри помещения"
-        },
-        {
-          "id": "o3",
-          "text": "Меньше эха, гулкости и отражений, речь и музыка воспринимаются мягче"
-        },
-        {
-          "id": "o4",
-          "text": "Исчезновение всех звуков с улицы"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "Акустический комфорт — это меньше эха, гулкости и отражений. Обещания тишины здесь нет.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "Когда в комнате меньше эхо, гулкости и отражений звука, а речь, музыка и повседневные звуки воспринимаются мягче и комфортнее",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-need-not-bothering"
-      ]
-    },
-    {
-      "id": "quiz-drum",
-      "topic": "principle",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Что такое «эффект барабана» под натяжным потолком?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Натяжное полотно на некоторых объектах принимает звуковую энергию и усиливает часть колебаний"
-        },
-        {
-          "id": "o2",
-          "text": "Просадка на низких частотах у любого материала"
-        },
-        {
-          "id": "o3",
-          "text": "Дефект мастера при установке полотна"
-        },
-        {
-          "id": "o4",
-          "text": "Звук барабанов у соседей"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "Эффект возникает из-за особенностей застройки, а не из-за мастеров по установке потолков.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "Натяжное полотно будет принимать на себя звуковую энергию и передавать в помещение",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В2",
-          "quote": "Такое происходит не из-за мастеров по установке натяжных потолков, а из-за особенностей застройки",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-effect-drum"
-      ]
-    },
-    {
-      "id": "quiz-hour",
-      "topic": "install",
-      "difficulty": 1,
-      "type": "single",
-      "question": "За какое время один мастер может смонтировать потолок площадью 20 м²?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Примерно за час"
-        },
-        {
-          "id": "o2",
-          "text": "За 5–20 дней"
-        },
-        {
-          "id": "o3",
-          "text": "За полдня с бригадой из трёх человек"
-        },
-        {
-          "id": "o4",
-          "text": "За три дня"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "Это ориентир: потолок 20 м², один мастер, примерно час.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "Монтаж потолка площадью 20 квадратных метров может выполнить один мастер примерно за час",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-time-long"
-      ]
-    },
-    {
-      "id": "quiz-fasteners",
-      "topic": "install",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Сколько креплений достаточно на одну панель?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Не менее десяти"
-        },
-        {
-          "id": "o2",
-          "text": "2–3"
-        },
-        {
-          "id": "o3",
-          "text": "Одно"
-        },
-        {
-          "id": "o4",
-          "text": "Столько же, сколько отверстий в панели"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Благодаря замковой системе панели поддерживают друг друга, поэтому достаточно 2–3 креплений на панель.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В3",
-          "quote": "панели будут поддерживать друг друга, поэтому достаточно 2-3 креплений на панель для создания устойчивой конструкции",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-tech-fixing"
-      ]
-    },
-    {
-      "id": "quiz-lock-name",
-      "topic": "install",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Как называется замковая система панелей?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Винтовой замок"
-        },
-        {
-          "id": "o2",
-          "text": "Шип-паз"
-        },
-        {
-          "id": "o3",
-          "text": "Шпунт-Про"
-        },
-        {
-          "id": "o4",
-          "text": "Липучка"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Замковая система называется шип-паз: она создаёт монолитное полотно по всей поверхности.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В3",
-          "quote": "замковая система SHIPPASS поможет создать монолитное надежное полотно на всей поверхности перекрытия",
-          "id": "q1"
-        }
-      ],
-      "isTrap": true,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-tech-fixing"
-      ]
-    },
-    {
-      "id": "quiz-holes",
-      "topic": "install",
-      "difficulty": 3,
-      "type": "single",
-      "question": "Сколько технических отверстий для крепления в каждой панели и можно ли сделать отверстие в другом месте?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Нет отверстий"
-        },
-        {
-          "id": "o2",
-          "text": "5; можно сделать в любом удобном месте"
-        },
-        {
-          "id": "o3",
-          "text": "2; нельзя"
-        },
-        {
-          "id": "o4",
-          "text": "10; только по разметке"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "У каждой панели 5 технических отверстий, но можно сделать отверстие в любом удобном месте.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В3",
-          "quote": "Всего у каждой панели 5 технических отверстий для крепления, но есть возможность сделать отверстие в любом удобном для монтажа месте",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "measurer",
-        "crew",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-tech-fixing"
-      ]
-    },
-    {
-      "id": "quiz-cutting",
-      "topic": "install",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Чем можно подрезать панели?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Резать нельзя"
-        },
-        {
-          "id": "o2",
-          "text": "Только болгаркой"
-        },
-        {
-          "id": "o3",
-          "text": "Только лазером"
-        },
-        {
-          "id": "o4",
-          "text": "Даже обычным ножом"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "Панели можно подрезать даже обычным ножом; для удобства есть коронка по дереву и реноватор.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В3",
-          "quote": "Панели можно подрезать даже обычным ножом",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "measurer",
-        "crew",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-tech-geometry"
-      ]
-    },
-    {
-      "id": "quiz-after-panels",
-      "topic": "install",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Что монтируется после установки панелей на потолке?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Минеральная вата"
-        },
-        {
-          "id": "o2",
-          "text": "Натяжное полотно или гипсокартон"
-        },
-        {
-          "id": "o3",
-          "text": "Ничего, панели остаются открытыми"
-        },
-        {
-          "id": "o4",
-          "text": "Мембрана"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "После установки панелей монтируется натяжное полотно или гипсокартон.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В3",
-          "quote": "После установки панелей монтируется натяжное полотно или гипсокартон",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-time-with-ceiling"
-      ]
-    },
-    {
-      "id": "quiz-calc",
-      "topic": "install",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Где получить расчёт количества материала на площадь помещения?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "В протоколе испытаний"
-        },
-        {
-          "id": "o2",
-          "text": "В калькуляторе STP-MultiFrame"
-        },
-        {
-          "id": "o3",
-          "text": "Только на объекте с замерщиком"
-        },
-        {
-          "id": "o4",
-          "text": "По телефону у производителя только по понедельникам"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Монтаж начинается с удобного расчёта в калькуляторе STP-MultiFrame.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В3",
-          "quote": "Получить расчет можно в калькуляторе STP-MultiFrame",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-drop",
-      "topic": "space",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Какой опуск потолка нужен при стандартной установке профиля и можно ли его сократить?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Профиль 30 см; сократить нельзя"
-        },
-        {
-          "id": "o2",
-          "text": "Опуск не нужен вовсе"
-        },
-        {
-          "id": "o3",
-          "text": "Профиль 7–9 см; опуск можно сократить до 6 см"
-        },
-        {
-          "id": "o4",
-          "text": "Профиль 2 см; сократить до 1 см"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "При стандартном профиле 7–9 см панели встают под натяжной потолок; при необходимости опуск сокращают до 6 см.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "При стандартной установке профиля в 7 – 9 см панели STP Multiframe прекрасно встанут под натяжной потолок",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В1",
-          "quote": "При необходимости можно сократить опуск до 6 см, в багет по периметру",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-space-lose"
-      ]
-    },
-    {
-      "id": "quiz-area-loss",
-      "topic": "space",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Сколько полезной площади в комнате 20 м² теряется по стенам при системе толщиной 6 см и при стандартном решении толщиной 12 см?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Ничего не теряется в обоих случаях"
-        },
-        {
-          "id": "o2",
-          "text": "Около 2 м² и около 1 м²"
-        },
-        {
-          "id": "o3",
-          "text": "Около 1 м² и около 2 м²"
-        },
-        {
-          "id": "o4",
-          "text": "Около 5 м² и около 10 м²"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "При толщине 12 см помещение станет меньше примерно на 2 м², при 6 см — примерно на 1 м².",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "помещение визуально и физически станет меньше примерно на 2 квадратных метра",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В1",
-          "quote": "полезная площадь уменьшится примерно всего на 1 квадратный метр",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-space-lose",
-        "obj-price-lost-area"
-      ]
-    },
-    {
-      "id": "quiz-timeframes",
-      "topic": "install",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Сколько дней обычно монтируются многосоставные конструкции?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "От 5 до 20 дней"
-        },
-        {
-          "id": "o2",
-          "text": "Не больше суток"
-        },
-        {
-          "id": "o3",
-          "text": "Один час"
-        },
-        {
-          "id": "o4",
-          "text": "От 1 до 3 дней"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "Многосоставные — от 5 до 20 дней; мембраны и одеяла — 1–3 дня; полистирол — за несколько часов.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "Многосоставные конструкции монтируются от 5 до 20 дней в зависимости от зоны и площади монтажа",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-time-long"
-      ]
-    },
-    {
-      "id": "quiz-test-ceiling",
-      "topic": "tests",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Какой результат показал MultiFrame в испытании на потолке с исходным уровнем 57 дБ?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Индекс снизился на 2 дБ"
-        },
-        {
-          "id": "o2",
-          "text": "Индекс вырос на 1 дБ"
-        },
-        {
-          "id": "o3",
-          "text": "Индекс вырос на 9 дБ"
-        },
-        {
-          "id": "o4",
-          "text": "Индекс не изменился"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "На потолке: +1 дБ. Исходные 57 дБ — очень высокий уровень, редко встречается.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "индекс звукоизоляции вырос на 1 децибел от исходного значения",
-          "id": "q1"
-        }
-      ],
-      "isTrap": true,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-effect-ceiling-low"
-      ]
-    },
-    {
-      "id": "quiz-test-wall",
-      "topic": "tests",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Какой результат показал MultiFrame в испытании на стене с исходным уровнем 38 дБ?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "+5 дБ"
-        },
-        {
-          "id": "o2",
-          "text": "−3 дБ"
-        },
-        {
-          "id": "o3",
-          "text": "+1 дБ"
-        },
-        {
-          "id": "o4",
-          "text": "+9 дБ"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "На стене с исходными 38 дБ MultiFrame прибавил 9 дБ.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "прибавив к изначальному индексу звукоизоляции 9 децибел",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-effect-ceiling-low"
-      ]
-    },
-    {
-      "id": "quiz-no-transfer",
-      "topic": "tests",
-      "difficulty": 3,
-      "type": "single",
-      "question": "Клиент спрашивает про потолок в обычной квартире. Что честно ответить про цифры?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "«На потолке в испытании было +1 дБ при очень высоком исходном уровне 57 дБ; +9 дБ получено на стене с исходными 38 дБ, цифру для вашей квартиры не обещаем»"
-        },
-        {
-          "id": "o2",
-          "text": "«Будет полная тишина»"
-        },
-        {
-          "id": "o3",
-          "text": "«На потолке будет +9 дБ, как на стене»"
-        },
-        {
-          "id": "o4",
-          "text": "«Цифры не имеют значения»"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "Нельзя переносить результат стены на потолок и обещать цифру. Честно называем оба результата и условия испытания.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "индекс звукоизоляции вырос на 1 децибел от исходного значения",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В5",
-          "quote": "прибавив к изначальному индексу звукоизоляции 9 децибел",
-          "id": "q2"
-        }
-      ],
-      "isTrap": true,
-      "roles": [
-        "manager",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-effect-ceiling-low",
-        "obj-effect-guarantee"
-      ]
-    },
-    {
-      "id": "quiz-base-level",
-      "topic": "tests",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Какой исходный уровень звукоизоляции типичен для жилых объектов массового сегмента?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "57 дБ"
-        },
-        {
-          "id": "o2",
-          "text": "38–45 дБ"
-        },
-        {
-          "id": "o3",
-          "text": "Более 60 дБ"
-        },
-        {
-          "id": "o4",
-          "text": "10–15 дБ"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "В массовом сегменте исходный уровень обычно 38–45 дБ; 57 дБ — очень высокий и редкий.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "В жилых объектах массового сегмента изначальный уровень звукоизоляции будет 38-45 дБ",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-log",
-      "topic": "tests",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Почему «прибавить 1 дБ к 57» не то же самое, что «прибавить 1 дБ к 38»?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Потому что оборудование показывает по-разному"
-        },
-        {
-          "id": "o2",
-          "text": "Потому что децибелы — логарифмическая, а не линейная величина"
-        },
-        {
-          "id": "o3",
-          "text": "Потому что 57 больше"
-        },
-        {
-          "id": "o4",
-          "text": "Это то же самое"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Децибелы нелинейные, а логарифмические.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "децибелы не линейная, а логарифмическая величина, а это значит, прибавить 1 децибел к 57 не то же самое, что прибавить 1 децибел к 38",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-effect-ceiling-low"
-      ]
-    },
-    {
-      "id": "quiz-index-graph",
-      "topic": "tests",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Почему специалисты рекомендуют смотреть график, а не только индекс звукоизоляции?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "График красивее"
-        },
-        {
-          "id": "o2",
-          "text": "Индекс всегда правдивее графика"
-        },
-        {
-          "id": "o3",
-          "text": "Даже небольшой провал на одной частоте сильно влияет на индекс; материал может ухудшать низкие частоты, а индекс не изменится"
-        },
-        {
-          "id": "o4",
-          "text": "Потому что график короче"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "Индекс учитывает неблагоприятные отклонения и может скрыть ухудшение на низких частотах.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "Поэтому специалисты рекомендуют смотреть именно график с разложением замеров на всем – частотном диапазоне",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-effect-index-vs-graph"
-      ]
-    },
-    {
-      "id": "quiz-polystyrene",
-      "topic": "tests",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Что показал полистирол в испытании на потолке (57 дБ) и на стене (38 дБ)?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Потолок +1 дБ, стена +9 дБ"
-        },
-        {
-          "id": "o2",
-          "text": "Потолок −1 дБ, стена −4 дБ"
-        },
-        {
-          "id": "o3",
-          "text": "Потолок +9 дБ, стена +5 дБ"
-        },
-        {
-          "id": "o4",
-          "text": "Потолок 0, стена 0"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Полистирол ухудшил показатель на потолке на 1 дБ, на стене на 4 дБ.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "Индекс звукоизоляции после монтажа полистирола на перекрытия снизился в общей сложности на 1 дБ",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В5",
-          "quote": "Индекс звукоизоляции после монтажа полистирола сильно упал, сразу на 4 дБ",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-cheaper-polystyrene"
-      ]
-    },
-    {
-      "id": "quiz-membrane",
-      "topic": "tests",
-      "difficulty": 3,
-      "type": "single",
-      "question": "Что показала полимерная мембрана с мастичным составом в испытании?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Потолок +5 дБ, стена −3 дБ"
-        },
-        {
-          "id": "o2",
-          "text": "Потолок +9 дБ, стена +9 дБ"
-        },
-        {
-          "id": "o3",
-          "text": "Потолок −2 дБ; на стене +5 дБ, но с сильной просадкой на низких частотах"
-        },
-        {
-          "id": "o4",
-          "text": "Мембрана не испытывалась"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "Мембрана показала нестабильный результат: на потолке −2 дБ, на стене +5 дБ с просадкой на низких частотах.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "индекс звукоизоляции снизился на 2 дБ",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В5",
-          "quote": "Значение индекса выросло на 5 дБ. Но на графике мы видим сильную просадку на низких частотах",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-cheaper-membrane"
-      ]
-    },
-    {
-      "id": "quiz-wool",
-      "topic": "tests",
-      "difficulty": 3,
-      "type": "single",
-      "question": "Что показало акустическое одеяло из стекловолокна?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Потолок +1 дБ, стена +9 дБ"
-        },
-        {
-          "id": "o2",
-          "text": "Потолок −1 дБ, стена −3 дБ"
-        },
-        {
-          "id": "o3",
-          "text": "Потолок +5 дБ, стена +5 дБ"
-        },
-        {
-          "id": "o4",
-          "text": "Потолок −4 дБ, стена −4 дБ"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Одеяло снизило показатель на потолке на 1 дБ, на стене на 3 дБ.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "Индекс звукоизоляции также снизился на 1 децибел",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В5",
-          "quote": "Индекс звукоизоляции уменьшился на 3 ДБ",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-competitor-wool"
-      ]
-    },
-    {
-      "id": "quiz-main-conclusion",
-      "topic": "tests",
-      "difficulty": 2,
-      "type": "single",
-      "question": "От чего сильно зависит результат звукоизоляции по выводам испытания?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Только от цвета панели"
-        },
-        {
-          "id": "o2",
-          "text": "Ни от чего"
-        },
-        {
-          "id": "o3",
-          "text": "От базового уровня звукоизоляции перекрытия"
-        },
-        {
-          "id": "o4",
-          "text": "Только от толщины слоя"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "Если индекс уже высокий, улучшить ещё очень сложно; эффект заметнее там, где есть проблемы.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "Результат сильно зависит от базового уровня звукоизоляции перекрытия",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-effect-ceiling-low"
-      ]
-    },
-    {
-      "id": "quiz-system-not-material",
-      "topic": "tests",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Каков главный вывод испытаний?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Всегда выбирать самый толстый материал"
-        },
-        {
-          "id": "o2",
-          "text": "Все материалы работают одинаково"
-        },
-        {
-          "id": "o3",
-          "text": "Звукоизоляция — это выбор системы и понимание физики процесса, а не просто материала"
-        },
-        {
-          "id": "o4",
-          "text": "Всё решает цена"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "Это третий и главный вывод испытаний.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "звукоизоляция это не просто выбор материала, это выбор системы и понимание физики процесса",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-silence",
-      "topic": "honesty",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Что можно сказать клиенту про тишину?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Что система сделает квартиру абсолютно беззвучной"
-        },
-        {
-          "id": "o2",
-          "text": "Что ни одна система не делает квартиру абсолютно беззвучной, а задача — повысить акустический комфорт и сделать шум менее раздражающим и заметным"
-        },
-        {
-          "id": "o3",
-          "text": "Что шум исчезнет полностью"
-        },
-        {
-          "id": "o4",
-          "text": "Что клиент вообще ничего не услышит"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Это прямая формулировка: ни одна система не делает квартиру абсолютно беззвучной. Тишину не обещаем.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "ни одна система не делает квартиру абсолютно беззвучной",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В1",
-          "quote": "Задача правильной звукоизоляции повысить уровень акустического комфорта и сделать шум менее раздражающим и заметным",
-          "id": "q2"
-        }
-      ],
-      "isTrap": true,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-effect-silence",
-        "obj-effect-guarantee"
-      ]
-    },
-    {
-      "id": "quiz-depends",
-      "topic": "honesty",
-      "difficulty": 1,
-      "type": "single",
-      "question": "От чего зависит эффективность звукоизоляции?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "От конструкции перекрытия, типа шума, качества монтажа и самой системы"
-        },
-        {
-          "id": "o2",
-          "text": "Только от цены"
-        },
-        {
-          "id": "o3",
-          "text": "Только от мастера"
-        },
-        {
-          "id": "o4",
-          "text": "Только от системы"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "Звукоизоляция — измеряемая величина, а не ощущение.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "Эффективность системы зависит от — конструкции перекрытия, типа шума, качества монтажа и самой системы",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-effect-guarantee"
-      ]
-    },
-    {
-      "id": "quiz-fire",
-      "topic": "safety",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Что известно о горении системы?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "О горении ничего не известно"
-        },
-        {
-          "id": "o2",
-          "text": "Система не поддерживает горения, не выделяет опасного чёрного дыма, не подвержена горячему каплепадению"
-        },
-        {
-          "id": "o3",
-          "text": "Система негорючая и вообще не горит"
-        },
-        {
-          "id": "o4",
-          "text": "Система горит как пенопласт"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Говорим точно: «не поддерживает горения». Слова «негорючий» там нет.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "Система STP MultiFrame не поддерживает горения, не выделяет опасного черного дыма, не подвержена горячему каплепадению",
-          "id": "q1"
-        }
-      ],
-      "isTrap": true,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-eco-fire"
-      ]
-    },
-    {
-      "id": "quiz-dust",
-      "topic": "safety",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Что известно о пыли при монтаже MultiFrame?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "О пыли ничего не сказано"
-        },
-        {
-          "id": "o2",
-          "text": "Пыль образуется так же, как у стекловаты"
-        },
-        {
-          "id": "o3",
-          "text": "Пыли совсем нет и быть не может"
-        },
-        {
-          "id": "o4",
-          "text": "Нет сильного пыления, характерного для некоторых волокнистых материалов"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "Говорим «нет сильного пыления», а не «совсем нет пыли».",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "Во время монтажа нет сильного пыления, характерного для некоторых волокнистых материалов",
-          "id": "q1"
-        }
-      ],
-      "isTrap": true,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-eco-dust-install"
-      ]
-    },
-    {
-      "id": "quiz-wool-risk",
-      "topic": "safety",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Почему при стекловолоконных и минераловатных одеялах важна защита?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Они слишком тяжёлые"
-        },
-        {
-          "id": "o2",
-          "text": "При монтаже пыль может попасть на кожу и в воздух, вызвать раздражение слизистых; мелкая пыль остаётся после ремонта"
-        },
-        {
-          "id": "o3",
-          "text": "Они плохо режутся ножом"
-        },
-        {
-          "id": "o4",
-          "text": "Они слишком дорогие"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "При монтаже стекловолоконные и минераловатные одеяла могут пылить, а мелкая пыль остаётся после ремонта.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В4",
-          "quote": "Стекловолоконные и минераловатные одеяла тоже популярное решение, но при монтаже они могут пылить, вызывать раздражение кожи и слезистых",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-competitor-wool",
-        "obj-eco-polystyrene"
-      ]
-    },
-    {
-      "id": "quiz-tested-criteria",
-      "topic": "tests",
-      "difficulty": 2,
-      "type": "single",
-      "question": "По каким показателям сравнивали материалы в испытании?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Только индекс звукоизоляции"
-        },
-        {
-          "id": "o2",
-          "text": "Эффективность звукоизоляции, удобство монтажа, скорость монтажа, экологичность и безопасность"
-        },
-        {
-          "id": "o3",
-          "text": "Цена, цвет, вес и бренд"
-        },
-        {
-          "id": "o4",
-          "text": "Только скорость монтажа"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Таковы четыре показателя, по которым сравнивали материалы в испытании.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В5",
-          "quote": "Эффективность звукоизоляции. Удобство монтажа. Скорость монтажа. Экологичность и безопасность материалов.",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-late",
-      "topic": "sales",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Что отвечать на «подумаю потом»?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Что клиент обязан решить сейчас"
-        },
-        {
-          "id": "o2",
-          "text": "Что скидка закончится сегодня"
-        },
-        {
-          "id": "o3",
-          "text": "Что сейчас идеальный момент: после установки натяжного потолка вернуться к вопросу будет намного сложнее и дороже, придётся всё разбирать и делать заново"
-        },
-        {
-          "id": "o4",
-          "text": "Ничего, лучше не звонить"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "Ответ без давления: хороший разговор с клиентом — это не давление, а логичная консультация.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "После установки натяжного потолка вернуться к этому вопросу будет намного сложнее и дороже",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В1",
-          "quote": "Хороший скрипт это не давление на клиента, это логичная консультация",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "manager",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-timing-later",
-        "obj-timing-after-ceiling"
-      ]
-    },
-    {
-      "id": "quiz-boost",
-      "topic": "sales",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Что предложить клиенту, чтобы усилить эффект?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Только потолок"
-        },
-        {
-          "id": "o2",
-          "text": "Только пол"
-        },
-        {
-          "id": "o3",
-          "text": "Звукоизоляцию и на потолки, и на стены; максимальный эффект — если звукоизолировать ещё и пол"
-        },
-        {
-          "id": "o4",
-          "text": "Ничего, эффект и так максимальный"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "Для усиления эффекта стоит предложить потолок и стены; максимум — с полом.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "Для усиления и ярко выраженного эффекта стоит предложить клиенту вариант с установкой звукоизоляции и на потолки и на стены",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В1",
-          "quote": "Максимальный эффект от звукоизоляции будет достигнут, если также звукоизолировать пол",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "manager",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-need-ceiling-only"
-      ]
-    },
-    {
-      "id": "quiz-audio",
-      "topic": "sales",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Чем можно показать клиенту эффект?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Описанием цвета"
-        },
-        {
-          "id": "o2",
-          "text": "Коротким аудио"
-        },
-        {
-          "id": "o3",
-          "text": "Фотографией панели"
-        },
-        {
-          "id": "o4",
-          "text": "Обещанием по телефону"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Факт: клиенту можно представить эффект с помощью короткого аудио.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "Также клиенту можно представить эффект от звукоизоляции с помощью короткого аудио",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "manager",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-need-not-bothering"
-      ]
-    },
-    {
-      "id": "quiz-benefits-client",
-      "topic": "sales",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Какие выгоды важно показывать клиенту?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Только скидки"
-        },
-        {
-          "id": "o2",
-          "text": "Спокойствие и комфорт семьи, защита здоровья и экологичность, повышение качества жизни"
-        },
-        {
-          "id": "o3",
-          "text": "Только сроки гарантии"
-        },
-        {
-          "id": "o4",
-          "text": "Только внешний вид панели"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Фраза: «тишина — это не роскошь, это базовый комфорт современного жилья».",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "важно показывать клиенту выгоду спокойствие и комфорт семьи защита здоровья и экологичность повышение качества жизни",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "manager",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-saving-three",
-      "topic": "sales",
-      "difficulty": 2,
-      "type": "single",
-      "question": "По каким трём направлениям клиент получает экономию?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Экономия только денег"
-        },
-        {
-          "id": "o2",
-          "text": "Экономия электричества, воды и газа"
-        },
-        {
-          "id": "o3",
-          "text": "Экономия на мастере, на доставке и на упаковке"
-        },
-        {
-          "id": "o4",
-          "text": "Экономия денег, времени и пространства"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "Для клиента выгода — это экономия по трём направлениям.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "Экономия по трем направлениям. Экономия денег. Экономия времени. Экономия пространства.",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "manager",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-wall-wires",
-      "topic": "install",
-      "difficulty": 3,
-      "type": "single",
-      "question": "Что делать, если на стене провода уже выведены из перекрытия к розетке?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Ничего, выводить через потолок"
-        },
-        {
-          "id": "o2",
-          "text": "Обрезать провода"
-        },
-        {
-          "id": "o3",
-          "text": "Закрыть провода панелью без вывода"
-        },
-        {
-          "id": "o4",
-          "text": "До начала монтажа панелей удлинить провода для вывода через панели и гипсокартон"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "Так сказано в инструкции по монтажу стен.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В6",
-          "quote": "необходимо до начала монтажа панели мультифрейм удлинить провода для последующего Вывода через панели и гипсокартон",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "measurer",
-        "crew",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-tech-wiring"
-      ]
-    },
-    {
-      "id": "quiz-wall-step",
-      "topic": "install",
-      "difficulty": 3,
-      "type": "single",
-      "question": "Каков стандартный шаг стоечного профиля на стене и когда он меньше?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "600 мм; 400 мм, если планируется монтаж тяжёлых конструкций"
-        },
-        {
-          "id": "o2",
-          "text": "300 мм; 100 мм"
-        },
-        {
-          "id": "o3",
-          "text": "1000 мм; 800 мм"
-        },
-        {
-          "id": "o4",
-          "text": "Шаг не имеет значения"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "Стандарт — 600 мм; при тяжёлых конструкциях — 400 мм.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В6",
-          "quote": "Разметка раскладки стоячного профиля 27 на 60 производится шагом 600 мм",
-          "id": "q1"
-        },
-        {
-          "videoCode": "В6",
-          "quote": "шаг стоячного профиля делаем 400 мм",
-          "id": "q2"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "crew",
-        "measurer",
-        "owner"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-wall-gkl",
-      "topic": "install",
-      "difficulty": 3,
-      "type": "single",
-      "question": "Какой зазор оставляют между листами гипсокартона на стене?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Не оставляют"
-        },
-        {
-          "id": "o2",
-          "text": "20–25 см"
-        },
-        {
-          "id": "o3",
-          "text": "1 м"
-        },
-        {
-          "id": "o4",
-          "text": "3–5 мм, для компенсации температурных расширений"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "Зазоры 3–5 мм между листами для компенсации температурных расширений.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В6",
-          "quote": "Оставляйте зазоры 3-5 мм между листами для компенсации температурных расширений",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "crew",
-        "measurer",
-        "owner"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-wires-90",
-      "topic": "install",
-      "difficulty": 3,
-      "type": "single",
-      "question": "Как ориентироваться, где проходит провод, чтобы не задеть его при монтаже?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Наугад"
-        },
-        {
-          "id": "o2",
-          "text": "По запаху"
-        },
-        {
-          "id": "o3",
-          "text": "По цвету обоев"
-        },
-        {
-          "id": "o4",
-          "text": "По стандартам прокладки: угол 90 градусов и распаячная коробка"
-        }
-      ],
-      "correctOptionIds": [
-        "o4"
-      ],
-      "explanation": "Так сказано в инструкции по монтажу стен.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В6",
-          "quote": "Угол 90 градусов и наличие распаячной коробки сориентируют, где проходит провод, чтобы его не задеть",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "measurer",
-        "crew",
-        "owner",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-tech-wiring"
-      ]
-    },
-    {
-      "id": "quiz-speed-profit",
-      "topic": "sales",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Почему скорость монтажа важна для мастера и компании?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Чем быстрее монтаж, тем больше объектов можно выполнить за месяц"
-        },
-        {
-          "id": "o2",
-          "text": "Быстрый монтаж запрещён"
-        },
-        {
-          "id": "o3",
-          "text": "Скорость важна только клиенту"
-        },
-        {
-          "id": "o4",
-          "text": "Скорость не влияет на количество объектов"
-        }
-      ],
-      "correctOptionIds": [
-        "o1"
-      ],
-      "explanation": "Скорость монтажа связана с количеством объектов, которые можно сделать за месяц.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "Чем быстрее монтаж, тем больше объектов можно выполнить за месяц",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": []
-    },
-    {
-      "id": "quiz-where-certs",
-      "topic": "safety",
-      "difficulty": 1,
-      "type": "single",
-      "question": "Где можно ознакомиться с сертификацией материалов?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Только на выставке"
-        },
-        {
-          "id": "o2",
-          "text": "Такой информации нет"
-        },
-        {
-          "id": "o3",
-          "text": "По QR-коду"
-        },
-        {
-          "id": "o4",
-          "text": "По запросу в течение месяца"
-        }
-      ],
-      "correctOptionIds": [
-        "o3"
-      ],
-      "explanation": "Сертификация материалов доступна по QR-коду.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В2",
-          "quote": "Ознакомиться с сертификацией можно по QR-коду",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-eco-safe"
-      ]
-    },
-    {
-      "id": "quiz-eco-children",
-      "topic": "safety",
-      "difficulty": 2,
-      "type": "single",
-      "question": "Для каких людей особенно важно отсутствие пыли и вредных частиц?",
-      "options": [
-        {
-          "id": "o1",
-          "text": "Только для владельцев животных"
-        },
-        {
-          "id": "o2",
-          "text": "Для семей с детьми, аллергиков и людей, которые проводят в помещении большую часть времени"
-        },
-        {
-          "id": "o3",
-          "text": "Только для пожилых"
-        },
-        {
-          "id": "o4",
-          "text": "Только для курящих"
-        }
-      ],
-      "correctOptionIds": [
-        "o2"
-      ],
-      "explanation": "Это не означает «безопасно аллергикам»; так нельзя говорить клиенту.",
-      "sourceQuotes": [
-        {
-          "videoCode": "В1",
-          "quote": "Это особенно важно для семей с детьми, аллергиков, людей, которые проводят в помещении большую часть времени",
-          "id": "q1"
-        }
-      ],
-      "isTrap": false,
-      "roles": [
-        "owner",
-        "manager",
-        "measurer",
-        "crew",
-        "stp_admin"
-      ],
-      "relatedObjectionIds": [
-        "obj-eco-child-allergy"
-      ]
+     "videoCode": "В2",
+     "quote": "формованного каркаса из вспененного полипропилена и мягкого акустического наполнителя",
+     "id": "q1"
     }
-  ],
-  "videos": [
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-eco-polystyrene"
+   ]
+  },
+  {
+   "id": "quiz-vpp-not-foam",
+   "topic": "material",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Вспененный полипропилен — это пенопласт?",
+   "options": [
     {
-      "code": "В1",
-      "id": "mat_5485oqujd37j",
-      "title": "2.Как продавать звукоизоляцию"
+     "id": "o1",
+     "text": "Нет: пенопласт — это изделия из полистирола"
     },
     {
-      "code": "В2",
-      "id": "mat_s39ht68tg6fp",
-      "title": "3.О материале и принципе работы"
+     "id": "o2",
+     "text": "Да, это одно и то же, названия у производителей разные"
     },
     {
-      "code": "В3",
-      "id": "mat_diuoo6eyip1t",
-      "title": "4.Монтаж и инженерные коммуникации (соглас)"
+     "id": "o3",
+     "text": "Да, но только с добавлением масел и клея"
     },
     {
-      "code": "В4",
-      "id": "mat_ab47cb58jzkx",
-      "title": "5.Сравнение с решениями на рынке (соглас)"
-    },
-    {
-      "code": "В5",
-      "id": "mat_ynwqiuakiuwe",
-      "title": "5. Испытания материалов для звукоизоляции 2026(1)"
-    },
-    {
-      "code": "В6",
-      "id": "mat_4paachgro0l4",
-      "title": "Каркасная система звукоизоляции стен СТП Мультифрейм"
-    },
-    {
-      "code": "В7",
-      "id": "mat_xo4cuu20thak",
-      "title": "Эффект добавленной звукоизоляции СТП Мультифрейм 2026"
+     "id": "o4",
+     "text": "Зависит от плотности и цвета самой панели"
     }
-  ]
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "ВПП — не пенопласт, пенопласт — это изделия из полистирола.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "Вспененный полипропилен – это не пенопласт",
+     "id": "q1"
+    },
+    {
+     "videoCode": "В2",
+     "quote": "Пенопластом принято считать изделия из экструдированного полистирола",
+     "id": "q2"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-eco-polystyrene"
+   ]
+  },
+  {
+   "id": "quiz-flat-install",
+   "topic": "product",
+   "difficulty": 2,
+   "type": "single",
+   "question": "На какую панель удобнее монтировать коммуникации и крепежи?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "На MultiFrame Wave"
+    },
+    {
+     "id": "o2",
+     "text": "Одинаково удобно на обе панели"
+    },
+    {
+     "id": "o3",
+     "text": "На ту, у которой наполнитель мягче"
+    },
+    {
+     "id": "o4",
+     "text": "На MultiFrame Flat"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "На Flat удобнее монтировать коммуникации и крепежи; Wave придаёт дополнительный акустический комфорт.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "На панель MultiFrame Flat удобнее монтировать коммуникации и крепежи",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-tech-wave-flat"
+   ]
+  },
+  {
+   "id": "quiz-filler",
+   "topic": "product",
+   "difficulty": 3,
+   "type": "single",
+   "question": "Чем отличается наполнитель у Flat и у Wave?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "У Flat мягче и восстанавливается после поджатия, у Wave плотнее и проще в работе"
+    },
+    {
+     "id": "o2",
+     "text": "У Flat плотнее и с ним проще работать, у Wave мягче и восстанавливается после поджатия"
+    },
+    {
+     "id": "o3",
+     "text": "У Wave наполнитель из минеральной ваты, у Flat — из полипропилена"
+    },
+    {
+     "id": "o4",
+     "text": "Наполнитель одинаковый, различается только цвет лицевой стороны"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "У Flat наполнитель плотнее, с ним проще работать мастеру; у Wave мягче, и после поджатия он восстанавливается.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "В версии панели MultiFrame Flat наполнитель плотнее, с ним проще работать мастеру",
+     "id": "q1"
+    },
+    {
+     "videoCode": "В2",
+     "quote": "В версии MultiFrame Wave наполнитель мягче, восстанавливается после поджатия",
+     "id": "q2"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "measurer",
+    "crew",
+    "owner",
+    "stp_admin",
+    "manager"
+   ],
+   "relatedObjectionIds": []
+  },
+  {
+   "id": "quiz-wave-flat-effect",
+   "topic": "product",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Какая из панелей, Wave или Flat, сильнее снижает шум?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Wave, из-за волнообразной лицевой поверхности"
+    },
+    {
+     "id": "o2",
+     "text": "Обе одинаковы по эффекту звукоизоляции"
+    },
+    {
+     "id": "o3",
+     "text": "Flat, из-за более плотного наполнителя"
+    },
+    {
+     "id": "o4",
+     "text": "Зависит от высоты потолка в комнате"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "Обе панели одинаковы по эффекту звукоизоляции; отличаются лицевой стороной и удобством.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "Обе панели одинаковы по эффекту звукоизоляции",
+     "id": "q1"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-tech-wave-flat"
+   ]
+  },
+  {
+   "id": "quiz-wave-surface",
+   "topic": "product",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Какая лицевая поверхность у панели MultiFrame Wave?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Ячеистая с мелкой сеткой"
+    },
+    {
+     "id": "o2",
+     "text": "Абсолютно ровная без рельефа"
+    },
+    {
+     "id": "o3",
+     "text": "Гладкая, покрытая тканью"
+    },
+    {
+     "id": "o4",
+     "text": "Волнообразная"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "У версии Wave поверхность волнообразная, у Flat — абсолютно ровная.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "У версии MultiFrame Wave это волнообразная поверхность, у версии MultiFrame Flat абсолютно ровная",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-tech-wave-flat"
+   ]
+  },
+  {
+   "id": "quiz-principle",
+   "topic": "principle",
+   "difficulty": 2,
+   "type": "single",
+   "question": "На каком принципе работает сквозная перфорация панели?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Принцип Гельмгольца: перфорация гасит звуковую энергию внутри панели"
+    },
+    {
+     "id": "o2",
+     "text": "Принцип массы: чем тяжелее панель, тем лучше звукоизоляция"
+    },
+    {
+     "id": "o3",
+     "text": "Принцип отражения: звук возвращается обратно в источник"
+    },
+    {
+     "id": "o4",
+     "text": "Принцип нагрева: звуковая энергия переходит в тепло воздуха"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "Перфорация работает по системе Гельмгольца, гасит энергию внутри панели, а не просто отражает обратно.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "Сквозная перфорация панели работает по системе Гельмгольца, забирает звуковую энергию и гасит ее внутри панели, а не просто отражает обратно",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": []
+  },
+  {
+   "id": "quiz-mass-vs-filter",
+   "topic": "principle",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Чем принцип MultiFrame отличается от классической звукоизоляции?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Классика опирается на фильтрацию звука, а MultiFrame — на массу и толщину самой конструкции"
+    },
+    {
+     "id": "o2",
+     "text": "Они опираются на один принцип, различается только толщина"
+    },
+    {
+     "id": "o3",
+     "text": "Классика опирается на массу, MultiFrame — на фильтрацию и перераспределение звуковых волн"
+    },
+    {
+     "id": "o4",
+     "text": "MultiFrame работает только на отражение звука обратно"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Классика — масса; современные технологии, в том числе MultiFrame, используют фильтрацию и перераспределение волн.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "Существует классическая система звукоизоляции, основанная на массе конструкции",
+     "id": "q1"
+    },
+    {
+     "videoCode": "В2",
+     "quote": "фильтрацию и перераспределение звуковых волн в широком диапазоне частот",
+     "id": "q2"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": []
+  },
+  {
+   "id": "quiz-two-way",
+   "topic": "principle",
+   "difficulty": 1,
+   "type": "single",
+   "question": "В каких направлениях работает MultiFrame?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Только снижает шум, который проникает в комнату снаружи, например с улицы или от соседей"
+    },
+    {
+     "id": "o2",
+     "text": "Только уменьшает передачу звука из комнаты наружу к соседям"
+    },
+    {
+     "id": "o3",
+     "text": "Только убирает эхо и гулкость внутри самой комнаты"
+    },
+    {
+     "id": "o4",
+     "text": "В обе стороны: снижает внешний шум и уменьшает передачу звука наружу"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "Система работает сразу в двух направлениях и формирует акустический комфорт внутри.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "STP Multiframe работает сразу в двух направлениях",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-need-quiet-neighbors"
+   ]
+  },
+  {
+   "id": "quiz-comfort",
+   "topic": "principle",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Что значит «акустический комфорт» внутри комнаты?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Меньше эха, гулкости и отражений: речь и музыка звучат мягче"
+    },
+    {
+     "id": "o2",
+     "text": "Полная тишина внутри помещения при закрытых окнах"
+    },
+    {
+     "id": "o3",
+     "text": "Усиление громкости музыки и речи в комнате"
+    },
+    {
+     "id": "o4",
+     "text": "Исчезновение всех звуков, которые приходят с улицы"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "Акустический комфорт — это меньше эха, гулкости и отражений. Обещания тишины здесь нет.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "Когда в комнате меньше эхо, гулкости и отражений звука, а речь, музыка и повседневные звуки воспринимаются мягче и комфортнее",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-need-not-bothering"
+   ]
+  },
+  {
+   "id": "quiz-drum",
+   "topic": "principle",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Что такое «эффект барабана» под натяжным потолком?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Просадка на низких частотах, которая бывает у любого материала на потолке"
+    },
+    {
+     "id": "o2",
+     "text": "Ошибка мастера, который слишком сильно натянул полотно"
+    },
+    {
+     "id": "o3",
+     "text": "Полотно на некоторых объектах усиливает часть колебаний звука"
+    },
+    {
+     "id": "o4",
+     "text": "Резонанс самой панели, из-за которого она гудит"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Эффект возникает из-за особенностей застройки, а не из-за мастеров по установке потолков.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "Натяжное полотно будет принимать на себя звуковую энергию и передавать в помещение",
+     "id": "q1"
+    },
+    {
+     "videoCode": "В2",
+     "quote": "Такое происходит не из-за мастеров по установке натяжных потолков, а из-за особенностей застройки",
+     "id": "q2"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-effect-drum"
+   ]
+  },
+  {
+   "id": "quiz-fasteners",
+   "topic": "install",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Сколько креплений достаточно на одну панель?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Не менее шести, по два на каждую сторону"
+    },
+    {
+     "id": "o2",
+     "text": "2–3, потому что панели держатся друг за друга"
+    },
+    {
+     "id": "o3",
+     "text": "Одно крепление в центре панели"
+    },
+    {
+     "id": "o4",
+     "text": "Ровно по числу технических отверстий"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "Благодаря замковой системе панели поддерживают друг друга, поэтому достаточно 2–3 креплений на панель.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В3",
+     "quote": "панели будут поддерживать друг друга, поэтому достаточно 2-3 креплений на панель для создания устойчивой конструкции",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-tech-fixing"
+   ]
+  },
+  {
+   "id": "quiz-lock-name",
+   "topic": "install",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Как называется замковая система панелей?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Винтовой замок"
+    },
+    {
+     "id": "o2",
+     "text": "Шпунт-Про"
+    },
+    {
+     "id": "o3",
+     "text": "Шип-паз"
+    },
+    {
+     "id": "o4",
+     "text": "Липучка"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Замковая система называется шип-паз: она создаёт монолитное полотно по всей поверхности.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В3",
+     "quote": "замковая система SHIPPASS поможет создать монолитное надежное полотно на всей поверхности перекрытия",
+     "id": "q1"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-tech-fixing"
+   ]
+  },
+  {
+   "id": "quiz-holes",
+   "topic": "install",
+   "difficulty": 3,
+   "type": "single",
+   "question": "Сколько технических отверстий для крепления в каждой панели и можно ли сделать отверстие в другом месте?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "5; можно сделать в любом удобном месте"
+    },
+    {
+     "id": "o2",
+     "text": "5; сверлить можно только в готовых отверстиях"
+    },
+    {
+     "id": "o3",
+     "text": "2; дополнительные отверстия делать нельзя"
+    },
+    {
+     "id": "o4",
+     "text": "10; только по разметке производителя"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "У каждой панели 5 технических отверстий, но можно сделать отверстие в любом удобном месте.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В3",
+     "quote": "Всего у каждой панели 5 технических отверстий для крепления, но есть возможность сделать отверстие в любом удобном для монтажа месте",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "measurer",
+    "crew",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-tech-fixing"
+   ]
+  },
+  {
+   "id": "quiz-cutting",
+   "topic": "install",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Чем можно подрезать панели?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Только болгаркой с алмазным диском"
+    },
+    {
+     "id": "o2",
+     "text": "Только электролобзиком по разметке"
+    },
+    {
+     "id": "o3",
+     "text": "Резать панели нельзя, нужны целые"
+    },
+    {
+     "id": "o4",
+     "text": "Даже обычным ножом"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "Панели можно подрезать даже обычным ножом; для удобства есть коронка по дереву и реноватор.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В3",
+     "quote": "Панели можно подрезать даже обычным ножом",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "measurer",
+    "crew",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-tech-geometry"
+   ]
+  },
+  {
+   "id": "quiz-hour",
+   "topic": "install",
+   "difficulty": 1,
+   "type": "single",
+   "question": "За какое время один мастер может смонтировать потолок площадью 20 м²?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "За 5–20 дней, как многосоставную систему"
+    },
+    {
+     "id": "o2",
+     "text": "Примерно за час"
+    },
+    {
+     "id": "o3",
+     "text": "За полдня с бригадой из трёх человек"
+    },
+    {
+     "id": "o4",
+     "text": "Примерно за три дня вдвоём"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "Это ориентир: потолок 20 м², один мастер, примерно час.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "Монтаж потолка площадью 20 квадратных метров может выполнить один мастер примерно за час",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-time-long"
+   ]
+  },
+  {
+   "id": "quiz-after-panels",
+   "topic": "install",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Что монтируется после установки панелей на потолке?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Минеральная вата для дополнительной защиты"
+    },
+    {
+     "id": "o2",
+     "text": "Натяжное полотно или гипсокартон"
+    },
+    {
+     "id": "o3",
+     "text": "Ничего, панели остаются открытыми"
+    },
+    {
+     "id": "o4",
+     "text": "Слой полимерной мембраны"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "После установки панелей монтируется натяжное полотно или гипсокартон.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В3",
+     "quote": "После установки панелей монтируется натяжное полотно или гипсокартон",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-time-with-ceiling"
+   ]
+  },
+  {
+   "id": "quiz-calc",
+   "topic": "install",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Где получить расчёт количества материала на площадь помещения?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "В прайс-листе рядом с ценой панели"
+    },
+    {
+     "id": "o2",
+     "text": "Только на объекте у замерщика с рулеткой"
+    },
+    {
+     "id": "o3",
+     "text": "В техническом паспорте на каждую панель"
+    },
+    {
+     "id": "o4",
+     "text": "В калькуляторе STP-MultiFrame"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "Монтаж начинается с удобного расчёта в калькуляторе STP-MultiFrame.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В3",
+     "quote": "Получить расчет можно в калькуляторе STP-MultiFrame",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": []
+  },
+  {
+   "id": "quiz-timeframes",
+   "topic": "install",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Сколько дней обычно монтируются многосоставные конструкции?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "От 5 до 20 дней"
+    },
+    {
+     "id": "o2",
+     "text": "Не больше одних суток"
+    },
+    {
+     "id": "o3",
+     "text": "От 1 до 3 дней, как мембраны"
+    },
+    {
+     "id": "o4",
+     "text": "Около часа на 20 м²"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "Многосоставные — от 5 до 20 дней; мембраны и одеяла — 1–3 дня; полистирол — за несколько часов.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "Многосоставные конструкции монтируются от 5 до 20 дней в зависимости от зоны и площади монтажа",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-time-long"
+   ]
+  },
+  {
+   "id": "quiz-wires-info",
+   "topic": "install",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Где искать подробности по разводке инженерных коммуникаций при монтаже?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "У клиента: он лучше знает свой дом"
+    },
+    {
+     "id": "o2",
+     "text": "У электрика: монтажа это не касается"
+    },
+    {
+     "id": "o3",
+     "text": "В инструкциях по монтажу"
+    },
+    {
+     "id": "o4",
+     "text": "В прайсе на материалы и расходники"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Подробности по удобной разводке коммуникаций и приёмам установки есть в инструкциях по монтажу; правила не придумываем.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В3",
+     "quote": "Подробнее про удобное разведение инженерных коммуникации и лайфхаки по установке можно узнать из инструкций по монтажу",
+     "id": "q1",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "measurer",
+    "crew",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-tech-wiring"
+   ]
+  },
+  {
+   "id": "quiz-wires-invent",
+   "topic": "install",
+   "difficulty": 3,
+   "type": "single",
+   "question": "Вы не знаете правила разводки проводов на потолке. Что делать?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Сказать, что правила везде одинаковые"
+    },
+    {
+     "id": "o2",
+     "text": "Сделать, как привыкли мастера на других объектах"
+    },
+    {
+     "id": "o3",
+     "text": "Сменить тему и вернуться к вопросу позже"
+    },
+    {
+     "id": "o4",
+     "text": "Сверить по инструкции и честно сказать клиенту"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "Придумывать правила нельзя: честно скажите, что уточните по инструкции по монтажу.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В3",
+     "quote": "Подробнее про удобное разведение инженерных коммуникации и лайфхаки по установке можно узнать из инструкций по монтажу",
+     "id": "q1",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "measurer",
+    "crew",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-tech-wiring"
+   ]
+  },
+  {
+   "id": "quiz-drop",
+   "topic": "space",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Какой опуск потолка нужен при стандартной установке профиля и можно ли его сократить?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Профиль 7–9 см; опуск можно сократить до 6 см"
+    },
+    {
+     "id": "o2",
+     "text": "Профиль 12 см; сократить нельзя никак"
+    },
+    {
+     "id": "o3",
+     "text": "Профиль 7–9 см; сократить нельзя"
+    },
+    {
+     "id": "o4",
+     "text": "Профиль 2–3 см; сократить до 1 см"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "При стандартном профиле 7–9 см панели встают под натяжной потолок; при необходимости опуск сокращают до 6 см.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "При стандартной установке профиля в 7 – 9 см панели STP Multiframe прекрасно встанут под натяжной потолок",
+     "id": "q1"
+    },
+    {
+     "videoCode": "В1",
+     "quote": "При необходимости можно сократить опуск до 6 см, в багет по периметру",
+     "id": "q2"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-space-lose"
+   ]
+  },
+  {
+   "id": "quiz-low-ceiling",
+   "topic": "space",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Клиент спрашивает, влезет ли система под низкий потолок. Как ответить?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Пообещать, что влезет в любую комнату без замера"
+    },
+    {
+     "id": "o2",
+     "text": "Сказать, что панели настолько тонкие, что высоты не заберут"
+    },
+    {
+     "id": "o3",
+     "text": "Назвать опуск 7–9 см и уточнить допустимую высоту на замере"
+    },
+    {
+     "id": "o4",
+     "text": "Посоветовать сначала сделать потолок, а звукоизоляцию позже"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Опуск при стандартном профиле — 7–9 см, при необходимости его сокращают до 6 см. Точную высоту уточняют на замере, без обещаний заранее.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "При стандартной установке профиля в 7 – 9 см панели STP Multiframe прекрасно встанут под натяжной потолок",
+     "id": "q1"
+    },
+    {
+     "videoCode": "В1",
+     "quote": "При необходимости можно сократить опуск до 6 см, в багет по периметру",
+     "id": "q2"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-space-lose"
+   ]
+  },
+  {
+   "id": "quiz-problemometer-number",
+   "topic": "tests",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Клиент просит цифру эффекта для его квартиры. На что опереться?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "На цифру, которая получилась на другом похожем объекте, с поправкой на этаж"
+    },
+    {
+     "id": "o2",
+     "text": "На оценку из Проблемомера: он моделирует работу материала"
+    },
+    {
+     "id": "o3",
+     "text": "На среднюю цифру, которую называют продавцы на рынке"
+    },
+    {
+     "id": "o4",
+     "text": "На личный опыт мастера, который ставил похожее раньше"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "Для квартиры клиента эффект оценивает Проблемомер: он показывает работу материала как модель. Цифру в дБ клиенту не обещаем и чужие результаты не переносим.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "Звукоизоляция — это измеряемая величина, а не ощущение.",
+     "id": "q1",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    },
+    {
+     "videoCode": "В1",
+     "quote": "конструкции перекрытия, типа шума, качества монтажа и самой системы",
+     "id": "q2",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "manager",
+    "owner",
+    "stp_admin",
+    "measurer"
+   ],
+   "relatedObjectionIds": [
+    "obj-effect-guarantee"
+   ],
+   "basis": "Проблемомер — модель работы материала (решение владельца продукта)"
+  },
+  {
+   "id": "quiz-polystyrene-ceiling",
+   "topic": "tests",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Что чаще всего происходит со звукоизоляцией потолка, если закрыть его обычным полистиролом (пенопластом)?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Она заметно улучшается: чем толще слой пенопласта, тем тише"
+    },
+    {
+     "id": "o2",
+     "text": "Она не меняется: пенопласт никак не влияет на звук"
+    },
+    {
+     "id": "o3",
+     "text": "Она часто ухудшается: материал лёгкий, жёсткий и почти не гасит звук"
+    },
+    {
+     "id": "o4",
+     "text": "Она улучшается, если пенопласт плотно приклеить к плите перекрытия по всей площади"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Обычный полистирол (пенопласт) на потолке часто ухудшает звукоизоляцию: он жёсткий и лёгкий, практически не гасит звук, а иногда усиливает передачу вибраций.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В4",
+     "quote": "Материал легкий и недорогой, но он плохо работает со сложными звуковыми колебаниями и может создавать дополнительные резонансы",
+     "id": "q1",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    },
+    {
+     "videoCode": "В5",
+     "quote": "он жесткий и легкий. А значит, он практически не гасит звук, а иногда даже усиливает передачу вибраций",
+     "id": "q4",
+     "appliesTo": "pushback",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-cheaper-polystyrene"
+   ]
+  },
+  {
+   "id": "quiz-blanket",
+   "topic": "tests",
+   "difficulty": 3,
+   "type": "single",
+   "question": "Решает ли проблему шума акустическое одеяло или вата, уложенные сами по себе?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Нет, сами по себе они проблему не решают, нужна система"
+    },
+    {
+     "id": "o2",
+     "text": "Да, мягкий слой надёжно гасит любой шум через перекрытие"
+    },
+    {
+     "id": "o3",
+     "text": "Да, если уложить его в два-три слоя без зазоров"
+    },
+    {
+     "id": "o4",
+     "text": "Только если закрыть сверху плотным натяжным полотном"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "Акустическое одеяло или вата сами по себе проблему шума не решают; при монтаже они ещё и пылят, поэтому их закрывают гипсокартоном.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В4",
+     "quote": "Стекловолоконные и минераловатные одеяла тоже популярное решение, но при монтаже они могут пылить, вызывать раздражение кожи и слезистых",
+     "id": "q1",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    },
+    {
+     "videoCode": "В5",
+     "quote": "Стекловата дает минимальный эффект",
+     "id": "q5",
+     "appliesTo": "pushback",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-competitor-wool"
+   ]
+  },
+  {
+   "id": "quiz-system-not-material",
+   "topic": "tests",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Что важнее при выборе звукоизоляции потолка?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Самый толстый материал, который вообще помещается под потолок в вашей комнате"
+    },
+    {
+     "id": "o2",
+     "text": "Самая низкая цена за квадратный метр материала"
+    },
+    {
+     "id": "o3",
+     "text": "Самый тяжёлый материал, какой выдержит перекрытие"
+    },
+    {
+     "id": "o4",
+     "text": "Система и понимание физики процесса, а не один материал"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "Звукоизоляция — это выбор системы и понимание физики процесса, а не просто материала.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "конструкции перекрытия, типа шума, качества монтажа и самой системы",
+     "id": "q4",
+     "appliesTo": "pushback",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": []
+  },
+  {
+   "id": "quiz-problemometer-shows",
+   "topic": "tests",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Что показывает Проблемомер клиенту?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Точное число децибел, которое гарантирует производитель для этой комнаты и квартиры"
+    },
+    {
+     "id": "o2",
+     "text": "Как может звучать его комната до и после, по модели работы материала"
+    },
+    {
+     "id": "o3",
+     "text": "Фотографии объектов, где панели уже установлены"
+    },
+    {
+     "id": "o4",
+     "text": "Список мастеров, которые работают в его районе"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "Проблемомер включает аудио «до» и «после» и оценивает эффект для комнаты клиента как модель работы материала.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "Также клиенту можно представить эффект от звукоизоляции с помощью короткого аудио",
+     "id": "q7",
+     "appliesTo": "pushback",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-effect-silence"
+   ]
+  },
+  {
+   "id": "quiz-compare-criteria",
+   "topic": "tests",
+   "difficulty": 2,
+   "type": "single",
+   "question": "По каким показателям сравнивать материалы для звукоизоляции потолка?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "По цене, цвету лицевой стороны, весу и известности бренда на рынке материалов"
+    },
+    {
+     "id": "o2",
+     "text": "По эффективности, монтажу, экологичности и безопасности вместе"
+    },
+    {
+     "id": "o3",
+     "text": "Только по индексу звукоизоляции, остальное неважно"
+    },
+    {
+     "id": "o4",
+     "text": "Только по скорости монтажа, остальное не влияет"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "Сравнивают эффективность, удобство и скорость монтажа, экологичность и безопасность вместе, а не один показатель.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "традиционные системы действительно могут обеспечить хорошие показатели звукоизоляции",
+     "id": "q1",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    },
+    {
+     "videoCode": "В1",
+     "quote": "Но при этом они требуют сложного многослойного монтажа, занимают больше пространства и часто используют материалы, которые могут быть опасными для здоровья из-за мелкодисперсной пыли",
+     "id": "q2",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": []
+  },
+  {
+   "id": "quiz-honest-competitors",
+   "topic": "tests",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Как корректно говорить о решениях конкурентов?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Сказать, что у них всё хуже по любым показателям"
+    },
+    {
+     "id": "o2",
+     "text": "Не упоминать их вовсе, даже если клиент спрашивает"
+    },
+    {
+     "id": "o3",
+     "text": "Назвать их цену выше нашей, не сверяя цифры"
+    },
+    {
+     "id": "o4",
+     "text": "Признать сильные стороны и честно назвать минусы"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "Классические системы могут давать хорошие показатели: признаём это и честно называем минусы, например сложный монтаж и пыль.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "традиционные системы действительно могут обеспечить хорошие показатели звукоизоляции",
+     "id": "q1",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    },
+    {
+     "videoCode": "В1",
+     "quote": "Но при этом они требуют сложного многослойного монтажа, занимают больше пространства и часто используют материалы, которые могут быть опасными для здоровья из-за мелкодисперсной пыли",
+     "id": "q2",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "manager",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-competitor-multilayer"
+   ]
+  },
+  {
+   "id": "quiz-compose-none",
+   "topic": "safety",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Чего нет в составе панелей MultiFrame?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Полистирола, масел, полимерных мембран и других опасных связующих"
+    },
+    {
+     "id": "o2",
+     "text": "Вспененного полипропилена, из которого сделан каркас"
+    },
+    {
+     "id": "o3",
+     "text": "Мягкого акустического наполнителя внутри панели"
+    },
+    {
+     "id": "o4",
+     "text": "Сквозной перфорации, работающей как резонатор"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "В составе нет полистирола, масел, полимерных мембран и других опасных связующих.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "В составе панелей STP-MultiFrame нет полистирола, масел, полимерных мембран и других опасных связующих",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-eco-safe"
+   ]
+  },
+  {
+   "id": "quiz-dust",
+   "topic": "safety",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Что известно о пыли при монтаже MultiFrame?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Пыли нет совсем и быть не может ни при каком монтаже"
+    },
+    {
+     "id": "o2",
+     "text": "Пыль образуется так же сильно, как у стекловаты и ваты"
+    },
+    {
+     "id": "o3",
+     "text": "Нет сильного пыления, характерного для некоторых волокнистых материалов"
+    },
+    {
+     "id": "o4",
+     "text": "Про пыль при монтаже в материалах ничего не сказано"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Говорим «нет сильного пыления», а не «совсем нет пыли».",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "Во время монтажа нет сильного пыления, характерного для некоторых волокнистых материалов",
+     "id": "q1"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-eco-dust-install"
+   ]
+  },
+  {
+   "id": "quiz-wool-risk",
+   "topic": "safety",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Почему при монтаже стекловолоконных и минераловатных одеял важна защита?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Они слишком тяжёлые для одного мастера при монтаже"
+    },
+    {
+     "id": "o2",
+     "text": "Они плохо режутся и крошатся при каждом движении"
+    },
+    {
+     "id": "o3",
+     "text": "Они горят сильнее, чем обычный пенопласт при пожаре"
+    },
+    {
+     "id": "o4",
+     "text": "Пыль попадает на кожу и в воздух и остаётся после ремонта"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "При монтаже стекловолоконные и минераловатные одеяла могут пылить, раздражать кожу и слизистые, а мелкая пыль остаётся после ремонта.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В4",
+     "quote": "Стекловолоконные и минераловатные одеяла тоже популярное решение, но при монтаже они могут пылить, вызывать раздражение кожи и слезистых",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-competitor-wool",
+    "obj-eco-polystyrene"
+   ]
+  },
+  {
+   "id": "quiz-fire",
+   "topic": "safety",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Что известно о горении системы?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Система не поддерживает горения и не выделяет опасного чёрного дыма"
+    },
+    {
+     "id": "o2",
+     "text": "Система полностью негорючая, гореть она не может"
+    },
+    {
+     "id": "o3",
+     "text": "Система горит так же, как обычный пенопласт"
+    },
+    {
+     "id": "o4",
+     "text": "О горении системы в материалах ничего не сказано"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "Говорим точно: группа горючести Г2, класс КМ2, система не поддерживает горения. Слова «негорючий» нет.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "Система STP MultiFrame не поддерживает горения, не выделяет опасного черного дыма, не подвержена горячему каплепадению",
+     "id": "q1"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-eco-fire"
+   ]
+  },
+  {
+   "id": "quiz-eco-children",
+   "topic": "safety",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Для каких людей особенно важно отсутствие пыли и вредных частиц?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Для людей, которые держат дома животных и птиц"
+    },
+    {
+     "id": "o2",
+     "text": "Только для пожилых, которые редко выходят из дома"
+    },
+    {
+     "id": "o3",
+     "text": "Для семей с детьми, аллергиков и тех, кто много времени дома"
+    },
+    {
+     "id": "o4",
+     "text": "Для тех, кто часто делает ремонт своими руками"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Это не означает «безопасно аллергикам»; так нельзя говорить клиенту.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "Это особенно важно для семей с детьми, аллергиков, людей, которые проводят в помещении большую часть времени",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-eco-child-allergy"
+   ]
+  },
+  {
+   "id": "quiz-certs",
+   "topic": "safety",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Где можно ознакомиться с сертификатами материалов?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Только на выставке производителя"
+    },
+    {
+     "id": "o2",
+     "text": "В кабинете: раздел «Обучение» → Материалы"
+    },
+    {
+     "id": "o3",
+     "text": "На упаковке каждой панели"
+    },
+    {
+     "id": "o4",
+     "text": "Такой информации у партнёров нет"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "Сертификаты есть в разделе «Обучение» → Материалы кабинета: их можно найти и показать клиенту.",
+   "sourceQuotes": [],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-eco-safe"
+   ],
+   "basis": "Сертификаты размещены в разделе «Обучение» → Материалы кабинета"
+  },
+  {
+   "id": "quiz-silence",
+   "topic": "honesty",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Что можно сказать клиенту про тишину?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Что после монтажа квартира станет абсолютно беззвучной для всей семьи"
+    },
+    {
+     "id": "o2",
+     "text": "Что при хорошем монтаже шум исчезнет полностью"
+    },
+    {
+     "id": "o3",
+     "text": "Абсолютно беззвучной квартиру не делает ни одна система"
+    },
+    {
+     "id": "o4",
+     "text": "Что соседей сверху клиент больше вообще не услышит"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Тишину не обещаем: задача — повысить акустический комфорт и сделать шум менее раздражающим и заметным.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "ни одна система не делает квартиру абсолютно беззвучной",
+     "id": "q1"
+    },
+    {
+     "videoCode": "В1",
+     "quote": "Задача правильной звукоизоляции повысить уровень акустического комфорта и сделать шум менее раздражающим и заметным",
+     "id": "q2"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-effect-silence",
+    "obj-effect-guarantee"
+   ]
+  },
+  {
+   "id": "quiz-depends",
+   "topic": "honesty",
+   "difficulty": 1,
+   "type": "single",
+   "question": "От чего зависит эффективность звукоизоляции?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "От перекрытия, типа шума, качества монтажа и самой системы"
+    },
+    {
+     "id": "o2",
+     "text": "Только от цены материала за квадратный метр"
+    },
+    {
+     "id": "o3",
+     "text": "Только от опыта мастера, который ставит панели"
+    },
+    {
+     "id": "o4",
+     "text": "Только от толщины слоя, который ставят под потолок"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "Звукоизоляция — измеряемая величина, а не ощущение.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "Эффективность системы зависит от — конструкции перекрытия, типа шума, качества монтажа и самой системы",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "measurer",
+    "crew",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-effect-guarantee"
+   ]
+  },
+  {
+   "id": "quiz-no-numbers",
+   "topic": "honesty",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Можно ли обещать клиенту конкретное число децибел для его квартиры?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Да, если клиент настаивает и просит назвать точную цифру в письменном виде"
+    },
+    {
+     "id": "o2",
+     "text": "Да, но только для квартир выше пятого этажа"
+    },
+    {
+     "id": "o3",
+     "text": "Да, если назвать цифру с запасом на всякий случай"
+    },
+    {
+     "id": "o4",
+     "text": "Нет: эффект оценивает Проблемомер, число не обещаем"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "Число в дБ для квартиры клиента не обещаем: для комнаты эффект оценивает Проблемомер, а результат зависит от перекрытия и монтажа.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "конструкции перекрытия, типа шума, качества монтажа и самой системы",
+     "id": "q2",
+     "appliesTo": "answer",
+     "sourceType": "video"
+    },
+    {
+     "videoCode": "В1",
+     "quote": "ни одна система не делает квартиру абсолютно беззвучной",
+     "id": "q3",
+     "appliesTo": "both",
+     "sourceType": "video"
+    }
+   ],
+   "isTrap": true,
+   "roles": [
+    "manager",
+    "owner",
+    "stp_admin",
+    "measurer"
+   ],
+   "relatedObjectionIds": [
+    "obj-effect-guarantee"
+   ]
+  },
+  {
+   "id": "quiz-late",
+   "topic": "sales",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Что отвечать на «подумаю потом»?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Сказать, что решение нужно принять сегодня, иначе откажем"
+    },
+    {
+     "id": "o2",
+     "text": "Без давления объяснить: после потолка вернуться к вопросу сложнее"
+    },
+    {
+     "id": "o3",
+     "text": "Предупредить, что скидка действует только до конца сегодняшнего дня"
+    },
+    {
+     "id": "o4",
+     "text": "Не звонить, пока клиент сам не вернётся к разговору"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "Ответ без давления: хороший разговор с клиентом — это не давление, а логичная консультация.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "После установки натяжного потолка вернуться к этому вопросу будет намного сложнее и дороже",
+     "id": "q1"
+    },
+    {
+     "videoCode": "В1",
+     "quote": "Хороший скрипт это не давление на клиента, это логичная консультация",
+     "id": "q2"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "manager",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-timing-later",
+    "obj-timing-after-ceiling"
+   ]
+  },
+  {
+   "id": "quiz-audio",
+   "topic": "sales",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Чем можно показать клиенту эффект звукоизоляции?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Подробным описанием цвета и фактуры панели"
+    },
+    {
+     "id": "o2",
+     "text": "Аудио «до» и «после» в Проблемомере"
+    },
+    {
+     "id": "o3",
+     "text": "Фотографией панели на потолке соседней квартиры"
+    },
+    {
+     "id": "o4",
+     "text": "Обещанием снижения шума по телефону"
+    }
+   ],
+   "correctOptionIds": [
+    "o2"
+   ],
+   "explanation": "Клиенту можно представить эффект с помощью короткого аудио «до» и «после» в Проблемомере.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "Также клиенту можно представить эффект от звукоизоляции с помощью короткого аудио",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "manager",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-need-not-bothering"
+   ]
+  },
+  {
+   "id": "quiz-benefits-client",
+   "topic": "sales",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Какие выгоды важно показывать клиенту?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Скидку, рассрочку и подарки при оформлении заказа именно сегодня"
+    },
+    {
+     "id": "o2",
+     "text": "Гарантийные сроки и условия возврата денег"
+    },
+    {
+     "id": "o3",
+     "text": "Внешний вид панелей и цвет натяжного полотна"
+    },
+    {
+     "id": "o4",
+     "text": "Спокойствие и комфорт семьи, здоровье и экологичность"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "Фраза: «тишина — это не роскошь, это базовый комфорт современного жилья».",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "важно показывать клиенту выгоду спокойствие и комфорт семьи защита здоровья и экологичность повышение качества жизни",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "manager",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": []
+  },
+  {
+   "id": "quiz-saving-three",
+   "topic": "sales",
+   "difficulty": 2,
+   "type": "single",
+   "question": "По каким трём направлениям клиент получает экономию?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Деньги, время и пространство"
+    },
+    {
+     "id": "o2",
+     "text": "Электричество, вода и газ"
+    },
+    {
+     "id": "o3",
+     "text": "Мастер, доставка и упаковка"
+    },
+    {
+     "id": "o4",
+     "text": "Налоги, страховка и кредит"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "Для клиента выгода — это экономия по трём направлениям.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В1",
+     "quote": "Экономия по трем направлениям. Экономия денег. Экономия времени. Экономия пространства.",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "manager",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": []
+  },
+  {
+   "id": "quiz-speed-profit",
+   "topic": "sales",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Почему скорость монтажа важна для мастера и компании?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Быстрый монтаж даёт право поднять цену на работу"
+    },
+    {
+     "id": "o2",
+     "text": "Быстрый монтаж сокращает расходы на материалы"
+    },
+    {
+     "id": "o3",
+     "text": "Чем быстрее монтаж, тем больше объектов за месяц"
+    },
+    {
+     "id": "o4",
+     "text": "Скорость нужна только клиенту, мастеру она безразлична"
+    }
+   ],
+   "correctOptionIds": [
+    "o3"
+   ],
+   "explanation": "Скорость монтажа связана с количеством объектов, которые можно сделать за месяц.",
+   "sourceQuotes": [
+    {
+     "videoCode": "В2",
+     "quote": "Чем быстрее монтаж, тем больше объектов можно выполнить за месяц",
+     "id": "q1"
+    }
+   ],
+   "isTrap": false,
+   "roles": [
+    "owner",
+    "manager",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": []
+  },
+  {
+   "id": "quiz-kp-contents",
+   "topic": "sales",
+   "difficulty": 2,
+   "type": "single",
+   "question": "Клиент говорит: «давайте сравним на этой комнате». Что отправляет менеджер?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Гарантийное письмо с цифрой снижения шума в комнате"
+    },
+    {
+     "id": "o2",
+     "text": "Сравнительную таблицу с ценами всех конкурентов"
+    },
+    {
+     "id": "o3",
+     "text": "Подробный отчёт обо всех объектах, где уже установлены панели"
+    },
+    {
+     "id": "o4",
+     "text": "КП: оценка из Проблемомера, панели и цена из калькулятора"
+    }
+   ],
+   "correctOptionIds": [
+    "o4"
+   ],
+   "explanation": "Менеджер отправляет КП: оценку эффективности из Проблемомера и количество панелей с ценой из калькулятора. Сроков, цифр и гарантий в нём нет.",
+   "sourceQuotes": [],
+   "isTrap": true,
+   "roles": [
+    "manager",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-effect-guarantee"
+   ],
+   "basis": "Менеджер отправляет КП с оценкой из Проблемомера и расчётом из калькулятора"
+  },
+  {
+   "id": "quiz-next-step",
+   "topic": "sales",
+   "difficulty": 1,
+   "type": "single",
+   "question": "Чем заканчивать разговор после отправки КП?",
+   "options": [
+    {
+     "id": "o1",
+     "text": "Договориться о следующем контакте: назвать день и время звонка"
+    },
+    {
+     "id": "o2",
+     "text": "Попросить клиента позвонить самому, когда он окончательно решит и посоветуется"
+    },
+    {
+     "id": "o3",
+     "text": "Сказать, что скидка действует только до вечера"
+    },
+    {
+     "id": "o4",
+     "text": "Отправить КП и дождаться ответа клиента"
+    }
+   ],
+   "correctOptionIds": [
+    "o1"
+   ],
+   "explanation": "Разговор закрепляется конкретным следующим шагом: кто, что и когда сделает, например «позвоню завтра в 18:00».",
+   "sourceQuotes": [],
+   "isTrap": false,
+   "roles": [
+    "manager",
+    "owner",
+    "stp_admin"
+   ],
+   "relatedObjectionIds": [
+    "obj-timing-later"
+   ],
+   "basis": "Закрытие разговора: действие, срок и договорённость о следующем контакте"
+  }
+ ],
+ "videos": [
+  {
+   "code": "В1",
+   "id": "mat_5485oqujd37j",
+   "title": "2.Как продавать звукоизоляцию"
+  },
+  {
+   "code": "В2",
+   "id": "mat_s39ht68tg6fp",
+   "title": "3.О материале и принципе работы"
+  },
+  {
+   "code": "В3",
+   "id": "mat_diuoo6eyip1t",
+   "title": "4.Монтаж и инженерные коммуникации (соглас)"
+  },
+  {
+   "code": "В4",
+   "id": "mat_ab47cb58jzkx",
+   "title": "5.Сравнение с решениями на рынке (соглас)"
+  },
+  {
+   "code": "В5",
+   "id": "mat_ynwqiuakiuwe",
+   "title": "5. Испытания материалов для звукоизоляции 2026(1)"
+  },
+  {
+   "code": "В6",
+   "id": "mat_4paachgro0l4",
+   "title": "Каркасная система звукоизоляции стен СТП Мультифрейм"
+  },
+  {
+   "code": "В7",
+   "id": "mat_xo4cuu20thak",
+   "title": "Эффект добавленной звукоизоляции СТП Мультифрейм 2026"
+  }
+ ]
 }

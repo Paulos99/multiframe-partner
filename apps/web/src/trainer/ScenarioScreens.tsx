@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { buildScenarioAttempt, scenarioCriteria, scenarioPlayed } from './attempts';
 import { errorLabel, makePick, scenarioSlots, slotChoice, slotClientLine, scoreChoices } from './choice';
+import { buildTranscript, clientSays, reactionAfterPicks } from './dialog';
 import { ChoiceBlock } from './ChoiceParts';
 import { scenariosForRole } from './engine';
 import { CriteriaList, ResultHead } from './Results';
@@ -180,18 +181,8 @@ export function ScenarioTalk({ id, session, setSession }: { id: string; session:
     }
   }
 
-  function reactionAfter(picks: Pick[]): string | null {
-    const last = slots[picks.length - 1];
-    if (last.beat === 'closing') return s!.closing.afterCorrect;
-    if (last.beat === 2) {
-      const step = s!.steps.find((x) => x.id === last.stepId)!;
-      const both = picks.filter((p) => p.stepId === step.id).every((p) => p.firstTry);
-      return both ? step.afterPass : step.afterFail;
-    }
-    return null;
-  }
-
-  const transcript = session.picks.map((p, i) => ({ p, text: slotChoice(s, slots[i]).options.find((o) => o.id === p.optionId)?.text ?? '' }));
+  const transcript = buildTranscript(s, session.picks, Boolean(session.reaction));
+  const who = s.persona.name;
   const label = finished ? `Шаг ${stepsTotal} из ${stepsTotal}` : `Шаг ${stepNo} из ${stepsTotal}`;
 
   return (
@@ -199,17 +190,18 @@ export function ScenarioTalk({ id, session, setSession }: { id: string; session:
       <StepBar current={session.reaction && !finished ? stepDone + 1 : stepDone} total={stepsTotal} label={label} />
       {transcript.length ? (
         <ol className={styles.chat} aria-label="Разговор">
-          {transcript.map(({ p, text }, i) => (
+          {transcript.map((entry, i) => (
             <li key={i}>
-              <p className={styles.client}>Клиент: {p.clientLine}</p>
-              <p className={styles.mine}>Вы: {text}</p>
+              <p className={styles.client}>{entry.client}</p>
+              <p className={styles.mine}>Вы: {entry.mine}</p>
+              {entry.reaction ? <p className={styles.client}>{entry.reaction}</p> : null}
             </li>
           ))}
         </ol>
       ) : null}
       {session.reaction ? (
         <div className={styles.block} aria-live="polite">
-          <p className={styles.client}>{session.reaction.startsWith(s.persona.name) ? session.reaction : `Клиент: ${session.reaction}`}</p>
+          <p className={styles.client}>{clientSays(session.reaction, who)}</p>
           <div className={styles.stickyBar}>
             <button
               type="button"
@@ -223,7 +215,7 @@ export function ScenarioTalk({ id, session, setSession }: { id: string; session:
       ) : (
         <div className={styles.talk}>
           {slot.beat === 'closing' ? <p className={styles.beat}>Заключительная реплика · выберите следующий шаг</p> : <p className={styles.beat}>{slot.beat === 1 ? 'Реплика клиента' : 'Клиент не согласен и повторяет'}</p>}
-          <blockquote className={styles.client}>{slotClientLine(s, slot)}</blockquote>
+          <blockquote className={styles.client}>{clientSays(slotClientLine(s, slot), who)}</blockquote>
           <ChoiceBlock
             key={`${session.id}-${slot.key}`}
             choice={slotChoice(s, slot)}
@@ -232,7 +224,7 @@ export function ScenarioTalk({ id, session, setSession }: { id: string; session:
             videos={t.content.objections.videos}
             copyable={t.role === 'stp_admin'}
             coachHint={slot.beat === 'closing' ? undefined : s.steps.find((x) => x.id === slot.stepId)?.coachHint}
-            wrongNote={slot.beat === 'closing' ? s.closing.afterWrong : undefined}
+            wrongNote={slot.beat === 'closing' ? clientSays(s.closing.afterWrong, who) : undefined}
             onHint={() => {
               if (slot.stepId && !session.hintsUsed.includes(slot.stepId)) setSession({ ...session, hintsUsed: [...session.hintsUsed, slot.stepId] });
             }}
@@ -248,7 +240,7 @@ export function ScenarioTalk({ id, session, setSession }: { id: string; session:
                 usedHint,
               });
               const picks = [...session.picks, pick];
-              void persist({ ...session, picks, reaction: reactionAfter(picks) });
+              void persist({ ...session, picks, reaction: reactionAfterPicks(s!, slots, picks) });
             }}
           />
         </div>

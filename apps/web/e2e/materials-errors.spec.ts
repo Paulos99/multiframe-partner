@@ -27,7 +27,7 @@ async function openMaterialsWith(page: Page, mode: Mode) {
 test('материалы, 401: «Сессия истекла» с одной точкой и кнопкой «Войти заново»', async ({ page }) => {
   await openMaterialsWith(page, '401');
   const alert = page.getByRole('alert');
-  await expect(alert).toContainText('Сессия истекла. Выйдите и войдите заново, чтобы открыть материалы.');
+  await expect(alert).toContainText('Сессия истекла. Войдите заново.');
   await expect(page.getByTestId('materials-relogin')).toBeVisible();
   expect(await page.locator('body').innerText()).not.toContain('..');
 });
@@ -55,3 +55,16 @@ test('материалы, обрыв сети: просьба проверить
   await expect(page.getByTestId('materials-relogin')).toHaveCount(0);
   expect(await page.locator('body').innerText()).not.toContain('..');
 });
+
+for (const url of ['/', '/?demo=1']) {
+  test(`вход: отказ сервера по паролю не впускает по демо-паролю из сборки (${url})`, async ({ page }) => {
+    await page.goto(url);
+    if (url.includes('demo')) await page.getByRole('button', { name: 'Войти по логину' }).click();
+    await page.getByLabel('Логин', { exact: true }).fill('admin');
+    await page.getByLabel('Пароль', { exact: true }).fill('admin1234');
+    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(page.getByRole('alert').first()).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('mf_partner_local_only_v1'))).toBeNull();
+  });
+}
