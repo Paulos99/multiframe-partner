@@ -29,6 +29,13 @@ export class ApiError extends Error {
   }
 }
 
+export const NETWORK_ERROR_MESSAGE = 'Нет связи с сервером. Проверьте интернет и повторите.';
+
+/** Сбой связи или сервера (не ответ «нет доступа»): повтор может помочь. */
+export function isTransientApiError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 0 || err.status >= 500);
+}
+
 export function isApiError(err: unknown): err is ApiError {
   return err instanceof ApiError;
 }
@@ -50,7 +57,7 @@ async function request<T>(
     const signal = opts.signal ?? AbortSignal.timeout(12000);
     res = await fetch(`${base}${path}`, { ...opts, headers, signal, cache: 'no-store' });
   } catch (err) {
-    throw new ApiError(0, err instanceof Error ? err.message : 'Нет сети');
+    throw new ApiError(0, NETWORK_ERROR_MESSAGE);
   }
   const data = (await res.json().catch(() => ({}))) as T & { message?: string };
   if (!res.ok) {
@@ -79,12 +86,15 @@ export async function apiMe(): Promise<SessionUser> {
 }
 
 export async function apiLogout(): Promise<void> {
+  // Токен стираем сразу, а запрос уходит со старым значением: иначе поздний ответ
+  // стёр бы токен нового входа, если человек успел войти заново.
+  const token = loadToken();
+  saveToken(null);
   try {
-    await request('/auth/logout', { method: 'POST' });
+    await request('/auth/logout', { method: 'POST', token });
   } catch {
     /* ignore */
   }
-  saveToken(null);
 }
 
 export async function apiSaveOrg(patch: Partial<OrgSettings>): Promise<OrgSettings> {

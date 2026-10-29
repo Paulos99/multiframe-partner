@@ -8,6 +8,7 @@ import {
   deleteMaterialItem,
   listMaterials,
   materialKindLabel,
+  materialsNeedRelogin,
   materialsUseApi,
   openMaterial,
   openMaterialPdfCopy,
@@ -32,6 +33,7 @@ import {
   syncOfflineMaterials,
 } from './offlineMaterials';
 import { OfflineMaterialsCard } from './OfflineMaterialsCard';
+import { useOptionalPartner } from './PartnerContext';
 
 export { PREPARING_LABEL };
 
@@ -41,6 +43,11 @@ type NotedMaterial = {
   stub: string | null;
   size: number | null;
 };
+
+/** Текст причины часто сам кончается точкой: без этого в «…материалы.. Показаны» выходило две. */
+export function noTrailingDot(text: string): string {
+  return text.replace(/[.\s]+$/u, '');
+}
 
 export function materialNote(item: NotedMaterial): string {
   if (item.kind === 'folder') return '';
@@ -76,7 +83,12 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
   // Перерисовка, когда меняется набор офлайн-копий (значок «Офлайн» у файлов).
   useSyncExternalStore(subscribeOffline, getOfflineState, getOfflineState);
   /** Без сети показываем сохранённый список: только чтение, правка — онлайн. */
-  const [offlineView, setOfflineView] = useState<{ at: string | null; reason: string } | null>(null);
+  const partner = useOptionalPartner();
+  const logout = (): void => {
+    partner?.logout();
+  };
+  const [offlineView, setOfflineView] = useState<{ at: string | null; reason: string; relogin: boolean } | null>(null);
+  const [errorRelogin, setErrorRelogin] = useState(false);
   const [serverList, setServerList] = useState<PublicMaterial[] | null>(null);
   const canManage = canManageOnline && !offlineView;
   const [items, setItems] = useState<PublicMaterial[]>([]);
@@ -100,6 +112,7 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
   async function reload() {
     setLoading(true);
     setError(null);
+    setErrorRelogin(false);
     try {
       // Без сети не ждём таймаута запроса — сразу сохранённый список.
       if (typeof navigator !== 'undefined' && navigator.onLine === false && offlineEnabled()) throw new Error('Нет сети');
@@ -113,13 +126,15 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
       }
     } catch (ex) {
       const message = ex instanceof Error ? ex.message : 'Не удалось открыть материалы';
+      const relogin = materialsNeedRelogin(ex);
       const saved = await offlineMaterialsList().catch(() => null);
       if (saved) {
         setItems(saved.items);
         setServerList(null);
-        setOfflineView({ at: saved.at, reason: message });
+        setOfflineView({ at: saved.at, reason: message, relogin });
       } else {
         setError(message);
+        setErrorRelogin(relogin);
       }
     } finally {
       setLoading(false);
@@ -259,9 +274,18 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
       <p className={styles.lead}>Инструкции и презентации по продукту.</p>
       {offlineView ? (
         <p className={styles.status} role="status" data-testid="materials-offline-note">
-          {typeof navigator !== 'undefined' && navigator.onLine === false ? 'Нет сети' : offlineView.reason}. Показаны
-          офлайн-копии{offlineView.at ? ` от ${new Date(offlineView.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}` : ''}
+          {noTrailingDot(typeof navigator !== 'undefined' && navigator.onLine === false ? 'Нет сети' : offlineView.reason)}.
+          {' '}Показаны офлайн-копии
+          {offlineView.at ? ` от ${new Date(offlineView.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}` : ''}
           . Открываются файлы со значком «Офлайн».
+          {offlineView.relogin ? (
+            <>
+              {' '}
+              <button type="button" className={styles.ghost} onClick={() => logout()} data-testid="materials-relogin">
+                Войти заново
+              </button>
+            </>
+          ) : null}
         </p>
       ) : null}
       {materialsUseApi() ? <OfflineMaterialsCard list={serverList} offline={!!offlineView} /> : null}
@@ -351,6 +375,11 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
       {error ? (
         <div className={styles.error} role="alert">
           <span>{error}</span>
+          {errorRelogin ? (
+            <button type="button" className={styles.ghost} onClick={() => logout()} data-testid="materials-relogin">
+              Войти заново
+            </button>
+          ) : null}
           <button type="button" className={styles.ghost} onClick={() => void reload()}>
             Обновить
           </button>

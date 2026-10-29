@@ -324,20 +324,67 @@ export function saveDb(db: PartnerDb): void {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
+/** Токен, который не влез в localStorage: живёт до закрытия вкладки, чтобы вход не терялся молча. */
+let memoryToken: string | null = null;
+
 export function loadToken(): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY) || memoryToken;
   } catch {
-    return null;
+    return memoryToken;
   }
 }
 
+/** Освободить место: эти кэши пересоздаются при следующей загрузке с сервера. */
+function freeStorageForToken(): void {
+  for (const key of [OBJECTS_CACHE_KEY, PROJECTS_CACHE_KEY, ANALYTICS_KEY]) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* хранилище недоступно */
+    }
+  }
+}
+
+/**
+ * Сохранить токен входа. Если localStorage переполнен, чистим пересоздаваемые кэши и пробуем снова;
+ * если и это не помогло — держим токен в памяти вкладки (вход не «пропадает» молча).
+ */
 export function saveToken(token: string | null): void {
+  memoryToken = token || null;
   try {
-    if (!token) localStorage.removeItem(TOKEN_KEY);
-    else localStorage.setItem(TOKEN_KEY, token);
+    if (!token) {
+      localStorage.removeItem(TOKEN_KEY);
+      return;
+    }
+    try {
+      localStorage.setItem(TOKEN_KEY, token);
+    } catch {
+      freeStorageForToken();
+      localStorage.setItem(TOKEN_KEY, token);
+    }
+  } catch {
+    /* токен остаётся в памяти вкладки */
+  }
+}
+
+const LOCAL_ONLY_KEY = 'mf_partner_local_only_v1';
+
+/** Вход выполнен только на устройстве (сервер недоступен или не принял демо-логин): токена нет. */
+export function setLocalOnlySession(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(LOCAL_ONLY_KEY, '1');
+    else localStorage.removeItem(LOCAL_ONLY_KEY);
   } catch {
     /* ignore */
+  }
+}
+
+export function isLocalOnlySession(): boolean {
+  try {
+    return localStorage.getItem(LOCAL_ONLY_KEY) === '1';
+  } catch {
+    return false;
   }
 }
 
