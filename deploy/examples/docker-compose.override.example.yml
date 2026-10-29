@@ -1,0 +1,16 @@
+# Пример своих дополнений к запуску. Скопируйте в deploy/docker-compose.override.yml (файл остаётся на сервере,
+# в репозиторий не попадает; release.sh подключает его сам) и оставьте только нужное.
+services:
+  web:
+    volumes:
+      # Свои заголовки безопасности: например, если хранилище не на storage.yandexcloud.net, добавьте его адрес
+      # (S3_ENDPOINT) в img-src, connect-src и media-src политики CSP. Возьмите deploy/nginx/security-headers.conf
+      # нужной метки как основу. После выпуска новой метки сверьте файл с исходным.
+      - /etc/multiframe/security-headers.conf:/etc/nginx/security-headers.conf:ro
+  api:
+    # Для адаптера хранилища документов (PostgreSQL), см. docs/handover/DATA_LAYER.md:
+    # environment:
+    #   DOCUMENT_STORE_MODULE: /adapters/pg-store.mjs
+    # volumes:
+    #   - /opt/multiframe/adapters:/adapters:ro
+    restart: unless-stopped

@@ -26,6 +26,11 @@ cd "$ROOT"
 STATE="$ROOT/.release"
 ENV_FILE="${ENV_FILE:-$ROOT/deploy/.env}"
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$ROOT/deploy/docker-compose.yml")
+# Свои дополнения к запуску (тома, адаптер хранилища, свои заголовки): файл на сервере, в репозиторий не попадает.
+# Пример: deploy/examples/docker-compose.override.example.yml
+if [[ -f "$ROOT/deploy/docker-compose.override.yml" ]]; then
+  COMPOSE+=(-f "$ROOT/deploy/docker-compose.override.yml")
+fi
 mkdir -p "$STATE"
 
 if [[ ! -f "$ENV_FILE" ]]; then

@@ -1,5 +1,5 @@
 import { defineConfig, type Plugin } from 'vite';
-import { cpSync, existsSync, readFileSync, statSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
@@ -20,6 +20,48 @@ const BUILD_ID =
   (process.env.BUILD_ID || '').trim().slice(0, 40) ||
   (process.env.GITHUB_SHA || '').slice(0, 12) ||
   `local-${Date.now().toString(36)}`;
+
+/**
+ * Стенд на GitHub Pages (рабочий процесс «Deploy to GitHub Pages») скрывается от поисковиков:
+ * `<meta name="robots" content="noindex,nofollow">` в index.html и 404.html и файл robots.txt.
+ * В боевых сборках (метка выпуска, Docker, локальная сборка) этого нет. Принудительно: NOINDEX=1 / NOINDEX=0.
+ */
+const PAGES_WORKFLOW = 'Deploy to GitHub Pages';
+export function isStandBuild(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NOINDEX === '1') return true;
+  if (env.NOINDEX === '0') return false;
+  return env.GITHUB_ACTIONS === 'true' && env.GITHUB_WORKFLOW === PAGES_WORKFLOW;
+}
+
+const NOINDEX_META = '<meta name="robots" content="noindex,nofollow" />';
+
+export function addNoindexMeta(html: string): string {
+  if (/name=["']robots["']/.test(html)) return html;
+  return html.replace(/<head>/, `<head>\n    ${NOINDEX_META}`);
+}
+
+function standNoindex(): Plugin {
+  let outDir = 'dist';
+  return {
+    name: 'mf-stand-noindex',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    transformIndexHtml(html) {
+      return isStandBuild() ? addNoindexMeta(html) : html;
+    },
+    generateBundle() {
+      if (!isStandBuild()) return;
+      this.emitFile({ type: 'asset', fileName: 'robots.txt', source: 'User-agent: *\nDisallow: /\n' });
+    },
+    closeBundle() {
+      if (!isStandBuild()) return;
+      const file = join(outDir, '404.html');
+      if (existsSync(file)) writeFileSync(file, addNoindexMeta(readFileSync(file, 'utf8')));
+    },
+  };
+}
 
 function buildVersionFile(): Plugin {
   return {
@@ -107,6 +149,7 @@ export default defineConfig(({ command }) => ({
   define: { __BUILD_ID__: JSON.stringify(command === 'build' ? BUILD_ID : 'dev') },
   plugins: [
     react(),
+    standNoindex(),
     buildVersionFile(),
     pdfjsAssets(),
     devServiceWorkerKiller(),
