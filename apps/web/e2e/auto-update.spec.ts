@@ -128,7 +128,8 @@ test('service worker: новый деплой включается сам при
   live = 'B';
   const loads = countLoads(page);
   await page.reload();
-  await expect.poll(() => mainScript(page), { timeout: 30_000 }).not.toBe(scriptA);
+  // Страница сама перезагружается: оценка во время перехода может упасть, тогда считаем, что скрипт ещё прежний.
+  await expect.poll(() => mainScript(page).catch(() => scriptA), { timeout: 30_000 }).not.toBe(scriptA);
   await expect.poll(() => page.evaluate(() => fetch('/version.json', { cache: 'no-store' }).then((r) => r.json()).then((j) => j.id))).toBe(siteB.id);
   await page.waitForTimeout(4000);
   // Один ручной reload + не больше одной автоматической перезагрузки; потом тихо.
@@ -149,7 +150,8 @@ test('без service worker: устаревшая страница сама до
   staleHtml = true; // кэш отдаёт старый HTML, version.json уже новый
   const loads = countLoads(page);
   await page.reload();
-  await expect.poll(() => mainScript(page), { timeout: 30_000 }).not.toBe(scriptA);
+  // Страница сама перезагружается: оценка во время перехода может упасть, тогда считаем, что скрипт ещё прежний.
+  await expect.poll(() => mainScript(page).catch(() => scriptA), { timeout: 30_000 }).not.toBe(scriptA);
   await page.waitForTimeout(3000);
   const settled = loads.count();
   expect(settled).toBeLessThanOrEqual(3);

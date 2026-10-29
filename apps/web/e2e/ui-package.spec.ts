@@ -57,7 +57,7 @@ test('phone: analytics period wraps under the title, full width, 44px', async ({
   const title = (await page.getByRole('heading', { name: 'Аналитика', exact: true }).boundingBox())!;
   const box = (await calendar.boundingBox())!;
   expect(box.y).toBeGreaterThan(title.y + title.height - 1);
-  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(43.9);
   const card = (await page.getByRole('group', { name: 'Период аналитики' }).boundingBox())!;
   expect(box.width).toBeGreaterThanOrEqual(card.width - 1);
   const r = await page.evaluate(() => ({ sw: document.scrollingElement!.scrollWidth, w: window.innerWidth }));

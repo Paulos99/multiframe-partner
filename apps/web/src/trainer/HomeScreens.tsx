@@ -214,7 +214,7 @@ export function Home({
           ) : null}
         </section>
       ) : null}
-      {t.pending > 0 ? <p className={styles.hint}>Результатов на этом устройстве: {t.pending}. Отправка на сервер пока не подключена, данные не потеряются.</p> : null}
+      {t.pending > 0 && t.who.partnerId ? <p className={styles.hint}>Ждут отправки: {t.pending}. Они уйдут сами, когда появится связь, ничего не потеряется.</p> : null}
     </section>
   );
 }

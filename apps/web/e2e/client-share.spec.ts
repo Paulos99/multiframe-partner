@@ -310,7 +310,7 @@ test('в ответе сервера по открытой ссылке нет �
   for (const secret of SECRETS) expect(raw, `в ответе не должно быть «${secret}»`).not.toContain(secret);
 
   // Чужой токен и мусор отвечают одинаково.
-  for (const bad of ['A'.repeat(32), 'abc', `${token.slice(0, -1)}_`]) {
+  for (const bad of ['A'.repeat(32), 'abc', `${token.slice(0, -1)}${token.endsWith('_') ? '-' : '_'}`]) {
     const miss = await request.get(`${API}/public/rooms/${bad}`);
     expect(miss.status()).toBe(404);
   }
