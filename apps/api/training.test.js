@@ -140,8 +140,9 @@ describe('обучение в аналитике', { concurrency: false }, () =>
 
   test('админ видит все компании и любого сотрудника', async () => {
     const list = readJson(await call('GET', '/training/companies', { token: t.admin }));
-    assert.deepEqual(list.companies.map((c) => c.id).sort(), ['org_demo', 'org_demo_spb']);
-    for (const c of list.companies) {
+    assert.deepEqual(list.companies.map((c) => c.id).sort(), ['org_demo', 'org_demo_spb', 'org_stp']);
+    // Внутренняя компания StP — менеджеры StP; в ней сотрудников меньше, чем у партнёров.
+    for (const c of list.companies.filter((x) => x.id !== 'org_stp')) {
       assert.ok(c.summary.staffTotal >= 3);
       assert.ok(c.summary.trained >= 1);
       assert.equal(typeof c.summary.active30, 'number');

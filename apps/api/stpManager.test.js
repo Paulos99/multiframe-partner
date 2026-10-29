@@ -18,10 +18,12 @@ after(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-function call(method, urlPath, { token, body } = {}) {
+function call(method, urlPathWithQuery, { token, body } = {}) {
+  const [urlPath, qs] = urlPathWithQuery.split('?');
   return handler({
     httpMethod: method,
     path: urlPath,
+    queryStringParameters: qs ? Object.fromEntries(new URLSearchParams(qs)) : undefined,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -191,6 +193,26 @@ describe('менеджер StP: создание админом и доступ'
     assert.equal(me.role, 'stp_manager');
     assert.equal((await call('GET', '/materials', { token })).statusCode, 200);
     assert.equal((await call('GET', '/objects', { token })).statusCode, 403);
+  });
+});
+
+describe('обучение менеджера StP на сервере', { concurrency: false }, () => {
+  test('журнал пишется за менеджером, администратор видит компанию StP, чужое закрыто', async () => {
+    const token = await login('stpmgr1', 'exec1234');
+    const now = Date.now();
+    const sync = await call('POST', '/training/sync', {
+      token,
+      body: { attempts: [], materials: [{ id: 'm-1', materialId: 'mat_x', title: 'Материал', openedAt: new Date(now - 1000).toISOString() }] },
+    });
+    assert.equal(sync.statusCode, 200, sync.body);
+    assert.equal((await call('GET', '/training/me', { token })).statusCode, 200);
+    assert.equal((await call('GET', '/training/org', { token })).statusCode, 403);
+    assert.equal((await call('GET', '/training/companies', { token })).statusCode, 403);
+    const admin = await login('admin', 'admin1234');
+    const org = await call('GET', '/training/org?orgId=org_stp', { token: admin });
+    assert.equal(org.statusCode, 200, org.body);
+    const employees = JSON.stringify(read(org));
+    assert.ok(employees.includes('u_stpmgr1'), 'менеджер StP в таблице компании StP');
   });
 });
 
