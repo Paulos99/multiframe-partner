@@ -47,6 +47,8 @@ import {
   apiUploadObjectDocuments,
   hasRemoteApi,
   isApiError,
+  isTransientApiError,
+  NETWORK_ERROR_MESSAGE,
   stripObjectDocuments,
 } from './apiClient';
 import {
@@ -98,6 +100,7 @@ import {
   updatePartnerCity,
   saveSession,
   saveToken,
+  setLocalOnlySession,
   trackToolOpen,
   updateOrgSettings,
   type StoredOrg,
@@ -559,11 +562,28 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         let session: SessionUser;
         if (remote) {
           try {
-            const res = await apiLogin(loginName, password);
+            let res: Awaited<ReturnType<typeof apiLogin>>;
+            try {
+              res = await apiLogin(loginName, password);
+            } catch (first) {
+              // Сбой связи на телефоне бывает разовым: один повтор, прежде чем сдаваться.
+              if (!isTransientApiError(first)) throw first;
+              await new Promise((resolve) => setTimeout(resolve, 1200));
+              res = await apiLogin(loginName, password);
+            }
             session = res.user;
             saveSession(session);
-          } catch {
-            session = localLogin(loginName, password);
+            setLocalOnlySession(false);
+          } catch (apiError) {
+            // Демо-логины, закрытые на сервере, входят только на устройстве (без токена).
+            // Настоящий аккаунт при обрыве связи так «войти» не может: говорим про связь, а не про пароль.
+            try {
+              session = localLogin(loginName, password);
+              setLocalOnlySession(true);
+            } catch (localError) {
+              if (isTransientApiError(apiError)) throw new Error(NETWORK_ERROR_MESSAGE);
+              throw localError;
+            }
           }
         } else {
           session = localLogin(loginName, password);
@@ -587,6 +607,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     if (remote) void apiLogout();
     localLogout(user);
+    setLocalOnlySession(false);
     void rememberSession({ token: null, apiBase: apiBase(), userId: null });
     setUser(null);
     setCalcRequest(null);
@@ -1216,6 +1237,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** Без исключения вне провайдера: для панелей, которые рендерятся и отдельно (тесты, предпросмотр). */
+export function useOptionalPartner(): PartnerApi | null {
+  return useContext(Ctx);
 }
 
 export function usePartner(): PartnerApi {

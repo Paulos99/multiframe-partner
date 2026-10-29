@@ -8,6 +8,24 @@ import { ICON_FILES, MANIFEST_ICONS } from './src/pwa/icons';
 
 const base = process.env.VITE_BASE || '/';
 
+/** Один номер на сборку: в бандле (__BUILD_ID__) и в version.json рядом с сайтом. */
+const BUILD_ID =
+  (process.env.GITHUB_SHA || '').slice(0, 12) || `local-${Date.now().toString(36)}`;
+
+function buildVersionFile(): Plugin {
+  return {
+    name: 'mf-build-version',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ id: BUILD_ID }),
+      });
+    },
+  };
+}
+
 /**
  * Ресурсы pdf.js (CMap, стандартные шрифты, wasm-декодеры, ICC) рядом с сайтом в /pdfjs/.
  * Без них PDF с невстроенными шрифтами или JPEG2000-картинками рисуется с ошибками.
@@ -75,10 +93,12 @@ function pdfjsAssets(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base,
+  define: { __BUILD_ID__: JSON.stringify(command === 'build' ? BUILD_ID : 'dev') },
   plugins: [
     react(),
+    buildVersionFile(),
     pdfjsAssets(),
     devServiceWorkerKiller(),
     VitePWA({
@@ -105,10 +125,14 @@ export default defineConfig({
         icons: MANIFEST_ICONS,
       },
       workbox: {
-        navigateFallback: `${base}index.html`.replace(/\/+/g, '/'),
-        // Don't hijack the partner calculator SPA under /calculator/
-        navigateFallbackDenylist: [/^\/.*calculator(?:\/|$)/i],
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff2,mp3}'],
+        // Новая версия включается сразу: без ожидания закрытия вкладок и без вопросов.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        // Страницы (index.html) — «сеть сначала» ниже, а не из предкэша: после выкладки открывается свежая.
+        navigateFallback: null,
+        // Ответы API (вход, /auth/me, материалы) service worker не кэширует: он не трогает запросы чужого origin.
+        globPatterns: ['**/*.{js,css,ico,png,svg,jpg,jpeg,webp,woff2,mp3}'],
         // pdf.js: воркер и декодеры большие и нужны только при открытии PDF.
         globIgnores: ['pdfjs/**', '**/pdf.worker*.mjs', '**/pdf.worker*.js'],
         importScripts: ['sw-sync.js'],
@@ -116,6 +140,23 @@ export default defineConfig({
         // чтобы PDF из офлайн-копий открывались без сети. Только свой сайт: файлы из бакета
         // (видео с Range) service worker не трогает.
         runtimeCaching: [
+          {
+            // Переходы по страницам сайта: сеть первой (до 4 с), офлайн — последняя удачная копия.
+            // Калькулятор /calculator/ — отдельное приложение, его worker не подменяет.
+            urlPattern: ({ request, url, sameOrigin }) =>
+              request.mode === 'navigate' && sameOrigin && !/calculator(?:\/|$)/i.test(url.pathname),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'mf-pages-v1',
+              networkTimeoutSeconds: 4,
+              plugins: [
+                {
+                  // Один ключ на все адреса приложения (?demo=1, ?_v=…, #-маршруты): офлайн открывается эта копия.
+                  cacheKeyWillBeUsed: async () => (globalThis as unknown as { registration: { scope: string } }).registration.scope,
+                },
+              ],
+            },
+          },
           {
             urlPattern: ({ url, sameOrigin }) =>
               sameOrigin && (url.pathname.includes('/pdfjs/') || /\/assets\/pdf\.worker[^/]*\.m?js$/.test(url.pathname)),
@@ -133,4 +174,4 @@ export default defineConfig({
   server: {
     port: 5174,
   },
-});
+}));

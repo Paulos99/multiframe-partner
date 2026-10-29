@@ -24,8 +24,9 @@ import {
   apiUploadMaterial,
   hasRemoteApi,
   isApiError,
+  NETWORK_ERROR_MESSAGE,
 } from './apiClient';
-import { loadDb, loadToken, saveDb } from './localStore';
+import { isLocalOnlySession, loadDb, loadToken, saveDb } from './localStore';
 
 export type { PublicMaterial };
 
@@ -68,15 +69,40 @@ export function materialsUseApi(): boolean {
 }
 
 export const MATERIALS_SESSION_EXPIRED = 'Сессия истекла. Выйдите и войдите заново, чтобы открыть материалы.';
+/** Вход был без сервера (нет связи или демо-логин): токена нет, сервер материалы не отдаст. */
+export const MATERIALS_NO_SERVER_SESSION =
+  'Вы вошли без связи с сервером, поэтому материалы не открываются. Проверьте интернет, выйдите и войдите заново.';
+export const MATERIALS_FORBIDDEN = 'Для вашей роли материалы недоступны. Обратитесь к владельцу кабинета.';
+export const MATERIALS_SERVER_DOWN = 'Сервер материалов временно недоступен. Повторите позже.';
+
+export type MaterialsFailure = 'session' | 'no-session' | 'network' | 'forbidden' | 'server' | 'other';
+
+/** Ошибка списка материалов с причиной: по ней экран выбирает текст и кнопку «Войти заново». */
+export class MaterialsError extends Error {
+  kind: MaterialsFailure;
+  constructor(kind: MaterialsFailure, message: string) {
+    super(message);
+    this.name = 'MaterialsError';
+    this.kind = kind;
+  }
+}
+
+/** Сессия не подтверждена сервером — поможет только повторный вход. */
+export function materialsNeedRelogin(error: unknown): boolean {
+  return error instanceof MaterialsError && (error.kind === 'session' || error.kind === 'no-session');
+}
 
 /**
- * С настроенным API материалы берутся только с сервера. Без токена (истёк, 401)
- * раньше молча открывалась локальная демо-библиотека из localStorage — реальные
- * файлы «пропадали». Теперь — явная ошибка с просьбой войти заново.
+ * С настроенным API материалы берутся только с сервера. Без токена раньше молча открывалась
+ * локальная демо-библиотека из localStorage — реальные файлы «пропадали». Теперь — явная ошибка.
  */
 function remoteEnabled(): boolean {
   if (!hasRemoteApi()) return false;
-  if (!loadToken()) throw new Error(MATERIALS_SESSION_EXPIRED);
+  if (!loadToken()) {
+    throw isLocalOnlySession()
+      ? new MaterialsError('no-session', MATERIALS_NO_SERVER_SESSION)
+      : new MaterialsError('session', MATERIALS_SESSION_EXPIRED);
+  }
   return true;
 }
 
@@ -85,8 +111,13 @@ export async function listMaterials(): Promise<PublicMaterial[]> {
     try {
       return await apiListMaterials();
     } catch (error) {
-      // Токен в хранилище есть, но сервер его уже не принимает (истёк/отозван).
-      if (isApiError(error) && error.status === 401) throw new Error(MATERIALS_SESSION_EXPIRED);
+      if (isApiError(error)) {
+        // Токен в хранилище есть, но сервер его уже не принимает (истёк/отозван).
+        if (error.status === 401) throw new MaterialsError('session', MATERIALS_SESSION_EXPIRED);
+        if (error.status === 403) throw new MaterialsError('forbidden', MATERIALS_FORBIDDEN);
+        if (error.status === 0) throw new MaterialsError('network', NETWORK_ERROR_MESSAGE);
+        if (error.status >= 500) throw new MaterialsError('server', MATERIALS_SERVER_DOWN);
+      }
       throw error;
     }
   }
