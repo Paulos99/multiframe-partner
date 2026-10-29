@@ -34,6 +34,7 @@ import {
 } from './offlineMaterials';
 import { OfflineMaterialsCard } from './OfflineMaterialsCard';
 import { useOptionalPartner } from './PartnerContext';
+import { trackMaterialOpen } from './trainingSync';
 
 export { PREPARING_LABEL };
 
@@ -201,6 +202,10 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
     // Окно предпросмотра листает все файлы текущей папки; содержимое грузится лениво.
     const index = Math.max(0, files.findIndex((entry) => entry.id === item.id));
     setError(null);
+    // Лёгкий учёт для обучения: «открыл материал» (раз в полчаса на материал, без ожидания сети).
+    if (partner?.user?.id && partner.user.orgId && partner.user.role !== 'admin') {
+      void trackMaterialOpen(partner.user.id, item.id, item.name);
+    }
     openFilePreview(files.map(materialPreviewItem), index);
   }
 

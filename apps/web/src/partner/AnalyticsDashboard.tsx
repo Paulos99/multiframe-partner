@@ -46,6 +46,8 @@ import { FadeRise } from './motionBits';
 import { PeriodCalendar } from './PeriodCalendar';
 import { usePartner } from './PartnerContext';
 import { StaffDrillDrawer } from './StaffDrillDrawer';
+import { TrainingCompanyPage, TrainingTab, TrainingUserPage } from './TrainingAnalytics';
+import { normalizeRole } from '../../../../packages/shared/partner';
 import styles from './partner.module.css';
 import { FunnelIcon } from '../icons';
 
@@ -364,7 +366,7 @@ function BreakdownList({
   );
 }
 
-type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'objects';
+type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'training' | 'objects';
 
 const DRILL_METRICS = new Set(['staff', 'problemomer', 'calculator', 'pdf', 'area', 'panels', 'avg', 'done']);
 
@@ -397,6 +399,16 @@ export function AnalyticsDashboard({
   useEffect(() => {
     if (mode !== 'admin' && section === 'companies') setSection('overview');
   }, [mode, section]);
+
+  // Обучение видят владелец (свою компанию) и администратор (все компании); остальным вкладки нет.
+  const canTraining = mode === 'admin' || normalizeRole(user.role) === 'owner';
+  const onTrainingPage = route.page === 'training-user' || route.page === 'training-company';
+  useEffect(() => {
+    if (onTrainingPage) setSection('training');
+  }, [onTrainingPage]);
+  useEffect(() => {
+    if (!canTraining && section === 'training') setSection('overview');
+  }, [canTraining, section]);
 
   const staffKey = api.partnerListStaff().map((member) => member.id).join('|');
 
@@ -488,6 +500,17 @@ export function AnalyticsDashboard({
     });
   }, [mode, data, partnersList]);
 
+  if (onTrainingPage && canTraining) {
+    return (
+      <div className={`${styles.card} ${styles.dashCard}`}>
+        {route.page === 'training-user' && route.userId ? <TrainingUserPage userId={route.userId} /> : null}
+        {route.page === 'training-company' && route.orgId && mode === 'admin' ? (
+          <TrainingCompanyPage orgId={route.orgId} />
+        ) : null}
+      </div>
+    );
+  }
+
   if (loading && !data) {
     return (
       <div className={`${styles.card} ${styles.dashCard}`} aria-busy="true">
@@ -511,6 +534,7 @@ export function AnalyticsDashboard({
     { id: 'portrait', label: 'Комнаты' },
     ...(mode === 'admin' ? [{ id: 'companies' as const, label: 'Компании' }] : []),
     { id: 'team', label: mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники' },
+    ...(canTraining ? [{ id: 'training' as const, label: 'Обучение' }] : []),
     { id: 'objects', label: 'Журнал' },
   ];
 
@@ -553,7 +577,7 @@ export function AnalyticsDashboard({
         </label>
       ) : null}
 
-      {route.page !== 'overview' && model ? (
+      {(route.page === 'rating' || route.page === 'staff') && model ? (
         <StaffDrillDrawer
           metric={route.metric || 'staff'}
           mode={mode}
@@ -769,6 +793,8 @@ export function AnalyticsDashboard({
           </div>
         </div>
       ) : null}
+
+      {section === 'training' && canTraining ? <TrainingTab mode={mode} /> : null}
 
       {section === 'objects' ? (
         <div className={styles.dashSection}>

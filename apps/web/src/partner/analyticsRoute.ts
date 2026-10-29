@@ -6,11 +6,13 @@ export const ANALYTICS_ROUTE_EVENT = 'mf-analytics-route';
 export type AnalyticsPeriod = 'month' | 'quarter' | 'year';
 
 export type AnalyticsLocation = {
-  page: 'overview' | 'rating' | 'staff';
+  page: 'overview' | 'rating' | 'staff' | 'training-user' | 'training-company';
   metric: string | null;
   role: string | null;
   userId: string | null;
   period: AnalyticsPeriod | null;
+  /** Компания для страницы обучения по компании (`#analytics/training-company/<id>`). */
+  orgId?: string | null;
 };
 
 const PERIODS = new Set<AnalyticsPeriod>(['month', 'quarter', 'year']);
@@ -66,6 +68,12 @@ export function parseAnalyticsHash(
       period,
     };
   }
+  if (parts[0] === 'analytics' && parts[1] === 'training' && parts[2]) {
+    return { page: 'training-user', metric: null, role: null, userId: parts[2], period: null, orgId: null };
+  }
+  if (parts[0] === 'analytics' && parts[1] === 'training-company' && parts[2]) {
+    return { page: 'training-company', metric: null, role: null, userId: null, period: null, orgId: parts[2] };
+  }
   return { ...OVERVIEW_LOCATION };
 }
 
@@ -76,6 +84,12 @@ export function analyticsHash(loc: AnalyticsLocation): string {
   }
   if (loc.page === 'staff' && loc.userId) {
     return `#analytics/staff/${encodeURIComponent(loc.userId)}`;
+  }
+  if (loc.page === 'training-user' && loc.userId) {
+    return `#analytics/training/${encodeURIComponent(loc.userId)}`;
+  }
+  if (loc.page === 'training-company' && loc.orgId) {
+    return `#analytics/training-company/${encodeURIComponent(loc.orgId)}`;
   }
   return '';
 }

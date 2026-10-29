@@ -2,7 +2,7 @@ import type { CompanyTrainingSummary, RecentAttempt, UserTrainingSummary, Traini
 
 export type TrainingDoc = { version: 1; users: Record<string, { attempts: TrainingAttempt[]; materials: MaterialOpen[] }> };
 export type TrainingPerson = { id: string; login?: string; displayName?: string; role?: string; orgId?: string | null };
-export type TrainingOrgRef = { id: string; name: string; settings?: { city?: string } };
+export type TrainingOrgRef = { id: string; name?: string; settings?: { companyName?: string; city?: string } };
 
 export type EmployeeRow = {
   id: string;

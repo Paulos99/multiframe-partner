@@ -18,6 +18,8 @@ import { demoTrainingFor, isDemoTrainingOrg } from './trainingDemo.js';
 
 export const STAFF_ROLES = ['sales', 'measurer', 'crew'];
 
+const orgName = (org) => org.settings?.companyName || org.name || 'Компания';
+
 const byFinishedDesc = (a, b) => String(b.finishedAt).localeCompare(String(a.finishedAt));
 const byAtDesc = (a, b) => String(b.at).localeCompare(String(a.at));
 
@@ -120,7 +122,7 @@ function compactRow(user, role, summary) {
 export function viewTrainingOrg({ org, staff, doc, nowMs, roleOf }) {
   const rows = staff.map((u) => ({ u, ...userSummary(doc, u, nowMs) }));
   return {
-    org: { id: org.id, name: org.name },
+    org: { id: org.id, name: orgName(org) },
     summary: summarizeCompanyTraining(rows.map((r) => r.summary), nowMs),
     employees: rows
       .map((r) => compactRow(r.u, roleOf(r.u.role), r.summary))
@@ -130,14 +132,14 @@ export function viewTrainingOrg({ org, staff, doc, nowMs, roleOf }) {
 
 export function companyTrainingSummary({ org, staff, doc, nowMs }) {
   const summaries = staff.map((u) => userSummary(doc, u, nowMs).summary);
-  return { id: org.id, name: org.name, city: org.settings?.city || '', summary: summarizeCompanyTraining(summaries, nowMs) };
+  return { id: org.id, name: orgName(org), city: org.settings?.city || '', summary: summarizeCompanyTraining(summaries, nowMs) };
 }
 
 export function viewTrainingUser({ user, role, org, doc, nowMs }) {
   const r = userSummary(doc, user, nowMs);
   return {
     employee: { id: user.id, displayName: user.displayName || user.login, role },
-    org: org ? { id: org.id, name: org.name } : null,
+    org: org ? { id: org.id, name: orgName(org) } : null,
     summary: r.summary,
     attempts: recentAttempts(r.attempts),
   };
