@@ -51,6 +51,11 @@ writeFileSync(
 );
 
 const { handler } = await import('./index.js');
+const seedEvents = async (body) => {
+  const { seedAnalyticsEventsForTests } = await import('./index.js');
+  await seedAnalyticsEventsForTests(body.events);
+  return { status: 200 };
+};
 after(() => rmSync(dir, { recursive: true, force: true }));
 
 async function call(method, p, body, token, query) {
@@ -75,7 +80,7 @@ const at = new Date().toISOString();
 test('GET /analytics/drill: владелец видит компанию, менеджер — команду, полевые роли закрыты', async () => {
   assert.equal(
     (
-      await call('POST', '/analytics/events', {
+      await seedEvents({
         events: [
           {
             id: 'm1',

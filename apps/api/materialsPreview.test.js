@@ -7,6 +7,7 @@ const PARTNERS = 'test-partners';
 const MATERIALS = 'test-materials';
 
 process.env.PARTNERS_BUCKET = PARTNERS;
+process.env.DEMO_SEED = '1';
 process.env.MATERIALS_BUCKET = MATERIALS;
 process.env.JWT_SECRET = 'materials-preview-test';
 process.env.YC_ACCESS_KEY_ID = 'YCAJEtestaccesskey123';

@@ -4,6 +4,7 @@ import { documentEtag, normalizeEtag, setObjectStoreTransportForTests } from './
 import { isolateDocumentCacheForTests, mergePlatformDocument, resetStoredDocumentsForTests } from './platformStore.js';
 
 process.env.PARTNERS_BUCKET = 'test-partners';
+process.env.DEMO_SEED = '1';
 process.env.MATERIALS_BUCKET = 'test-materials';
 process.env.JWT_SECRET = 'platform-store-test';
 process.env.YC_ACCESS_KEY_ID = 'YCAJEtestaccesskey123';

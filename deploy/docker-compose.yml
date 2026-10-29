@@ -1,0 +1,37 @@
+# Запуск: ./deploy/release.sh vX.Y.Z   (или вручную: docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build)
+# Секреты берутся из deploy/.env (файл не в репозитории, права 600).
+name: multiframe-cabinet
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args:
+        BUILD_ID: ${BUILD_ID:-local}
+        VITE_BASE: ${VITE_BASE:-/cabinet}
+        VITE_API_URL: ${VITE_API_URL:-/cabinet-api}
+        VITE_DISABLE_DEMO: ${VITE_DISABLE_DEMO:-1}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8081}:80"
+    security_opt:
+      - no-new-privileges:true

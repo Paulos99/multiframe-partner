@@ -1,4 +1,5 @@
 import { Room } from '../core/room-model.js';
+import { escapeHtml, safeId } from '../core/html-escape.js';
 import { PolygonPanelCalculator, ceilingLayoutCacheKey } from '../calculators/polygon-ceiling-calculator.js';
 import { WallCalculator } from '../calculators/wall-calculator.js';
 import { buildBOM, renderResultsHtml } from '../calculators/materials-bom.js';
@@ -661,7 +662,7 @@ function clearResultsUi(message = '') {
   const textEl = $('resultsText');
   if (textEl) {
     if (message) {
-      textEl.innerHTML = `<div class="rb-empty">${message.replace(/</g, '&lt;')}</div>`;
+      textEl.innerHTML = `<div class="rb-empty">${escapeHtml(message)}</div>`;
     } else {
       textEl.innerHTML = `<div class="rb-empty">${state.inputMode
         ? 'Цифры появятся после расчёта'
@@ -792,7 +793,7 @@ function showValidationErrors(errors) {
     return;
   }
   box.style.display = 'block';
-  box.innerHTML = errors.map((e) => `<div>${e}</div>`).join('');
+  box.innerHTML = errors.map((e) => `<div>${escapeHtml(e)}</div>`).join('');
 }
 
 function partnerCeilingOnly() {
@@ -808,14 +809,14 @@ function renderAreaWallsList() {
   const list = $('areaWallsList');
   if (!list) return;
   list.innerHTML = state.areaWalls.map((w, i) => `
-    <div class="area-wall-row" data-wall-id="${w.id}">
+    <div class="area-wall-row" data-wall-id="${escapeHtml(w.id)}">
       <label class="area-wall-row__check">
-        <input type="checkbox" data-area-wall-check="${w.id}" ${w.enabled ? 'checked' : ''} />
+        <input type="checkbox" data-area-wall-check="${escapeHtml(w.id)}" ${w.enabled ? 'checked' : ''} />
       </label>
       <span class="area-wall-row__label">Стена ${i + 1}</span>
-      <input type="number" class="area-wall-row__input" data-area-wall-input="${w.id}"
-        value="${w.area || ''}" placeholder="м²" step="0.1" min="0.1" />
-      <button type="button" class="btn-link area-wall-row__remove" data-area-wall-remove="${w.id}" title="Удалить">×</button>
+      <input type="number" class="area-wall-row__input" data-area-wall-input="${escapeHtml(w.id)}"
+        value="${Number(w.area) || ''}" placeholder="м²" step="0.1" min="0.1" />
+      <button type="button" class="btn-link area-wall-row__remove" data-area-wall-remove="${escapeHtml(w.id)}" title="Удалить">×</button>
     </div>`).join('');
 
   list.querySelectorAll('[data-area-wall-check]').forEach((el) => {
@@ -872,8 +873,8 @@ function refreshWallSurfaceCheckboxes() {
     .map(
       (w) => `
       <label class="surface-chip surface-chip--toggle">
-        <input type="checkbox" name="wallSurface" value="${w.id}" ${prev.has(w.id) ? 'checked' : ''} />
-        <span class="surface-chip__label">${w.label}</span>
+        <input type="checkbox" name="wallSurface" value="${escapeHtml(w.id)}" ${prev.has(w.id) ? 'checked' : ''} />
+        <span class="surface-chip__label">${escapeHtml(w.label)}</span>
       </label>`
     )
     .join('');
@@ -1848,7 +1849,7 @@ function populateWallSelect() {
   if (!state.wallResult) return;
   const walls = state.wallResult.wallResults;
   if (sel) {
-    sel.innerHTML = walls.map((w) => `<option value="${w.wall.id}">${w.wall.label}</option>`).join('');
+    sel.innerHTML = walls.map((w) => `<option value="${escapeHtml(w.wall.id)}">${escapeHtml(w.wall.label)}</option>`).join('');
   }
   if (chips) {
     chips.innerHTML = '';
@@ -2354,7 +2355,12 @@ function loadFromUrl() {
       state.areaValue = data.areaValue;
     }
     if (data.areaWalls?.length) {
-      state.areaWalls = data.areaWalls;
+      state.areaWalls = data.areaWalls.slice(0, 50).map((w, i) => ({
+        ...w,
+        id: safeId(w?.id, `area-wall-${i}`),
+        area: Number.isFinite(Number(w?.area)) ? Number(w.area) : 0,
+        enabled: w?.enabled !== false,
+      }));
       renderAreaWallsList();
     }
     showProjectLoadedBanner();
@@ -2483,7 +2489,7 @@ function mountPartnerBanner() {
   const company = pricing.company ? pricing.company : 'Партнёрский режим';
   const install =
     pricing.installPerM2 != null ? ` · монтаж ${pricing.installPerM2} ₽/м²` : '';
-  banner.innerHTML = `<strong>${company}</strong><span>РРЦ ${PANEL.priceRub} ₽/панель · ${PANEL.pricePerM2} ₽/м²${install}</span><span class="partner-calc-banner__hint">Офиц. ${pricing.officialPanelPrice} ₽</span>`;
+  banner.innerHTML = `<strong>${escapeHtml(company)}</strong><span>РРЦ ${Number(PANEL.priceRub) || 0} ₽/панель · ${Number(PANEL.pricePerM2) || 0} ₽/м²${install}</span><span class="partner-calc-banner__hint">Офиц. ${Number(pricing.officialPanelPrice) || 0} ₽</span>`;
   const shell = document.querySelector('.app-shell');
   if (shell) shell.prepend(banner);
   else document.body.prepend(banner);

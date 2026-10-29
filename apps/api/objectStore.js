@@ -4,7 +4,17 @@
  */
 import { createHash } from 'node:crypto';
 
-export const S3_ENDPOINT = 'https://storage.yandexcloud.net';
+/** Адрес S3-совместимого хранилища. По умолчанию Yandex Object Storage; для MinIO/Selectel/Ceph задайте S3_ENDPOINT. */
+export const DEFAULT_S3_ENDPOINT = 'https://storage.yandexcloud.net';
+export const S3_ENDPOINT = DEFAULT_S3_ENDPOINT;
+
+function envText(...names) {
+  for (const name of names) {
+    const value = String(process.env[name] || '').trim();
+    if (value) return value;
+  }
+  return '';
+}
 export const SIGNED_GET_TTL_SECONDS = 15 * 60;
 /** Прямая загрузка крупного файла: час на PUT, шлюз API этот объём не везёт. */
 export const SIGNED_PUT_TTL_SECONDS = 60 * 60;
@@ -29,12 +39,14 @@ export function materialsConfigError() {
 }
 
 export function s3ClientConfig() {
+  const forcePathStyle = ['1', 'true'].includes(envText('S3_FORCE_PATH_STYLE').toLowerCase());
   return {
-    region: process.env.YC_REGION || 'ru-central1',
-    endpoint: S3_ENDPOINT,
+    region: envText('S3_REGION', 'YC_REGION') || 'ru-central1',
+    endpoint: envText('S3_ENDPOINT') || DEFAULT_S3_ENDPOINT,
+    ...(forcePathStyle ? { forcePathStyle: true } : {}),
     credentials: {
-      accessKeyId: process.env.YC_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.YC_SECRET_ACCESS_KEY || '',
+      accessKeyId: envText('S3_ACCESS_KEY_ID', 'YC_ACCESS_KEY_ID'),
+      secretAccessKey: envText('S3_SECRET_ACCESS_KEY', 'YC_SECRET_ACCESS_KEY'),
     },
   };
 }
@@ -45,6 +57,33 @@ let transportForTests = null;
 export function setObjectStoreTransportForTests(fn) {
   transportForTests = fn;
 }
+
+/**
+ * Своё хранилище только для двух документов платформы (platform-v2.json, analytics-events.json), например PostgreSQL.
+ * Фото, PDF и материалы остаются в S3. Объект store:
+ *   handles(key) -> boolean                       — берёт ли хранилище этот ключ
+ *   head({ bucket, key })  -> { missing, etag }
+ *   read({ bucket, key })  -> { missing, body, etag }
+ *   put({ bucket, key, body, ifMatch, ifNoneMatch }) -> { etag }
+ *       при несовпадении ifMatch (или если объект уже есть при ifNoneMatch '*') бросает ошибку со status 412
+ * См. docs/handover/DATA_LAYER.md.
+ */
+let documentStore = null;
+
+export function setDocumentStore(store) {
+  documentStore = store || null;
+}
+
+function ownDocument(key) {
+  return Boolean(documentStore && documentStore.handles(key));
+}
+
+/**
+ * Точка подключения собственного хранилища (вместо S3): функция получает операцию
+ * { action: 'get' | 'head' | 'put' | 'delete' | 'sign-get' | 'sign-put' | 'mpu-*', bucket, key, ... }.
+ * См. docs/handover/DATA_LAYER.md. Для обычного S3-совместимого хранилища не нужна: хватит S3_ENDPOINT.
+ */
+export const setObjectStoreTransport = setObjectStoreTransportForTests;
 
 /** ETag как у одиночного PutObject: MD5 в кавычках. Для тестов и запасного значения. */
 export function documentEtag(body) {
@@ -85,6 +124,10 @@ export function isStorageConflict(error) {
 }
 
 export async function putObject({ bucket, key, body, contentType, ifMatch, ifNoneMatch }) {
+  if (ownDocument(key)) {
+    const out = await documentStore.put({ bucket, key, body, ifMatch: normalizeEtag(ifMatch), ifNoneMatch });
+    return { etag: normalizeEtag(out?.etag) || documentEtag(body) };
+  }
   if (transportForTests) {
     const out = await transportForTests({
       action: 'put',
@@ -119,6 +162,11 @@ export async function getObjectText({ bucket, key }) {
 }
 
 export async function readObjectText({ bucket, key }) {
+  if (ownDocument(key)) {
+    const out = await documentStore.read({ bucket, key });
+    if (!out || out.missing) return { missing: true, body: null, etag: null };
+    return { missing: false, body: String(out.body), etag: normalizeEtag(out.etag) || documentEtag(out.body) };
+  }
   if (transportForTests) {
     const out = await transportForTests({ action: 'get', bucket, key, encoding: 'utf8' });
     if (out == null) return { missing: true, body: null, etag: null };
@@ -138,6 +186,11 @@ export async function readObjectText({ bucket, key }) {
 }
 
 export async function headObject({ bucket, key }) {
+  if (ownDocument(key)) {
+    const out = await documentStore.head({ bucket, key });
+    if (!out || out.missing) return { missing: true, etag: null, contentLength: null, contentType: null };
+    return { missing: false, etag: normalizeEtag(out.etag), contentLength: null, contentType: 'application/json' };
+  }
   if (transportForTests) {
     const out = await transportForTests({ action: 'head', bucket, key });
     if (out && typeof out === 'object') {
