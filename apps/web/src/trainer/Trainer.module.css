@@ -1303,3 +1303,15 @@ details[open] > summary::after {
     grid-row: 1;
   }
 }
+@media (max-width: 600px) {
+  .option {
+    flex-wrap: wrap;
+  }
+  .optText {
+    flex: 1 1 calc(100% - 40px);
+  }
+  .optTag {
+    flex: 1 0 100%;
+    padding-left: 38px;
+  }
+}
