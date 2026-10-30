@@ -4,7 +4,7 @@
  * для чтения старых ключей materials/<id> без поля bucket.
  */
 
-import { MATERIAL_BUCKET_MARKER, materialBase, toPublicMaterial } from './materialsLib.js';
+import { MATERIAL_BUCKET_MARKER, materialBase, toPublicMaterial } from '../../packages/shared/materialsLib.js';
 import {
   abortMultipartUpload,
   completeMultipartUpload,

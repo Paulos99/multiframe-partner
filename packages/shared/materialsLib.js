@@ -4,14 +4,15 @@
  * Новые файлы помечаются bucket: "materials". Узел без bucket — старый ключ в бакете кабинета.
  */
 
+import { MATERIAL_DIRECT_MAX_BYTES, MATERIAL_MAX_PARTS } from './schemas.js';
+
+/** Предел одного объекта в S3 (5 ТБ) и число частей multipart: общие с проверкой запросов (packages/shared/schemas.js). */
+export { MATERIAL_DIRECT_MAX_BYTES, MATERIAL_MAX_PARTS };
 export const MATERIAL_BUCKET_MARKER = 'materials';
-/** Прямой PUT в бакет. Шлюз API по-прежнему принимает только до 2 МБ base64. */
-/** Предел одного объекта в S3 (5 ТБ). Одиночный PUT — до 5 ГБ, крупнее только multipart. */
-export const MATERIAL_DIRECT_MAX_BYTES = 5 * 1024 * 1024 * 1024 * 1024;
+/** Прямой PUT в бакет. Шлюз API по-прежнему принимает только до 2 МБ base64. Одиночный PUT — до 5 ГБ, крупнее только multipart. */
 export const MATERIAL_SINGLE_PUT_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 export const MATERIAL_PART_MIN_BYTES = 8 * 1024 * 1024;
 export const MATERIAL_PART_MAX_BYTES = 100 * 1024 * 1024;
-export const MATERIAL_MAX_PARTS = 10000;
 
 /** Размер части: от 8 до 100 МБ (последние — до лимита S3 в 5 ГБ), не больше 10 000 частей. */
 export function materialPartSize(size) {

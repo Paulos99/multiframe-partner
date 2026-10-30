@@ -14,7 +14,7 @@
  *   DELETE /materials/:id/preview  — только admin: убрать копию
  */
 
-import { MATERIAL_BUCKET_MARKER, findMaterial, materialBase } from './materialsLib.js';
+import { MATERIAL_BUCKET_MARKER, findMaterial, materialBase } from '../../packages/shared/materialsLib.js';
 import {
   deleteMaterialBytes,
   materialsConfigError,

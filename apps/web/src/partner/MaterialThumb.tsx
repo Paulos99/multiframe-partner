@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { PublicMaterial } from '../../../api/materialsLib.js';
+import type { PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import { detectFileKind, fileExtension, type FileKind } from '../ui/filePreview/fileKind';
 import styles from './MaterialsPanel.module.css';
 
