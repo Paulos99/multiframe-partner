@@ -114,10 +114,6 @@ function emptyCompanyDb() {
       user('u_exec1', 'exec1', 'measurer', 'org_demo', 'Замерщик · Потолки Столицы'),
       user('u_crew1', 'crew1', 'crew', 'org_demo', 'Монтажник · Потолки Столицы'),
       user('u_crew1b', 'crew1b', 'crew', 'org_demo', 'Монтажник 2 · Потолки Столицы'),
-      user('u_partner2', 'partner2', 'owner', 'org_demo_spb', 'Владелец · Северный Потолок'),
-      user('u_sales2', 'sales2', 'sales', 'org_demo_spb', 'Менеджер · Северный Потолок'),
-      user('u_exec2', 'exec2', 'measurer', 'org_demo_spb', 'Замерщик · Северный Потолок'),
-      user('u_crew2', 'crew2', 'crew', 'org_demo_spb', 'Монтажник · Северный Потолок'),
     ],
     orgs: [
       {
@@ -125,12 +121,6 @@ function emptyCompanyDb() {
         createdAt: '2026-09-01T00:00:00.000Z',
         createdBy: 'u_admin',
         settings: { companyName: 'Потолки Столицы', city: 'Москва' },
-      },
-      {
-        id: 'org_demo_spb',
-        createdAt: '2026-09-01T00:00:00.000Z',
-        createdBy: 'u_admin',
-        settings: { companyName: 'Северный Потолок', city: 'Санкт-Петербург' },
       },
     ],
     links: [],

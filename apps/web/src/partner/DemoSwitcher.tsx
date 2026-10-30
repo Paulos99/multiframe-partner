@@ -11,7 +11,7 @@ import { isDemoModeEnabled } from './demoMode';
 export { isDemoModeEnabled };
 
 export type DemoGroup = {
-  id: 'stp' | 'capital' | 'north';
+  id: 'stp' | 'capital';
   title: string;
   place: string;
   accounts: DemoAccount[];
@@ -31,18 +31,12 @@ export function demoGroups(accounts: DemoAccount[] = DEMO_ACCOUNTS): DemoGroup[]
       place: 'Москва',
       accounts: accounts.filter((account) => account.company === 'Потолки Столицы'),
     },
-    {
-      id: 'north',
-      title: 'Северный Потолок',
-      place: 'Санкт-Петербург',
-      accounts: accounts.filter((account) => account.company === 'Северный Потолок'),
-    },
   ];
 }
 
 export function demoRoleLabel(account: DemoAccount): string {
   if (account.role === 'admin') return 'Админ StP';
-  return account.label.replace(/ · (Потолки Столицы|Северный Потолок)$/u, '');
+  return account.label.replace(/ · Потолки Столицы$/u, '');
 }
 
 export function demoRoleHint(account: DemoAccount): string {

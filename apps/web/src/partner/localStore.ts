@@ -55,6 +55,7 @@ import { supplementDemoHistory } from '../../../../packages/shared/demoHistory.j
 import {
   assignDemoRoomStaff,
   buildLocalDemoAnalytics,
+  RETIRED_DEMO_ORG_ID,
   buildLocalDemoObjects,
   buildLocalDemoOrgs,
   buildLocalDemoUsers,
@@ -135,7 +136,32 @@ function defaultDb(): PartnerDb {
   return db;
 }
 
-function migrateDb(raw: PartnerDb): PartnerDb {
+/** Убранная демо-компания: чистим её следы из уже сохранённой в браузере базы. */
+function dropRetiredDemoOrg(raw: PartnerDb): PartnerDb {
+  const gone = RETIRED_DEMO_ORG_ID;
+  const goneUsers = new Set((raw.users || []).filter((u) => u.orgId === gone).map((u) => u.id));
+  const hit = (orgId?: string | null) => orgId === gone;
+  const touched =
+    goneUsers.size > 0 ||
+    (raw.orgs || []).some((o) => hit(o.id)) ||
+    (raw.objects || []).some((o) => hit(o.orgId)) ||
+    (raw.projects || []).some((p) => hit(p.orgId)) ||
+    (raw.activity || []).some((a) => hit(a.orgId)) ||
+    (raw.links || []).some((l) => hit(l.orgId));
+  if (!touched) return raw;
+  return {
+    ...raw,
+    users: (raw.users || []).filter((u) => !hit(u.orgId)),
+    orgs: (raw.orgs || []).filter((o) => !hit(o.id)),
+    objects: (raw.objects || []).filter((o) => !hit(o.orgId)),
+    projects: Array.isArray(raw.projects) ? raw.projects.filter((p) => !hit(p.orgId)) : raw.projects,
+    activity: (raw.activity || []).filter((a) => !hit(a.orgId)),
+    links: (raw.links || []).filter((l) => !hit(l.orgId)),
+  };
+}
+
+function migrateDb(input: PartnerDb): PartnerDb {
+  const raw = dropRetiredDemoOrg(input);
   const users = (raw.users || []).map((u) => ({
     ...u,
     role: normalizeRole(u.role as string),
@@ -240,13 +266,13 @@ function dropLegacyKeys(): void {
 /**
  * Ключ v5 ещё не создан, а комнаты уже лежат в v4.
  * Переносим их, а не заменяем свежим сидом: сид стирал бы клики проблемомера и монтажа.
- * Недостающую вторую демо-компанию добавляем рядом, объекты не трогаем.
+ * Недостающую демо-компанию добавляем рядом, объекты не трогаем.
  */
 function adoptLegacyDb(legacy: PartnerDb): PartnerDb {
   const migrated = migrateDb(legacy);
   const fresh = defaultDb();
-  const hasSpb = migrated.orgs.some((org) => org.id === 'org_demo_spb');
-  if (migrated.users.length && hasSpb) return migrated;
+  const hasDemo = migrated.orgs.some((org) => org.id === 'org_demo');
+  if (migrated.users.length && hasDemo) return migrated;
   const orgIds = new Set(migrated.orgs.map((org) => org.id));
   const logins = new Set(migrated.users.map((user) => user.login));
   return {
@@ -279,7 +305,7 @@ export function loadDb(): PartnerDb {
     }
     const before = raw;
     const parsed = migrateDb(JSON.parse(raw) as PartnerDb);
-    if (!parsed.users?.length || !parsed.orgs.some((o) => o.id === 'org_demo_spb')) {
+    if (!parsed.users?.length || !parsed.orgs.some((o) => o.id === 'org_demo')) {
       const db = defaultDb();
       saveDb(db);
       seedDemoAnalyticsOnce(true);
@@ -401,6 +427,10 @@ export function loadSession(): SessionUser | null {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw) as SessionUser;
+    if (session.orgId === RETIRED_DEMO_ORG_ID) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
     session.role = normalizeRole(session.role as string);
     const db = loadDb();
     let dirty = false;
@@ -973,7 +1003,7 @@ export function fillDemoCompanyRooms(objects: JobObject[], orgId?: string | null
       (!orgId || !obj.orgId || obj.orgId === orgId),
   );
   if (own.length) return objects;
-  if (orgId !== 'org_demo' && orgId !== 'org_demo_spb') return objects;
+  if (orgId !== 'org_demo') return objects;
   return buildLocalDemoObjects().filter((obj) => obj.orgId === orgId);
 }
 
@@ -1362,7 +1392,7 @@ function readJsonArray<T>(key: string): T[] {
 }
 
 export function loadAnalyticsEvents(): AnalyticsEvent[] {
-  return readJsonArray<AnalyticsEvent>(ANALYTICS_KEY);
+  return readJsonArray<AnalyticsEvent>(ANALYTICS_KEY).filter((event) => event?.orgId !== RETIRED_DEMO_ORG_ID);
 }
 
 /** Сохранённые события плюс недостающий хвост демо-года. Хранилище не пишется. */

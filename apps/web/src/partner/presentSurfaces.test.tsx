@@ -13,11 +13,10 @@ function equal(actual: unknown, expected: unknown) {
 }
 
 const groups = demoGroups();
-equal(groups.map((group) => group.title), ['StP', 'Потолки Столицы', 'Северный Потолок']);
-equal(groups.map((group) => group.place), ['Сеть', 'Москва', 'Санкт-Петербург']);
+equal(groups.map((group) => group.title), ['StP', 'Потолки Столицы']);
+equal(groups.map((group) => group.place), ['Сеть', 'Москва']);
 equal(groups[0]?.accounts.map((account) => account.login), ['admin', 'stpmgr1']);
 equal(groups[1]?.accounts.map((account) => account.login), ['partner1', 'sales1', 'exec1', 'crew1', 'crew1b']);
-equal(groups[2]?.accounts.map((account) => account.login), ['partner2', 'sales2', 'exec2', 'crew2']);
 equal(
   groups.flatMap((group) => group.accounts).map((account) => account.login).sort(),
   DEMO_ACCOUNTS.map((account) => account.login).sort(),

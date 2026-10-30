@@ -26,6 +26,8 @@ import {
   isApiError,
   NETWORK_ERROR_MESSAGE,
 } from './apiClient';
+import { isDemoOnDevice } from './demoDevice';
+import { isDemoModeEnabled } from './demoMode';
 import { isLocalOnlySession, loadDb, loadToken, saveDb } from './localStore';
 
 export type { PublicMaterial };
@@ -65,7 +67,7 @@ function localList(): PublicMaterial[] {
 
 /** Материалы идут через API (а не localStorage) — тогда есть миниатюры и их загрузка. */
 export function materialsUseApi(): boolean {
-  return hasRemoteApi();
+  return hasRemoteApi() && !isDemoOnDevice();
 }
 
 export const MATERIALS_SESSION_EXPIRED = 'Сессия истекла. Войдите заново.';
@@ -98,6 +100,8 @@ export function materialsNeedRelogin(error: unknown): boolean {
  */
 function remoteEnabled(): boolean {
   if (!hasRemoteApi()) return false;
+  // Демо без токена: встроенная демо-библиотека, баннера «войдите заново» нет.
+  if (isDemoOnDevice()) return false;
   if (!loadToken()) {
     throw isLocalOnlySession()
       ? new MaterialsError('no-session', MATERIALS_NO_SERVER_SESSION)
@@ -113,6 +117,7 @@ export async function listMaterials(): Promise<PublicMaterial[]> {
     } catch (error) {
       if (isApiError(error)) {
         // Токен в хранилище есть, но сервер его уже не принимает (истёк/отозван).
+        if (error.status === 401 && isDemoModeEnabled()) return localList();
         if (error.status === 401) throw new MaterialsError('session', MATERIALS_SESSION_EXPIRED);
         if (error.status === 403) throw new MaterialsError('forbidden', MATERIALS_FORBIDDEN);
         if (error.status === 0) throw new MaterialsError('network', NETWORK_ERROR_MESSAGE);

@@ -615,7 +615,7 @@ test('накопленное хранилище: старые id, без всп�
       stored: events,
       db: {
         users,
-        orgs: [org('org_demo', 'Потолки Столицы', 'Москва'), org('org_demo_spb', 'Северный Потолок', 'Санкт-Петербург')],
+        orgs: [org('org_demo', 'Потолки Столицы', 'Москва')],
         links: [],
         activity: [],
         objects: [room, mount, mountSecond, mountQuarter, mountYear],
