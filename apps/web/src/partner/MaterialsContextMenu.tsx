@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import type { PublicMaterial } from '../../../api/materialsLib.js';
+import type { PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import { Button } from '../ui/Button';
 import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import styles from './MaterialsContextMenu.module.css';

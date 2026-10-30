@@ -6,7 +6,7 @@ import {
   demoMaterialNodes,
   publicMaterials,
   renameMaterial,
-} from './materialsLib.js';
+} from '../../packages/shared/materialsLib.js';
 
 test('демо разложено по папкам и содержит нужные файлы', () => {
   const nodes = demoMaterialNodes();

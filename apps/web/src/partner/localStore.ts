@@ -2,8 +2,8 @@
  * Local-first store for partner portal (offline / no API).
  * Survives reloads and works as PWA cache.
  */
-import type { MaterialNode } from '../../../api/materialsLib.js';
-import { resolveCity } from '../../../api/cityCatalog.js';
+import type { MaterialNode } from '../../../../packages/shared/materialsLib.js';
+import { resolveCity } from '../../../../packages/shared/cityCatalog.js';
 import type {
   ActivityEvent,
   AnalyticsDashboard,

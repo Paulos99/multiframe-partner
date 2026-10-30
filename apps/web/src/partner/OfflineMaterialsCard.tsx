@@ -1,6 +1,6 @@
 import { useContext, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import type { PublicMaterial } from '../../../api/materialsLib.js';
+import type { PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import { SettingsIcon } from '../icons';
 import { OfflineGearSlot } from './offlineGearSlot';
 import {

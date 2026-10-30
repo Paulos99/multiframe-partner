@@ -8,7 +8,7 @@
  *
  * Только чтение: офлайн ничего не меняется на сервере, правка материалов остаётся у админа онлайн.
  */
-import type { PublicMaterial } from '../../../api/materialsLib.js';
+import type { PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import { apiMaterialContent } from './apiClient';
 import {
   chunkCount,

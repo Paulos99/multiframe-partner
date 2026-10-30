@@ -1,4 +1,4 @@
-import type { MaterialNode, PublicMaterial } from '../../../api/materialsLib.js';
+import type { MaterialNode, PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import {
   MATERIAL_DIRECT_MAX_BYTES,
   addFile,
@@ -8,7 +8,7 @@ import {
   publicMaterials,
   renameMaterial,
   replaceFile,
-} from '../../../api/materialsLib.js';
+} from '../../../../packages/shared/materialsLib.js';
 import {
   apiCreateMaterialFolder,
   apiDeleteMaterial,
