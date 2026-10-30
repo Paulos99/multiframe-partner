@@ -78,34 +78,6 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     company: 'Потолки Столицы',
     label: 'Монтажник 2 · Потолки Столицы',
   },
-  {
-    login: 'partner2',
-    password: 'demo1234',
-    role: 'owner',
-    company: 'Северный Потолок',
-    label: 'Владелец · Северный Потолок',
-  },
-  {
-    login: 'sales2',
-    password: 'exec1234',
-    role: 'sales',
-    company: 'Северный Потолок',
-    label: 'Менеджер · Северный Потолок',
-  },
-  {
-    login: 'exec2',
-    password: 'exec1234',
-    role: 'measurer',
-    company: 'Северный Потолок',
-    label: 'Замерщик · Северный Потолок',
-  },
-  {
-    login: 'crew2',
-    password: 'exec1234',
-    role: 'crew',
-    company: 'Северный Потолок',
-    label: 'Монтажник · Северный Потолок',
-  },
 ];
 
 /** Реальное «сейчас» минус n суток. Час берётся из Date.now(), не из выдуманных демо-часов. */
@@ -123,6 +95,14 @@ function analyticsAt(day: number): string {
 
 export const DEMO_HISTORY_SCHEMA = 3;
 
+/**
+ * Вторая демо-компания («Северный Потолок») убрана из витрины.
+ * Скрытая точка отсчёта для подъёма показателей, в выдачу не попадает.
+ * Тот же id чистится из уже сохранённых в браузере данных.
+ */
+export const RETIRED_DEMO_ORG_ID = 'org_demo_spb';
+const REFERENCE_ORG_ID = RETIRED_DEMO_ORG_ID;
+
 /** День отсчёта, а не день недели: одни и те же цифры в любой день календаря. */
 const DEMO_HISTORY_DAYS = 371;
 
@@ -138,10 +118,6 @@ const DEMO_PEOPLE: Record<string, { login: string; name: string }> = {
   u_exec1: { login: 'exec1', name: 'Замерщик · Потолки Столицы' },
   u_crew1: { login: 'crew1', name: 'Монтажник · Потолки Столицы' },
   u_crew1b: { login: 'crew1b', name: 'Монтажник 2 · Потолки Столицы' },
-  u_partner2: { login: 'partner2', name: 'Владелец · Северный Потолок' },
-  u_sales2: { login: 'sales2', name: 'Менеджер · Северный Потолок' },
-  u_exec2: { login: 'exec2', name: 'Замерщик · Северный Потолок' },
-  u_crew2: { login: 'crew2', name: 'Монтажник · Северный Потолок' },
 };
 
 function historyStamp(userId: string, at: string, action: string, detail?: string) {
@@ -222,19 +198,6 @@ const SPECS_A: Spec[] = [
   { id: 'obj_a11', status: 'draft', clientName: 'Чернов А.', phone: '+7 495 111-01-11', address: 'ул. Бауманская, 33', area: 17, day: 0, rt: 3, ht: 2, st: 0 },
 ];
 
-const SPECS_B: Spec[] = [
-  { id: 'obj_b01', status: 'closed', clientName: 'Смирнов В.', phone: '+7 812 222-01-01', address: 'Невский пр., 28', area: 21, day: 27, rt: 0, ht: 2, st: 1 },
-  { id: 'obj_b02', status: 'closed', clientName: 'Кузнецова Л.', phone: '+7 812 222-01-02', address: 'Литейный пр., 14', area: 14, day: 22, rt: 1, ht: 0, st: 2 },
-  { id: 'obj_b03', status: 'install', clientName: 'Орлов К.', phone: '+7 812 222-01-03', address: 'ул. Рубинштейна, 9', area: 26, day: 16, rt: 0, ht: 3, st: 0 },
-  { id: 'obj_b04', status: 'install', clientName: 'Павлова Т.', phone: '+7 812 222-01-04', address: 'Васильевский остр., 7-я линия, 22', area: 18, day: 12, rt: 2, ht: 1, st: 1 },
-  { id: 'obj_b05', status: 'quote_sent', clientName: 'Волков Р.', phone: '+7 812 222-01-05', address: 'ул. Садовая, 40', area: 23, day: 9, rt: 4, ht: 2, st: 2 },
-  { id: 'obj_b06', status: 'quote_sent', clientName: 'Лебедева И.', phone: '+7 812 222-01-06', address: 'Московский пр., 55', area: 16, day: 7, rt: 1, ht: 0, st: 1 },
-  { id: 'obj_b07', status: 'measured', clientName: 'Соколов Д.', phone: '+7 812 222-01-07', address: 'ул. Гороховая, 18', area: 20, day: 4, rt: 3, ht: 1, st: 0 },
-  { id: 'obj_b08', status: 'measured', clientName: 'Зайцева М.', phone: '+7 812 222-01-08', address: 'пр. Просвещения, 80', area: 15, day: 2, rt: 0, ht: 0, st: 2 },
-  { id: 'obj_b09', status: 'measured', clientName: 'Медведев Ю.', phone: '+7 812 222-01-09', address: 'ул. Оптиков, 4', area: 29, day: 1, rt: 1, ht: 3, st: 1 },
-  { id: 'obj_b10', status: 'draft', clientName: 'Егорова С.', phone: '+7 812 222-01-10', address: 'ул. Казанская, 6', area: 11, day: 0, rt: 2, ht: 2, st: 0 },
-];
-
 function makeObject(
   spec: Spec,
   orgId: string,
@@ -308,10 +271,6 @@ export function buildLocalDemoUsers(): DemoUser[] {
     { id: 'u_exec1', login: 'exec1', password: 'exec1234', role: 'measurer', displayName: DEMO_PERSONAL_NAMES.u_exec1, orgId: 'org_demo', createdAt: now },
     { id: 'u_crew1', login: 'crew1', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew1, orgId: 'org_demo', createdAt: now },
     { id: 'u_crew1b', login: 'crew1b', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew1b, orgId: 'org_demo', createdAt: now },
-    { id: 'u_partner2', login: 'partner2', password: 'demo1234', role: 'owner', displayName: DEMO_PERSONAL_NAMES.u_partner2, orgId: 'org_demo_spb', createdAt: now },
-    { id: 'u_sales2', login: 'sales2', password: 'exec1234', role: 'sales', displayName: DEMO_PERSONAL_NAMES.u_sales2, orgId: 'org_demo_spb', createdAt: now },
-    { id: 'u_exec2', login: 'exec2', password: 'exec1234', role: 'measurer', displayName: DEMO_PERSONAL_NAMES.u_exec2, orgId: 'org_demo_spb', createdAt: now },
-    { id: 'u_crew2', login: 'crew2', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew2, orgId: 'org_demo_spb', createdAt: now },
   ];
 }
 
@@ -329,12 +288,6 @@ export function buildLocalDemoOrgs(): DemoOrg[] {
       createdBy: 'u_admin',
       settings: orgSettings('Потолки Столицы', 'Москва'),
     },
-    {
-      id: 'org_demo_spb',
-      createdAt: daysAgo(38),
-      createdBy: 'u_admin',
-      settings: orgSettings('Северный Потолок', 'Санкт-Петербург'),
-    },
   ];
 }
 
@@ -348,7 +301,7 @@ export function assignDemoRoomStaff<T extends { id?: string; orgId?: string | nu
 ): T[] {
   const byOrg = new Map<string, { crew: string[]; sales?: string; measurer?: string }>();
   for (const user of users) {
-    if (user.orgId !== 'org_demo' && user.orgId !== 'org_demo_spb') continue;
+    if (user.orgId !== 'org_demo') continue;
     const slot = byOrg.get(user.orgId) || { crew: [] };
     if (user.role === 'crew') slot.crew.push(user.id);
     if (user.role === 'sales' && !slot.sales) slot.sales = user.id;
@@ -384,12 +337,7 @@ export function buildLocalDemoObjects(): JobObject[] {
   const moscow = SPECS_A.map((s) =>
     makeObject(s, 'org_demo', 'Москва', 'u_partner1', 'u_exec1', s.id === 'obj_a04' ? 'u_crew1b' : 'u_crew1', 'u_sales1'),
   );
-  return [
-    ...moscow,
-    ...SPECS_B.map((s) =>
-      makeObject(s, 'org_demo_spb', 'Санкт-Петербург', 'u_partner2', 'u_exec2', 'u_crew2', 'u_sales2'),
-    ),
-  ];
+  return moscow;
 }
 
 export type LocalAnalyticsEvent = {
@@ -409,6 +357,10 @@ export type LocalAnalyticsEvent = {
 
 export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
   const events: LocalAnalyticsEvent[] = [];
+  /**
+   * Витрина показывает одну компанию. «Северный Потолок» остаётся только невидимой точкой отсчёта:
+   * по ней считается подъём показателей «Потолков Столицы», сами события в выдачу не попадают.
+   */
   const orgs = [
     {
       orgId: 'org_demo',
@@ -554,5 +506,6 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
     action: 'schema',
   });
 
-  return boostCapitalEvents(events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)));
+  const boosted = boostCapitalEvents(events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)));
+  return boosted.filter((event: LocalAnalyticsEvent) => event.orgId !== REFERENCE_ORG_ID);
 }

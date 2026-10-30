@@ -21,8 +21,13 @@ import {
   hasRemoteApi,
   type TrainingSyncAck,
 } from './apiClient';
+import { isDemoOnDevice } from './demoDevice';
 import { loadDb, loadSession } from './localStore';
+
 import type { TrainingCompanyRow, TrainingDoc, TrainingOrgView, TrainingUserView } from '../../../../packages/shared/trainingService.js';
+
+/** Сервер, если он есть и мы вошли с токеном. Демо без токена считает обучение на устройстве. */
+const viaServer = () => hasRemoteApi() && !isDemoOnDevice();
 
 export type { TrainingCompanyRow, TrainingOrgView, TrainingUserView };
 
@@ -44,7 +49,7 @@ function localStaff(orgId: string) {
 }
 
 export async function sendTrainingSync(body: { attempts: unknown[]; materials: unknown[] }): Promise<TrainingSyncAck> {
-  if (hasRemoteApi()) return apiTrainingSync(body);
+  if (viaServer()) return apiTrainingSync(body);
   const session = loadSession();
   if (!session?.orgId) throw new Error('Нет компании');
   const docs = readLocal();
@@ -59,7 +64,7 @@ export async function sendTrainingSync(body: { attempts: unknown[]; materials: u
 }
 
 export async function fetchTrainingOrg(orgId: string | null): Promise<TrainingOrgView> {
-  if (hasRemoteApi()) return apiTrainingOrg(orgId);
+  if (viaServer()) return apiTrainingOrg(orgId);
   const id = orgId || loadSession()?.orgId;
   const org = loadDb().orgs.find((o) => o.id === id);
   if (!id || !org) throw new Error('Компания не найдена');
@@ -67,7 +72,7 @@ export async function fetchTrainingOrg(orgId: string | null): Promise<TrainingOr
 }
 
 export async function fetchTrainingCompanies(): Promise<TrainingCompanyRow[]> {
-  if (hasRemoteApi()) return (await apiTrainingCompanies()).companies;
+  if (viaServer()) return (await apiTrainingCompanies()).companies;
   const docs = readLocal();
   return loadDb()
     .orgs.map((org) => companyTrainingSummary({ org, staff: localStaff(org.id), doc: docs[org.id] ?? emptyTrainingDoc(), nowMs: Date.now() }))
@@ -75,7 +80,7 @@ export async function fetchTrainingCompanies(): Promise<TrainingCompanyRow[]> {
 }
 
 export async function fetchTrainingUser(userId: string): Promise<TrainingUserView> {
-  if (hasRemoteApi()) return apiTrainingUser(userId);
+  if (viaServer()) return apiTrainingUser(userId);
   const db = loadDb();
   const user = db.users.find((u) => u.id === userId);
   if (!user?.orgId) throw new Error('Сотрудник не найден');
