@@ -102,4 +102,15 @@ for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {
   }
 }
 
+// Каждая роль видит в «Обучении» своё видео; у admin видео нет.
+for (const [role, title] of [['owner', 'Владелец компании'], ['sales', 'Менеджер по продажам'], ['measurer', 'Замерщик'], ['crew', 'Монтажник'], ['stp_manager', 'Менеджер StP']] as const) {
+  const html = renderToStaticMarkup(<HelpTrainingPanel role={role} />);
+  if (!html.includes('Обучающее видео') || !html.includes(`«${title}»`) || !html.includes(`/videos/role-${role === 'stp_manager' ? 'stp' : role}.jpg`)) {
+    throw new Error(`В обучении роли ${role} нет своего видео`);
+  }
+}
+if (renderToStaticMarkup(<HelpTrainingPanel role="admin" />).includes('Обучающее видео')) {
+  throw new Error('У admin не должно быть обучающего видео');
+}
+
 console.log('Present surfaces: checks passed');
