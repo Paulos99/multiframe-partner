@@ -186,7 +186,8 @@ export default defineConfig(({ command }) => ({
         // Ответы API (вход, /auth/me, материалы) service worker не кэширует: он не трогает запросы чужого origin.
         globPatterns: ['**/*.{js,css,ico,png,svg,jpg,jpeg,webp,woff2,mp3}'],
         // pdf.js: воркер и декодеры большие и нужны только при открытии PDF.
-        globIgnores: ['pdfjs/**', '**/pdf.worker*.mjs', '**/pdf.worker*.js'],
+        // Обучающие ролики и афиши (videos/) тоже не в предкэше: грузятся при просмотре.
+        globIgnores: ['videos/**', 'pdfjs/**', '**/pdf.worker*.mjs', '**/pdf.worker*.js'],
         importScripts: ['sw-sync.js'],
         // pdf.js (воркер, шрифты, wasm) не в precache — кладём в кэш при первом использовании,
         // чтобы PDF из офлайн-копий открывались без сети. Только свой сайт: файлы из бакета
