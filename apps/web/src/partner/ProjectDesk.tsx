@@ -58,6 +58,7 @@ import { ProjectPhotoReports } from './photos/ProjectPhotoReports';
 import styles from './ProjectDesk.module.css';
 import pill from '../ui/SlidingPill.module.css';
 import { useSlidingPill } from '../ui/useSlidingPill';
+import { AnimatedNumber, useFlipReflow, useLift, useStaggerIn } from '../ui/gsapMotion';
 
 type Person = { id: string; role: UserRole; displayName: string };
 
@@ -424,7 +425,7 @@ function BoardColumn({ status, count, active, children }: { status: ProjectStatu
     >
       <div className={styles.columnHead}>
         <h3>{projectStatusLabel(status)}</h3>
-        <span className={styles.count}>{count}</span>
+        <AnimatedNumber className={styles.count} value={count} duration={0.4} pop />
       </div>
       {children}
     </section>
@@ -456,7 +457,7 @@ function BoardCard({
   const area = areaSum(row.rooms);
   const money = preliminaryRoomTotal(row.rooms);
   return (
-    <div className={styles.cardWrap}>
+    <div className={styles.cardWrap} data-flip-id={row.project.id}>
     <button
       ref={setNodeRef}
       {...(draggable ? attributes : {})}
@@ -528,6 +529,17 @@ function BoardCard({
   );
 }
 
+/** Карточка в руке: плавно «поднимается» (масштаб, лёгкий наклон, тень). */
+function LiftedCard({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLift(ref);
+  return (
+    <div ref={ref} className={`${styles.card} ${styles.cardOverlay}`} data-project-overlay>
+      {children}
+    </div>
+  );
+}
+
 function ProjectBoard({
   rows,
   seesMoney,
@@ -555,6 +567,9 @@ function ProjectBoard({
   // Жест мышью: откуда начали и довёл ли его до конца dnd-kit.
   const gesture = useRef<{ id: string; x: number; y: number; settled: boolean; ended: boolean } | null>(null);
   const moveRef = useRef<(id: string, target: ProjectStatus) => void>(() => undefined);
+  const boardRef = useRef<HTMLDivElement>(null);
+  // Откуда отпустили карточку: она «садится» с места падения, а не едет из старой колонки.
+  const dropRef = useRef<{ id: string; rect: DOMRect; at: number } | null>(null);
   useEffect(() => {
     if (!movable) return;
     const remember = (event: PointerEvent | TouchEvent) => {
@@ -605,6 +620,10 @@ function ProjectBoard({
   );
   const shown = rows.map((row) => (moved[row.project.id] ? { ...row, status: moved[row.project.id] } : row));
   const activeRow = activeId ? shown.find((row) => row.project.id === activeId) : undefined;
+  // Колонки и карточки появляются со ступенькой при открытии вида; перестановки идут через Flip.
+  useStaggerIn(boardRef, '[data-project-stage]', 'enter', { y: 16, stagger: 0.06, duration: 0.5 });
+  useStaggerIn(boardRef, '[data-flip-id]', 'enter', { y: 12, stagger: 0.03, duration: 0.45, delay: 0.12 });
+  useFlipReflow(boardRef, shown.map((row) => `${row.project.id}:${row.status}`).join('|'), Boolean(activeId), dropRef);
 
   function stageAtPointer(): ProjectStatus | null {
     const point = lastPoint.current;
@@ -621,7 +640,14 @@ function ProjectBoard({
     const byKeyboard = activatorEvent instanceof KeyboardEvent;
     if (gesture.current) gesture.current.settled = true;
     const target = (byKeyboard ? null : stageAtPointer()) ?? (over ? (over.id as ProjectStatus) : null);
-    if (target) void move(String(active.id), target);
+    if (target) {
+      const overlay = typeof document === 'undefined' ? null : document.querySelector('[data-project-overlay]');
+      const current = shown.find((row) => row.project.id === String(active.id));
+      if (overlay && current && current.status !== target) {
+        dropRef.current = { id: String(active.id), rect: overlay.getBoundingClientRect(), at: Date.now() };
+      }
+      void move(String(active.id), target);
+    }
   }
 
   function step(id: string, direction: number) {
@@ -671,7 +697,7 @@ function ProjectBoard({
   ) : null;
 
   const board = (
-    <div className={styles.board}>
+    <div className={styles.board} ref={boardRef}>
       {PROJECT_STATUSES.map((status) => {
         const column = shown.filter((row) => row.status === status);
         return (
@@ -775,10 +801,10 @@ function ProjectBoard({
         {createPortal(
           <DragOverlay dropAnimation={null}>
             {activeRow ? (
-              <div className={`${styles.card} ${styles.cardOverlay}`} data-project-overlay>
+              <LiftedCard>
                 <strong>{activeRow.project.name}</strong>
                 <span>{[activeRow.project.clientName, activeRow.project.address].filter(Boolean).join(' · ') || 'Адрес не заполнен'}</span>
-              </div>
+              </LiftedCard>
             ) : null}
           </DragOverlay>,
           document.body,

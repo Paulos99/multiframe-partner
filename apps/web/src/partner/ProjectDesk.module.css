@@ -239,6 +239,7 @@
 
 .cardSource {
   opacity: 0.35;
+  transition: opacity 0.18s ease;
 }
 
 .card[data-saving] {
@@ -249,8 +250,19 @@
   width: 240px;
   cursor: grabbing;
   border-color: var(--cab-accent, #01644f);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
-  transform: rotate(2deg);
+  position: relative;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+
+/* Тень «подъёма» проявляется прозрачностью (--lift анимирует GSAP): без перерисовки теней на кадр. */
+.cardOverlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.22);
+  opacity: var(--lift, 0);
+  pointer-events: none;
 }
 
 .columnOver {
