@@ -8,6 +8,8 @@ import {
   type CompanyTab,
 } from './projectRoute';
 import styles from './ProjectDesk.module.css';
+import pill from '../ui/SlidingPill.module.css';
+import { useSlidingPill } from '../ui/useSlidingPill';
 
 const TABS: ReadonlyArray<readonly [CompanyTab, string]> = [
   ['about', 'О компании'],
@@ -23,8 +25,30 @@ function readPerson(): boolean {
   return typeof window !== 'undefined' && parseStaffHash(window.location.hash).kind === 'person';
 }
 
+/** Вкладки компании: выбранная подсвечивается плавно переезжающей подложкой. */
+function CompanyTabs({ tab }: { tab: CompanyTab }) {
+  const { boxRef, pillRef } = useSlidingPill(tab);
+  return (
+    <div className={styles.tabs} role="tablist" aria-label="Разделы компании" ref={boxRef}>
+      <span ref={pillRef} className={`${pill.pill} ${styles.tabPill}`} aria-hidden="true" />
+      {TABS.map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          className={styles.tab}
+          role="tab"
+          aria-selected={tab === id}
+          onClick={() => navigateCompany(id, 'replace')}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
- * Раздел «Компания» владельца: «О компании» и «Сотрудники» вкладками, как проект в СММ.
+ * Раздел «Компания" владельца: «О компании» и «Сотрудники» вкладками, как проект в СММ.
  * Карточка сотрудника (#staff/<id>) открывается страницей в той же основной части.
  */
 export function CompanySection({ about }: { about: ReactNode }) {
@@ -60,20 +84,7 @@ export function CompanySection({ about }: { about: ReactNode }) {
           <p className={styles.lead}>Данные и прайс компании, команда.</p>
         </div>
       </header>
-      <div className={styles.tabs} role="tablist" aria-label="Разделы компании">
-        {TABS.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={styles.tab}
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => navigateCompany(id, 'replace')}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <CompanyTabs tab={tab} />
       <div className={styles.pageBody}>{tab === 'staff' ? <StaffPanel /> : about}</div>
     </section>
   );
