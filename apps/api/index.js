@@ -4,7 +4,7 @@ import { handleProfile, profileWithAvatar } from './profileRoutes.js';
  * Storage: Object Storage JSON or in-memory seed.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import {
   LOGIN_LOCK,
@@ -33,6 +33,8 @@ import { handleMaterials } from './materialsRoutes.js';
 import { handleMaterialPreview } from './materialsPreview.js';
 import { handleMaterialThumbnail } from './materialsThumbnail.js';
 import {
+  isUnsavedDocument,
+  loadSharedDocument,
   loadStoredDocument,
   mergeEventList,
   mergePlatformDocument,
@@ -74,8 +76,14 @@ const ANALYTICS_ADMIN_KEY = () => {
 };
 const PLATFORM_S3_KEY = () => process.env.PLATFORM_KEY || 'platform-v2.json';
 const ANALYTICS_S3_KEY = () => process.env.ANALYTICS_KEY || 'analytics-events.json';
-const ANALYTICS_CAP = 5000;
-const OBJECTS_CAP = 5000;
+const AUDIT_S3_KEY = () => process.env.AUDIT_LOG_KEY || 'activity-log.json';
+const LOGIN_STATE_S3_KEY = () => process.env.LOGIN_STATE_KEY || 'login-state.json';
+/** События аналитики в основном документе. Старше — уходят в месячные архивные объекты, а не пропадают. */
+const ANALYTICS_CAP = Number(process.env.ANALYTICS_EVENTS_CAP) || 5000;
+/** Журнал действий: старше этого числа записей уходят в архив (отдельный объект), а не пропадают. */
+const AUDIT_CAP = Number(process.env.AUDIT_LOG_CAP) || 5000;
+/** Предел числа комнат на всех: достигнув его, API отвечает ошибкой, а не вытесняет старые записи молча. */
+const OBJECTS_CAP = Number(process.env.MAX_OBJECTS) || 100000;
 
 const ORG_ROLES = ['owner', 'sales', 'measurer', 'crew'];
 const STAFF_ROLES = ['sales', 'measurer', 'crew'];
@@ -95,7 +103,8 @@ const CORS = {
     return corsOriginFor(requestContext.getStore()?.origin);
   },
   'Access-Control-Allow-Headers':
-    'Content-Type, Authorization, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
+    'Content-Type, Authorization, If-None-Match, X-Analytics-Key, X-Analytics-Role, X-Analytics-Org, X-Partner-Login',
+  'Access-Control-Expose-Headers': 'ETag, Retry-After',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
   'Access-Control-Max-Age': '600',
   Vary: 'Origin',
@@ -355,6 +364,7 @@ export async function seedAnalyticsEventsForTests(events) {
 
 export function resetPlatformMemoryForTests() {
   resetStoredDocumentsForTests();
+  resetListCacheForTests();
 }
 
 function platformDocumentSpec() {
@@ -374,7 +384,7 @@ function eventsDocumentSpec() {
     accept: (value) => Array.isArray(value),
     normalize: (parsed) => (Array.isArray(parsed) ? parsed : parsed?.events || null),
     fallback: () => [],
-    merge: mergeEventList,
+    merge: (base, desired, fresh) => mergeEventList(base, desired, fresh, ANALYTICS_CAP * 2),
   };
 }
 
@@ -403,7 +413,8 @@ async function loadPlatform() {
   const names = Boolean(platform?.users && applyDemoPersonalNames(platform.users));
   const grouped = groupOrphanRooms(platform);
   const stpDemo = Boolean(platform?.users && ensureDemoStpManager(platform));
-  if (names || grouped || stpDemo) {
+  // Первый запуск: пустое хранилище. Стартовый документ записывается сразу, чтобы все экземпляры видели одни и те же записи.
+  if (names || grouped || stpDemo || isUnsavedDocument(platform)) {
     try {
       await savePlatform(platform);
     } catch (error) {
@@ -415,6 +426,197 @@ async function loadPlatform() {
 
 async function savePlatform(platform) {
   await saveStoredDocument(platformDocumentSpec(), platform, platform);
+}
+
+/**
+ * Документ для чтения: общий разобранный экземпляр без копирования. Менять его нельзя.
+ * Правки миграций и записи идут через loadPlatform() со своей копией; чужая версия проверяется один раз.
+ */
+async function loadPlatformView() {
+  return (await loadPlatformViewMeta()).value;
+}
+
+/** То же, с версией документа (ETag хранилища) для ответов 304. Без бакета версии нет: null. */
+async function loadPlatformViewMeta() {
+  if (!partnerBucket()) return { value: await loadPlatform(), version: null };
+  const shared = await loadSharedDocument(platformDocumentSpec());
+  if (shared.own || shared.migrated) return { value: shared.value, version: shared.etag };
+  return shared.runOnce(async () => {
+    await loadPlatform();
+    const after = await loadSharedDocument(platformDocumentSpec());
+    after.markMigrated();
+    return { value: after.value, version: after.etag };
+  });
+}
+
+/* —— Журнал действий и счётчики входа: отдельные небольшие документы ——
+ * Раньше каждая запись шла в общий platform-v2.json, то есть переписывала весь файл при каждом входе.
+ * Теперь вход меняет только эти два маленьких объекта, а параллельные записи собираются в одну пачку. */
+
+function auditDocumentSpec() {
+  return {
+    key: () => AUDIT_S3_KEY(),
+    accept: (value) => Array.isArray(value),
+    normalize: (parsed) => (Array.isArray(parsed) ? parsed : parsed?.events || null),
+    fallback: () => [],
+    merge: (base, desired, fresh) => mergeEventList(base, desired, fresh, AUDIT_CAP * 2),
+  };
+}
+
+function auditArchiveSpec(key) {
+  return {
+    key: () => key,
+    accept: (value) => Array.isArray(value),
+    normalize: (parsed) => (Array.isArray(parsed) ? parsed : parsed?.events || null),
+    fallback: () => [],
+    merge: (base, desired, fresh) => mergeEventList(base, desired, fresh, 1_000_000),
+  };
+}
+
+function loginStateSpec() {
+  return {
+    key: () => LOGIN_STATE_S3_KEY(),
+    accept: (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value) && isPlainObject(value.users),
+    fallback: () => ({ version: 1, users: {} }),
+    merge: mergeLoginState,
+  };
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Сводка записей по пользователям: изменённые этим процессом записи побеждают, остальные берутся из хранилища. */
+export function mergeLoginState(base, desired, fresh) {
+  const users = { ...(fresh?.users || {}) };
+  const before = base?.users || {};
+  const want = desired?.users || {};
+  for (const id of Object.keys(want)) {
+    if (JSON.stringify(want[id]) !== JSON.stringify(before[id])) users[id] = want[id];
+  }
+  for (const id of Object.keys(before)) {
+    if (!(id in want)) delete users[id];
+  }
+  return { version: 1, users };
+}
+
+/** Очередь изменений одного документа: пока идёт запись, новые изменения копятся и уходят следующей пачкой. */
+function createBatchedWriter(specFactory, afterApply) {
+  let pending = [];
+  let running = null;
+  async function flush() {
+    // Один тик на сбор запросов, пришедших одновременно (пик входов).
+    await new Promise((resolve) => setImmediate(resolve));
+    while (pending.length) {
+      const batch = pending;
+      pending = [];
+      try {
+        const spec = specFactory();
+        const doc = await loadStoredDocument(spec);
+        for (const item of batch) {
+          try {
+            item.apply(doc);
+          } catch (error) {
+            console.warn('batched change skipped', error?.message || error);
+          }
+        }
+        const out = afterApply ? await afterApply(doc) : doc;
+        await saveStoredDocument(spec, out, doc);
+        for (const item of batch) item.resolve();
+      } catch (error) {
+        for (const item of batch) item.reject(error);
+      }
+    }
+  }
+  function kick() {
+    if (running) return;
+    running = flush().finally(() => {
+      running = null;
+      if (pending.length) kick();
+    });
+  }
+  return {
+    enqueue(apply) {
+      return new Promise((resolve, reject) => {
+        pending.push({ apply, resolve, reject });
+        kick();
+      });
+    },
+  };
+}
+
+/** Список «свежие впереди»: сверх cap старые записи уходят в месячный архивный объект, а не пропадают. */
+async function trimToArchive(list, cap, baseKey) {
+  if (list.length <= cap) return list;
+  const keep = list.slice(0, cap);
+  const overflow = list.slice(cap);
+  const month = new Date().toISOString().slice(0, 7);
+  const archive = auditArchiveSpec(`${baseKey.replace(/\.json$/, '')}-archive-${month}.json`);
+  try {
+    const stored = await loadStoredDocument(archive);
+    const seen = new Set(stored.map((e) => e.id));
+    for (const e of overflow) if (!seen.has(e.id)) stored.push(e);
+    await saveStoredDocument(archive, stored, stored);
+  } catch (error) {
+    // Архив не записался: записи остаются в основном документе, ничего не теряется.
+    console.warn('archive failed', baseKey, error?.message || error);
+    return list;
+  }
+  return keep;
+}
+
+const auditWriter = createBatchedWriter(auditDocumentSpec, (list) => trimToArchive(list, AUDIT_CAP, AUDIT_S3_KEY()));
+const eventsWriter = createBatchedWriter(eventsDocumentSpec, (list) => trimToArchive(list, ANALYTICS_CAP, ANALYTICS_S3_KEY()));
+const loginStateWriter = createBatchedWriter(loginStateSpec, async (doc) => {
+  const now = Date.now();
+  for (const [id, row] of Object.entries(doc.users)) {
+    const locked = Date.parse(row?.lockedUntil || '') > now;
+    const failing = row?.failedLogins && now - Number(row.failedLogins.since || 0) < LOGIN_LOCK.windowMs;
+    if (!locked && !failing) delete doc.users[id];
+  }
+  return doc;
+});
+
+async function flushRequestActivity(store) {
+  const list = store?.activity;
+  if (!list || !list.length) return;
+  store.activity = [];
+  try {
+    await auditWriter.enqueue((doc) => {
+      for (const ev of list) doc.unshift(ev);
+    });
+  } catch (error) {
+    console.warn('activity not saved', error?.message || error);
+  }
+}
+
+async function loadLoginStateView() {
+  try {
+    return (await loadSharedDocument(loginStateSpec())).value;
+  } catch (error) {
+    console.warn('login state unavailable', error?.message || error);
+    return { version: 1, users: {} };
+  }
+}
+
+/** Время последнего входа по организации и по пользователю: из нового журнала и из старой записи platform.activity. */
+async function lastLoginIndex(platform) {
+  const byOrg = new Map();
+  const byUser = new Map();
+  const take = (list) => {
+    for (const a of list || []) {
+      if (a?.action !== 'login') continue;
+      if (a.orgId && !byOrg.has(a.orgId)) byOrg.set(a.orgId, a.at);
+      if (a.userId && !byUser.has(a.userId)) byUser.set(a.userId, a.at);
+    }
+  };
+  try {
+    take((await loadSharedDocument(auditDocumentSpec())).value);
+  } catch (error) {
+    console.warn('audit unavailable', error?.message || error);
+  }
+  take(platform.activity);
+  return { byOrg, byUser };
 }
 
 async function loadEvents() {
@@ -441,7 +643,9 @@ async function saveEvents(list, loaded) {
   await saveStoredDocument(eventsDocumentSpec(), list, loaded);
 }
 
+/** Запись журнала действий. Уходит в отдельный объект activity-log.json в конце запроса, не в platform-v2.json. */
 function pushActivity(platform, partial) {
+  void platform;
   const ev = {
     id: uid('act'),
     at: partial.at || new Date().toISOString(),
@@ -451,7 +655,15 @@ function pushActivity(platform, partial) {
     action: partial.action,
     detail: partial.detail,
   };
-  platform.activity = [ev, ...(platform.activity || [])].slice(0, 500);
+  const store = requestContext.getStore();
+  if (store) {
+    store.activity.push(ev);
+    return;
+  }
+  // Вне запроса (скрипты, тесты): записываем сразу, не теряя запись.
+  void auditWriter.enqueue((doc) => {
+    doc.unshift(ev);
+  }).catch((error) => console.warn('activity not saved', error?.message || error));
 }
 
 function findOrg(platform, orgId) {
@@ -478,27 +690,46 @@ function findUserByLogin(platform, login) {
   );
 }
 
-/** Счётчик неверных паролей хранится в записи пользователя: общий для всех экземпляров функции. */
+/** Счётчик неверных паролей: в отдельном документе login-state.json, общем для всех экземпляров функции. */
 async function recordLoginFailure(platform, user, nowMs) {
-  const row = user.failedLogins;
-  const fresh = row && nowMs - Number(row.since || 0) < LOGIN_LOCK.windowMs;
-  const next = { count: (fresh ? Number(row.count) || 0 : 0) + 1, since: fresh ? row.since : nowMs };
-  user.failedLogins = next;
-  if (next.count >= LOGIN_LOCK.failures) {
-    user.lockedUntil = new Date(nowMs + LOGIN_LOCK.lockMs).toISOString();
-    user.failedLogins = { count: 0, since: nowMs };
-    pushActivity(platform, {
-      orgId: user.orgId,
-      userId: user.id,
-      login: user.login,
-      action: 'login_locked',
-      detail: 'Серия неверных паролей',
-    });
-  }
+  void platform;
   try {
-    await savePlatform(platform);
+    let locked = false;
+    await loginStateWriter.enqueue((doc) => {
+      const row = doc.users[user.id] || {};
+      const prev = row.failedLogins;
+      const fresh = prev && nowMs - Number(prev.since || 0) < LOGIN_LOCK.windowMs;
+      const count = (fresh ? Number(prev.count) || 0 : 0) + 1;
+      const next = { ...row, failedLogins: { count, since: fresh ? prev.since : nowMs } };
+      if (count >= LOGIN_LOCK.failures) {
+        next.lockedUntil = new Date(nowMs + LOGIN_LOCK.lockMs).toISOString();
+        next.failedLogins = { count: 0, since: nowMs };
+        locked = true;
+      }
+      doc.users[user.id] = next;
+    });
+    if (locked) {
+      pushActivity(null, {
+        orgId: user.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'login_locked',
+        detail: 'Серия неверных паролей',
+      });
+    }
   } catch (error) {
     console.warn('login failure counter not saved', error?.message || error);
+  }
+}
+
+/** Снять блокировку и счётчик неверных паролей (вход, смена пароля админом). */
+async function clearLoginState(userId) {
+  try {
+    await loginStateWriter.enqueue((doc) => {
+      delete doc.users[userId];
+    });
+  } catch (error) {
+    console.warn('login state not cleared', error?.message || error);
   }
 }
 
@@ -513,11 +744,20 @@ async function signToken(user) {
   return signAuthToken({ ...user, role: normalizeRole(user.role) });
 }
 
-async function requireAuth(event) {
+/** { readonly: true } — platform в ответе общий и неизменяемый: для обработчиков, которые только читают. */
+async function requireAuth(event, { readonly = false } = {}) {
   const token = getAuth(event);
   if (!token) throw Object.assign(new Error('Unauthorized'), { status: 401 });
   const { payload, usedPreviousKey } = await verifyToken(token);
-  const platform = await loadPlatform();
+  let version = null;
+  let platform;
+  if (readonly) {
+    const meta = await loadPlatformViewMeta();
+    platform = meta.value;
+    version = meta.version;
+  } else {
+    platform = await loadPlatform();
+  }
   // Только по идентификатору из токена: совпадение по логину позволило бы старому токену
   // подойти новой учётной записи с тем же логином.
   const user = (platform.users || []).find((u) => u.id === payload.sub) || null;
@@ -527,7 +767,7 @@ async function requireAuth(event) {
   if (isStpManager(role) && !stpManagerMayCall(getMethod(event), getPath(event))) {
     throw Object.assign(new Error('Недостаточно прав'), { status: 403 });
   }
-  return { platform, user: { ...user, role }, payload, usedPreviousKey };
+  return { platform, user: { ...user, role }, payload, usedPreviousKey, version };
 }
 
 function assertRole(user, roles) {
@@ -725,10 +965,34 @@ function withRefusalHistory(next, existing, actor) {
 
 /* —— analytics aggregate (subset, city-aware) —— */
 
-function dayKey(iso) {
+const DEFAULT_ANALYTICS_TZ = 'Europe/Moscow';
+const dayFormatters = new Map();
+
+/** Часовой пояс для разбивки по дням: из запроса, затем ANALYTICS_TZ, затем Москва. Неверное имя пояса игнорируется. */
+export function resolveAnalyticsTz(requested) {
+  for (const candidate of [requested, process.env.ANALYTICS_TZ, DEFAULT_ANALYTICS_TZ]) {
+    const name = String(candidate || '').trim();
+    if (!name) continue;
+    try {
+      new Intl.DateTimeFormat('en-CA', { timeZone: name });
+      return name;
+    } catch {
+      /* следующий кандидат */
+    }
+  }
+  return 'UTC';
+}
+
+/** Календарный день события в заданном часовом поясе (ГГГГ-ММ-ДД). Раньше брался пояс сервера, то есть UTC. */
+export function dayKey(iso, tz = DEFAULT_ANALYTICS_TZ) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  let fmt = dayFormatters.get(tz);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    dayFormatters.set(tz, fmt);
+  }
+  return fmt.format(d);
 }
 
 /**
@@ -920,16 +1184,19 @@ export function aggregateAnalyticsDashboard(allEvents, opts) {
     ? new Date(opts.from)
     : new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
   const seriesMap = new Map();
-  const start = new Date(fromDate);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(toDate);
-  end.setHours(0, 0, 0, 0);
-  for (let t = start.getTime(); t <= end.getTime(); t += 24 * 60 * 60 * 1000) {
-    const key = dayKey(new Date(t).toISOString());
-    if (key) seriesMap.set(key, { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 });
+  const tz = resolveAnalyticsTz(opts.tz);
+  const endKey = dayKey(toDate.toISOString(), tz);
+  const startKey = dayKey(fromDate.toISOString(), tz);
+  if (startKey && endKey && startKey <= endKey) {
+    // Шаг в двенадцать часов не пропускает день при переходе на летнее время в других поясах.
+    for (let t = fromDate.getTime(), n = 0; n < 4000; t += 12 * 60 * 60 * 1000, n += 1) {
+      const key = dayKey(new Date(t).toISOString(), tz);
+      if (key > endKey) break;
+      if (key && !seriesMap.has(key)) seriesMap.set(key, { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 });
+    }
   }
   for (const e of events) {
-    const key = dayKey(e.at);
+    const key = dayKey(e.at, tz);
     if (!key) continue;
     if (!seriesMap.has(key)) {
       seriesMap.set(key, { day: key, problemomer: 0, calculator: 0, pdf: 0, logins: 0 });
@@ -1001,6 +1268,86 @@ export function aggregateAnalyticsDashboard(allEvents, opts) {
       .slice(0, opts.journalAll ? 5000 : 40),
     events: events.slice(0, opts.journalAll ? 5000 : 200),
   };
+}
+
+/* —— Списки с проверкой версии и постраничной выдачей ——
+ * Ответ зависит от версии документа и от пользователя. Клиент присылает If-None-Match и, если ничего не
+ * изменилось, получает 304 без тела и без пересборки списка. Собранные ответы держатся в небольшом кэше. */
+
+const listCache = new Map();
+let listCacheBytes = 0;
+const LIST_CACHE_BYTES = Number(process.env.LIST_CACHE_BYTES) || 64 * 1024 * 1024;
+
+function listCacheGet(key) {
+  const hit = listCache.get(key);
+  if (hit) {
+    listCache.delete(key);
+    listCache.set(key, hit);
+  }
+  return hit || null;
+}
+
+function listCachePut(key, entry) {
+  if (entry.body.length > LIST_CACHE_BYTES / 2) return;
+  listCache.set(key, entry);
+  listCacheBytes += entry.body.length;
+  for (const [oldKey, old] of listCache) {
+    if (listCacheBytes <= LIST_CACHE_BYTES) break;
+    listCache.delete(oldKey);
+    listCacheBytes -= old.body.length;
+  }
+}
+
+export function resetListCacheForTests() {
+  listCache.clear();
+  listCacheBytes = 0;
+}
+
+/** Слабый ETag: версия документа плюс всё, от чего зависит ответ. */
+function listEtag(version, parts) {
+  const raw = [version, ...parts].join('|');
+  return `W/"${createHash('sha1').update(raw).digest('hex').slice(0, 24)}"`;
+}
+
+function ifNoneMatchHas(event, etag) {
+  const raw = header(event, 'If-None-Match');
+  if (!raw) return false;
+  return String(raw)
+    .split(',')
+    .map((x) => x.trim())
+    .includes(etag);
+}
+
+/**
+ * limit/offset необязательны: без них отдаётся весь список (как раньше). С limit — страница,
+ * и в ответе total и nextOffset (null на последней странице).
+ */
+function listResponse(event, { version, user, name, query, build, field }) {
+  const limitRaw = Number(query?.limit);
+  const paged = Number.isFinite(limitRaw) && limitRaw > 0;
+  const limit = paged ? Math.min(2000, Math.floor(limitRaw)) : 0;
+  const offset = paged ? Math.max(0, Math.floor(Number(query?.offset) || 0)) : 0;
+  const etag = version
+    ? listEtag(version, [name, user.id, user.role, user.orgId || '', limit, offset])
+    : null;
+  const headers = etag ? { ETag: etag } : {};
+  if (etag && ifNoneMatchHas(event, etag)) {
+    return { statusCode: 304, headers: { ...json(200, {}).headers, ...headers }, body: '' };
+  }
+  const cached = etag ? listCacheGet(etag) : null;
+  if (cached) {
+    return { statusCode: 200, headers: { ...json(200, {}).headers, ...headers }, body: cached.body };
+  }
+  const all = build();
+  const page = paged ? all.slice(offset, offset + limit) : all;
+  const payload = { [field]: page };
+  if (paged) {
+    payload.total = all.length;
+    payload.nextOffset = offset + limit < all.length ? offset + limit : null;
+  }
+  const out = json(200, payload, headers);
+  if (etag) listCachePut(etag, { body: out.body });
+  return out;
 }
 
 function json(statusCode, body, extraHeaders = {}) {
@@ -1140,7 +1487,15 @@ function normalizeIncomingEvent(raw, actor = null, org = null) {
 }
 
 export async function handler(event = {}) {
-  return requestContext.run({ origin: header(event, 'Origin') || '' }, () => handleRequest(event));
+  const store = { origin: header(event, 'Origin') || '', activity: [] };
+  return requestContext.run(store, async () => {
+    try {
+      return await handleRequest(event);
+    } finally {
+      // Записи журнала уходят пачкой до ответа: функция не «замораживается» с недописанным журналом.
+      await flushRequestActivity(store);
+    }
+  });
 }
 
 async function handleRequest(event = {}) {
@@ -1190,6 +1545,8 @@ async function handleRequest(event = {}) {
       path,
       method,
       requireAuth: () => requireAuth(event),
+      requireAuthReadonly: () => requireAuth(event, { readonly: true }),
+      listResponse: (opts) => listResponse(event, { ...opts, query: getQuery(event) }),
       json,
       getBody: () => getBody(event),
       savePlatform,
@@ -1254,13 +1611,16 @@ async function handleRequest(event = {}) {
           { 'Retry-After': String(blocked.retryAfter) },
         );
       }
-      const platform = await loadPlatform();
+      const platform = await loadPlatformView();
       const loginText = String(login || '').trim().slice(0, 200);
       const user = findUserByLogin(platform, loginText);
       const nowMs = Date.now();
-      if (user && Date.parse(user.lockedUntil || '') > nowMs) {
+      const state = user ? (await loadLoginStateView()).users?.[user.id] || null : null;
+      // Старые записи хранили блокировку прямо в пользователе: учитываем обе.
+      const lockedUntil = Math.max(Date.parse(user?.lockedUntil || '') || 0, Date.parse(state?.lockedUntil || '') || 0);
+      if (user && lockedUntil > nowMs) {
         rateHit(ipKey, ipLimit);
-        const wait = Math.ceil((Date.parse(user.lockedUntil) - nowMs) / 1000);
+        const wait = Math.ceil((lockedUntil - nowMs) / 1000);
         return json(
           429,
           { message: 'Слишком много неверных паролей. Вход временно закрыт, повторите позже.' },
@@ -1276,24 +1636,21 @@ async function handleRequest(event = {}) {
         return json(401, { message: 'Неверный логин или пароль' });
       }
       rateReset(ipKey);
-      if (user.failedLogins || user.lockedUntil) {
-        delete user.failedLogins;
-        delete user.lockedUntil;
-      }
       const token = await signToken(user);
-      pushActivity(platform, {
+      pushActivity(null, {
         orgId: user.orgId,
         userId: user.id,
         login: user.login,
         action: 'login',
         detail: `Роль: ${normalizeRole(user.role)}`,
       });
-      await savePlatform(platform);
+      // Файл платформы при входе не переписывается: сбрасываем только маленькую запись счётчика.
+      if (state) await clearLoginState(user.id);
       return json(200, { token, user: await sessionUser(user, platform) });
     }
 
     if (method === 'GET' && path.endsWith('/auth/me')) {
-      const { platform, user, payload, usedPreviousKey } = await requireAuth(event);
+      const { platform, user, payload, usedPreviousKey } = await requireAuth(event, { readonly: true });
       // Скользящая сессия: токен старше часа обновляется, чтобы активный пользователь не упирался в 12 ч.
       const stale = Number(payload?.iat) > 0 && Date.now() / 1000 - Number(payload.iat) > 3600;
       return json(200, { user: await sessionUser(user, platform), ...(usedPreviousKey || stale ? { token: await signToken(user) } : {}) });
@@ -1350,17 +1707,19 @@ async function handleRequest(event = {}) {
 
     /* —— Admin partners —— */
     if (method === 'GET' && path.endsWith('/admin/partners')) {
-      const { platform, user } = await requireAuth(event);
+      const { platform, user } = await requireAuth(event, { readonly: true });
       assertRole(user, ['admin']);
       const owners = platform.users.filter((u) => normalizeRole(u.role) === 'owner');
+      const logins = await lastLoginIndex(platform);
+      const orgsById = new Map((platform.orgs || []).map((o) => [o.id, o]));
+      const staffByOrg = new Map();
+      for (const x of platform.users) {
+        if (x.orgId && STAFF_ROLES.includes(normalizeRole(x.role))) staffByOrg.set(x.orgId, (staffByOrg.get(x.orgId) || 0) + 1);
+      }
       const list = owners.map((u) => {
-        const org = findOrg(platform, u.orgId);
-        const staffCount = platform.users.filter(
-          (x) => x.orgId === u.orgId && STAFF_ROLES.includes(normalizeRole(x.role)),
-        ).length;
-        const last = (platform.activity || []).find(
-          (a) => a.orgId === u.orgId && a.action === 'login',
-        );
+        const org = orgsById.get(u.orgId) || null;
+        const staffCount = staffByOrg.get(u.orgId) || 0;
+        const last = { at: logins.byOrg.get(u.orgId) };
         return {
           user: {
             id: u.id,
@@ -1433,12 +1792,13 @@ async function handleRequest(event = {}) {
 
     /* —— Менеджеры StP: внутренние сотрудники MultiFrame, обучение и ссылки на инструменты —— */
     if (method === 'GET' && path.endsWith('/admin/stp-managers')) {
-      const { platform, user } = await requireAuth(event);
+      const { platform, user } = await requireAuth(event, { readonly: true });
       assertRole(user, ['admin']);
+      const logins = await lastLoginIndex(platform);
       const managers = platform.users
         .filter((u) => normalizeRole(u.role) === STP_MANAGER_ROLE)
         .map((u) => {
-          const last = (platform.activity || []).find((a) => a.userId === u.id && a.action === 'login');
+          const last = { at: logins.byUser.get(u.id) };
           return {
             id: u.id,
             login: u.login,
@@ -1552,6 +1912,7 @@ async function handleRequest(event = {}) {
       };
       delete platform.users[idx].failedLogins;
       delete platform.users[idx].lockedUntil;
+      await clearLoginState(platform.users[idx].id);
       pushActivity(platform, {
         orgId: platform.users[idx].orgId,
         userId: user.id,
@@ -1620,7 +1981,7 @@ async function handleRequest(event = {}) {
 
     /* —— Staff —— */
     if (method === 'GET' && path.endsWith('/org/staff')) {
-      const { platform, user } = await requireAuth(event);
+      const { platform, user } = await requireAuth(event, { readonly: true });
       assertRole(user, ['owner', 'sales']);
       if (!user.orgId) return json(400, { message: 'Нет организации' });
       const staff = platform.users
@@ -1708,6 +2069,7 @@ async function handleRequest(event = {}) {
       };
       delete nextUser.failedLogins;
       delete nextUser.lockedUntil;
+      await clearLoginState(nextUser.id);
       delete nextUser.password;
       platform.users[idx] = nextUser;
       pushActivity(platform, {
@@ -1900,16 +2262,17 @@ async function handleRequest(event = {}) {
     }
 
     if (method === 'GET' && path.endsWith('/objects')) {
-      const { platform, user } = await requireAuth(event);
-      if (user.role === 'admin') {
-        const all = (platform.objects || []).map((o) => publicObject(o, user.role));
-        return json(200, { objects: all });
-      }
-      if (!user.orgId) return json(400, { message: 'Нет организации' });
-      const list = (platform.objects || [])
-        .filter((o) => objectVisibleTo(user, o))
-        .map((o) => publicObject(o, user.role));
-      return json(200, { objects: list });
+      const { platform, user, version } = await requireAuth(event, { readonly: true });
+      if (user.role !== 'admin' && !user.orgId) return json(400, { message: 'Нет организации' });
+      const query = getQuery(event);
+      return listResponse(event, {
+        version,
+        user,
+        name: 'objects',
+        query,
+        build: () => (platform.objects || []).filter((o) => objectVisibleTo(user, o)).map((o) => publicObject(o, user.role)),
+        field: 'objects',
+      });
     }
 
     if (method === 'POST' && path.endsWith('/objects')) {
@@ -1976,7 +2339,14 @@ async function handleRequest(event = {}) {
         platform.objects[existingIdx] = obj;
       } else {
         obj.history = [historyEvent(user, obj.createdAt, 'create', obj.status)];
-        platform.objects = [obj, ...(platform.objects || [])].slice(0, OBJECTS_CAP);
+        if ((platform.objects || []).length >= OBJECTS_CAP) {
+          // Раньше старые комнаты молча вытеснялись. Теперь запись отклоняется, данные не теряются.
+          throw Object.assign(new Error('Достигнут предел числа комнат в системе. Свяжитесь с администратором.'), {
+            status: 409,
+            expose: true,
+          });
+        }
+        platform.objects = [obj, ...(platform.objects || [])];
         pushActivity(platform, {
           orgId: user.orgId,
           userId: user.id,
@@ -2039,7 +2409,7 @@ async function handleRequest(event = {}) {
     }
 
     if (method === 'GET' && /\/objects\/[^/]+$/.test(path) && !path.endsWith('/objects')) {
-      const { platform, user } = await requireAuth(event);
+      const { platform, user } = await requireAuth(event, { readonly: true });
       const objectId = path.split('/').pop();
       const obj = (platform.objects || []).find((o) => o.id === objectId);
       if (!obj || !objectVisibleTo(user, obj)) return json(404, { message: 'Комната не найдена' });
@@ -2108,13 +2478,11 @@ async function handleRequest(event = {}) {
       }
       const normalized = incoming.map((raw) => normalizeIncomingEvent(raw, actor, actorOrg)).filter(Boolean);
       if (!normalized.length) return json(400, { message: 'No events' });
-      const existing = await loadEvents();
-      const ids = new Set(existing.map((e) => e.id));
-      const merged = [...normalized.filter((e) => !ids.has(e.id)), ...existing].slice(
-        0,
-        ANALYTICS_CAP,
-      );
-      await saveEvents(merged, existing);
+      // Одновременные события собираются в одну запись основного документа аналитики.
+      await eventsWriter.enqueue((doc) => {
+        const ids = new Set(doc.map((e) => e.id));
+        doc.unshift(...normalized.filter((e) => !ids.has(e.id)));
+      });
       return json(200, { ok: true, accepted: normalized.length });
     }
 
@@ -2189,6 +2557,7 @@ async function handleRequest(event = {}) {
             to: query.to || null,
             orgId: query.orgId || null,
             journalAll: query.journal === '1',
+        tz: query.tz,
           }),
         );
       }
@@ -2226,6 +2595,7 @@ async function handleRequest(event = {}) {
         executorCount: staffDir.filter((e) => !orgId || e.orgId === orgId).length,
         executorDirectory: staffDir,
         journalAll: query.journal === '1',
+        tz: query.tz,
         ...networkAdminScope(platform),
       });
       return json(200, dash);

@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { pollDelayMs } from './polling';
 import type {
   ActivityEvent,
   JobObject,
@@ -468,10 +469,14 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       });
     };
     const arm = () => {
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
       timer = 0;
+      if (stopped) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      timer = window.setInterval(pull, 45_000);
+      timer = window.setTimeout(() => {
+        pull();
+        arm();
+      }, pollDelayMs());
     };
     const onFocus = () => pull();
     const onVisibility = () => {
@@ -479,7 +484,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         pull();
         arm();
       } else {
-        window.clearInterval(timer);
+        window.clearTimeout(timer);
         timer = 0;
       }
     };
@@ -488,7 +493,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       stopped = true;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };

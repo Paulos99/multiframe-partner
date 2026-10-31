@@ -48,10 +48,35 @@ export function isApiError(err: unknown): err is ApiError {
   return err instanceof ApiError;
 }
 
-export async function request<T>(
+/** Ожидание ответа одного запроса. Раньше было 12 с: при очереди на сервере клиент сам обрывал живой запрос. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+const RETRY_ATTEMPTS = 3;
+const RETRY_BASE_MS = 600;
+const RETRY_STATUSES = new Set([502, 503, 504]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Повторять можно только запросы, которые не меняют данные при повторе. */
+function isIdempotent(method: string): boolean {
+  return method === 'GET' || method === 'HEAD';
+}
+
+/** Пауза перед повтором: 0,6 с, 1,2 с, 2,4 с с разбросом, чтобы клиенты не возвращались синхронно. */
+export function retryDelayMs(attempt: number, retryAfterHeader?: string | null, random: () => number = Math.random): number {
+  const seconds = Number(retryAfterHeader);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(10_000, seconds * 1000);
+  const base = RETRY_BASE_MS * 2 ** attempt;
+  return Math.round(base * (0.75 + random() * 0.5));
+}
+
+export type RawResponse<T> = { status: number; data: T; etag: string | null };
+
+async function rawRequest<T>(
   path: string,
   opts: RequestInit & { token?: string | null } = {},
-): Promise<T> {
+): Promise<RawResponse<T>> {
   const base = apiBase();
   if (!base) throw new Error('Сервер не настроен');
   const headers: Record<string, string> = {
@@ -60,18 +85,114 @@ export async function request<T>(
   };
   const token = opts.token !== undefined ? opts.token : loadToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  let res: Response;
-  try {
-    const signal = opts.signal ?? AbortSignal.timeout(12000);
-    res = await fetch(`${base}${path}`, { ...opts, headers, signal, cache: 'no-store' });
-  } catch (err) {
-    throw new ApiError(0, NETWORK_ERROR_MESSAGE);
+  const method = String(opts.method || 'GET').toUpperCase();
+  const attempts = isIdempotent(method) ? RETRY_ATTEMPTS : 1;
+  let lastError: ApiError | null = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    let res: Response;
+    try {
+      const signal = opts.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+      res = await fetch(`${base}${path}`, { ...opts, headers, signal, cache: 'no-store' });
+    } catch {
+      lastError = new ApiError(0, NETWORK_ERROR_MESSAGE);
+      // Запрос, который прервал сам вызывающий, не повторяется.
+      if (opts.signal?.aborted || attempt === attempts - 1) throw lastError;
+      await sleep(retryDelayMs(attempt));
+      continue;
+    }
+    if (res.status === 304) return { status: 304, data: {} as T, etag: res.headers.get('ETag') };
+    const data = (await res.json().catch(() => ({}))) as T & { message?: string };
+    if (!res.ok) {
+      lastError = new ApiError(res.status, data.message || `Ошибка ${res.status}`);
+      const retryable = RETRY_STATUSES.has(res.status) || (res.status === 429 && attempts > 1);
+      if (!retryable || attempt === attempts - 1) throw lastError;
+      await sleep(retryDelayMs(attempt, res.headers.get('Retry-After')));
+      continue;
+    }
+    return { status: res.status, data, etag: res.headers.get('ETag') };
   }
-  const data = (await res.json().catch(() => ({}))) as T & { message?: string };
-  if (!res.ok) {
-    throw new ApiError(res.status, data.message || `Ошибка ${res.status}`);
+  throw lastError ?? new ApiError(0, NETWORK_ERROR_MESSAGE);
+}
+
+export async function request<T>(
+  path: string,
+  opts: RequestInit & { token?: string | null } = {},
+): Promise<T> {
+  return (await rawRequest<T>(path, opts)).data;
+}
+
+/** Последний ответ списка и его версия. Ключ включает токен: при смене пользователя чужие данные не показываются. */
+const listCache = new Map<string, { etag: string; value: unknown }>();
+
+export function resetListCacheForTests(): void {
+  listCache.clear();
+}
+
+/**
+ * Читает страницу списка с проверкой версии. Если сервер ответил 304, возвращается прежнее значение
+ * и notModified: true.
+ */
+async function conditionalGet<T>(path: string): Promise<RawResponse<T> & { notModified: boolean; cached: unknown }> {
+  const key = `${loadToken() || ''}|${path}`;
+  const known = listCache.get(key);
+  const res = await rawRequest<T>(path, {
+    headers: known ? { 'If-None-Match': known.etag } : undefined,
+  });
+  if (res.status === 304 && known) return { ...res, notModified: true, cached: known.value };
+  if (res.status === 304) {
+    // Сервер ответил 304 без нашего кэша (сброс памяти): запрашиваем заново без условия.
+    const fresh = await rawRequest<T>(path);
+    return { ...fresh, notModified: false, cached: null };
   }
-  return data;
+  return { ...res, notModified: false, cached: null };
+}
+
+const PAGE_SIZE = 500;
+
+type ListPage<K extends string, T> = { [key in K]: T[] } & { total?: number; nextOffset?: number | null };
+
+/**
+ * Весь список постранично. Первая страница проверяется по версии: если она не изменилась, остальные не
+ * запрашиваются. Старый сервер без постраничной выдачи отвечает целиком, и цикл заканчивается сразу.
+ */
+async function listAll<K extends string, T extends { id: string }>(
+  base: string,
+  field: K,
+): Promise<{ items: T[]; notModified: boolean }> {
+  const token = loadToken() || '';
+  const firstPath = `${base}?limit=${PAGE_SIZE}&offset=0`;
+  const first = await conditionalGet<ListPage<K, T>>(firstPath);
+  const assembledKey = `${token}|${base}|all`;
+  if (first.notModified) {
+    const assembled = listCache.get(assembledKey);
+    if (assembled && assembled.etag === listCache.get(`${token}|${firstPath}`)?.etag) {
+      return { items: assembled.value as T[], notModified: true };
+    }
+  }
+  let items: T[] = first.data[field] ?? [];
+  let next = first.data.nextOffset ?? null;
+  let consistent = true;
+  let guard = 0;
+  while (next != null && guard < 200) {
+    const page = await rawRequest<ListPage<K, T>>(`${base}?limit=${PAGE_SIZE}&offset=${next}`);
+    if (first.etag && page.etag && page.etag !== first.etag) consistent = false;
+    items = items.concat(page.data[field] ?? []);
+    next = page.data.nextOffset ?? null;
+    guard += 1;
+  }
+  if (guard > 0) {
+    const seen = new Set<string>();
+    items = items.filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
+  }
+  if (first.etag && consistent) {
+    listCache.set(`${token}|${firstPath}`, { etag: first.etag, value: first.data });
+    listCache.set(assembledKey, { etag: first.etag, value: items });
+  } else {
+    // Список менялся во время загрузки: версию не запоминаем, следующая проверка загрузит его заново.
+    listCache.delete(`${token}|${firstPath}`);
+    listCache.delete(assembledKey);
+  }
+  return { items, notModified: false };
 }
 
 export async function apiLogin(
@@ -214,8 +335,13 @@ export async function apiRenameStaff(
 }
 
 export async function apiListObjects(): Promise<JobObject[]> {
-  const data = await request<{ objects: JobObject[] }>('/objects');
-  return data.objects;
+  return (await apiListObjectsChecked()).objects;
+}
+
+/** Список комнат; notModified — на сервере ничего не изменилось с прошлой загрузки (можно не пересохранять). */
+export async function apiListObjectsChecked(): Promise<{ objects: JobObject[]; notModified: boolean }> {
+  const { items, notModified } = await listAll<'objects', JobObject>('/objects', 'objects');
+  return { objects: items, notModified };
 }
 
 export async function apiCreateObject(
@@ -240,8 +366,12 @@ export async function apiPatchObject(
 }
 
 export async function apiListProjects(): Promise<Project[]> {
-  const data = await request<{ projects: Project[] }>('/projects');
-  return data.projects;
+  return (await apiListProjectsChecked()).projects;
+}
+
+export async function apiListProjectsChecked(): Promise<{ projects: Project[]; notModified: boolean }> {
+  const { items, notModified } = await listAll<'projects', Project>('/projects', 'projects');
+  return { projects: items, notModified };
 }
 
 export async function apiCreateProject(input: ProjectInput): Promise<Project> {
