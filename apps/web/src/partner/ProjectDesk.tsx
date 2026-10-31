@@ -56,6 +56,8 @@ import { REFUSAL_COMMENT_MAX, REFUSAL_OTHER_KEY, REFUSAL_REASONS } from '../../.
 import { PHONE_EXAMPLE, phoneStageAllowed } from '../../../../packages/shared/clientPhone.js';
 import { ProjectPhotoReports } from './photos/ProjectPhotoReports';
 import styles from './ProjectDesk.module.css';
+import pill from '../ui/SlidingPill.module.css';
+import { useSlidingPill } from '../ui/useSlidingPill';
 
 type Person = { id: string; role: UserRole; displayName: string };
 
@@ -195,14 +197,7 @@ export function ProjectDesk({
       <div className={styles.bar}>
         <p className={styles.lead}>Клиент, адрес и стадия. Комнаты открываются внутри карточки.</p>
         <div className={styles.tools}>
-          <div className={styles.switch} role="group" aria-label="Вид проектов">
-            <button type="button" aria-pressed={view === 'list'} onClick={() => choose('list')}>
-              Список
-            </button>
-            <button type="button" aria-pressed={view === 'kanban'} onClick={() => choose('kanban')}>
-              Канбан
-            </button>
-          </div>
+          <ViewSwitch view={view} onChoose={choose} />
           <button type="button" className={styles.quiet} aria-pressed={archive} onClick={() => setArchive((value) => !value)}>
             Архив{archiveCount ? `: ${archiveCount}` : ''}
           </button>
@@ -218,6 +213,22 @@ export function ProjectDesk({
         <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onMoveStatus={onMoveStatus} onDelete={onDeleteProject} />
       )}
     </section>
+  );
+}
+
+/** Переключатель «Список / Канбан»: выбранный пункт подсвечивает плавно переезжающая подложка. */
+function ViewSwitch({ view, onChoose }: { view: ProjectDeskView; onChoose: (next: ProjectDeskView) => void }) {
+  const { boxRef, pillRef } = useSlidingPill(view);
+  return (
+    <div className={styles.switch} role="group" aria-label="Вид проектов" ref={boxRef}>
+      <span ref={pillRef} className={`${pill.pill} ${styles.switchPill}`} aria-hidden="true" />
+      <button type="button" aria-pressed={view === 'list'} onClick={() => onChoose('list')}>
+        Список
+      </button>
+      <button type="button" aria-pressed={view === 'kanban'} onClick={() => onChoose('kanban')}>
+        Канбан
+      </button>
+    </div>
   );
 }
 
@@ -804,6 +815,7 @@ function ProjectPage({
   onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
   onDeleteProject?: (project: Project) => void;
 }) {
+  const { boxRef: tabsRef, pillRef: tabsPillRef } = useSlidingPill(tab);
   const people = actor && !staff.some((person) => person.id === actor.id) ? [actor, ...staff] : staff;
   const { project, rooms, status } = row;
   const area = areaSum(rooms);
@@ -835,7 +847,8 @@ function ProjectPage({
           </button>
         ) : null}
       </header>
-      <div className={styles.tabs} role="tablist" aria-label="Разделы проекта">
+      <div className={styles.tabs} role="tablist" aria-label="Разделы проекта" ref={tabsRef}>
+        <span ref={tabsPillRef} className={`${pill.pill} ${styles.tabPill}`} aria-hidden="true" />
         {TABS.map(([id, label]) => (
           <button
             key={id}

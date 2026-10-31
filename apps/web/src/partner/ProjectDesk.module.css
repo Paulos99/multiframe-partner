@@ -28,6 +28,7 @@
 }
 
 .switch {
+  position: relative;
   display: inline-flex;
   padding: 3px;
   border: 1px solid var(--cab-border);
@@ -66,10 +67,28 @@
   font-weight: 700;
 }
 
+.switch button {
+  position: relative;
+  z-index: 1;
+  transition: color 0.25s ease;
+}
+
 .switch button[aria-pressed='true'] {
   background: var(--cab-card, #fff);
   color: var(--cab-accent-text, #01644f);
   box-shadow: 0 1px 2px rgba(16, 40, 32, 0.08);
+}
+
+/* Подложка выбранного вида переезжает (useSlidingPill); у самой кнопки фон остаётся только до первого замера. */
+.switchPill {
+  border-radius: 9px;
+  background: var(--cab-card, #fff);
+  box-shadow: 0 1px 2px rgba(16, 40, 32, 0.08);
+}
+
+.switch[data-pill='ready'] button[aria-pressed='true'] {
+  background: transparent;
+  box-shadow: none;
 }
 
 .quiet {
@@ -350,6 +369,7 @@
 }
 
 .tabs {
+  position: relative;
   display: flex;
   flex-wrap: nowrap;
   gap: 4px;
@@ -371,10 +391,27 @@
   white-space: nowrap;
 }
 
+.tab {
+  position: relative;
+  z-index: 1;
+  transition: color 0.25s ease;
+}
+
 .tab[aria-selected='true'] {
   border-bottom-color: var(--cab-accent, #01644f);
   background: transparent;
   color: var(--cab-accent-text, #01644f);
+}
+
+/* Подложка выбранной вкладки с акцентной чертой снизу переезжает (useSlidingPill). */
+.tabPill {
+  border-radius: 10px 10px 0 0;
+  background: var(--cab-accent-soft, #e7f3ef);
+  border-bottom: 2px solid var(--cab-accent, #01644f);
+}
+
+.tabs[data-pill='ready'] .tab[aria-selected='true'] {
+  border-bottom-color: transparent;
 }
 
 .page {
