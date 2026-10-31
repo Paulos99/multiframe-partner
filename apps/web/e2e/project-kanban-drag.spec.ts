@@ -18,6 +18,14 @@ async function enter(page: Page, role: string) {
 async function openBoard(page: Page) {
   await page.getByRole('button', { name: 'Канбан', exact: true }).click();
   await expect(page.locator('[data-project-stage]')).toHaveCount(5);
+  // Колонки и карточки появляются анимацией (GSAP): жесты начинаем, когда всё встало на место.
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-project-stage], [data-flip-id]')
+        .evaluateAll((els) => els.every((el) => !(el as HTMLElement).style.transform && !(el as HTMLElement).style.opacity)),
+    )
+    .toBe(true);
 }
 
 /** Настоящий жест мышью: нажать, несколько шагов движения, отпустить. Без клавиатуры и dispatchEvent. */
