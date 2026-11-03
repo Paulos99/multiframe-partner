@@ -113,7 +113,7 @@ export function StpManagersAdmin() {
                 <input value={login} onChange={(e) => setLogin(e.target.value)} required autoComplete="off" />
               </label>
               <label className={styles.field}>
-                {canIssueLinks() ? 'Пароль (можно не задавать)' : 'Пароль'}
+                Пароль
                 <input
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -128,7 +128,7 @@ export function StpManagersAdmin() {
             </div>
             {canIssueLinks() ? (
               <p className={styles.hint}>
-                Без пароля нажмите «Ссылка для входа» в строке менеджера: он придумает пароль сам.
+                Пароль можно не задавать: нажмите «Ссылка для входа» в строке менеджера, он придумает пароль сам.
               </p>
             ) : null}
             {err ? (

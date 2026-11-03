@@ -292,7 +292,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                         <input value={login} onChange={(e) => setLogin(e.target.value)} required />
                       </label>
                       <label className={styles.field}>
-                        {canIssueLinks() ? 'Пароль (можно не задавать)' : 'Пароль'}
+                        Пароль
                         <input
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
@@ -315,7 +315,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                     </div>
                     {canIssueLinks() ? (
                       <p className={styles.hint}>
-                        Без пароля нажмите «Ссылка для входа» в строке партнёра: владелец придумает пароль сам.
+                        Пароль можно не задавать: нажмите «Ссылка для входа» в строке партнёра, владелец придумает пароль сам.
                       </p>
                     ) : null}
                     {err ? (
