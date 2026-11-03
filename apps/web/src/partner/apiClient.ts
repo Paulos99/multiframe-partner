@@ -122,6 +122,7 @@ export async function apiAdminListPartners(): Promise<
       displayName: string;
       orgId: string | null;
       createdAt: string;
+      pendingActivation?: boolean;
     };
     org?: { id: string; settings: OrgSettings };
     lastLogin: string | null;
@@ -140,7 +141,7 @@ export async function apiAdminCreatePartner(input: {
   password: string;
   companyName: string;
   city?: string;
-}): Promise<{ login: string; password: string }> {
+}): Promise<{ login: string; password?: string; pendingActivation?: boolean }> {
   return request('/admin/partners', {
     method: 'POST',
     body: JSON.stringify(input),
@@ -170,6 +171,7 @@ export async function apiListStaff(): Promise<
     displayName: string;
     orgId: string | null;
     createdAt: string;
+    pendingActivation?: boolean;
   }>
 > {
   const data = await request<{ staff: Awaited<ReturnType<typeof apiListStaff>> }>('/org/staff');
@@ -181,7 +183,7 @@ export async function apiCreateStaff(input: {
   password: string;
   displayName: string;
   role: UserRole;
-}): Promise<{ id: string; login: string; password: string; role: UserRole }> {
+}): Promise<{ id: string; login: string; password?: string; role: UserRole; pendingActivation?: boolean }> {
   return request('/org/staff', {
     method: 'POST',
     body: JSON.stringify(input),

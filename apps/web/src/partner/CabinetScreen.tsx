@@ -20,6 +20,8 @@ import { AnimatePresence, FadeRise, m, motionPresets } from './motionBits';
 import { ObjectsPanel } from './ObjectsPanel';
 import { CompanySection } from './CompanySection';
 import { generatePassword, usePartner } from './PartnerContext';
+import { ActivationLinkButton } from './ActivationLinkButton';
+import { canIssueLinks } from './activation';
 import { SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
 import { ToolsPanel } from './ToolsPanel';
@@ -188,7 +190,11 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     setSaving(true);
     try {
       const res = await api.adminCreatePartner({ login, password, companyName, city });
-      setNotice(`Создан партнёр ${res.login} · пароль: ${res.password}`);
+      setNotice(
+        res.password
+          ? `Создан партнёр ${res.login} · пароль: ${res.password}`
+          : `Создан партнёр ${res.login}. Пароля пока нет: нажмите «Ссылка для входа» в его строке.`,
+      );
       setLogin('');
       setPassword('');
       setCompanyName('');
@@ -286,11 +292,11 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                         <input value={login} onChange={(e) => setLogin(e.target.value)} required />
                       </label>
                       <label className={styles.field}>
-                        Пароль
+                        {canIssueLinks() ? 'Пароль (можно не задавать)' : 'Пароль'}
                         <input
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          required
+                          required={!canIssueLinks()}
                           autoComplete="new-password"
                         />
                       </label>
@@ -307,6 +313,11 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                         <CityField value={city} onChange={setCity} />
                       </label>
                     </div>
+                    {canIssueLinks() ? (
+                      <p className={styles.hint}>
+                        Без пароля нажмите «Ссылка для входа» в строке партнёра: владелец придумает пароль сам.
+                      </p>
+                    ) : null}
                     {err ? (
                       <p className={styles.error} role="alert">
                         {err}
@@ -349,6 +360,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                         ' · город не указан'
                       )}
                       {cityBad ? <span className={styles.cityBadge}>не из справочника</span> : null}
+                      {'pendingActivation' in p.user && p.user.pendingActivation ? ' · ждёт активации' : ''}
                       {' · '}сотрудников: {p.executorCount}
                       {p.lastLogin
                         ? ` · вход ${new Date(p.lastLogin).toLocaleDateString('ru-RU')}`
@@ -367,6 +379,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                     >
                       {cityBad ? 'Исправить город' : 'Город'}
                     </button>
+                    <ActivationLinkButton userId={p.user.id} userName={p.org?.settings.companyName || p.user.displayName} />
                     <button
                       type="button"
                       className={styles.ghost}

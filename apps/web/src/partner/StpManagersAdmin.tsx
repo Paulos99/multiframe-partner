@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Button } from '../ui/Button';
 import { Skeleton } from './Skeleton';
 import { generatePassword } from './PartnerContext';
+import { ActivationLinkButton } from './ActivationLinkButton';
+import { canIssueLinks } from './activation';
 import {
   createStpManager,
   deleteStpManager,
@@ -43,7 +45,11 @@ export function StpManagersAdmin() {
     setSaving(true);
     try {
       const res = await createStpManager({ login, password, displayName });
-      setNotice(`Создан менеджер StP ${res.login} · пароль: ${res.password}`);
+      setNotice(
+        res.password
+          ? `Создан менеджер StP ${res.login} · пароль: ${res.password}`
+          : `Создан менеджер StP ${res.login}. Пароля пока нет: нажмите «Ссылка для входа» в его строке.`,
+      );
       setLogin('');
       setPassword('');
       setDisplayName('');
@@ -107,11 +113,11 @@ export function StpManagersAdmin() {
                 <input value={login} onChange={(e) => setLogin(e.target.value)} required autoComplete="off" />
               </label>
               <label className={styles.field}>
-                Пароль
+                {canIssueLinks() ? 'Пароль (можно не задавать)' : 'Пароль'}
                 <input
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
+                  required={!canIssueLinks()}
                   autoComplete="new-password"
                 />
               </label>
@@ -120,6 +126,11 @@ export function StpManagersAdmin() {
                 <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
               </label>
             </div>
+            {canIssueLinks() ? (
+              <p className={styles.hint}>
+                Без пароля нажмите «Ссылка для входа» в строке менеджера: он придумает пароль сам.
+              </p>
+            ) : null}
             {err ? (
               <p className={styles.error} role="alert">
                 {err}
@@ -149,10 +160,12 @@ export function StpManagersAdmin() {
               <strong>{row.displayName}</strong>
               <div className={styles.hint}>
                 {row.login}
+                {row.pendingActivation ? ' · ждёт активации' : ''}
                 {row.lastLogin ? ` · вход ${new Date(row.lastLogin).toLocaleDateString('ru-RU')}` : ''}
               </div>
             </div>
             <div className={styles.rowActions}>
+              <ActivationLinkButton userId={row.id} userName={row.displayName} />
               <button type="button" className={styles.ghost} onClick={() => void onReset(row)}>
                 Новый пароль
               </button>

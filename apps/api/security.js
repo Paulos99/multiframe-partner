@@ -6,23 +6,14 @@
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { PASSWORD_MIN, PASSWORD_MAX_BYTES, passwordProblem } from '../../packages/shared/passwordPolicy.js';
 
 /** Стоимость bcrypt для новых паролей. Проверка принимает любые хеши. */
 export const BCRYPT_COST = Math.min(14, Math.max(10, Number(process.env.BCRYPT_COST) || 12));
-export const PASSWORD_MIN = 10;
-export const PASSWORD_MAX_BYTES = 72;
+export { PASSWORD_MIN, PASSWORD_MAX_BYTES, passwordProblem };
 
 export function hashPassword(password) {
   return bcrypt.hash(String(password), BCRYPT_COST);
-}
-
-/** Пустая строка, если пароль подходит, иначе текст ошибки для пользователя. */
-export function passwordProblem(password) {
-  const value = String(password ?? '');
-  if (value.length < PASSWORD_MIN) return `Пароль: не короче ${PASSWORD_MIN} символов`;
-  if (Buffer.byteLength(value, 'utf8') > PASSWORD_MAX_BYTES) return `Пароль: не более ${PASSWORD_MAX_BYTES} байт`;
-  if (/^\s|\s$/.test(value)) return 'Пароль не должен начинаться или заканчиваться пробелом';
-  return '';
 }
 
 /** Случайный пароль без похожих символов (для временных паролей). */

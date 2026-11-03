@@ -5,7 +5,7 @@
 import { STP_MANAGER_ROLE, STP_ORG_ID, STP_ORG_NAME } from '../../../../packages/shared/rolePermissions.js';
 import { normalizeOrgSettings } from '../../../../packages/shared/partner';
 import { apiAdminResetPassword, hasRemoteApi, request } from './apiClient';
-import { loadDb, loadSession, loadToken, saveDb } from './localStore';
+import { generatePassword, loadDb, loadSession, loadToken, saveDb } from './localStore';
 
 export type StpManagerRow = {
   id: string;
@@ -13,6 +13,8 @@ export type StpManagerRow = {
   displayName: string;
   createdAt: string;
   lastLogin: string | null;
+  /** Пароль ещё не задан: ждёт ссылку активации. */
+  pendingActivation?: boolean;
 };
 
 function talksToServer(): boolean {
@@ -44,18 +46,20 @@ export async function createStpManager(input: {
   login: string;
   password: string;
   displayName: string;
-}): Promise<{ login: string; password: string }> {
+}): Promise<{ login: string; password: string; pendingActivation?: boolean }> {
   const login = input.login.trim();
-  const password = input.password.trim();
+  const typed = input.password.trim();
   const displayName = input.displayName.trim() || login;
-  if (!login || !password) throw new Error('Укажите логин и пароль');
+  if (!login) throw new Error('Укажите логин');
   if (talksToServer()) {
-    const res = await request<{ login: string; password: string }>('/admin/stp-managers', {
+    // Без пароля сервер создаёт менеджера и ждёт ссылку активации.
+    const res = await request<{ login: string; password?: string; pendingActivation?: boolean }>('/admin/stp-managers', {
       method: 'POST',
-      body: JSON.stringify({ login, password, displayName }),
+      body: JSON.stringify({ login, password: typed, displayName }),
     });
-    return { login: res.login, password: res.password };
+    return { login: res.login, password: res.password ?? '', pendingActivation: res.pendingActivation };
   }
+  const password = typed || generatePassword();
   needAdmin();
   const db = loadDb();
   if (db.users.some((u) => u.login === login)) throw new Error('Такой логин уже есть');

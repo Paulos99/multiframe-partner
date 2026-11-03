@@ -13,6 +13,8 @@ import { canSaveToProject } from './partner/toolSave';
 import { sessionFromRoom } from './partner/roomLink';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
+import { ActivationScreen } from './partner/ActivationScreen';
+import { ACTIVATED_MESSAGE, activationTokenFromSearch } from './partner/activation';
 import { CabinetScreen } from './partner/CabinetScreen';
 import { DemoSwitcherFab } from './partner/DemoSwitcher';
 import { SyncStatus } from './partner/SyncStatus';
@@ -171,6 +173,11 @@ function PartnerShell() {
     cabinetLeaveNonce,
   } = usePartner();
   const [routeState, setRoute] = useState<Route>('cabinet');
+  // Ссылка активации открывает экран пароля при любом состоянии входа. Токен остаётся только здесь.
+  const [activationToken, setActivationToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : activationTokenFromSearch(window.location.search),
+  );
+  const [activated, setActivated] = useState(false);
   // Менеджеру StP открыт только кабинет: страницы Проблемомера и калькулятора партнёров для него закрыты.
   const route: Route = user && isStpManagerRole(user.role) ? 'cabinet' : routeState;
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
@@ -282,14 +289,27 @@ function PartnerShell() {
   ]);
 
   let body: ReactNode;
-  if (!ready) {
+  if (activationToken) {
+    body = (
+      <ActivationScreen
+        token={activationToken}
+        onCancel={() => setActivationToken(null)}
+        onDone={() => {
+          setActivationToken(null);
+          setActivated(true);
+          // Сеанс другого человека на этом устройстве закрываем: дальше обычный вход.
+          if (user) logout();
+        }}
+      />
+    );
+  } else if (!ready) {
     body = (
       <div className={styles.shell}>
         <Skeleton kind="page" count={3} label="Загрузка кабинета"/>
       </div>
     );
   } else if (!user) {
-    body = <LoginScreen />;
+    body = <LoginScreen notice={activated ? ACTIVATED_MESSAGE : undefined} />;
   } else if (route === 'cabinet') {
     body = (
       <>

@@ -37,6 +37,8 @@ GATEWAY_PATHS = (
     "/auth/login",
     "/auth/me",
     "/auth/logout",
+    "/auth/invite",
+    "/auth/activate",
     "/me",
     "/me/password",
     "/me/avatar",
