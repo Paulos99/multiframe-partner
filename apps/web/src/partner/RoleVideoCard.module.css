@@ -36,47 +36,25 @@
   min-width: 0;
 }
 
-.poster,
 .video {
   display: block;
   width: 100%;
+  height: auto;
   aspect-ratio: 16 / 9;
   border-radius: var(--cab-radius-sm);
   background: #0b2a22;
+  object-fit: contain;
 }
 
-.poster {
-  position: relative;
-  appearance: none;
-  padding: 0;
-  border: none;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.poster img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.play {
-  position: absolute;
-  inset: auto 10px 10px auto;
-  min-height: var(--touch-min);
-  display: inline-flex;
-  align-items: center;
-  padding: 0 16px;
-  border-radius: 999px;
+.broken {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 16px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--cab-radius-sm);
   background: var(--cab-card);
-  color: var(--cab-accent-text);
+  color: var(--cab-muted);
   font-size: 0.92rem;
-  font-weight: 750;
-  box-shadow: var(--cab-shadow-sm);
-}
-
-.poster:focus-visible {
-  outline: 3px solid var(--cab-accent);
-  outline-offset: 2px;
+  text-align: center;
 }

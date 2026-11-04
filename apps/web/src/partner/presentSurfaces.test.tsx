@@ -108,6 +108,13 @@ for (const [role, title] of [['owner', 'Владелец компании'], ['s
   if (!html.includes('Обучающее видео') || !html.includes(`«${title}»`) || !html.includes(`/videos/role-${role === 'stp_manager' ? 'stp' : role}.jpg`)) {
     throw new Error(`В обучении роли ${role} нет своего видео`);
   }
+  for (const part of ['<video', ' controls', 'playsInline', 'preload="none"', 'poster="']) {
+    if (!html.includes(part)) throw new Error(`Видео роли ${role}: нет «${part.trim()}»`);
+  }
+  // Первым пунктом: раньше папок материалов.
+  if (html.indexOf('Обучающее видео') > html.indexOf('Папки') && html.includes('Папки')) {
+    throw new Error(`Видео роли ${role} должно идти раньше папок`);
+  }
 }
 if (renderToStaticMarkup(<HelpTrainingPanel role="admin" />).includes('Обучающее видео')) {
   throw new Error('У admin не должно быть обучающего видео');
