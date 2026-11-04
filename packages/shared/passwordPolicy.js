@@ -2,7 +2,7 @@
  * Правила пароля: одни и те же для сервера и для экрана.
  * Минимальную длину меняйте только здесь.
  */
-export const PASSWORD_MIN = 10;
+export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX_BYTES = 72;
 
 function byteLength(value) {

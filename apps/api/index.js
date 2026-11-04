@@ -229,7 +229,7 @@ function defaultPlatform() {
     const boot = bootstrapAdminPlatform();
     if (boot) return boot;
     throw Object.assign(
-      new Error('Хранилище пусто. Задайте ADMIN_BOOTSTRAP_LOGIN и ADMIN_BOOTSTRAP_PASSWORD (не короче 10 символов).'),
+      new Error('Хранилище пусто. Задайте ADMIN_BOOTSTRAP_LOGIN и ADMIN_BOOTSTRAP_PASSWORD (не короче 8 символов).'),
       { status: 503, expose: true },
     );
   }

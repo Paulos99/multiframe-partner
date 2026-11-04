@@ -89,8 +89,8 @@ test('слабый пароль на экране активации не при
   await page.getByRole('button', { name: 'Ссылка для входа' }).click();
   const link = await readLink(page);
 
-  const weak = await activate(browser, link, 'korotkiy');
-  await expect(weak.page.getByRole('alert')).toContainText('10');
+  const weak = await activate(browser, link, 'abc1234');
+  await expect(weak.page.getByRole('alert')).toContainText('8');
   await weak.page.getByLabel('Новый пароль').fill(newPassword);
   await weak.page.getByRole('button', { name: 'Задать пароль' }).click();
   await expect(weak.page.getByText('Пароль задан. Войдите в аккаунт.')).toBeVisible();
