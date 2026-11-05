@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after, before, mock } from 'node:test';
 import { aggregateAnalyticsDashboard, normalizeRole, type AnalyticsEvent } from '../../../../packages/shared/partner';
 import { buildStaffDrill, visibleStaff } from '../../../../packages/shared/staffDrill.js';
 import { composeCabinetAnalytics, presetRange, rangeFromYmd } from './analytics';
@@ -12,6 +12,14 @@ import {
 } from './demoSeed';
 
 const now = '2026-10-27T12:00:00.000Z';
+
+// Демо-история строится от текущей даты; фиксируем часы, чтобы проверки не зависели от дня запуска.
+before(() => {
+  mock.timers.enable({ apis: ['Date'], now: Date.parse(now) });
+});
+after(() => {
+  mock.timers.reset();
+});
 
 const users = [
   { id: 'owner', login: 'owner', displayName: 'Владелец', role: 'owner', orgId: 'org_a' },
