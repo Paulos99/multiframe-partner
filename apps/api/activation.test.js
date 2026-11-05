@@ -13,7 +13,7 @@ process.env.JWT_SECRET = 'activation-local-test-secret-0123456789';
 process.env.BCRYPT_COST = '10';
 
 const { handler } = await import('./index.js');
-const { resetStoredDocumentsForTests } = await import('./platformStore.js');
+const { resetStoredDocumentsForTests, loadStoredDocument, mergeEventList } = await import('./platformStore.js');
 const { resetRateLimitsForTests, PASSWORD_MIN } = await import('./security.js');
 const { PASSWORD_MIN: SHARED_MIN } = await import('../../packages/shared/passwordPolicy.js');
 
@@ -269,13 +269,21 @@ describe('ссылка активации', { concurrency: false }, () => {
     resetRateLimitsForTests();
   });
 
-  test('токены и пароли не попадают в журнал и вывод', () => {
+  test('токены и пароли не попадают в журнал и вывод', async () => {
     const joined = printed.join('\n');
     assert.ok(!/[a-f0-9]{64}/.test(joined), 'в выводе есть токен');
     for (const secret of ['my-own-password-1', 'reset-password-33', 'owner-password-1', 'manager-password-1']) {
       assert.ok(!joined.includes(secret), 'в выводе есть пароль');
     }
-    const activity = JSON.stringify(platformFile().activity || []);
+    // Журнал действий лежит в отдельном документе activity-log.json, а не в файле платформы.
+    const activityDoc = await loadStoredDocument({
+      key: () => process.env.AUDIT_LOG_KEY || 'activity-log.json',
+      accept: (value) => Array.isArray(value),
+      normalize: (parsed) => (Array.isArray(parsed) ? parsed : parsed?.events || null),
+      fallback: () => [],
+      merge: (base, desired, fresh) => mergeEventList(base, desired, fresh, 10000),
+    });
+    const activity = JSON.stringify(activityDoc || []);
     assert.ok(!/[a-f0-9]{64}/.test(activity));
     assert.match(activity, /issue_activation/);
     assert.match(activity, /activate_account/);
