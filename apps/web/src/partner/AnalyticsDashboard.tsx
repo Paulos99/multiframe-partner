@@ -1,5 +1,5 @@
 import { Skeleton } from './Skeleton';
-import { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type {
   AnalyticsBreakdownItem,
   AnalyticsDashboard as DashData,
@@ -42,7 +42,9 @@ import { isDemoModeEnabled } from './demoMode';
 import { calcModeLabel } from './calcModeLabel';
 import { JournalDownload } from './JournalDownload';
 import { spansMoreThanTwoMonths } from './periodSpan';
-import { FadeRise } from './motionBits';
+import pill from '../ui/SlidingPill.module.css';
+import { useSlidingPill } from '../ui/useSlidingPill';
+import { AnimatedNumber, useGrow, useStaggerIn } from '../ui/gsapMotion';
 import { PeriodCalendar } from './PeriodCalendar';
 import { PhotoCases } from './photos/PhotoCases';
 import { usePartner } from './PartnerContext';
@@ -207,7 +209,9 @@ function KpiCard({
     return (
       <div className={styles.kpi}>
         <span className={styles.kpiLabel}>{label}</span>
-        <strong>{formatNum(value)}</strong>
+        <strong>
+          <AnimatedNumber value={value} format={formatNum} />
+        </strong>
         {deltaNode}
       </div>
     );
@@ -221,7 +225,9 @@ function KpiCard({
       onBlur={() => setTapped(false)}
     >
       <span className={styles.kpiLabel}>{label}</span>
-      <strong>{formatNum(value)}</strong>
+      <strong>
+          <AnimatedNumber value={value} format={formatNum} />
+        </strong>
       {deltaNode}
     </button>
   );
@@ -238,8 +244,12 @@ function FunnelBlock({
   const stopped = funnelStopCounts(reached);
   const percents = funnelStopPercents(reached);
   const opened = stopped.reduce((sum, value) => sum + value, 0);
+  const ref = useRef<HTMLDivElement>(null);
+  const funnelKey = stopped.join(',');
+  useStaggerIn(ref, 'li', funnelKey, { y: 8, stagger: 0.06, duration: 0.4 });
+  useGrow(ref, `.${styles.funnelBarFill}`, 'x', funnelKey, { stagger: 0.06, duration: 0.7, delay: 0.1, max: 0.5 });
   return (
-    <div className={styles.funnelBlock}>
+    <div className={styles.funnelBlock} ref={ref}>
       <h4 className={styles.funnelTitle}>
         <FunnelIcon size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
         {title}
@@ -254,8 +264,13 @@ function FunnelBlock({
         {steps.map((step, index) => (
           <li key={step.label}>
             <span className={styles.funnelLabel}>{step.label}</span>
-            <strong title="Остановились на этом этапе">{stopped[index]}</strong>
+            <strong title="Остановились на этом этапе">
+              <AnimatedNumber value={stopped[index]} duration={0.7} />
+            </strong>
             <span className={styles.funnelPct}>{percents[index]}</span>
+            <span className={styles.funnelBar} aria-hidden="true">
+              <span className={styles.funnelBarFill} style={{ width: `${opened > 0 ? (stopped[index] / opened) * 100 : 0}%` }} />
+            </span>
           </li>
         ))}
       </ol>
@@ -280,9 +295,11 @@ function monthsFromSeries(series: AnalyticsSeriesPoint[]): SliceRow[] {
 
 function MonthSlice({ rows }: { rows: SliceRow[] }) {
   const max = Math.max(1, ...rows.map((r) => r.total));
+  const ref = useRef<HTMLUListElement>(null);
+  useGrow(ref, `.${styles.sliceFill}`, 'x', rows.map((r) => r.total).join(','));
   if (!rows.length) return <p className={styles.lead}>Пока нет данных по месяцам</p>;
   return (
-    <ul className={styles.sliceList}>
+    <ul className={styles.sliceList} ref={ref}>
       {rows.map((r) => (
         <li key={r.label} className={styles.sliceRow}>
           <span>{r.label}</span>
@@ -302,9 +319,11 @@ function SeriesChart({ series, title = 'Динамика по дням' }: { ser
     ...series.map((p) => Math.max(p.problemomer, p.calculator, p.pdf, p.logins)),
   );
   const showEvery = series.length > 14 ? Math.ceil(series.length / 10) : 1;
+  const ref = useRef<HTMLDivElement>(null);
+  useGrow(ref, `.${styles.seriesBar}`, 'y', `${series.length}:${series[0]?.day ?? ''}:${max}`, { stagger: 0.01, duration: 0.6, max: 0.35 });
 
   return (
-    <div className={styles.seriesWrap}>
+    <div className={styles.seriesWrap} ref={ref}>
       <div className={styles.seriesLegend}>
         <span className={styles.legPm}>Проблемомер</span>
         <span className={styles.legCalc}>Калькулятор</span>
@@ -374,8 +393,10 @@ function BreakdownList({
   items: AnalyticsBreakdownItem[];
   kind: 'room' | 'house' | 'stage' | 'mode' | 'comfort' | 'raw';
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGrow(ref, `.${styles.breakdownFill}`, 'x', items.map((item) => `${item.key}:${item.share}`).join(','), { stagger: 0.04, duration: 0.6, max: 0.3 });
   return (
-    <div className={styles.breakdownBlock}>
+    <div className={styles.breakdownBlock} ref={ref}>
       <h4 className={styles.funnelTitle}>{title}</h4>
       {!items.length ? (
         <p className={styles.lead}>Нет данных</p>
@@ -404,6 +425,58 @@ function BreakdownList({
 }
 
 type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'training' | 'photos' | 'objects';
+
+function KpiRow({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Карточки показателей выезжают со ступенькой; после «Загрузка…» (смена периода и фильтров) ряд монтируется заново.
+  useStaggerIn(ref, ':scope > *', 'enter', { y: 16, stagger: 0.05, duration: 0.5 });
+  return (
+    <div className={styles.kpiRow} ref={ref} data-motion-own>
+      {children}
+    </div>
+  );
+}
+
+/** Раздел аналитики: содержимое мягко проявляется при переключении вкладки. */
+function DashSection({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useStaggerIn(ref, ':scope > :not([data-motion-own])', 'enter', { y: 12, stagger: 0.07, duration: 0.45 });
+  return (
+    <div className={styles.dashSection} ref={ref}>
+      {children}
+    </div>
+  );
+}
+
+/** Вкладки разделов: выбранную подсвечивает плавно переезжающая подложка. */
+function SectionTabs({
+  tabs,
+  section,
+  onOpen,
+}: {
+  tabs: ReadonlyArray<{ id: AnalyticsTab; label: string }>;
+  section: AnalyticsTab;
+  onOpen: (id: AnalyticsTab) => void;
+}) {
+  const { boxRef, pillRef } = useSlidingPill(section, tabs.map((t) => t.id).join(','));
+  return (
+    <div className={styles.tabs} role="tablist" aria-label="Разделы аналитики" ref={boxRef}>
+      <span ref={pillRef} className={`${pill.pill} ${styles.tabPill}`} aria-hidden="true" />
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={section === t.id}
+          className={section === t.id ? styles.tabActive : styles.tab}
+          onClick={() => onOpen(t.id)}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const DRILL_METRICS = new Set(['staff', 'problemomer', 'calculator', 'pdf', 'area', 'panels', 'avg', 'done']);
 
@@ -472,22 +545,7 @@ export function AnalyticsDashboard({
     }
     setSection(id);
   }
-  const sectionTabBar = (
-    <div className={styles.tabs} role="tablist" aria-label="Разделы аналитики">
-      {sectionTabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          role="tab"
-          aria-selected={section === t.id}
-          className={section === t.id ? styles.tabActive : styles.tab}
-          onClick={() => openSection(t.id)}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
+  const sectionTabBar = <SectionTabs tabs={sectionTabs} section={section} onOpen={openSection} />;
 
   const staffKey = api.partnerListStaff().map((member) => member.id).join('|');
 
@@ -722,15 +780,15 @@ export function AnalyticsDashboard({
       {sectionTabBar}
 
       {section === 'overview' ? (
-        <div className={styles.dashSection}>
+        <DashSection>
           {loading ? (
-            <div className={styles.kpiRow} aria-busy="true">
+            <div className={styles.kpiRow} aria-busy="true" data-motion-own>
               {Array.from({ length: mode === 'admin' ? 9 : 8 }, (_, index) => (
                 <Skeleton key={index} kind="cards" count={1} label="Загрузка показателя" />
               ))}
             </div>
           ) : (
-          <FadeRise className={styles.kpiRow}>
+          <KpiRow>
             {(
               [
                 ...(mode === 'admin'
@@ -764,14 +822,14 @@ export function AnalyticsDashboard({
                 }
               />
             ))}
-          </FadeRise>
+          </KpiRow>
           )}
           <p className={styles.hint}>Нажмите показатель — откроются воронка и динамика.</p>
-        </div>
+        </DashSection>
       ) : null}
 
       {section === 'portrait' ? (
-        <div className={styles.dashSection}>
+        <DashSection>
           <div className={styles.breakdownGrid}>
             <BreakdownList title="Тип комнаты" items={dash.breakdowns.roomType} kind="room" />
             <BreakdownList title="Тип дома" items={dash.breakdowns.houseType} kind="house" />
@@ -805,11 +863,11 @@ export function AnalyticsDashboard({
               kind="raw"
             />
           </div>
-        </div>
+        </DashSection>
       ) : null}
 
       {section === 'companies' && mode === 'admin' ? (
-        <div className={styles.dashSection}>
+        <DashSection>
           <div className={styles.dashTableScroll}>
             <table className={styles.dashTable}>
               <thead>
@@ -859,11 +917,11 @@ export function AnalyticsDashboard({
               </ul>
             </>
           ) : null}
-        </div>
+        </DashSection>
       ) : null}
 
       {section === 'team' ? (
-        <div className={styles.dashSection}>
+        <DashSection>
           <div className={styles.table}>
             {dash.executors.map((ex) => (
               <div key={ex.userId || ex.login} className={styles.tableRow}>
@@ -881,13 +939,13 @@ export function AnalyticsDashboard({
               <p className={styles.lead}>Пока нет активности сотрудников</p>
             ) : null}
           </div>
-        </div>
+        </DashSection>
       ) : null}
 
       {section === 'training' && canTraining ? <TrainingTab mode={mode} /> : null}
 
       {section === 'objects' ? (
-        <div className={styles.dashSection}>
+        <DashSection>
           <JournalDownload
             mode={mode}
             fromYmd={fromYmd}
@@ -944,7 +1002,7 @@ export function AnalyticsDashboard({
           ) : (
             <p className={styles.lead}>Нет записей за выбранный фильтр</p>
           )}
-        </div>
+        </DashSection>
       ) : null}
       </>
       ) : null}

@@ -54,8 +54,14 @@
   background: var(--cab-subtle);
 }
 
+.tabs {
+  position: relative;
+}
+
 .tab,
 .tabOn {
+  position: relative;
+  z-index: 1;
   appearance: none;
   min-height: var(--touch-min);
   padding: 8px 10px;
@@ -74,6 +80,18 @@
   background: var(--cab-card);
   color: var(--cab-accent-text);
   box-shadow: var(--cab-shadow-sm);
+}
+
+/* Белая подложка выбранной вкладки переезжает (useSlidingPill); у кнопки фон остаётся до первого замера. */
+.tabPill {
+  border-radius: var(--cab-radius-sm);
+  background: var(--cab-card);
+  box-shadow: var(--cab-shadow-sm);
+}
+
+.tabs[data-pill='ready'] .tabOn {
+  background: transparent;
+  box-shadow: none;
 }
 
 .panel {
