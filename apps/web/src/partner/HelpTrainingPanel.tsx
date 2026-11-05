@@ -4,6 +4,7 @@ import { trainerHashOpen } from '../trainer/route';
 import { navigateHash } from './projectRoute';
 import { MaterialsPanel } from './MaterialsPanel';
 import { OfflineGearSlot } from './offlineGearSlot';
+import { RoleVideoSection } from './RoleVideoCard';
 import styles from './HelpTrainingPanel.module.css';
 import pill from '../ui/SlidingPill.module.css';
 import { useSlidingPill } from '../ui/useSlidingPill';
@@ -74,6 +75,7 @@ export function HelpTrainingPanel({ role }: { role: UserRole }) {
         </div>
         {section === 'materials' ? (
           <div id="help-panel-materials" role="tabpanel" aria-labelledby="help-tab-materials">
+            <RoleVideoSection role={role} />
             <MaterialsPanel canManage={role === 'admin'} />
           </div>
         ) : (

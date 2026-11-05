@@ -102,4 +102,35 @@ for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {
   }
 }
 
+// Каждая рабочая роль видит в «Обучении» своё видео; у менеджера StP видео нет; админ StP видит все четыре.
+const VIDEO_ROLES = [['owner', 'Владелец компании'], ['sales', 'Менеджер по продажам'], ['measurer', 'Замерщик'], ['crew', 'Монтажник']] as const;
+for (const [role, title] of VIDEO_ROLES) {
+  const html = renderToStaticMarkup(<HelpTrainingPanel role={role} />);
+  if (!html.includes('Обучающее видео') || !html.includes(`«${title}»`) || !html.includes(`/videos/role-${role}.jpg`)) {
+    throw new Error(`В обучении роли ${role} нет своего видео`);
+  }
+  if ((html.match(/<video/g) || []).length !== 1) throw new Error(`У роли ${role} должно быть ровно одно видео`);
+  for (const part of ['<video', ' controls', 'playsInline', 'preload="none"', 'poster="']) {
+    if (!html.includes(part)) throw new Error(`Видео роли ${role}: нет «${part.trim()}»`);
+  }
+  // Первым пунктом: раньше папок материалов.
+  if (html.indexOf('Обучающее видео') > html.indexOf('Папки') && html.includes('Папки')) {
+    throw new Error(`Видео роли ${role} должно идти раньше папок`);
+  }
+}
+if (renderToStaticMarkup(<HelpTrainingPanel role={'stp_manager'} />).includes('Обучающее видео')) {
+  throw new Error('У менеджера StP не должно быть обучающего видео');
+}
+{
+  const html = renderToStaticMarkup(<HelpTrainingPanel role="admin" />);
+  if ((html.match(/<video/g) || []).length !== 4) throw new Error('Админ StP должен видеть все четыре видео');
+  for (const [role, title] of VIDEO_ROLES) {
+    if (!html.includes(`«${title}»`) || !html.includes(`/videos/role-${role}.jpg`)) throw new Error(`Админ StP не видит видео роли ${role}`);
+  }
+  if (html.includes('role-stp')) throw new Error('Видео менеджера StP убрано');
+  // Только просмотр: рядом с роликами нет кнопок удаления.
+  const videoPart = html.slice(html.indexOf('Обучающее видео'), html.indexOf('Папки') > 0 ? html.indexOf('Папки') : undefined);
+  if (/Удалить|Заменить|Загрузить/.test(videoPart)) throw new Error('Рядом с видео ролей не должно быть удаления и замены');
+}
+
 console.log('Present surfaces: checks passed');
