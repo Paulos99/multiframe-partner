@@ -20,6 +20,7 @@ import {
   safeEqual,
 } from './security.js';
 import { signToken as signAuthToken, verifyToken } from './authTokens.js';
+import { awaitsActivation, findUserByActivation, issueActivation, looksLikeActivationToken } from './activation.js';
 import { ensureIndexFromTsv, resolveCity } from '../../packages/shared/cityCatalog.js';
 import ruCitiesTsv from '../../packages/shared/data/ru-cities.js';
 import {
@@ -225,7 +226,7 @@ function defaultPlatform() {
     const boot = bootstrapAdminPlatform();
     if (boot) return boot;
     throw Object.assign(
-      new Error('Хранилище пусто. Задайте ADMIN_BOOTSTRAP_LOGIN и ADMIN_BOOTSTRAP_PASSWORD (не короче 10 символов).'),
+      new Error('Хранилище пусто. Задайте ADMIN_BOOTSTRAP_LOGIN и ADMIN_BOOTSTRAP_PASSWORD (не короче 8 символов).'),
       { status: 503, expose: true },
     );
   }
@@ -1640,6 +1641,94 @@ async function handleRequest(event = {}) {
       return json(200, { ok: true });
     }
 
+    /* —— Ссылка активации: первый пароль сотрудника и сброс пароля —— */
+    if (method === 'POST' && path.endsWith('/auth/invite')) {
+      const { platform, user } = await requireAuth(event);
+      const inviteLimit = { limit: 20, windowMs: 15 * 60 * 1000 };
+      const inviteHit = rateHit(`invite:${user.id}`, inviteLimit);
+      if (!inviteHit.allowed) {
+        return json(
+          429,
+          { message: 'Слишком много ссылок за короткое время. Повторите позже.' },
+          { 'Retry-After': String(inviteHit.retryAfter) },
+        );
+      }
+      const { userId } = getBody(event);
+      const idx = platform.users.findIndex((u) => u.id === String(userId || ''));
+      const target = idx < 0 ? null : platform.users[idx];
+      const targetRole = target ? normalizeRole(target.role) : null;
+      // Админ StP выдаёт ссылки владельцам партнёров и менеджерам StP, владелец — сотрудникам своей компании.
+      const allowed =
+        Boolean(target) &&
+        (user.role === 'admin'
+          ? targetRole === 'owner' || targetRole === STP_MANAGER_ROLE
+          : STAFF_MANAGER_ROLES.includes(user.role) &&
+            Boolean(user.orgId) &&
+            target.orgId === user.orgId &&
+            STAFF_ROLES.includes(targetRole));
+      if (!allowed) return json(404, { message: 'Пользователь не найден' });
+      if (target.loginDisabled === true) {
+        return json(409, { message: 'Пользователь отключён: ссылку выдать нельзя' });
+      }
+      const nextUser = { ...target };
+      const { token, expiresAt } = issueActivation(nextUser);
+      platform.users[idx] = nextUser;
+      pushActivity(platform, {
+        orgId: nextUser.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'issue_activation',
+        detail: nextUser.login,
+      });
+      await savePlatform(platform);
+      // Токен есть только в этом ответе: в записи пользователя лежит один хеш.
+      return json(200, { path: `?activate=${token}`, expiresAt });
+    }
+
+    if (method === 'POST' && path.endsWith('/auth/activate')) {
+      const ip = clientIp(event) || 'unknown';
+      const activateLimit = { limit: 10, windowMs: 15 * 60 * 1000 };
+      const activateHit = rateHit(`activate-ip:${ip}`, activateLimit);
+      if (!activateHit.allowed) {
+        return json(
+          429,
+          { message: 'Слишком много попыток. Подождите и повторите.' },
+          { 'Retry-After': String(activateHit.retryAfter) },
+        );
+      }
+      const body = getBody(event);
+      const invalid = { message: 'Ссылка недействительна или срок истёк' };
+      const token = typeof body.token === 'string' ? body.token : '';
+      if (!looksLikeActivationToken(token)) return json(400, invalid);
+      const platform = await loadPlatform();
+      const found = findUserByActivation(platform.users, token);
+      if (!found || found.loginDisabled === true) return json(400, invalid);
+      const password = String(body.password ?? '');
+      const weakActivation = passwordProblem(password);
+      if (weakActivation) return json(400, { message: weakActivation });
+      const idx = platform.users.findIndex((u) => u.id === found.id);
+      // Одна запись: новый пароль, закрытые сеансы (sessionVersion) и стёртая ссылка сохраняются вместе.
+      const nextUser = {
+        ...platform.users[idx],
+        passwordHash: await hashPassword(password),
+        sessionVersion: (Number(platform.users[idx].sessionVersion) || 0) + 1,
+      };
+      delete nextUser.activation;
+      delete nextUser.failedLogins;
+      delete nextUser.lockedUntil;
+      delete nextUser.password;
+      platform.users[idx] = nextUser;
+      pushActivity(platform, {
+        orgId: nextUser.orgId,
+        userId: nextUser.id,
+        login: nextUser.login,
+        action: 'activate_account',
+        detail: 'Пароль задан по ссылке',
+      });
+      await savePlatform(platform);
+      return json(200, { ok: true });
+    }
+
     /* —— Org profile —— */
     if (method === 'PATCH' && path.endsWith('/org/settings')) {
       const { platform, user } = await requireAuth(event);
@@ -1708,6 +1797,7 @@ async function handleRequest(event = {}) {
             displayName: u.displayName,
             orgId: u.orgId,
             createdAt: u.createdAt,
+            pendingActivation: awaitsActivation(u),
           },
           org,
           lastLogin: last?.at || null,
@@ -1724,7 +1814,8 @@ async function handleRequest(event = {}) {
       const body = getBody(event);
       const city = cityOrThrow(body.city ?? '', null);
       const { login, password, companyName } = parseBody(schemas.partnerCreate, body);
-      const weak = passwordProblem(password);
+      // Пароль можно не задавать: владелец получит ссылку активации и придумает его сам.
+      const weak = password ? passwordProblem(password) : '';
       if (weak) return json(400, { message: weak });
       if (loginTaken(platform, login)) return json(409, { message: 'Такой логин уже есть' });
       const now = new Date().toISOString();
@@ -1747,7 +1838,7 @@ async function handleRequest(event = {}) {
       const owner = {
         id: userId,
         login,
-        passwordHash: await hashPassword(password),
+        ...(password ? { passwordHash: await hashPassword(password) } : {}),
         role: 'owner',
         displayName: companyName,
         orgId,
@@ -1763,7 +1854,11 @@ async function handleRequest(event = {}) {
         detail: `${login} · ${companyName}`,
       });
       await savePlatform(platform);
-      return json(200, { login, password, user: publicUser(owner, org) });
+      return json(200, {
+        login,
+        ...(password ? { password } : { pendingActivation: true }),
+        user: publicUser(owner, org),
+      });
     }
 
     /* —— Менеджеры StP: внутренние сотрудники MultiFrame, обучение и ссылки на инструменты —— */
@@ -1783,6 +1878,7 @@ async function handleRequest(event = {}) {
             orgId: u.orgId || null,
             createdAt: u.createdAt,
             lastLogin: last?.at || null,
+            pendingActivation: awaitsActivation(u),
           };
         });
       return json(200, { managers });
@@ -1793,6 +1889,8 @@ async function handleRequest(event = {}) {
       assertRole(user, ['admin']);
       const { login, password, displayName } = parseBody(schemas.stpManagerCreate, getBody(event));
       if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
+      const weakManager = password ? passwordProblem(password) : '';
+      if (weakManager) return json(400, { message: weakManager });
       const now = new Date().toISOString();
       if (!findOrg(platform, STP_ORG_ID)) {
         platform.orgs.push({
@@ -1806,7 +1904,7 @@ async function handleRequest(event = {}) {
       const manager = {
         id: uid('u'),
         login,
-        passwordHash: bcrypt.hashSync(password, 10),
+        ...(password ? { passwordHash: await hashPassword(password) } : {}),
         role: STP_MANAGER_ROLE,
         displayName,
         orgId: STP_ORG_ID,
@@ -1821,7 +1919,13 @@ async function handleRequest(event = {}) {
         detail: login,
       });
       await savePlatform(platform);
-      return json(200, { id: manager.id, login, password, role: STP_MANAGER_ROLE, displayName });
+      return json(200, {
+        id: manager.id,
+        login,
+        ...(password ? { password } : { pendingActivation: true }),
+        role: STP_MANAGER_ROLE,
+        displayName,
+      });
     }
 
     if (method === 'DELETE' && /\/admin\/stp-managers\/[^/]+$/.test(path)) {
@@ -1962,6 +2066,7 @@ async function handleRequest(event = {}) {
           displayName: u.displayName,
           orgId: u.orgId,
           createdAt: u.createdAt,
+          pendingActivation: awaitsActivation(u),
         }));
       return json(200, { staff });
     }
@@ -1971,13 +2076,13 @@ async function handleRequest(event = {}) {
       assertRole(user, STAFF_MANAGER_ROLES);
       if (!user.orgId) return json(400, { message: 'Нет организации' });
       const { login, password, displayName, role } = parseBody(schemas.staffCreate, getBody(event));
-      const weak = passwordProblem(password);
+      const weak = password ? passwordProblem(password) : '';
       if (weak) return json(400, { message: weak });
       if (loginTaken(platform, login)) return json(409, { message: 'Такой логин уже есть' });
       const staff = {
         id: uid('u'),
         login,
-        passwordHash: await hashPassword(password),
+        ...(password ? { passwordHash: await hashPassword(password) } : {}),
         role,
         displayName,
         orgId: user.orgId,
@@ -1995,7 +2100,7 @@ async function handleRequest(event = {}) {
       return json(200, {
         id: staff.id,
         login,
-        password,
+        ...(password ? { password } : { pendingActivation: true }),
         role,
         displayName,
       });

@@ -41,8 +41,10 @@ test('любое тело, не объект, отклоняется с 400', ()
 });
 
 test('новый партнёр: пустые логин и пароль, длинный логин, название по умолчанию', () => {
-  assert.equal(fail(schemas.partnerCreate, { login: 'a' }).message, 'Укажите логин и пароль');
-  assert.equal(fail(schemas.partnerCreate, { login: ' ', password: 'x' }).message, 'Укажите логин и пароль');
+  assert.equal(fail(schemas.partnerCreate, { password: 'x' }).message, 'Укажите логин');
+  assert.equal(fail(schemas.partnerCreate, { login: ' ', password: 'x' }).message, 'Укажите логин');
+  // Пароль не обязателен: без него пользователь получает ссылку активации.
+  assert.equal(pass(schemas.partnerCreate, { login: 'a' }).password, '');
   const long = fail(schemas.partnerCreate, { login: 'a'.repeat(LOGIN_MAX + 1), password: 'p' });
   assert.equal(long.message, 'Логин слишком длинный');
   assert.equal(long.status, 400);
@@ -56,13 +58,13 @@ test('новый партнёр: пустые логин и пароль, дли
 test('менеджер StP: длина логина не ограничивается, имя по умолчанию — логин', () => {
   const data = pass(schemas.stpManagerCreate, { login: 'a'.repeat(LOGIN_MAX + 10), password: 'p' });
   assert.equal(data.displayName, data.login);
-  assert.equal(fail(schemas.stpManagerCreate, { password: 'p' }).message, 'Укажите логин и пароль');
+  assert.equal(fail(schemas.stpManagerCreate, { password: 'p' }).message, 'Укажите логин');
 });
 
 test('сотрудник: роль проверяется раньше логина, executor — это замерщик, пустая роль — замерщик', () => {
   assert.equal(fail(schemas.staffCreate, { role: 'owner' }).message, 'Роль: sales, measurer или crew');
   assert.equal(fail(schemas.staffCreate, { role: 'admin', login: 'a', password: 'b' }).message, 'Роль: sales, measurer или crew');
-  assert.equal(fail(schemas.staffCreate, { role: 'crew' }).message, 'Укажите логин и пароль');
+  assert.equal(fail(schemas.staffCreate, { role: 'crew' }).message, 'Укажите логин');
   assert.equal(
     fail(schemas.staffCreate, { login: 'a'.repeat(LOGIN_MAX + 1), password: 'p' }).message,
     'Логин слишком длинный',

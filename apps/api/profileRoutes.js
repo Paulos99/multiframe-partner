@@ -118,7 +118,7 @@ export async function handleProfile(ctx) {
     if (!(await bcrypt.compare(current, user.passwordHash || '')))
       fail('Текущий пароль неверен', 403);
     if (password.length < 10 || Buffer.byteLength(password, 'utf8') > 72)
-      fail('Новый пароль: от 10 символов, не более 72 байт');
+      fail('Новый пароль: от 8 символов, не более 72 байт');
     if (password === current) fail('Новый пароль должен отличаться');
     const next = {
       ...platform.users[index],

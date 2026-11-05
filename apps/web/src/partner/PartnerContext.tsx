@@ -131,6 +131,8 @@ export type StaffMember = {
   displayName: string;
   orgId: string | null;
   createdAt?: string;
+  /** Пароль ещё не задан: сотрудник ждёт ссылку активации. */
+  pendingActivation?: boolean;
 };
 
 export type SyncStatus = 'offline' | 'pending' | 'synced';
@@ -143,6 +145,7 @@ function asStaff(member: StaffMember | StoredUser): StaffMember {
     displayName: member.displayName,
     orgId: member.orgId,
     createdAt: member.createdAt,
+    ...('pendingActivation' in member && member.pendingActivation ? { pendingActivation: true } : {}),
   };
 }
 
@@ -167,12 +170,13 @@ type PartnerApi = {
   login: (login: string, password: string, options?: { demoAccount?: boolean }) => Promise<void>;
   logout: () => void;
   saveOrg: (patch: Partial<OrgSettings>) => Promise<void>;
+  /** Пустой пароль при работе с сервером: владелец получит ссылку активации и задаст пароль сам. */
   adminCreatePartner: (input: {
     login: string;
     password: string;
     companyName: string;
     city?: string;
-  }) => Promise<{ login: string; password: string }>;
+  }) => Promise<{ login: string; password: string; pendingActivation?: boolean }>;
   adminResetPassword: (partnerUserId: string, password: string) => Promise<string>;
   adminDeletePartner: (partnerUserId: string) => Promise<void>;
   adminUpdatePartnerCity: (partnerUserId: string, city: string) => Promise<string>;
@@ -188,7 +192,7 @@ type PartnerApi = {
     password: string;
     displayName: string;
     role: UserRole;
-  }) => Promise<{ id: string; login: string; password: string; role: UserRole }>;
+  }) => Promise<{ id: string; login: string; password: string; role: UserRole; pendingActivation?: boolean }>;
   partnerResetStaffPassword: (staffUserId: string, password: string) => Promise<string>;
   partnerDeleteStaff: (staffUserId: string) => Promise<void>;
   partnerListStaff: () => StaffMember[];
@@ -686,9 +690,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       if (remote && loadToken()) {
         const res = await apiAdminCreatePartner(payload);
         setTick((n) => n + 1);
-        return { login: res.login, password: res.password };
+        return { login: res.login, password: res.password ?? '', pendingActivation: res.pendingActivation };
       }
-      const res = createPartnerAccount({ ...payload, admin: user });
+      const res = createPartnerAccount({ ...payload, password: payload.password || generatePassword(), admin: user });
       setTick((n) => n + 1);
       return { login: res.user.login, password: res.password };
     },
@@ -754,7 +758,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         setTick((n) => n + 1);
         const list = await apiListStaff();
         setStaffCache(list);
-        return res;
+        return { ...res, password: res.password ?? '' };
       }
       const res = createStaffAccount({ ...input, owner: user });
       setTick((n) => n + 1);

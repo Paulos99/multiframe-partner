@@ -5,7 +5,7 @@ import { FadeRise, ShakeBox } from './motionBits';
 import { usePartner } from './PartnerContext';
 import styles from './LoginScreen.module.css';
 
-export function LoginScreen() {
+export function LoginScreen({ notice }: { notice?: string } = {}) {
   const { login, loading, error } = usePartner();
   const [loginName, setLoginName] = useState('');
   const [password, setPassword] = useState('');
@@ -82,6 +82,11 @@ export function LoginScreen() {
                 {demo ? 'Выберите роль, чтобы открыть кабинет.' : 'Проблемомер, калькулятор и проекты компании.'}
               </p>
             </header>
+            {notice ? (
+              <p className={styles.notice} role="status">
+                {notice}
+              </p>
+            ) : null}
             {demo ? <DemoLoginPicker /> : null}
             {demo ? (
               <>

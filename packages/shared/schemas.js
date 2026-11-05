@@ -54,15 +54,16 @@ export function createSchemas(z) {
     });
 
   /**
-   * Общая часть создания пользователя: логин и пароль обрезаются по краям.
+   * Общая часть создания пользователя: логин и пароль обрезаются по краям; пароль необязателен.
    * @param {{ checkLength: boolean }} options
    */
   const credentials = ({ checkLength }) =>
     body().transform((raw, ctx) => {
       const login = textOf(raw.login).trim();
       const password = textOf(raw.password).trim();
-      if (!login || !password) {
-        issue(ctx, 'Укажите логин и пароль');
+      // Пароль можно не задавать: пользователь получает ссылку активации и придумывает его сам.
+      if (!login) {
+        issue(ctx, 'Укажите логин');
         return z.NEVER;
       }
       if (checkLength && login.length > LOGIN_MAX) {

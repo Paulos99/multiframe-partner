@@ -151,3 +151,13 @@
 .manual:hover {
   background: var(--cab-accent-soft);
 }
+
+.notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--cab-accent-softer);
+  border: 1px solid var(--cab-border-strong);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}

@@ -8,6 +8,8 @@ import {
   type UserRole,
 } from '../../../../packages/shared/partner';
 import { Button } from '../ui/Button';
+import { ActivationLinkButton } from './ActivationLinkButton';
+import { canIssueLinks } from './activation';
 import { NewPasswordButton } from './NewPasswordButton';
 import { generatePassword, usePartner } from './PartnerContext';
 import { navigateCompany, navigateStaff, parseStaffHash, type StaffRoute } from './projectRoute';
@@ -21,7 +23,7 @@ export function StaffPanel() {
   const [execLogin, setExecLogin] = useState('');
   const [execName, setExecName] = useState('');
   const [execRole, setExecRole] = useState<UserRole>('measurer');
-  const [issued, setIssued] = useState<{ login: string; password: string } | null>(null);
+  const [issued, setIssued] = useState<{ id: string; login: string; displayName: string; password: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [savingStaff, setSavingStaff] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -49,14 +51,16 @@ export function StaffPanel() {
     setErr(null);
     setSavingStaff(true);
     try {
-      const password = generatePassword();
+      // С сервером пароль не создаём: сотрудник задаст его сам по ссылке активации.
+      const password = canIssueLinks() ? '' : generatePassword();
+      const displayName = execName.trim() || execLogin.trim();
       const res = await api.partnerCreateStaff({
         login: execLogin.trim(),
         password,
-        displayName: execName.trim() || execLogin.trim(),
+        displayName,
         role: execRole,
       });
-      setIssued({ login: res.login, password: res.password });
+      setIssued({ id: res.id, login: res.login, displayName, password: res.password });
       setExecLogin('');
       setExecName('');
     } catch (ex) {
@@ -145,7 +149,13 @@ export function StaffPanel() {
                 Сохранить имя
               </Button>
             </form>
-            <NewPasswordButton staffId={open.id} staffName={open.displayName} />
+            {open.pendingActivation ? (
+              <p className={styles.hint}>Пароль ещё не задан. Нажмите «Ссылка для входа» и отправьте её сотруднику.</p>
+            ) : null}
+            <div className={styles.rowActions}>
+              <ActivationLinkButton userId={open.id} userName={open.displayName} />
+              <NewPasswordButton staffId={open.id} staffName={open.displayName} />
+            </div>
             {open.id === user.id ? null : (
               <button
                 type="button"
@@ -206,13 +216,29 @@ export function StaffPanel() {
               />
             </label>
           </div>
-          <p className={styles.hint}>Пароль создаётся при сохранении и показывается один раз.</p>
+          <p className={styles.hint}>
+            {canIssueLinks()
+              ? 'Пароль вы не задаёте: после сохранения нажмите «Ссылка для входа» и отправьте её сотруднику. Он придумает пароль сам.'
+              : 'Пароль создаётся при сохранении и показывается один раз.'}
+          </p>
           {issued ? (
             <p className={styles.flash} role="status">
-              Сотрудник {issued.login}. Пароль: {issued.password}{' '}
-              <button type="button" className={styles.ghost} onClick={() => setIssued(null)}>
-                Скрыть пароль
-              </button>
+              {issued.password ? (
+                <>
+                  Сотрудник {issued.login}. Пароль: {issued.password}{' '}
+                  <button type="button" className={styles.ghost} onClick={() => setIssued(null)}>
+                    Скрыть пароль
+                  </button>
+                </>
+              ) : (
+                <>
+                  Сотрудник {issued.login} создан. Пароля пока нет:{' '}
+                  <ActivationLinkButton userId={issued.id} userName={issued.displayName} />{' '}
+                  <button type="button" className={styles.ghost} onClick={() => setIssued(null)}>
+                    Скрыть
+                  </button>
+                </>
+              )}
             </p>
           ) : null}
           {err ? (
@@ -237,6 +263,7 @@ export function StaffPanel() {
               <strong>{ex.displayName}</strong>
               <div className={styles.hint}>
                 {ex.login} · {ROLE_LABELS[ex.role] || ex.role}
+                {ex.pendingActivation ? ' · ждёт активации' : ''}
               </div>
             </button>
           </m.div>
