@@ -64,6 +64,10 @@ test('сохранённая история: плитки и рейтинг из
     },
   ];
 
+  // Демонстрационные комнаты и события считаются от «сегодня», а период в тесте задан датами:
+  // часы браузера зафиксированы на 30 октября 2026, чтобы результат не зависел от дня запуска.
+  await page.clock.setFixedTime(new Date('2026-10-30T12:00:00+03:00'));
+
   await page.addInitScript(
     ({ historyKey, analyticsKey, sessionKey, periodKey, stored }) => {
       localStorage.setItem(historyKey, '1');
