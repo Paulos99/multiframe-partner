@@ -3,9 +3,14 @@
 // Ставьте за обратным прокси (nginx/Caddy): сервер сам TLS не терминирует.
 // За прокси укажите TRUST_PROXY=1 — тогда адрес клиента берётся из X-Forwarded-For, который прокси перезаписывает.
 import http from 'node:http';
+import { gzip } from 'node:zlib';
+import { promisify } from 'node:util';
 import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { handler } from './index.js';
+// Отдельный сервер держит один процесс на всех: версия документа сверяется не чаще раза в DOC_FRESH_MS.
+// Свои записи видны сразу; запись из другого процесса — с задержкой не больше этого значения. 0 — сверять каждый запрос.
+process.env.DOC_FRESH_MS ??= '300';
+const { handler } = await import('./index.js');
 import { setDocumentStore } from './objectStore.js';
 
 // Своя база для документов платформы: DOCUMENT_STORE_MODULE=/путь/к/adapter.mjs (см. docs/handover/DATA_LAYER.md).
@@ -49,6 +54,20 @@ function sourceIp(req) {
   return req.socket.remoteAddress || '';
 }
 
+const gzipAsync = promisify(gzip);
+const COMPRESS_MIN = Number(process.env.COMPRESS_MIN_BYTES || 1024);
+
+/** Сжатие JSON-ответов, если клиент его принимает (отключается COMPRESS=0, когда сжимает прокси). */
+async function maybeGzip(req, headers, payload) {
+  if (process.env.COMPRESS === '0' || payload.length < COMPRESS_MIN) return payload;
+  if (headers['Content-Encoding'] || !/\bgzip\b/i.test(String(req.headers['accept-encoding'] || ''))) return payload;
+  if (!/json|text/i.test(String(headers['Content-Type'] || ''))) return payload;
+  const packed = await gzipAsync(payload, { level: 5 });
+  headers['Content-Encoding'] = 'gzip';
+  headers.Vary = headers.Vary ? `${headers.Vary}, Accept-Encoding` : 'Accept-Encoding';
+  return packed;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const body = ['GET', 'HEAD', 'OPTIONS'].includes(req.method) ? Buffer.alloc(0) : await readBody(req);
@@ -70,9 +89,10 @@ const server = http.createServer(async (req, res) => {
         ? Buffer.from(out.body, 'base64')
         : Buffer.from(String(out.body), 'utf8')
       : Buffer.alloc(0);
-    headers['Content-Length'] = payload.length;
+    const packed = await maybeGzip(req, headers, payload);
+    headers['Content-Length'] = packed.length;
     res.writeHead(out.statusCode || 200, headers);
-    res.end(req.method === 'HEAD' ? undefined : payload);
+    res.end(req.method === 'HEAD' ? undefined : packed);
   } catch (error) {
     const status = error?.status === 413 ? 413 : 500;
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -85,5 +105,10 @@ server.listen(PORT, HOST, () => {
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => server.close(() => process.exit(0)));
+  process.on(signal, () => {
+    server.close(() => process.exit(0));
+    // Открытые соединения не должны держать перезапуск: простаивающие закрываются сразу, остальные через 10 секунд.
+    server.closeIdleConnections?.();
+    setTimeout(() => process.exit(0), 10_000).unref();
+  });
 }

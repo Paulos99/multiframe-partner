@@ -23,14 +23,15 @@ import {
 } from './objectStore.js';
 
 const WRITE_ATTEMPTS = 8;
-const OBJECTS_CAP = 5000;
 const ACTIVITY_CAP = 500;
-const EVENTS_CAP = 5000;
+const EVENTS_CAP = Number(process.env.ANALYTICS_EVENTS_CAP) || 20000;
 
 const cacheSlots = new AsyncLocalStorage();
 const rootCache = new Map();
 /** @type {WeakMap<object, { base: any, etag: string | null }>} */
 const origins = new WeakMap();
+/** Значения из запасного варианта, которых нет в хранилище (локальный режим). */
+const unsavedLocal = new WeakSet();
 
 const ID_LISTS = new Set(['users', 'orgs', 'objects', 'projects', 'materials', 'roomShares']);
 const LIST_CAPS = { history: 50, documents: 40, photos: 60 };
@@ -71,14 +72,10 @@ function stable(value) {
 }
 
 function same(a, b) {
+  if (a === b) return true;
+  // Копии одной записи сериализуются одинаково: канонический вид нужен только при расхождении порядка ключей.
+  if (JSON.stringify(a) === JSON.stringify(b)) return true;
   return stable(a) === stable(b);
-}
-
-function handout(value, etag) {
-  const base = clone(value);
-  const copy = clone(value);
-  if (copy && typeof copy === 'object') origins.set(copy, { base, etag: etag || null });
-  return copy;
 }
 
 export function resetStoredDocumentsForTests() {
@@ -252,7 +249,7 @@ export function mergePlatformDocument(base, desired, fresh) {
     }
     if (ID_LISTS.has(key)) {
       const merged = mergeIdList(b[key], d[key], f[key], {
-        cap: key === 'objects' ? OBJECTS_CAP : null,
+        cap: null,
         prependNew: true,
       });
       if (merged !== undefined) out[key] = merged;
@@ -279,9 +276,9 @@ export function mergePlatformDocument(base, desired, fresh) {
   return out;
 }
 
-export function mergeEventList(base, desired, fresh) {
+export function mergeEventList(base, desired, fresh, cap = EVENTS_CAP) {
   if (base === undefined && desired === undefined) return Array.isArray(fresh) ? fresh : [];
-  return unionItems(base, desired, fresh, EVENTS_CAP);
+  return unionItems(base, desired, fresh, cap);
 }
 
 function assignMerged(target, merged) {
@@ -300,36 +297,92 @@ function assignMerged(target, merged) {
   return merged;
 }
 
-async function readRemote(spec) {
+/**
+ * Свежесть проверки версии. 0 — каждый запрос сверяет ETag (поведение по умолчанию и в тестах).
+ * server.mjs ставит 300 мс: сотни запросов в секунду делят одну проверку и один разбор документа.
+ */
+function freshMs() {
+  const n = Number(process.env.DOC_FRESH_MS);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function parseBody(spec, body) {
+  const parsed = JSON.parse(body);
+  return spec.normalize ? spec.normalize(parsed) : parsed;
+}
+
+/** Разобранное значение строки кэша. Общее для всех запросов и никем не меняется. */
+function sharedValue(row, spec) {
+  if (row.value === undefined || row.value === null) {
+    row.value = parseBody(spec, row.body);
+    if (process.env.MF_FREEZE_SHARED === '1') deepFreeze(row.value);
+  }
+  return row.value;
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const key of Object.keys(value)) deepFreeze(value[key]);
+  return value;
+}
+
+/**
+ * Проверка версии в хранилище. Параллельные вызовы делят одну проверку (холодный старт:
+ * двести запросов дают одно чтение документа, а не двести). { force } — не доверять свежести.
+ * @returns {Promise<{ missing: true } | { missing: false, etag: string, row: object }>}
+ */
+async function readRemote(spec, { force = false } = {}) {
   const bucket = partnerBucket();
   const key = spec.key();
   const row = slot(key);
-  const head = await headObject({ bucket, key });
-  if (head.missing) {
-    row.loaded = false;
-    row.etag = null;
-    row.value = undefined;
-    return { missing: true };
+  if (!force && row.loaded && row.etag && row.checkedAt && Date.now() - row.checkedAt < freshMs()) {
+    return { missing: false, etag: row.etag, row };
   }
-  if (row.loaded && row.etag && head.etag && head.etag === row.etag) {
-    return { missing: false, value: row.value, etag: row.etag };
+  if (row.refreshing) {
+    if (!force) return row.refreshing;
+    await row.refreshing.catch(() => {});
+    if (row.refreshing) return row.refreshing;
   }
-  const got = await readObjectText({ bucket, key });
-  if (got.missing || !got.body) return { missing: true };
-  let parsed;
+  const run = (async () => {
+    const head = await headObject({ bucket, key });
+    if (head.missing) {
+      row.loaded = false;
+      row.etag = null;
+      row.value = undefined;
+      row.body = undefined;
+      return { missing: true };
+    }
+    if (row.loaded && row.etag && head.etag && head.etag === row.etag) {
+      row.checkedAt = Date.now();
+      return { missing: false, etag: row.etag, row };
+    }
+    const got = await readObjectText({ bucket, key });
+    if (got.missing || !got.body) return { missing: true };
+    let value;
+    try {
+      value = parseBody(spec, got.body);
+    } catch (error) {
+      console.warn('document parse failed', key, error?.message || error);
+      return { missing: true };
+    }
+    if (!spec.accept(value)) return { missing: true };
+    const etag = head.etag || got.etag;
+    row.loaded = true;
+    row.body = got.body;
+    row.value = value;
+    if (process.env.MF_FREEZE_SHARED === '1') deepFreeze(value);
+    row.etag = etag;
+    row.checkedAt = Date.now();
+    row.ownEtag = null;
+    return { missing: false, etag, row };
+  })();
+  row.refreshing = run;
   try {
-    parsed = JSON.parse(got.body);
-  } catch (error) {
-    console.warn('document parse failed', key, error?.message || error);
-    return { missing: true };
+    return await run;
+  } finally {
+    if (row.refreshing === run) row.refreshing = null;
   }
-  const value = spec.normalize ? spec.normalize(parsed) : parsed;
-  if (!spec.accept(value)) return { missing: true };
-  const etag = head.etag || got.etag;
-  row.loaded = true;
-  row.value = value;
-  row.etag = etag;
-  return { missing: false, value, etag };
 }
 
 async function loadLocal(spec) {
@@ -351,7 +404,16 @@ async function loadLocal(spec) {
   }
   row.value = await spec.fallback();
   row.loaded = true;
+  if (row.value && typeof row.value === 'object') unsavedLocal.add(row.value);
   return row.value;
+}
+
+/** Документ собран из запасного значения и ещё не записан в хранилище. */
+export function isUnsavedDocument(doc) {
+  if (!doc || typeof doc !== 'object') return false;
+  if (unsavedLocal.has(doc)) return true;
+  const origin = origins.get(doc);
+  return Boolean(origin) && origin.etag === null;
 }
 
 function saveLocal(spec, value) {
@@ -359,6 +421,7 @@ function saveLocal(spec, value) {
   row.value = value;
   row.loaded = true;
   row.etag = null;
+  if (value && typeof value === 'object') unsavedLocal.delete(value);
   const filePath = spec.filePath ? spec.filePath() : '';
   if (!filePath) return;
   mkdirSync(dirname(filePath), { recursive: true });
@@ -366,21 +429,121 @@ function saveLocal(spec, value) {
   writeFileSync(filePath, body);
 }
 
+/** Запасное значение для пустого хранилища: одно на всех, пока документ не появится. */
+async function fallbackFor(spec, row) {
+  if (row.fallbackValue !== undefined) return row.fallbackValue;
+  if (!row.fallbackPromise) {
+    row.fallbackPromise = Promise.resolve(spec.fallback()).then(
+      (value) => {
+        row.fallbackValue = value;
+        row.fallbackPromise = null;
+        return value;
+      },
+      (error) => {
+        row.fallbackPromise = null;
+        throw error;
+      },
+    );
+  }
+  return row.fallbackPromise;
+}
+
+/**
+ * Общий разобранный документ для чтения: один экземпляр на версию, без копирования.
+ * Менять его нельзя. Для изменений — loadStoredDocument (своя копия).
+ * @returns {Promise<{ value: any, etag: string | null, own: boolean }>}
+ */
+export async function loadSharedDocument(spec) {
+  if (!partnerBucket()) {
+    return { value: await loadLocal(spec), etag: null, own: true, migrated: true, markMigrated() {}, runOnce: (fn) => Promise.resolve().then(fn) };
+  }
+  const remote = await readRemote(spec);
+  const row = slot(spec.key());
+  const describe = (value, etag) => ({
+    value,
+    etag,
+    own: Boolean(etag) && row.ownEtag === etag,
+    migrated: Boolean(etag) && row.migratedEtag === etag,
+    markMigrated() {
+      row.migratedEtag = etag;
+    },
+    /** Одна общая проверка миграций на версию документа: сотня запросов не разбирает файл заново. */
+    runOnce(fn) {
+      if (!row.flight || row.flight.etag !== etag) {
+        const flight = { etag, promise: null };
+        flight.promise = Promise.resolve()
+          .then(fn)
+          .catch((error) => {
+            if (row.flight === flight) row.flight = null;
+            throw error;
+          });
+        row.flight = flight;
+      }
+      return row.flight.promise;
+    },
+  });
+  if (!remote.missing) return describe(sharedValue(remote.row, spec), remote.etag);
+  if (row.loaded && row.etag && row.body !== undefined) return describe(sharedValue(row, spec), row.etag);
+  return { ...describe(await fallbackFor(spec, row), null), own: false };
+}
+
+/** Версия документа без чтения тела (для ответов 304). */
+export async function documentVersion(spec) {
+  if (!partnerBucket()) return null;
+  const remote = await readRemote(spec);
+  return remote.missing ? null : remote.etag;
+}
+
+function makeOrigin(row, etag) {
+  return { etag: etag || null, _body: row.body, _base: undefined };
+}
+
+function originBase(origin, spec) {
+  if (origin._base === undefined) origin._base = origin._body ? parseBody(spec, origin._body) : undefined;
+  return origin._base;
+}
+
+/** Свой изменяемый экземпляр документа. Разбор из строки в 3-4 раза дешевле structuredClone. */
 export async function loadStoredDocument(spec) {
   if (!partnerBucket()) return loadLocal(spec);
   const remote = await readRemote(spec);
-  if (!remote.missing) return handout(remote.value, remote.etag);
-  const row = slot(spec.key());
-  if (row.loaded && row.etag) return handout(row.value, row.etag);
-  if (row.fallbackValue === undefined) {
-    row.fallbackValue = await spec.fallback();
-    if (row.loaded && row.etag) return handout(row.value, row.etag);
+  if (!remote.missing) {
+    const row = remote.row;
+    const copy = parseBody(spec, row.body);
+    origins.set(copy, { ...makeOrigin(row, remote.etag), base: sharedValue(row, spec) });
+    return copy;
   }
-  return handout(row.fallbackValue, null);
+  const row = slot(spec.key());
+  if (row.loaded && row.etag && row.body !== undefined) {
+    const copy = parseBody(spec, row.body);
+    origins.set(copy, { ...makeOrigin(row, row.etag), base: sharedValue(row, spec) });
+    return copy;
+  }
+  const fallback = await fallbackFor(spec, row);
+  if (row.loaded && row.etag && row.body !== undefined) {
+    const copy = parseBody(spec, row.body);
+    origins.set(copy, { ...makeOrigin(row, row.etag), base: sharedValue(row, spec) });
+    return copy;
+  }
+  const copy = clone(fallback);
+  if (copy && typeof copy === 'object') origins.set(copy, { etag: null, base: clone(fallback), _body: undefined });
+  return copy;
 }
 
 function retryableWrite(error) {
   return isStorageConflict(error) || isMissingObject(error);
+}
+
+/** Очередь записей одного документа внутри процесса: свои записи не мешают друг другу. */
+function withWriteLock(row, fn) {
+  const previous = row.writeChain || Promise.resolve();
+  const run = previous.catch(() => {}).then(fn);
+  row.writeChain = run.catch(() => {});
+  return run;
+}
+
+function pause(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function saveStoredDocument(spec, value, loadedFrom) {
@@ -391,40 +554,52 @@ export async function saveStoredDocument(spec, value, loadedFrom) {
   const origin = (loadedFrom && origins.get(loadedFrom)) || origins.get(value) || null;
   const bucket = partnerBucket();
   const key = spec.key();
-  let lastError = null;
-  for (let attempt = 1; attempt <= WRITE_ATTEMPTS; attempt += 1) {
-    const remote = await readRemote(spec);
-    let next = value;
-    if (!remote.missing && origin && (!origin.etag || origin.etag !== remote.etag)) {
-      next = spec.merge(origin.base, value, remote.value);
-    }
-    const body = spec.space ? JSON.stringify(next, null, spec.space) : JSON.stringify(next);
-    try {
-      const put = await putObject({
-        bucket,
-        key,
-        body,
-        contentType: 'application/json',
-        ifMatch: remote.missing ? undefined : remote.etag,
-        ifNoneMatch: remote.missing ? '*' : undefined,
-      });
-      const etag = put?.etag || null;
-      const saved = assignMerged(value, next);
-      const row = slot(key);
-      row.loaded = true;
-      row.etag = etag;
-      row.value = clone(next);
-      row.fallbackValue = undefined;
-      if (origin) {
-        origin.base = clone(next);
-        origin.etag = etag;
+  const row = slot(key);
+  return withWriteLock(row, async () => {
+    let lastError = null;
+    for (let attempt = 1; attempt <= WRITE_ATTEMPTS; attempt += 1) {
+      const remote = await readRemote(spec, { force: true });
+      let next = value;
+      if (!remote.missing && origin && (!origin.etag || origin.etag !== remote.etag)) {
+        const fresh = parseBody(spec, remote.row.body);
+        const base = origin.base !== undefined ? origin.base : originBase(origin, spec);
+        next = spec.merge(base, value, fresh);
       }
-      return saved;
-    } catch (error) {
-      lastError = error;
-      if (!retryableWrite(error) || attempt === WRITE_ATTEMPTS) throw error;
-      console.warn('document write conflict, retry', key, attempt);
+      // В хранилище документ пишется без отступов: он вдвое меньше и быстрее читается.
+      const body = JSON.stringify(next);
+      try {
+        const put = await putObject({
+          bucket,
+          key,
+          body,
+          contentType: 'application/json',
+          ifMatch: remote.missing ? undefined : remote.etag,
+          ifNoneMatch: remote.missing ? '*' : undefined,
+        });
+        const etag = put?.etag || null;
+        const saved = assignMerged(value, next);
+        row.loaded = true;
+        row.etag = etag;
+        row.body = body;
+        row.value = undefined;
+        row.checkedAt = Date.now();
+        row.ownEtag = etag;
+        row.fallbackValue = undefined;
+        if (origin) {
+          origin.etag = etag;
+          origin._body = body;
+          origin._base = undefined;
+          origin.base = undefined;
+        }
+        return saved;
+      } catch (error) {
+        lastError = error;
+        if (!retryableWrite(error) || attempt === WRITE_ATTEMPTS) throw error;
+        console.warn('document write conflict, retry', key, attempt);
+        // Запись из другого процесса: короткая пауза с разбросом, чтобы не биться синхронно.
+        await pause(Math.floor(Math.random() * 40 * attempt));
+      }
     }
-  }
-  throw lastError || new Error('Не удалось записать документ');
+    throw lastError || new Error('Не удалось записать документ');
+  });
 }

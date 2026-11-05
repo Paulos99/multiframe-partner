@@ -5,12 +5,14 @@
 // Таблица (создаётся при первом запуске):
 //   CREATE TABLE IF NOT EXISTS mf_documents (
 //     key text PRIMARY KEY, body text NOT NULL, etag text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
-// Фото, PDF и материалы остаются в S3: адаптер берёт только два ключа.
+// Фото, PDF и материалы остаются в S3: адаптер берёт только документы платформы (список ключей ниже).
 // Проверьте на своей базе до боевого запуска: пример проверен только на уровне контракта (apps/api/documentStore.test.js).
 import { createHash } from 'node:crypto';
 import pg from 'pg';
 
-const KEYS = new Set(['platform-v2.json', 'analytics-events.json']);
+// Основные документы и мелкие журналы, которые API ведёт отдельно (см. DATA_LAYER.md): платформа, события аналитики,
+// журнал действий, счётчики входа и их месячные архивы. Ключ, которого здесь нет, API хранит в S3, как раньше.
+const KEY_PATTERN = /^(platform-v2|analytics-events(-archive-\d{4}-\d{2})?|activity-log(-archive-\d{4}-\d{2})?|login-state)\.json$/;
 const etagOf = (body) => `"${createHash('md5').update(body).digest('hex')}"`;
 const conflict = () => Object.assign(new Error('Precondition Failed'), { name: 'PreconditionFailed', status: 412 });
 
@@ -20,7 +22,7 @@ export default {
     await pool.query(`CREATE TABLE IF NOT EXISTS mf_documents (
       key text PRIMARY KEY, body text NOT NULL, etag text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())`);
     return {
-      handles: (key) => KEYS.has(key),
+      handles: (key) => KEY_PATTERN.test(key),
 
       async head({ key }) {
         const { rows } = await pool.query('SELECT etag FROM mf_documents WHERE key = $1', [key]);

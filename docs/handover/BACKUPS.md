@@ -5,7 +5,7 @@
 
 | Что | Как часто | Чем |
 |---|---|---|
-| `platform-v2.json` и `analytics-events.json` | каждый час (данные мелкие) | копия объекта по расписанию / `pg_dump` таблицы `mf_documents` |
+| `platform-v2.json`, `analytics-events*.json`, `activity-log*.json`, `login-state.json` | каждый час (данные мелкие) | копия объектов по расписанию / `pg_dump` таблицы `mf_documents` |
 | фото `photos/**`, PDF `docs/**` | раз в сутки | синхронизация бакета (`rclone sync`, `aws s3 sync`) |
 | материалы (`MATERIALS_BUCKET`) | раз в неделю | синхронизация бакета |
 | `deploy/.env` | при каждом изменении | в хранилище секретов, отдельно от кода |
@@ -28,7 +28,7 @@ find /backup/partners -mindepth 1 -maxdepth 1 -mtime +30 -exec rm -rf {} +
 ## Восстановление
 
 1. Остановите запись: `docker compose --env-file deploy/.env -f deploy/docker-compose.yml stop api`.
-2. Верните объект `platform-v2.json` (и при необходимости `analytics-events.json`) из копии или версии бакета.
+2. Верните объект `platform-v2.json` (и при необходимости `analytics-events*.json`, `activity-log*.json`; `login-state.json` можно не возвращать: счётчики паролей начнутся заново) из копии или версии бакета.
 3. Верните недостающие `photos/**` и `docs/**`.
 4. Запустите: `docker compose --env-file deploy/.env -f deploy/docker-compose.yml start api`.
 5. Войдите администратором, откройте несколько объектов с фото.
