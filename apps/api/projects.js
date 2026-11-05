@@ -17,8 +17,10 @@ import {
   roleSeesClientPhone,
 } from '../../packages/shared/clientPhone.js';
 import { cleanRefusal } from '../../packages/shared/refusal.js';
+import { PROJECT_LIMITS } from '../../packages/shared/schemas.js';
+import { parseBody, schemas } from './validation.js';
 
-const NAME_MAX = 250;
+const NAME_MAX = PROJECT_LIMITS.name;
 const TEXT_MAX = 250;
 const CITY_MAX = 120;
 const ROOM_MAX = 120;
@@ -166,9 +168,8 @@ function clientProjectId(raw) {
 }
 
 function writeProject(body, existing, actor, uid, platform) {
-  const source = body && typeof body === 'object' ? body : {};
-  const name = text(source.name !== undefined ? source.name : existing?.name, NAME_MAX);
-  if (!name) throw httpError(400, 'Укажите название проекта');
+  const source = parseBody(schemas.projectInput(existing?.name), body);
+  const name = source.name;
   const pick = (key, max) =>
     text(source[key] !== undefined ? source[key] : existing?.[key], max);
   const orgId = existing?.orgId || actor.orgId;

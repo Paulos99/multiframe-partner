@@ -48,6 +48,10 @@ node server.mjs
 
 ## Проверки
 
+Из корня репозитория (Node.js 22): `npm run install:all`, затем `npm run check`: границы архитектуры, lint, typecheck и тесты API и интерфейса. Правила для агентов — [AGENTS.md](../../AGENTS.md).
+
+По частям:
+
 ```bash
 cd apps/api && npm run lint && npm test          # 190+ проверок, хранилище подменяется в памяти
 cd apps/web && npm run lint && npm run typecheck && npm run test:unit

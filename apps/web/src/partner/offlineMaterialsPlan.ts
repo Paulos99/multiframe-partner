@@ -1,7 +1,7 @@
 /**
  * Офлайн-копии «Обучения»: чистые функции (без браузерных API) — план синхронизации.
  */
-import type { PublicMaterial } from '../../../api/materialsLib.js';
+import type { PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 
 /** Кусок скачивания: 8 МБ. В памяти одновременно не больше одного куска. */
 export const OFFLINE_CHUNK_BYTES = 8 * 1024 * 1024;

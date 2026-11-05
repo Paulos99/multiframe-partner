@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PublicMaterial } from '../../../api/materialsLib.js';
+import type { PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import { contentsLabel, folderContents } from './MaterialsContextMenu';
 
 const node = (id: string, kind: 'folder' | 'file', parentId: string | null) =>
