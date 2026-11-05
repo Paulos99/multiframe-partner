@@ -18,15 +18,24 @@ export type RoleVideo = {
  * Обучающие ролики по ролям (горизонтальные 16:9, с озвучкой): единственное место, где роль связана с файлом.
  * Как заменить ролик: docs/TRAINING_VIDEOS.md (скрипт `npm run video:swap`). Если коротко:
  * файлы лежат в apps/web/public/videos как <file>.mp4 и <file>.jpg (афиша); после замены обновите
- * здесь `duration` и поднимите `version`. У роли admin ролика нет.
+ * здесь `duration` и поднимите `version`. У менеджера StP своего ролика нет; администратор StP видит все четыре ролика, но только смотрит: удаления в кабинете нет, заменяются ролики кодом (docs/TRAINING_VIDEOS.md).
  */
 const VIDEOS: Partial<Record<UserRole, RoleVideo>> = {
-  owner: { file: 'role-owner', title: 'Владелец компании', duration: '2:13', description: 'Что это за сервис и как им пользоваться владельцу.', version: '1' },
-  sales: { file: 'role-sales', title: 'Менеджер по продажам', duration: '2:23', description: 'Как вести клиентов, считать потолок и собирать предложение.', version: '1' },
-  measurer: { file: 'role-measurer', title: 'Замерщик', duration: '1:57', description: 'Как делать замеры и вести комнату объекта.', version: '1' },
-  crew: { file: 'role-crew', title: 'Монтажник', duration: '1:38', description: 'Что видно на монтаже и как отправлять фотоотчёт.', version: '1' },
-  stp_manager: { file: 'role-stp', title: 'Менеджер StP', duration: '1:03', description: 'Материалы, тренажёр, проблемомер и калькулятор.', version: '1' },
+  owner: { file: 'role-owner', title: 'Владелец компании', duration: '2:13', description: 'Что это за сервис и как им пользоваться владельцу.', version: '2' },
+  sales: { file: 'role-sales', title: 'Менеджер по продажам', duration: '2:32', description: 'Как вести клиентов, считать потолок и собирать предложение.', version: '2' },
+  measurer: { file: 'role-measurer', title: 'Замерщик', duration: '2:22', description: 'Калькулятор со схемой потолка, раскладка панелей для монтажника и Проблемомер на объекте.', version: '2' },
+  crew: { file: 'role-crew', title: 'Монтажник', duration: '1:35', description: 'Обучение, схема монтажа по комнате и фотоотчёт до, во время и после монтажа.', version: '2' },
 };
+
+/** Порядок показа администратору StP: все ролики ролей. */
+const ADMIN_ORDER = ['owner', 'sales', 'measurer', 'crew'] as const satisfies readonly UserRole[];
+
+/** Ролики, которые видит роль: свой (рабочие роли) или все четыре (admin). Менеджер StP — ни одного. */
+export function roleVideosFor(role: UserRole): Array<{ role: UserRole; video: RoleVideo }> {
+  if (role === 'admin') return ADMIN_ORDER.map((r) => ({ role: r, video: VIDEOS[r]! }));
+  const own = VIDEOS[role];
+  return own ? [{ role, video: own }] : [];
+}
 
 export function roleVideoFor(role: UserRole): RoleVideo | null {
   return VIDEOS[role] ?? null;

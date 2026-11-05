@@ -2,7 +2,7 @@
 /**
  * Замена обучающего ролика роли одной командой:
  *   npm run video:swap -- <роль> <путь к новому mp4> [--poster-at=сек]
- * Роли: owner, sales, measurer, crew, stp_manager (см. src/partner/roleVideos.ts).
+ * Роли: owner, sales, measurer, crew (см. src/partner/roleVideos.ts).
  * Скрипт сжимает ролик (16:9, 1280×720, быстрый старт), снимает афишу, обновляет «duration»
  * и поднимает «version» в roleVideos.ts. Нужен ffmpeg в PATH. Затем: проверить на экране и закоммитить.
  */
@@ -61,4 +61,4 @@ fs.writeFileSync(configPath, config.replace(lineRe, `$1$2$3${duration}$5${nextVe
 
 const mb = (fs.statSync(mp4).size / 1048576).toFixed(1);
 console.log(`Готово: ${role} → ${file}.mp4 (${mb} МБ, ${duration}), афиша ${file}.jpg, версия ${nextVersion}.`);
-if (fs.statSync(mp4).size > 6_000_000) console.warn('Внимание: ролик тяжелее 6 МБ, тест на размер не пройдёт.');
+if (fs.statSync(mp4).size > 10_000_000) console.warn('Внимание: ролик тяжелее 10 МБ, тест на размер не пройдёт.');

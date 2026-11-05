@@ -1,15 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import type { UserRole } from '../../../../packages/shared/partner';
-import { roleVideoFor, roleVideoSrc } from './roleVideos';
+import { roleVideoSrc, roleVideosFor, type RoleVideo } from './roleVideos';
 import styles from './RoleVideoCard.module.css';
 
 /**
- * Обучающее видео своей роли: первым пунктом в «Обучении», вне папок, нажал «воспроизвести» — и оно идёт.
+ * Обучающее видео роли: первым пунктом в «Обучении», вне папок, нажал «воспроизвести» — и оно идёт.
  * Сам ролик не скачивается, пока его не запустят (preload="none", видна афиша);
  * плеер создаётся, когда блок подходит к экрану.
  */
-export function RoleVideoCard({ role }: { role: UserRole }) {
-  const v = roleVideoFor(role);
+/**
+ * Видео в «Обучении»: у рабочей роли своё, у администратора StP все четыре подряд (только просмотр).
+ * В карточке нет кнопок изменения и удаления: ролики заменяются кодом (docs/TRAINING_VIDEOS.md).
+ */
+export function RoleVideoSection({ role }: { role: UserRole }) {
+  return (
+    <>
+      {roleVideosFor(role).map((item) => (
+        <VideoCard key={item.role} role={item.role} v={item.video} />
+      ))}
+    </>
+  );
+}
+
+function VideoCard({ role, v }: { role: UserRole; v: RoleVideo }) {
   const holder = useRef<HTMLDivElement | null>(null);
   // Без IntersectionObserver (старые браузеры, проверки без экрана) плеер показываем сразу.
   const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined');
@@ -30,10 +43,9 @@ export function RoleVideoCard({ role }: { role: UserRole }) {
     return () => watcher.disconnect();
   }, [near]);
 
-  if (!v) return null;
   const src = roleVideoSrc(v, import.meta.env.BASE_URL || '/');
   return (
-    <section className={styles.card} aria-label="Обучающее видео" data-role-video={role}>
+    <section className={styles.card} aria-label={`Обучающее видео: ${v.title}`} data-role-video={role}>
       <div className={styles.text}>
         <h3 className={styles.title}>Обучающее видео · {v.duration}</h3>
         <p className={styles.lead}>
@@ -55,7 +67,7 @@ export function RoleVideoCard({ role }: { role: UserRole }) {
             preload="none"
             width={1280}
             height={720}
-            aria-label={`Обучающее видео: ${v.title}`}
+            aria-label={`Видео: ${v.title}`}
             onError={() => setBroken(true)}
           >
             Видео не поддерживается этим браузером.

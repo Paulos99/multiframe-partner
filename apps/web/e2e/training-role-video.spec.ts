@@ -7,7 +7,6 @@ const roles = [
   ['sales', 'Менеджер по продажам', 'role-sales'],
   ['measurer', 'Замерщик', 'role-measurer'],
   ['crew', 'Монтажник', 'role-crew'],
-  ['stp_manager', 'Менеджер StP', 'role-stp'],
 ] as const;
 
 test.beforeEach(async ({ request }) => {
@@ -21,9 +20,7 @@ for (const [role, title, file] of roles) {
     await page.getByLabel('Пароль', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(nav(page)).toBeVisible();
-    if (role !== 'stp_manager') {
-      await page.getByRole('tab', { name: 'Обучение', exact: true }).or(page.getByRole('button', { name: 'Обучение', exact: true })).first().click();
-    }
+    await page.getByRole('tab', { name: 'Обучение', exact: true }).or(page.getByRole('button', { name: 'Обучение', exact: true })).first().click();
     await expect(page.getByRole('heading', { level: 2, name: 'Обучение' })).toBeVisible();
 
     const card = page.getByRole('region', { name: 'Обучающее видео' });
@@ -62,6 +59,33 @@ for (const [role, title, file] of roles) {
     expect(Math.abs(state.ratio - 16 / 9)).toBeLessThan(0.01);
   });
 }
+
+test('менеджер StP: видео роли нет', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Логин', { exact: true }).fill('ui.stp_manager');
+  await page.getByLabel('Пароль', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(nav(page)).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Обучение' })).toBeVisible();
+  await expect(page.locator('video')).toHaveCount(0);
+});
+
+test('админ StP: видны все четыре видео ролей, удалить их нельзя', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Логин', { exact: true }).fill('ui.admin');
+  await page.getByLabel('Пароль', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(nav(page)).toBeVisible();
+  await page.getByRole('tab', { name: 'Обучение', exact: true }).or(page.getByRole('button', { name: 'Обучение', exact: true })).first().click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Обучение' })).toBeVisible();
+  for (const [, title, file] of roles) {
+    const card = page.getByRole('region', { name: `Обучающее видео: ${title}` });
+    await expect(card).toBeVisible();
+    await expect(card.locator('video')).toHaveAttribute('src', new RegExp(`/videos/${file}\\.mp4\\?v=\\d+$`));
+    await expect(card.getByRole('button', { name: /Удалить|Заменить/ })).toHaveCount(0);
+  }
+  await expect(page.locator('[data-role-video] video')).toHaveCount(4);
+});
 
 test('владелец на телефоне: видео помещается в экран, без горизонтальной прокрутки', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });

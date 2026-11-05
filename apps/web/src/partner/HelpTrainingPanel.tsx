@@ -4,7 +4,7 @@ import { trainerHashOpen } from '../trainer/route';
 import { navigateHash } from './projectRoute';
 import { MaterialsPanel } from './MaterialsPanel';
 import { OfflineGearSlot } from './offlineGearSlot';
-import { RoleVideoCard } from './RoleVideoCard';
+import { RoleVideoSection } from './RoleVideoCard';
 import styles from './HelpTrainingPanel.module.css';
 
 // Тренажёр грузится по требованию: содержимое (около 280 КБ) не входит в основной пакет кабинета.
@@ -70,7 +70,7 @@ export function HelpTrainingPanel({ role }: { role: UserRole }) {
         </div>
         {section === 'materials' ? (
           <div id="help-panel-materials" role="tabpanel" aria-labelledby="help-tab-materials">
-            <RoleVideoCard role={role} />
+            <RoleVideoSection role={role} />
             <MaterialsPanel canManage={role === 'admin'} />
           </div>
         ) : (
