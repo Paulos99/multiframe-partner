@@ -386,6 +386,7 @@ export async function probeAnalyticsDashboard(opts: {
   if (!API_BASE) return { kind: 'no-api' };
   try {
     const q = new URLSearchParams();
+    q.set('tz', clientTimeZone());
     if (opts.orgId) q.set('orgId', opts.orgId);
     const headers: Record<string, string> = {
       'X-Analytics-Role': opts.mode === 'admin' ? 'admin' : 'owner',
@@ -403,7 +404,7 @@ export async function probeAnalyticsDashboard(opts: {
     if (opts.orgId) headers['X-Analytics-Org'] = opts.orgId;
     const res = await fetch(`${API_BASE}/analytics/dashboard?${q.toString()}`, {
       headers,
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(30000),
     });
     let body: unknown = null;
     try {
@@ -414,6 +415,15 @@ export async function probeAnalyticsDashboard(opts: {
     return { kind: 'http', status: res.status, body };
   } catch {
     return { kind: 'network' };
+  }
+}
+
+/** Часовой пояс устройства: по нему сервер делит события на дни. Без него сервер берёт Москву. */
+export function clientTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+  } catch {
+    return 'Europe/Moscow';
   }
 }
 
@@ -450,6 +460,7 @@ export async function fetchAnalyticsDashboard(opts: {
 
   try {
     const q = new URLSearchParams();
+    q.set('tz', clientTimeZone());
     if (opts.from) q.set('from', opts.from);
     if (opts.to) q.set('to', opts.to);
     if (opts.orgId) q.set('orgId', opts.orgId);

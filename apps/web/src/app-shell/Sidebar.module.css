@@ -31,9 +31,27 @@
 }
 
 .nav {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* Подложка выбранного пункта «переезжает» (useSlidingPill); сам пункт остаётся без фона. */
+.pill {
+  border-radius: var(--cab-radius-sm);
+  background: var(--cab-accent-soft);
+}
+
+.nav[data-pill='ready'] .itemOn,
+.nav[data-pill='ready'] .itemOn:hover {
+  background: transparent;
+}
+
+.item,
+.itemOn {
+  z-index: 1;
+  transition: color 0.25s ease;
 }
 
 .item,

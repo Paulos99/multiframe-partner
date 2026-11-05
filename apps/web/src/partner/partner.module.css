@@ -3549,3 +3549,44 @@ div.drillPerson {
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
+
+/* Подложка выбранной вкладки аналитики переезжает (useSlidingPill); у кнопки фон остаётся до первого замера. */
+.tabPill {
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-accent);
+}
+
+.tabs[data-pill='ready'] .tabActive {
+  background: transparent;
+}
+
+.tab,
+.tabActive {
+  position: relative;
+  z-index: 1;
+}
+
+/* Полоска воронки растёт слева направо (scaleX, GSAP). */
+.funnelBar {
+  grid-column: 1 / -1;
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--cab-subtle);
+  overflow: hidden;
+}
+
+.funnelBarFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--cab-accent);
+}
+
+.funnelSteps li strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.tabs {
+  position: relative;
+}

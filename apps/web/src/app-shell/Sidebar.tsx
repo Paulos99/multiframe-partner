@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { CabinetBrand } from '../partner/CabinetBrand';
 import { NavIcon, splitNavLabel } from './navIcons';
+import pill from '../ui/SlidingPill.module.css';
+import { useSlidingPill } from '../ui/useSlidingPill';
 import styles from './Sidebar.module.css';
 
 export type SideItem = {
@@ -30,9 +32,12 @@ export function Sidebar({
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeId = items.find((item) => item.active)?.id ?? null;
   useScrollStrip(scrollRef, activeId, items.length);
+  const { boxRef, pillRef } = useSlidingPill(activeId, items.map((item) => `${item.id}:${item.label}`).join('|'));
+  const pillEl = <span ref={pillRef} className={`${pill.pill} ${styles.pill}`} aria-hidden="true" />;
   const nav =
     mode === 'tabs' ? (
-      <div className={styles.nav} role="tablist" aria-label="Разделы">
+      <div className={styles.nav} role="tablist" aria-label="Разделы" ref={boxRef}>
+        {pillEl}
         {items.map((item) => (
           <button
             key={item.id}
@@ -49,7 +54,8 @@ export function Sidebar({
         ))}
       </div>
     ) : (
-      <div className={styles.nav}>
+      <div className={styles.nav} ref={boxRef}>
+        {pillEl}
         {items.map((item) => (
           <button
             key={item.id}

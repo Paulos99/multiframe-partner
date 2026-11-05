@@ -10,8 +10,8 @@ import {
   apiCreateObject,
   apiCreateProject,
   apiDeleteObject,
-  apiListObjects,
-  apiListProjects,
+  apiListObjectsChecked,
+  apiListProjectsChecked,
   apiPatchObject,
   apiUpdateProject,
   apiUploadObjectDocuments,
@@ -76,9 +76,13 @@ export async function loadVisibleObjects(user: SessionUser, remote: boolean): Pr
     base = listLocalObjects(user);
   } else if (loadToken() && navigator.onLine) {
     try {
-      base = await apiListObjects();
-      await replaceServerObjects(base, user.orgId, user.role === 'admin');
-      cacheObjects(base);
+      const loaded = await apiListObjectsChecked();
+      base = loaded.objects;
+      // Версия на сервере не изменилась: локальная копия уже совпадает, пересохранять её не нужно.
+      if (!loaded.notModified) {
+        await replaceServerObjects(base, user.orgId, user.role === 'admin');
+        cacheObjects(base);
+      }
     } catch (err) {
       if (isApiError(err) && err.status === 401) {
         saveToken(null);
@@ -426,10 +430,13 @@ export async function loadVisibleProjects(user: SessionUser, remote: boolean): P
     return { projects: mergeProjects(stored, queued), error: null, unavailable: false };
   }
   try {
-    const list = await apiListProjects();
+    const loaded = await apiListProjectsChecked();
+    const list = loaded.projects;
     markProjectsApiReady(true);
-    cacheProjects(list);
-    await replaceServerProjects(list, user.orgId, user.role === 'admin');
+    if (!loaded.notModified) {
+      cacheProjects(list);
+      await replaceServerProjects(list, user.orgId, user.role === 'admin');
+    }
     return { projects: mergeProjects(list, queued), error: null, unavailable: false };
   } catch (err) {
     if (isApiError(err) && err.status === 401) {

@@ -5,6 +5,8 @@ import { navigateHash } from './projectRoute';
 import { MaterialsPanel } from './MaterialsPanel';
 import { OfflineGearSlot } from './offlineGearSlot';
 import styles from './HelpTrainingPanel.module.css';
+import pill from '../ui/SlidingPill.module.css';
+import { useSlidingPill } from '../ui/useSlidingPill';
 
 // Тренажёр грузится по требованию: содержимое (около 280 КБ) не входит в основной пакет кабинета.
 const TrainerRoot = lazy(() => import('../trainer/TrainerRoot').then((m) => ({ default: m.TrainerRoot })));
@@ -19,6 +21,8 @@ function sectionFromHash(): Section {
 export function HelpTrainingPanel({ role }: { role: UserRole }) {
   const [gearSlot, setGearSlot] = useState<HTMLElement | null>(null);
   const [section, setSection] = useState<Section>(() => (typeof window === 'undefined' ? 'materials' : sectionFromHash()));
+
+  const { boxRef: tabsRef, pillRef: tabsPillRef } = useSlidingPill(section);
 
   useEffect(() => {
     const sync = () => setSection(sectionFromHash());
@@ -43,7 +47,8 @@ export function HelpTrainingPanel({ role }: { role: UserRole }) {
           <h2>Обучение</h2>
           <div ref={setGearSlot} className={styles.gearSlot} />
         </div>
-        <div className={styles.tabs} role="tablist" aria-label="Разделы обучения">
+        <div className={styles.tabs} role="tablist" aria-label="Разделы обучения" ref={tabsRef}>
+          <span ref={tabsPillRef} className={`${pill.pill} ${styles.tabPill}`} aria-hidden="true" />
           <button
             type="button"
             role="tab"

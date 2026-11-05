@@ -43,9 +43,11 @@ function projectRows(platform) {
  * Телефон клиента отдаётся владельцу, менеджеру, замерщику и монтажнику, только с этапа «Замер».
  * Без роли (viewer) и для админа сети он всегда пустой.
  */
-export function publicProject(project, viewer = null, platform = null) {
+export function publicProject(project, viewer = null, platform = null, roomsByProject = null) {
   const status = PROJECT_STATUSES.includes(project.status) ? project.status : undefined;
-  const rooms = (platform?.objects || []).filter((obj) => obj.projectId === project.id);
+  const rooms = roomsByProject
+    ? roomsByProject.get(project.id) || []
+    : (platform?.objects || []).filter((obj) => obj.projectId === project.id);
   const showPhone =
     Boolean(viewer) && roleSeesClientPhone(viewer.role) && phoneStageAllowed(projectStageOf(project, rooms));
   return {
@@ -75,7 +77,7 @@ function canWriteProject(user) {
   return user.role === 'owner' || user.role === 'sales';
 }
 
-function projectVisible(user, project, platform, objectVisibleTo) {
+function projectVisible(user, project, platform, objectVisibleTo, roomsByProject = null) {
   if (user.role === 'admin') return true;
   if (!user.orgId || project.orgId !== user.orgId) return false;
   if (user.role === 'owner' || user.role === 'sales') return true;
@@ -84,9 +86,10 @@ function projectVisible(user, project, platform, objectVisibleTo) {
       (user.role === 'measurer' && project.measurerUserId === user.id) ||
       (user.role === 'crew' && project.crewUserId === user.id);
     if (named) return true;
-    return (platform.objects || []).some(
-      (obj) => obj.projectId === project.id && objectVisibleTo(user, obj),
-    );
+    const rooms = roomsByProject
+      ? roomsByProject.get(project.id) || []
+      : (platform.objects || []).filter((obj) => obj.projectId === project.id);
+    return rooms.some((obj) => objectVisibleTo(user, obj));
   }
   return false;
 }
@@ -278,14 +281,29 @@ export async function handleProjects(ctx) {
   if (listRoute && method !== 'GET' && method !== 'POST') return null;
   if (itemRoute && method !== 'PATCH' && method !== 'DELETE') return null;
 
-  const { platform, user } = await ctx.requireAuth();
+  const readOnly = method === 'GET' && listRoute && typeof ctx.requireAuthReadonly === 'function';
+  const auth = readOnly ? await ctx.requireAuthReadonly() : await ctx.requireAuth();
+  const { platform, user } = auth;
   const rows = projectRows(platform);
 
   if (method === 'GET' && listRoute) {
-    const projects = rows
-      .filter((project) => projectVisible(user, project, platform, ctx.objectVisibleTo))
-      .map((project) => publicProject(project, user, platform));
-    return ctx.json(200, { projects });
+    const build = () => {
+      // Комнаты группируются один раз: раньше для каждого проекта перебирались все комнаты сети.
+      const roomsByProject = new Map();
+      for (const obj of platform?.objects || []) {
+        if (!obj.projectId) continue;
+        const list = roomsByProject.get(obj.projectId);
+        if (list) list.push(obj);
+        else roomsByProject.set(obj.projectId, [obj]);
+      }
+      return rows
+        .filter((project) => projectVisible(user, project, platform, ctx.objectVisibleTo, roomsByProject))
+        .map((project) => publicProject(project, user, platform, roomsByProject));
+    };
+    if (readOnly && ctx.listResponse) {
+      return ctx.listResponse({ version: auth.version, user, name: 'projects', build, field: 'projects' });
+    }
+    return ctx.json(200, { projects: build() });
   }
 
   if (!canWriteProject(user)) return ctx.json(403, { message: 'Недостаточно прав' });
