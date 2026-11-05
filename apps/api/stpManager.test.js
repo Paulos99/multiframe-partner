@@ -92,8 +92,12 @@ describe('менеджер StP: создание админом и доступ'
       body: { login: 'stp.test', password: 'x' },
     });
     assert.equal(dup.statusCode, 409);
+    // Без пароля менеджер создаётся и ждёт ссылку активации (см. activation.test.js).
     const noPass = await call('POST', '/admin/stp-managers', { token: tokens.admin, body: { login: 'stp.two' } });
-    assert.equal(noPass.statusCode, 400);
+    assert.equal(noPass.statusCode, 200);
+    assert.equal(read(noPass).pendingActivation, true);
+    const weakPass = await call('POST', '/admin/stp-managers', { token: tokens.admin, body: { login: 'stp.three', password: 'x' } });
+    assert.equal(weakPass.statusCode, 400);
 
     for (const token of [tokens.owner, tokens.sales]) {
       const denied = await call('POST', '/admin/stp-managers', {

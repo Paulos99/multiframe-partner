@@ -3590,3 +3590,15 @@ div.drillPerson {
 .tabs {
   position: relative;
 }
+
+.activationLink {
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--cab-border-strong);
+  background: var(--cab-card);
+  color: inherit;
+  text-overflow: ellipsis;
+}

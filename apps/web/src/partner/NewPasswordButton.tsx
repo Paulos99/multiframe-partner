@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { passwordProblem } from './activation';
 import { generatePassword } from './localStore';
 import { usePartner } from './PartnerContext';
 import styles from './partner.module.css';
@@ -21,8 +22,9 @@ export function NewPasswordButton({ staffId, staffName }: { staffId: string; sta
 
   async function apply(next: string) {
     const password = next.trim();
-    if (password.length < 6) {
-      setErr('Минимум 6 символов или нажмите «Сгенерировать».');
+    const problem = passwordProblem(password);
+    if (problem) {
+      setErr(`${problem}. Или нажмите «Сгенерировать».`);
       return;
     }
     setBusy(true);
