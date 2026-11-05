@@ -75,7 +75,7 @@ export function ContextMenu({
       left: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
       top: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
     });
-    el.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    el.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus({ preventScroll: true });
   }, [x, y]);
 
   useEffect(() => {

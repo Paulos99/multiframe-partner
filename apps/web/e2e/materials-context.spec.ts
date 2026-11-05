@@ -57,6 +57,27 @@ async function menuSettled(menu: ReturnType<Page['getByRole']>) {
   await expect(menu).toHaveCSS('transform', 'none');
 }
 
+/**
+ * Над папками теперь идут видео роли, страница длиннее окна, и прокрутка к папке плавная.
+ * Правый клик посреди прокрутки закрывал меню (оно закрывается при любой прокрутке),
+ * поэтому сначала подводим нужное место в окно и ждём, пока страница замрёт.
+ */
+async function scrollSettled(page: Page, target: ReturnType<Page['locator']>, block: 'center' | 'end' = 'center') {
+  await page.addStyleTag({ content: 'html, body, * { scroll-behavior: auto !important; }' });
+  await target.evaluate((el, b) => el.scrollIntoView({ block: b as ScrollLogicalPosition, behavior: 'instant' }), block);
+  // Положение должно не меняться три проверки подряд: картинки и видео ниже могут сдвинуть страницу.
+  let last = -1;
+  let calm = 0;
+  await expect
+    .poll(async () => {
+      const now = await page.evaluate(() => Math.round(window.scrollY));
+      calm = now === last ? calm + 1 : 0;
+      last = now;
+      return calm;
+    }, { intervals: [150] })
+    .toBeGreaterThanOrEqual(3);
+}
+
 const folderCard = (page: Page, name: string) =>
   page.locator('article[data-material-id]', { has: page.getByText(name, { exact: true }) });
 
@@ -65,6 +86,7 @@ test('админ: правый клик по папке → «Удалить» �
   await enter(page, 'admin');
   const card = folderCard(page, 'Старые инструкции');
   await expect(card).toBeVisible();
+  await scrollSettled(page, card);
   await card.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: 'Папка «Старые инструкции»' });
   await menuSettled(menu);
@@ -73,6 +95,7 @@ test('админ: правый клик по папке → «Удалить» �
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
 
+  await scrollSettled(page, card);
   await card.click({ button: 'right' });
   await menuSettled(menu);
   await menu.getByRole('menuitem', { name: 'Удалить' }).click();
@@ -99,6 +122,7 @@ test('админ: правый клик по пустому месту → «С�
   await seed(request);
   await enter(page, 'admin');
   const list = page.getByTestId('materials-list');
+  await scrollSettled(page, list, 'end');
   const box = (await list.boundingBox())!;
   await page.mouse.click(box.x + box.width / 2, box.y + box.height - 6, { button: 'right' });
   const menu = page.getByRole('menu', { name: 'Материалы' });
