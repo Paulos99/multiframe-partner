@@ -1,7 +1,7 @@
 import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { Skeleton } from './Skeleton';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from 'react';
-import type { PublicMaterial } from '../../../api/materialsLib.js';
+import type { PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import { MaterialStubView, PREPARING_LABEL } from './MaterialStubView';
 import {
   createMaterialFolder,

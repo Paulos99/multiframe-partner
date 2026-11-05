@@ -327,10 +327,10 @@ export async function apiAdminUpdatePartnerCity(
 }
 
 export async function apiListMaterials(): Promise<
-  import('../../../api/materialsLib.js').PublicMaterial[]
+  import('../../../../packages/shared/materialsLib.js').PublicMaterial[]
 > {
   const data = await request<{
-    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+    materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
   }>('/materials');
   return data.materials;
 }
@@ -338,9 +338,9 @@ export async function apiListMaterials(): Promise<
 export async function apiCreateMaterialFolder(
   name: string,
   parentId: string | null,
-): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
-    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+    materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
   }>('/materials/folders', {
     method: 'POST',
     body: JSON.stringify({ name, parentId }),
@@ -395,9 +395,9 @@ export async function apiMaterialMultipartComplete(input: {
   partCount: number;
   name: string;
   parentId: string | null;
-}): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+}): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
-    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+    materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
   }>('/materials/files/multipart/complete', { method: 'POST', body: JSON.stringify(input) });
   return data.materials;
 }
@@ -413,9 +413,9 @@ export async function apiRegisterMaterialFile(input: {
   name: string;
   parentId: string | null;
   storageKey: string;
-}): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+}): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
-    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+    materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
   }>('/materials/files', {
     method: 'POST',
     body: JSON.stringify(input),
@@ -428,9 +428,9 @@ export async function apiUploadMaterial(input: {
   parentId: string | null;
   mime: string;
   contentBase64: string;
-}): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+}): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
-    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+    materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
   }>('/materials/files', {
     method: 'POST',
     body: JSON.stringify(input),
@@ -441,9 +441,9 @@ export async function apiUploadMaterial(input: {
 export async function apiRenameMaterial(
   id: string,
   name: string,
-): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
-    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+    materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
   }>(`/materials/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ name }),
@@ -454,9 +454,9 @@ export async function apiRenameMaterial(
 export async function apiReplaceMaterial(
   id: string,
   input: { name: string; mime: string; contentBase64: string },
-): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
-    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+    materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
   }>(`/materials/${id}/content`, {
     method: 'PUT',
     body: JSON.stringify(input),
@@ -466,9 +466,9 @@ export async function apiReplaceMaterial(
 
 export async function apiDeleteMaterial(
   id: string,
-): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
+): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
-    materials: import('../../../api/materialsLib.js').PublicMaterial[];
+    materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
   }>(`/materials/${id}`, { method: 'DELETE' });
   return data.materials;
 }
@@ -495,8 +495,8 @@ export async function apiMaterialThumbnailTicket(
 export async function apiMaterialThumbnailConfirm(
   id: string,
   storageKey: string,
-): Promise<import('../../../api/materialsLib.js').PublicMaterial[]> {
-  const data = await request<{ materials: import('../../../api/materialsLib.js').PublicMaterial[] }>(
+): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{ materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[] }>(
     `/materials/${id}/thumbnail`,
     { method: 'POST', body: JSON.stringify({ storageKey }) },
   );

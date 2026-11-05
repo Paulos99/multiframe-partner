@@ -1,4 +1,4 @@
-import type { PublicMaterial } from '../../../api/materialsLib.js';
+import type { PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import { detectFileKind, type FileKind } from '../ui/filePreview/fileKind';
 import { loadPdfJs, pdfDocumentOptions } from '../ui/filePreview/pdfjsLoader';
 import { apiMaterialThumbnailConfirm, apiMaterialThumbnailTicket } from './apiClient';

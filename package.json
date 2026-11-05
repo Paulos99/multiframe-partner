@@ -1,0 +1,18 @@
+{
+  "name": "multiframe-partner",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Кабинет партнёра MultiFrame: общие команды проверки для apps/api и apps/web",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "install:all": "npm ci --prefix apps/api && npm ci --prefix apps/web",
+    "architecture:check": "node scripts/architecture-check.mjs",
+    "lint": "npm run lint --prefix apps/api && npm run lint --prefix apps/web",
+    "typecheck": "npm run typecheck --prefix apps/web",
+    "test": "node --test scripts/*.test.mjs && npm test --prefix apps/api && npm test --prefix apps/web",
+    "check": "npm run architecture:check && npm run lint && npm run typecheck && npm test"
+  }
+}

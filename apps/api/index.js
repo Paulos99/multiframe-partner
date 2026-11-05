@@ -20,8 +20,8 @@ import {
   safeEqual,
 } from './security.js';
 import { signToken as signAuthToken, verifyToken } from './authTokens.js';
-import { ensureIndexFromTsv, resolveCity } from './cityCatalog.js';
-import ruCitiesTsv from './data/ru-cities.js';
+import { ensureIndexFromTsv, resolveCity } from '../../packages/shared/cityCatalog.js';
+import ruCitiesTsv from '../../packages/shared/data/ru-cities.js';
 import {
   buildDemoAnalyticsEvents,
   buildDemoPlatform,
@@ -44,6 +44,7 @@ import { handleTraining } from './training.js';
 import { handleRoomPhotos, photoCountsForObject, removePhotoFiles, clientReport } from './roomPhotos.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
+import { parseBody, schemas } from './validation.js';
 import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { estimateForRole } from '../../packages/shared/projectAccess.js';
@@ -103,7 +104,6 @@ const CORS = {
 };
 
 const MAX_BODY_BYTES = Math.max(100_000, Number(process.env.MAX_BODY_BYTES) || 6_000_000);
-const OBJECT_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 function uid(prefix) {
   return `${prefix}_${randomBytes(9).toString('hex')}${Date.now().toString(36).slice(-4)}`;
@@ -124,18 +124,6 @@ function normalizeRole(role) {
   if (role === 'installer' || role === 'install') return 'crew';
   if (['admin', 'owner', 'sales', 'measurer', 'crew', STP_MANAGER_ROLE].includes(role)) return role;
   return 'measurer';
-}
-
-/**
- * Роль нового сотрудника. Пустое значение — замерщик.
- * owner, admin (StP) и прочие роли не назначаются.
- */
-function assignableStaffRole(raw) {
-  const requested = String(raw ?? '').trim();
-  if (!requested) return 'measurer';
-  if (requested === 'executor') return 'measurer';
-  if (STAFF_ROLES.includes(requested)) return requested;
-  return null;
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -634,9 +622,7 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
   const finalStatus = allowed.includes(status) ? status : 'draft';
   const phone = objectPhone(body, existing, finalStatus);
   const refusal = objectRefusal(body, existing, finalStatus, actor, now);
-  if (!existing && body.id != null && !OBJECT_ID_RE.test(String(body.id))) {
-    throw Object.assign(new Error('Некорректный идентификатор комнаты'), { status: 400 });
-  }
+  parseBody(schemas.objectInput({ isNew: !existing }), body);
   const assignedRaw = body.assignedTo !== undefined ? body.assignedTo : existing?.assignedTo ?? null;
   const assignedTo = assignedRaw === '' ? null : assignedRaw;
   if (assignedTo != null && assignedTo !== existing?.assignedTo) {
@@ -649,11 +635,6 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
       !['measurer', 'crew', 'sales', 'owner'].includes(normalizeRole(assignee.role))
     ) {
       throw Object.assign(new Error('Исполнитель не найден в вашей компании'), { status: 400 });
-    }
-  }
-  for (const field of ['room', 'estimate']) {
-    if (body[field] != null && JSON.stringify(body[field]).length > 400_000) {
-      throw Object.assign(new Error('Слишком большие данные расчёта'), { status: 413 });
     }
   }
   return {
@@ -1242,7 +1223,7 @@ async function handleRequest(event = {}) {
 
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
-      const { login, password } = getBody(event);
+      const { login: loginText, password } = parseBody(schemas.loginRequest, getBody(event));
       const ip = clientIp(event) || 'unknown';
       const ipKey = `login-ip:${ip}`;
       const ipLimit = { limit: 30, windowMs: 10 * 60 * 1000 };
@@ -1255,7 +1236,6 @@ async function handleRequest(event = {}) {
         );
       }
       const platform = await loadPlatform();
-      const loginText = String(login || '').trim().slice(0, 200);
       const user = findUserByLogin(platform, loginText);
       const nowMs = Date.now();
       if (user && Date.parse(user.lockedUntil || '') > nowMs) {
@@ -1268,7 +1248,7 @@ async function handleRequest(event = {}) {
         );
       }
       const hasHash = Boolean(user) && typeof user.passwordHash === 'string' && user.passwordHash;
-      const valid = hasHash ? await bcrypt.compare(String(password || ''), user.passwordHash) : false;
+      const valid = hasHash ? await bcrypt.compare(password, user.passwordHash) : false;
       if (!hasHash) await dummyCompare(password);
       if (!user || user.loginDisabled === true || !valid) {
         rateHit(ipKey, ipLimit);
@@ -1383,12 +1363,8 @@ async function handleRequest(event = {}) {
       const { platform, user } = await requireAuth(event);
       assertRole(user, ['admin']);
       const body = getBody(event);
-      const login = String(body.login || '').trim();
-      const password = String(body.password || '').trim();
-      const companyName = String(body.companyName || '').trim() || login;
       const city = cityOrThrow(body.city ?? '', null);
-      if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
-      if (login.length > 64) return json(400, { message: 'Логин слишком длинный' });
+      const { login, password, companyName } = parseBody(schemas.partnerCreate, body);
       const weak = passwordProblem(password);
       if (weak) return json(400, { message: weak });
       if (loginTaken(platform, login)) return json(409, { message: 'Такой логин уже есть' });
@@ -1455,11 +1431,7 @@ async function handleRequest(event = {}) {
     if (method === 'POST' && path.endsWith('/admin/stp-managers')) {
       const { platform, user } = await requireAuth(event);
       assertRole(user, ['admin']);
-      const body = getBody(event);
-      const login = String(body.login || '').trim();
-      const password = String(body.password || '').trim();
-      const displayName = String(body.displayName || login).trim() || login;
-      if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
+      const { login, password, displayName } = parseBody(schemas.stpManagerCreate, getBody(event));
       if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
       const now = new Date().toISOString();
       if (!findOrg(platform, STP_ORG_ID)) {
@@ -1573,10 +1545,7 @@ async function handleRequest(event = {}) {
       if (!partner?.orgId) return json(404, { message: 'Партнёр не найден' });
       const idx = platform.orgs.findIndex((o) => o.id === partner.orgId);
       if (idx < 0) return json(404, { message: 'Организация не найдена' });
-      const body = getBody(event);
-      if (!Object.prototype.hasOwnProperty.call(body, 'city')) {
-        return json(400, { message: 'Укажите город' });
-      }
+      const body = parseBody(schemas.partnerCityUpdate, getBody(event));
       // Правка города не оставляет произвольный текст. Старое невалидное значение
       // само не подменяется, пока админ не выберет город из справочника.
       const city = cityOrThrow(body.city, null);
@@ -1640,16 +1609,7 @@ async function handleRequest(event = {}) {
       const { platform, user } = await requireAuth(event);
       assertRole(user, STAFF_MANAGER_ROLES);
       if (!user.orgId) return json(400, { message: 'Нет организации' });
-      const body = getBody(event);
-      const login = String(body.login || '').trim();
-      const password = String(body.password || '').trim();
-      const displayName = String(body.displayName || login).trim();
-      const role = assignableStaffRole(body.role);
-      if (!role) {
-        return json(400, { message: 'Роль: sales, measurer или crew' });
-      }
-      if (!login || !password) return json(400, { message: 'Укажите логин и пароль' });
-      if (login.length > 64) return json(400, { message: 'Логин слишком длинный' });
+      const { login, password, displayName, role } = parseBody(schemas.staffCreate, getBody(event));
       const weak = passwordProblem(password);
       if (weak) return json(400, { message: weak });
       if (loginTaken(platform, login)) return json(409, { message: 'Такой логин уже есть' });
@@ -1733,10 +1693,7 @@ async function handleRequest(event = {}) {
       if (!STAFF_ROLES.includes(targetRole)) {
         return json(403, { message: 'Недостаточно прав' });
       }
-      const body = getBody(event);
-      if (!Object.prototype.hasOwnProperty.call(body, 'displayName')) {
-        return json(400, { message: 'Укажите имя' });
-      }
+      const body = parseBody(schemas.staffUpdate, getBody(event));
       const displayName = normalizePersonName(body.displayName);
       const idx = platform.users.findIndex((u) => u.id === staffUserId);
       const nextUser = {

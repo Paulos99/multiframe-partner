@@ -9,7 +9,6 @@
 import {
   MATERIAL_BUCKET_MARKER,
   MATERIAL_DIRECT_MAX_BYTES,
-  MATERIAL_MAX_PARTS,
   addFile,
   materialPartSize,
   createFolder,
@@ -18,7 +17,8 @@ import {
   materialBase,
   renameMaterial,
   replaceFile,
-} from './materialsLib.js';
+} from '../../packages/shared/materialsLib.js';
+import { parseBody, schemas } from './validation.js';
 import {
   abortMaterialMultipart,
   completeMaterialMultipart,
@@ -232,9 +232,7 @@ export async function handleMaterials(ctx) {
     const body = ctx.getBody() || {};
     const step = multipart[1] || 'start';
     if (step === 'start') {
-      const size = Number(body.size);
-      if (!Number.isFinite(size) || size < 1) return ctx.json(400, { message: 'Файл пустой' });
-      if (size > MATERIAL_DIRECT_MAX_BYTES) return ctx.json(413, { message: 'Файл больше 5 ТБ' });
+      const { size } = parseBody(schemas.materialMultipartStart, body);
       const id = ctx.uid('mat');
       const key = `materials/${id}`;
       const mime = mimeOf(body.mime, body.name);
@@ -248,20 +246,9 @@ export async function handleMaterials(ctx) {
         mime,
       });
     }
-    const key = String(body.storageKey || '');
-    const uploadId = String(body.uploadId || '');
-    if (!safeId(key.slice('materials/'.length)) || !key.startsWith('materials/')) {
-      return ctx.json(400, { message: 'Некорректный ключ материала' });
-    }
-    if (!uploadId || uploadId.length > 1024) return ctx.json(400, { message: 'Нет uploadId' });
+    const { storageKey: key, uploadId } = parseBody(schemas.materialMultipartRef, body);
     if (step === 'parts') {
-      const numbers = [...new Set((Array.isArray(body.partNumbers) ? body.partNumbers : []).map(Number))];
-      if (!numbers.length || numbers.length > 100) {
-        return ctx.json(400, { message: 'Нужно от 1 до 100 номеров частей' });
-      }
-      if (numbers.some((n) => !Number.isInteger(n) || n < 1 || n > MATERIAL_MAX_PARTS)) {
-        return ctx.json(400, { message: 'Некорректный номер части' });
-      }
+      const { partNumbers: numbers } = parseBody(schemas.materialMultipartParts, body);
       const signed = await signMaterialParts(key, uploadId, numbers);
       const uploaded = body.withUploaded ? await listMaterialParts(key, uploadId) : undefined;
       return ctx.json(200, { ...signed, ...(uploaded ? { uploaded } : {}) });

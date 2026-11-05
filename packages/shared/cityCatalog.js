@@ -1,6 +1,6 @@
 /**
  * Справочник городов РФ.
- * Данные: apps/api/data/ru-cities.tsv
+ * Данные: packages/shared/data/ru-cities.tsv
  * Источник: Википедия, «Список городов России» (CC BY-SA 4.0).
  */
 

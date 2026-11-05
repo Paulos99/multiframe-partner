@@ -5,7 +5,7 @@ import {
   resolveCity,
   searchCities,
   type CityRow,
-} from '../../../api/cityCatalog.js';
+} from '../../../../packages/shared/cityCatalog.js';
 
 let pending: Promise<void> | null = null;
 
@@ -13,7 +13,7 @@ let pending: Promise<void> | null = null;
 export function loadCities(): Promise<void> {
   if (citiesReady()) return Promise.resolve();
   if (!pending) {
-    pending = import('../../../api/data/ru-cities.js')
+    pending = import('../../../../packages/shared/data/ru-cities.js')
       .then((mod) => {
         ensureIndexFromTsv(mod.default);
       })

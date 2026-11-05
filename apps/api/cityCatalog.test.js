@@ -6,10 +6,10 @@ import {
   isKnownCity,
   resolveCity,
   searchCities,
-} from './cityCatalog.js';
-import ruCitiesTsv from './data/ru-cities.js';
+} from '../../packages/shared/cityCatalog.js';
+import ruCitiesTsv from '../../packages/shared/data/ru-cities.js';
 
-const tsvFile = readFileSync(new URL('./data/ru-cities.tsv', import.meta.url), 'utf8');
+const tsvFile = readFileSync(new URL('../../packages/shared/data/ru-cities.tsv', import.meta.url), 'utf8');
 assert.equal(ruCitiesTsv.replace(/\r\n/g, '\n'), tsvFile.replace(/\r\n/g, '\n'));
 ensureIndexFromTsv(ruCitiesTsv);
 

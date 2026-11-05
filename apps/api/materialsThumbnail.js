@@ -13,7 +13,7 @@
  *   DELETE /materials/:id/thumbnail — только admin: убрать миниатюру
  */
 
-import { findMaterial, materialBase, toPublicMaterial } from './materialsLib.js';
+import { findMaterial, materialBase, toPublicMaterial } from '../../packages/shared/materialsLib.js';
 import {
   deleteMaterialBytes,
   materialsConfigError,

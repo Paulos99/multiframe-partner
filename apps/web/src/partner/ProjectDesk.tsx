@@ -54,6 +54,7 @@ import { CloseDialog, closeChoiceError, type CloseChoice } from './CloseDialog';
 import { projectStageLabel, refusalLine, refusalReasonPlain, roomStageLabel } from './closeOutcome';
 import { REFUSAL_COMMENT_MAX, REFUSAL_OTHER_KEY, REFUSAL_REASONS } from '../../../../packages/shared/refusal.js';
 import { PHONE_EXAMPLE, phoneStageAllowed } from '../../../../packages/shared/clientPhone.js';
+import { PROJECT_LIMITS } from '../../../../packages/shared/schemas.js';
 import { ProjectPhotoReports } from './photos/ProjectPhotoReports';
 import styles from './ProjectDesk.module.css';
 
@@ -1352,7 +1353,7 @@ function Settings({
     <form className={styles.form} onSubmit={(event) => void submit(event)}>
       <label>
         Название
-        <input value={form.name} required maxLength={250} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        <input value={form.name} required maxLength={PROJECT_LIMITS.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
       </label>
       <label>
         Описание
