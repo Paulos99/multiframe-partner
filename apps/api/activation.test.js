@@ -92,6 +92,34 @@ describe('ссылка активации', { concurrency: false }, () => {
     assert.equal(list.find((row) => row.login === 'sales1').pendingActivation, false);
   });
 
+  test('создание без логина и активация со своим логином; занятый — 409', async () => {
+    const created = await call('POST', '/org/staff', {
+      token: tokens.owner,
+      body: { displayName: 'Без логина', role: 'sales' },
+    });
+    assert.equal(created.statusCode, 200);
+    const body = read(created);
+    assert.equal(body.pendingActivation, true);
+    assert.match(body.login, /^inv_/);
+    const link = tokenOf(await call('POST', '/auth/invite', { token: tokens.owner, body: { userId: body.id } }));
+    const taken = await call('POST', '/auth/activate', {
+      body: { token: link, password: 'choose-login-pass-1', login: 'sales1' },
+    });
+    assert.equal(taken.statusCode, 409);
+    assert.match(read(taken).message, /логин уже есть/i);
+    const missing = await call('POST', '/auth/activate', {
+      body: { token: link, password: 'choose-login-pass-1' },
+    });
+    assert.equal(missing.statusCode, 400);
+    assert.match(read(missing).message, /Укажите логин/);
+    const ok = await call('POST', '/auth/activate', {
+      body: { token: link, password: 'choose-login-pass-1', login: 'chooses.own' },
+    });
+    assert.equal(ok.statusCode, 200);
+    assert.equal(userByLogin('chooses.own').login, 'chooses.own');
+    assert.equal((await login('chooses.own', 'choose-login-pass-1')).status, 200);
+  });
+
   test('прежнее создание с паролем работает как раньше', async () => {
     const created = await call('POST', '/org/staff', {
       token: tokens.owner,

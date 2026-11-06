@@ -87,6 +87,10 @@ export type StoredUser = {
   displayName: string;
   orgId: string | null;
   createdAt: string;
+  /** Пароль ещё не задан — ждёт ссылку активации (демо/локально). */
+  pendingActivation?: boolean;
+  /** Локальная одноразовая ссылка: hash + срок, как на сервере. */
+  activation?: { hash: string; expiresAt: string };
 };
 
 export type StoredOrg = {
@@ -497,7 +501,11 @@ export function userToSession(u: StoredUser, db: PartnerDb): SessionUser {
 export function localLogin(login: string, password: string): SessionUser {
   const db = loadDb();
   const u = db.users.find((x) => x.login === login.trim());
-  if (!u || u.password !== password) {
+  if (!u) throw new Error('Неверный логин или пароль');
+  if (u.pendingActivation || !u.password) {
+    throw new Error('Сначала активируйте аккаунт по ссылке');
+  }
+  if (u.password !== password) {
     throw new Error('Неверный логин или пароль');
   }
   const session = userToSession(u, db);
@@ -731,19 +739,21 @@ export function createStaffAccount(input: {
   }
   const role: UserRole = requested === '' || requested === 'executor' ? 'measurer' : (requested as UserRole);
   const db = loadDb();
-  const login = input.login.trim();
-  const password = input.password.trim() || generatePassword();
-  if (!login) throw new Error('Укажите логин');
+  let login = input.login.trim();
+  const password = input.password.trim();
+  // Пустой пароль — ссылка активации (как на сервере). Логин можно не задавать: временный inv_*.
+  if (!login) login = `inv_${uid('x').slice(2, 10)}`;
   if (db.users.some((u) => u.login === login)) throw new Error('Такой логин уже есть');
   const now = new Date().toISOString();
   const user: StoredUser = {
     id: uid('u'),
     login,
-    password,
+    password: password || '',
     role,
     displayName: input.displayName.trim() || login,
     orgId: input.owner.orgId,
     createdAt: now,
+    ...(password ? {} : { pendingActivation: true }),
   };
   let next: PartnerDb = { ...db, users: [...db.users, user] };
   next = pushActivity(next, {

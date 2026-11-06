@@ -92,7 +92,7 @@ export function createSchemas(z) {
     displayName: textOf(value.displayName || value.login).trim() || value.login,
   }));
 
-  /** POST /org/staff: роль проверяется раньше логина и пароля. */
+  /** POST /org/staff: роль раньше логина. Логин необязателен — сотрудник задаст его по ссылке. */
   const staffCreate = body().transform((raw, ctx) => {
     const requested = String(raw.role ?? '').trim();
     const role = !requested || requested === 'executor' ? 'measurer' : requested;
@@ -100,14 +100,18 @@ export function createSchemas(z) {
       issue(ctx, 'Роль: sales, measurer или crew');
       return z.NEVER;
     }
-    const checked = credentials({ checkLength: true }).safeParse(raw);
-    if (!checked.success) {
-      const first = checked.error.issues[0];
-      issue(ctx, first.message, first.params?.status);
+    const login = textOf(raw.login).trim();
+    const password = textOf(raw.password).trim();
+    if (login && login.length > LOGIN_MAX) {
+      issue(ctx, 'Логин слишком длинный');
       return z.NEVER;
     }
-    const { login } = checked.data;
-    return { ...checked.data, role, displayName: textOf(raw.displayName || login).trim() };
+    const displayName = textOf(raw.displayName || login).trim();
+    if (!displayName) {
+      issue(ctx, 'Укажите имя');
+      return z.NEVER;
+    }
+    return { login, password, role, displayName };
   });
 
   /** PATCH /org/staff/:id: имя обязательно. */
