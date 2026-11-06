@@ -1,0 +1,51 @@
+/**
+ * Mirror of apps/web/src/styles/tokens.css — --cab-* only (Gate C visual baseline).
+ * Do not edit ad hoc; sync from production tokens when the cabinet theme changes.
+ */
+:root {
+  --cab-accent: #01644f;
+  --cab-accent-hover: #014e3e;
+  --cab-accent-text: #01644f;
+  --cab-on-accent: #ffffff;
+  --cab-accent-soft: #e6f4ef;
+  --cab-accent-softer: #f4faf7;
+  --cab-page: #f3f4f6;
+  --cab-card: #ffffff;
+  --cab-subtle: #f6f7f9;
+  --cab-field: #ffffff;
+  --cab-ink: #14211c;
+  --cab-ink-soft: #3d4f48;
+  --cab-muted: #4e5d56;
+  --cab-border: #e4e7eb;
+  --cab-border-strong: #d3d8de;
+  --cab-danger: #9f2c24;
+  --cab-danger-soft: #fdecec;
+  --cab-warn: #8a4b08;
+  --cab-warn-soft: #fff4e5;
+  --cab-info: #1a4b8c;
+  --cab-info-soft: #e7f1fb;
+  --cab-ok: #0d5c45;
+  --cab-ok-soft: #e5f4ee;
+  --cab-neutral: #3e4944;
+  --cab-neutral-soft: #eef1f2;
+  --cab-shadow: 0 1px 3px rgba(20, 28, 36, 0.07), 0 10px 30px rgba(20, 28, 36, 0.09);
+  --cab-shadow-md: 0 2px 6px rgba(20, 28, 36, 0.08), 0 18px 44px rgba(20, 28, 36, 0.14);
+  --cab-shadow-sm: 0 1px 2px rgba(20, 28, 36, 0.08), 0 3px 8px rgba(20, 28, 36, 0.06);
+  --cab-radius-sm: 12px;
+  --cab-radius-md: 16px;
+  --cab-radius-lg: 20px;
+  --cab-radius-xl: 24px;
+  --cab-radius-pill: 999px;
+  --cab-space-2: 8px;
+  --cab-space-3: 12px;
+  --cab-space-4: 16px;
+  --cab-space-5: 20px;
+  --cab-space-6: 24px;
+  --cab-space-7: 32px;
+  --cab-title: clamp(1.45rem, 2.2vw, 1.8rem);
+  --cab-kpi: clamp(1.85rem, 3vw, 2.35rem);
+  --cab-track: -0.03em;
+  --cab-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --cab-side-w: 260px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
