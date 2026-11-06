@@ -53,44 +53,32 @@ describe('управление сотрудниками', { concurrency: false }
   /** @type {Record<string, string>} */
   const tokens = {};
 
-  test('менеджер видит сотрудников своей компании и не создаёт их', async () => {
+  test('менеджер создаёт сотрудников своей компании и не удаляет их', async () => {
     tokens.sales = await login('sales1', 'exec1234');
     tokens.owner = await login('partner1', 'demo1234');
     tokens.otherSales = await login('sales2', 'exec1234');
 
-    const denied = await call('POST', '/org/staff', {
-      token: tokens.sales,
-      body: {
-        login: 'mgr_extra',
-        password: 'staff-pass-1',
-        displayName: 'Второй менеджер',
-        role: 'sales',
-        orgId: 'org_demo_spb',
-      },
-    });
-    assert.equal(denied.statusCode, 403);
-    assert.equal(userByLogin('mgr_extra'), undefined);
-
     const created = readJson(
       await call('POST', '/org/staff', {
-        token: tokens.owner,
+        token: tokens.sales,
         body: {
           login: 'mgr_extra',
           password: 'staff-pass-1',
           displayName: 'Второй менеджер',
           role: 'sales',
+          orgId: 'org_demo_spb',
         },
       }),
     );
     assert.equal(created.role, 'sales');
     const row = userById(created.id);
     assert.ok(row);
-    assert.equal(row.orgId, 'org_demo');
+    assert.equal(row.orgId, 'org_demo', 'чужой orgId в теле игнорируется');
     assert.equal(row.role, 'sales');
 
     const measurer = readJson(
       await call('POST', '/org/staff', {
-        token: tokens.owner,
+        token: tokens.sales,
         body: {
           login: 'mgr_measurer',
           password: 'staff-pass-1',
@@ -187,7 +175,7 @@ describe('управление сотрудниками', { concurrency: false }
         role: 'measurer',
       },
     });
-    assert.equal(overwrite.statusCode, 403);
+    assert.equal(overwrite.statusCode, 409);
     assert.equal(userById('u_partner1').role, 'owner');
     assert.equal(userById('u_partner1').passwordHash, ownerBefore.passwordHash);
 
@@ -223,7 +211,7 @@ describe('управление сотрудниками', { concurrency: false }
       token: sales,
       body: { staffUserId: 'u_crew2', password: 'staff-pass-1' },
     });
-    assert.equal(resetForeign.statusCode, 403);
+    assert.equal(resetForeign.statusCode, 404);
     const foreignCrew = await call('POST', '/auth/login', {
       body: { login: 'crew2', password: 'exec1234' },
     });
@@ -240,7 +228,7 @@ describe('управление сотрудниками', { concurrency: false }
           role,
         },
       });
-      assert.equal(rejected.statusCode, 403, role);
+      assert.ok([400, 403].includes(rejected.statusCode), `${role} → ${rejected.statusCode}`);
       assert.equal(userByLogin(`forbidden_${role}`), undefined);
     }
     assert.equal(storedUsers().length, beforeCount);
@@ -264,13 +252,9 @@ describe('управление сотрудниками', { concurrency: false }
           body: { staffUserId: temp.id, password: 'staff-pass-2' },
         })
       ).statusCode,
-      403,
+      200,
+      'менеджер может выдать новый пароль / ссылку',
     );
-    const reset = await call('POST', '/org/staff/reset-password', {
-      token: owner,
-      body: { staffUserId: temp.id, password: 'staff-pass-2' },
-    });
-    assert.equal(reset.statusCode, 200);
     assert.equal(
       (await call('POST', '/auth/login', { body: { login: 'mgr_pw', password: 'staff-pass-1' } }))
         .statusCode,

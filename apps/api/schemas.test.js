@@ -64,7 +64,7 @@ test('менеджер StP: длина логина не ограничивае�
 test('сотрудник: роль проверяется раньше логина, executor — это замерщик, пустая роль — замерщик', () => {
   assert.equal(fail(schemas.staffCreate, { role: 'owner' }).message, 'Роль: sales, measurer или crew');
   assert.equal(fail(schemas.staffCreate, { role: 'admin', login: 'a', password: 'b' }).message, 'Роль: sales, measurer или crew');
-  assert.equal(fail(schemas.staffCreate, { role: 'crew' }).message, 'Укажите логин');
+  assert.equal(fail(schemas.staffCreate, { role: 'crew' }).message, 'Укажите имя');
   assert.equal(
     fail(schemas.staffCreate, { login: 'a'.repeat(LOGIN_MAX + 1), password: 'p' }).message,
     'Логин слишком длинный',
@@ -74,6 +74,8 @@ test('сотрудник: роль проверяется раньше логи�
   const crew = pass(schemas.staffCreate, { login: ' l ', password: 'p', role: ' crew ', displayName: ' Иван ' });
   assert.deepEqual([crew.login, crew.role, crew.displayName], ['l', 'crew', 'Иван']);
   assert.equal(pass(schemas.staffCreate, { login: 'l', password: 'p' }).displayName, 'l');
+  assert.equal(pass(schemas.staffCreate, { displayName: 'Иван', role: 'crew' }).login, '');
+  assert.equal(pass(schemas.staffCreate, { displayName: 'Иван', role: 'crew' }).displayName, 'Иван');
 });
 
 test('обновление сотрудника и города партнёра: поле должно быть передано', () => {

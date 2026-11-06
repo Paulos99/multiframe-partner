@@ -269,14 +269,20 @@ test('каждый этап — доля от всех открытий, пер�
   assert.deepEqual(percents, ['60%', '20%', '10%', '10%']);
   assertStopsSum100(counts);
   assert.deepEqual(funnelStopPercents([0, 0, 0, 0]), ['—', '—', '—', '—']);
+  // UI: вместо двух воронок «где остановились» — путь клиента из 20 шагов.
   const ui = readFileSync(
     new URL('../web/src/partner/AnalyticsDashboard.tsx', import.meta.url),
     'utf8',
   );
-  assert.match(ui, /где остановились, в сумме 100%/);
-  assert.equal(ui.includes('% от всех открытий'), false);
-  assert.equal(ui.includes('Процент от открытий'), false);
-  assert.match(ui, /funnelStopPercents\(/);
+  const journey = readFileSync(
+    new URL('../web/src/partner/JourneyFunnel.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(ui, /Путь клиента/);
+  assert.match(ui, /computeClientJourney/);
+  assert.match(journey, /нет данных/);
+  assert.equal(ui.includes('где остановились, в сумме 100%'), false);
+  assert.equal(ui.includes('funnelStopPercents('), false);
   assertSameFunnel(events);
 });
 
@@ -323,9 +329,11 @@ test('скриншот Павла: в строках остановившиес�
   assert.deepEqual(funnelStopPercents([10, 5, 5]), ['50%', '0%', '50%']);
   assert.deepEqual(fromTypeScript.funnelStopPercents([10, 5, 5]), ['50%', '0%', '50%']);
   const ui = readFileSync(new URL('../web/src/partner/AnalyticsDashboard.tsx', import.meta.url), 'utf8');
-  for (const label of ['Только открыл', 'Посчитал, без PDF', 'Скачал PDF, не поделился', 'Поделился']) {
-    assert.ok(ui.includes(`'${label}'`), label);
+  const journeyUi = readFileSync(new URL('../web/src/partner/JourneyFunnel.tsx', import.meta.url), 'utf8');
+  assert.match(ui, /JourneyFunnel/);
+  assert.match(ui, /Отказы, %/);
+  assert.match(journeyUi, /formatCount/);
+  for (const old of ['Только открыл', 'Посчитал, без PDF', 'Скачал PDF, не поделился', 'funnelStopCounts(']) {
+    assert.equal(ui.includes(old), false, old);
   }
-  for (const old of ['До расчёта', 'До PDF', 'Дошли до этапа']) assert.equal(ui.includes(old), false, old);
-  assert.match(ui, /funnelStopCounts\(/);
 });

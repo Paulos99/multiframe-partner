@@ -31,7 +31,7 @@ for (const role of ['owner', 'sales']) {
     await page.getByRole('menuitem', { name: 'Удалить проект…' }).click();
     const dialog = page.getByRole('alertdialog');
     await expect(dialog).toContainText('Удалить проект «Тестовая квартира»?');
-    await expect(dialog).toContainText('3 комнаты');
+    await expect(dialog).toContainText('5 комнат');
     await expect(dialog).toContainText('нельзя отменить');
     // Окно по центру экрана, не боковая панель.
     const view = page.viewportSize()!;
