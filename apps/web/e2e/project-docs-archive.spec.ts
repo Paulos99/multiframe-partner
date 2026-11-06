@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 
-const OUT = process.env.DOCS_SHOT_DIR || '/workspace/handover/screenshots-1.1.0-fixes';
+const OUT = process.env.DOCS_SHOT_DIR || 'test-results/docs-shots';
 const TAG = process.env.DOCS_SHOT_TAG || 'after';
 const CHECK = TAG === 'after';
 
