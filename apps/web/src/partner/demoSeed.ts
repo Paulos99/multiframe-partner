@@ -22,6 +22,7 @@ type DemoUser = {
   password: string;
   role: UserRole;
   displayName: string;
+  phone?: string;
   orgId: string | null;
   createdAt: string;
 };
@@ -276,7 +277,7 @@ export function buildLocalDemoUsers(): DemoUser[] {
     { id: 'u_admin', login: 'admin', password: 'admin1234', role: 'admin', displayName: DEMO_PERSONAL_NAMES.u_admin, orgId: null, createdAt: now },
     { id: 'u_stpmgr1', login: 'stpmgr1', password: 'exec1234', role: 'stp_manager', displayName: DEMO_PERSONAL_NAMES.u_stpmgr1, orgId: 'org_stp', createdAt: now },
     { id: 'u_partner1', login: 'partner1', password: 'demo1234', role: 'owner', displayName: DEMO_PERSONAL_NAMES.u_partner1, orgId: 'org_demo', createdAt: now },
-    { id: 'u_sales1', login: 'sales1', password: 'exec1234', role: 'sales', displayName: DEMO_PERSONAL_NAMES.u_sales1, orgId: 'org_demo', createdAt: now },
+    { id: 'u_sales1', login: 'sales1', password: 'exec1234', role: 'sales', displayName: DEMO_PERSONAL_NAMES.u_sales1, phone: '+7 495 111-00-21', orgId: 'org_demo', createdAt: now },
     { id: 'u_exec1', login: 'exec1', password: 'exec1234', role: 'measurer', displayName: DEMO_PERSONAL_NAMES.u_exec1, orgId: 'org_demo', createdAt: now },
     { id: 'u_crew1', login: 'crew1', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew1, orgId: 'org_demo', createdAt: now },
     { id: 'u_crew1b', login: 'crew1b', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew1b, orgId: 'org_demo', createdAt: now },
