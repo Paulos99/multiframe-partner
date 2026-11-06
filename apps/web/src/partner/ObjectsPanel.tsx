@@ -1,4 +1,5 @@
 import { roomCountLabel } from './kanban';
+import { trackPartnerAnalytics } from './analytics';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -540,6 +541,9 @@ export function ObjectsPanel({
               status: 'closed',
               refusal: choice ? { reasonKey: choice.reasonKey, comment: choice.comment, at: '', by: null } : null,
             });
+            if (!choice) {
+              trackPartnerAnalytics({ tool: 'cabinet', action: 'install_done' });
+            }
           }}
         />
       ) : null}
@@ -909,7 +913,14 @@ export function ObjectsPanel({
                       onClick={() => {
                         if (s === selected.status) return;
                         if (s === 'closed') setClosingRoom(selected);
-                        else void patch(selected, { status: s });
+                        else {
+                          void patch(selected, { status: s });
+                          if (s === 'measured') {
+                            trackPartnerAnalytics({ tool: 'cabinet', action: 'client_agreed' });
+                          } else if (s === 'install') {
+                            trackPartnerAnalytics({ tool: 'cabinet', action: 'quote_accepted' });
+                          }
+                        }
                       }}
                     >
                       {JOB_OBJECT_STATUS_LABELS[s]}

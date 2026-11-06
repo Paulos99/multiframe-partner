@@ -400,7 +400,15 @@ export type AnalyticsAction =
   | 'result'
   | 'pdf'
   | 'share'
-  | 'calc_done';
+  | 'calc_done'
+  | 'schema'
+  | 'survey_done'
+  | 'panel_view'
+  | 'calc_input'
+  | 'offer'
+  | 'client_agreed'
+  | 'quote_accepted'
+  | 'install_done';
 
 export type AnalyticsObject = {
   roomType?: string | null;

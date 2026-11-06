@@ -358,7 +358,7 @@ export type LocalAnalyticsEvent = {
   companyName: string;
   city?: string;
   tool: 'problemomer' | 'calculator' | 'cabinet';
-  action: 'login' | 'open' | 'result' | 'pdf' | 'share' | 'calc_done' | 'schema';
+  action: 'login' | 'open' | 'result' | 'pdf' | 'share' | 'calc_done' | 'schema' | 'survey_done' | 'panel_view' | 'calc_input' | 'offer' | 'client_agreed' | 'quote_accepted' | 'install_done';
   schema?: number;
   object?: Record<string, unknown> | null;
 };
@@ -497,6 +497,39 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
           object,
         });
       }
+    }
+  }
+
+  // 7 шагов воронки, раньше «нет данных».
+  for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 1) {
+    if (!includeDemoDay(day)) continue;
+    const isWeekend = day % 7 === 5 || day % 7 === 6;
+    if (isWeekend && day % 2 === 0) continue;
+    for (const org of orgs) {
+      const base = {
+        at: analyticsAt(day),
+        orgId: org.orgId,
+        companyName: org.companyName,
+        city: org.city,
+      };
+      const add = (id: string, tool: LocalAnalyticsEvent['tool'], action: string, user: { id: string; login: string; role: string }) => {
+        events.push({
+          id: `${id}_${org.orgId}_${day}`,
+          ...base,
+          userId: user.id,
+          login: user.login,
+          role: user.role as LocalAnalyticsEvent['role'],
+          tool,
+          action: action as LocalAnalyticsEvent['action'],
+        });
+      };
+      if (day % 2 === 0) add('ev_survey', 'problemomer', 'survey_done', org.measurer);
+      if (day % 3 === 0) add('ev_panel', 'problemomer', 'panel_view', org.sales);
+      if (day % 2 === 1) add('ev_calc_input', 'calculator', 'calc_input', org.sales);
+      if (day % 5 === 0) add('ev_offer', 'cabinet', 'offer', org.sales);
+      if (day % 6 === 0) add('ev_agreed', 'cabinet', 'client_agreed', org.sales);
+      if (day % 7 === 0) add('ev_quote_ok', 'cabinet', 'quote_accepted', org.sales);
+      if (day % 8 === 0) add('ev_install_done', 'cabinet', 'install_done', org.crew);
     }
   }
 

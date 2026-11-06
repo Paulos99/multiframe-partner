@@ -4,6 +4,8 @@ import {
   CLIENT_JOURNEY_STEPS,
   UNTRACKED_JOURNEY_IDS,
   computeClientJourney,
+  JOURNEY_GROUPS,
+  groupJourneySteps,
 } from '../../packages/shared/clientJourney.js';
 
 describe('clientJourney', () => {
@@ -51,7 +53,7 @@ describe('clientJourney', () => {
       from: '2026-11-01T00:00:00Z',
       to: '2026-11-30T23:59:59Z',
     });
-    assert.equal(steps.find((s) => s.id === 'survey_done').count, null);
+    assert.equal(steps.find((s) => s.id === 'survey_done').count, 0);
     assert.equal(steps.find((s) => s.id === 'pm_open').count, 1);
   });
 
@@ -79,6 +81,65 @@ describe('clientJourney', () => {
     assert.equal(year.steps.find((s) => s.id === 'pm_open').count, 2);
     assert.equal(month.steps.find((s) => s.id === 'calc_done').count, 1);
     assert.equal(year.steps.find((s) => s.id === 'calc_done').count, 2);
+  });
+
+
+  it('семь бывших «нет данных» шагов считаются по событиям', () => {
+    const events = [
+      { tool: 'problemomer', action: 'survey_done', at: '2026-11-02T12:00:00Z', sessionId: 's1' },
+      { tool: 'problemomer', action: 'panel_view', at: '2026-11-02T12:01:00Z', sessionId: 's1' },
+      { tool: 'calculator', action: 'calc_input', at: '2026-11-02T12:02:00Z', sessionId: 's1' },
+      { tool: 'cabinet', action: 'offer', at: '2026-11-02T12:03:00Z', sessionId: 's1' },
+      { tool: 'cabinet', action: 'client_agreed', at: '2026-11-02T12:04:00Z', sessionId: 's1' },
+      { tool: 'cabinet', action: 'quote_accepted', at: '2026-11-02T12:05:00Z', sessionId: 's1' },
+      { tool: 'cabinet', action: 'install_done', at: '2026-11-02T12:06:00Z', sessionId: 's1' },
+    ];
+    const { steps } = computeClientJourney({
+      rooms: [{ id: '1', status: 'draft', createdAt: '2026-11-01T10:00:00Z', updatedAt: '2026-11-01T10:00:00Z' }],
+      events,
+      from: '2026-11-01T00:00:00Z',
+      to: '2026-11-30T23:59:59Z',
+    });
+    for (const id of ['survey_done', 'panel_view', 'calc_input', 'offer', 'client_agreed', 'quote_accepted', 'install_done']) {
+      assert.equal(steps.find((s) => s.id === id).count, 1, id);
+    }
+  });
+
+  it('groupJourneySteps: 6 групп + отказ, % от предыдущей группы', () => {
+    assert.equal(JOURNEY_GROUPS.length, 6);
+    const { steps } = computeClientJourney({
+      rooms: [
+        { id: '1', status: 'closed', createdAt: '2026-11-01T10:00:00Z', updatedAt: '2026-11-05T10:00:00Z', refusal: null },
+        {
+          id: '2',
+          status: 'closed',
+          createdAt: '2026-11-01T10:00:00Z',
+          updatedAt: '2026-11-05T10:00:00Z',
+          refusal: { reasonKey: 'price_too_high', at: '2026-11-05T10:00:00Z' },
+        },
+      ],
+      events: [
+        { tool: 'problemomer', action: 'open', at: '2026-11-02T12:00:00Z', sessionId: 'a' },
+        { tool: 'problemomer', action: 'survey_done', at: '2026-11-02T12:01:00Z', sessionId: 'a' },
+        { tool: 'problemomer', action: 'result', at: '2026-11-02T12:02:00Z', sessionId: 'a' },
+        { tool: 'problemomer', action: 'panel_view', at: '2026-11-02T12:03:00Z', sessionId: 'a' },
+      ],
+      from: '2026-11-01T00:00:00Z',
+      to: '2026-11-30T23:59:59Z',
+    });
+    const { groups, refusal } = groupJourneySteps(steps);
+    assert.equal(groups.length, 6);
+    assert.equal(groups[0].label, 'Комната');
+    assert.equal(groups[1].label, 'Проблемомер');
+    assert.equal(groups[2].label, 'Калькулятор');
+    assert.equal(groups[3].label, 'Предложение');
+    assert.equal(groups[4].label, 'Замер и КП');
+    assert.equal(groups[5].label, 'Монтаж');
+    assert.ok(refusal);
+    assert.equal(refusal.id, 'refusal');
+    assert.equal(groups[0].count, 2);
+    assert.equal(groups[1].count, 1); // panel_view final
+    assert.equal(groups[1].fromPrevPct, '50%');
   });
 
 });
