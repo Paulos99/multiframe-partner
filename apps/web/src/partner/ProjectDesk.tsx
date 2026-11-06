@@ -1311,7 +1311,7 @@ function Documents({
   if (!docs.length) {
     return (
       <p className={styles.lead}>
-        Профиль проблемомера появится после сохранения профиля, смета калькулятора и коммерческое предложение — после расчёта комнаты.
+        Акустический профиль помещения появится после Проблемомера, смета и схема монтажа — после расчёта в калькуляторе.
       </p>
     );
   }
@@ -1327,7 +1327,7 @@ function Documents({
   return (
     <div className={styles.docs}>
       {docs.map(({ room, doc }) => {
-        const title = doc.kind === 'profile' ? 'Профиль проблемомера' : 'Смета калькулятора';
+        const title = documentLabel(doc.kind);
         const latest =
           docs.find((item) => item.room.id === room.id && documentDisplayKind(item.doc.kind) === documentDisplayKind(doc.kind))?.doc.id === doc.id;
         const stale = latest && isDocStale(doc, room);
@@ -1344,7 +1344,7 @@ function Documents({
                 {stale ? <span className={styles.staleBadge}>Устарел</span> : null}
               </strong>
               <span className={styles.docMeta} data-doc-meta>
-                {doc.kind === 'profile' ? documentLabel(doc.kind) : 'Коммерческое предложение'}
+                {doc.kind === 'profile' ? 'Проблемомер' : 'Калькулятор'}
                 {' · '}
                 {roomTitle(room)}
                 {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}

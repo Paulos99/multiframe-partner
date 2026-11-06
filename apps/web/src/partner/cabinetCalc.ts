@@ -22,7 +22,7 @@ export type CabinetCalcMessage = {
   specPdfBase64?: string;
 };
 
-/** «Козлов Д. — смета — 2026-10-17.pdf», «Козлов Д. — профиль — 2026-10-17.pdf» */
+/** «Козлов Д. — смета и схема монтажа — 2026-10-17.pdf», «Козлов Д. — акустический профиль помещения — 2026-10-17.pdf» */
 export function readablePdfName(
   clientName: string | null | undefined,
   kind: 'estimate' | 'profile',
@@ -34,7 +34,7 @@ export function readablePdfName(
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 80) || 'Расчёт';
-  const label = kind === 'profile' ? 'профиль' : 'смета';
+  const label = kind === 'profile' ? 'акустический профиль помещения' : 'смета и схема монтажа';
   const day = at && /^\d{4}-\d{2}-\d{2}/.test(at) ? at.slice(0, 10) : new Date().toISOString().slice(0, 10);
   return `${who} — ${label} — ${day}.pdf`;
 }

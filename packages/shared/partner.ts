@@ -231,8 +231,8 @@ export type JobObjectEstimate = {
 export type JobDocumentKind = 'estimate' | 'profile' | 'spec';
 
 export const JOB_DOCUMENT_LABELS: Record<'estimate' | 'profile', string> = {
-  estimate: 'Смета',
-  profile: 'Профиль',
+  estimate: 'Смета и схема монтажа',
+  profile: 'Акустический профиль помещения',
 };
 
 /** Как показывать запись: старая spec — это смета. */
@@ -279,7 +279,7 @@ export function visibleDocuments(docs: JobObjectDocument[] | null | undefined): 
   });
 }
 
-/** «Смета · Профиль» — какие документы есть у объекта. Пусто, если документов нет. */
+/** «Смета и схема монтажа · Акустический профиль помещения» — какие документы есть у объекта. Пусто, если документов нет. */
 export function documentKindsSummary(docs: JobObjectDocument[] | null | undefined): string {
   const kinds = new Set(visibleDocuments(docs).map((d) => documentDisplayKind(d.kind)));
   return (['estimate', 'profile'] as const)
