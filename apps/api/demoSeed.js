@@ -7,6 +7,7 @@
 import bcrypt from 'bcryptjs';
 import { boostCapitalEvents, boostCapitalStaff } from '../../packages/shared/demoAnalyticsBoost.js';
 import { demoHistoryReady, supplementDemoHistory } from '../../packages/shared/demoHistory.js';
+import { applyAutoArchive } from '../../packages/shared/autoArchive.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { DEMO_PERSONAL_NAMES } from '../../packages/shared/personName.js';
 import { STP_MANAGER_ROLE, STP_ORG_ID, STP_ORG_NAME } from '../../packages/shared/rolePermissions.js';
@@ -443,6 +444,8 @@ export function buildDemoPlatform(opts = {}) {
   };
   const seeded = opts.boostCapital === false ? platform : sealDisabledDemoUsers(boostCapitalStaff(platform));
   groupOrphanRooms(seeded);
+  if (!Array.isArray(seeded.projects)) seeded.projects = [];
+  applyAutoArchive(seeded.projects, seeded.objects || [], Date.now());
   return seeded;
 }
 
