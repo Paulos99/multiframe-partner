@@ -35,6 +35,12 @@
   align-items: stretch;
 }
 
+/* В тёмной теме общий градиент .shellWide сильнее по специфичности — явно оставляем прозрачный фон у вложенной оболочки. */
+:global(body.theme-dark) .framed.shell,
+:global(body.theme-dark) .framed.shellWide {
+  background: transparent;
+}
+
 .cabinetGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1610,11 +1616,16 @@
 }
 
 :global(body.theme-dark) .shell,
-:global(body.theme-dark) .shellWide,
-:global(body.theme-dark) .toolHost {
+:global(body.theme-dark) .shellWide {
   background:
-    radial-gradient(800px 380px at 0% 0%, color-mix(in srgb, var(--cab-accent) 28%, transparent), transparent 58%),
+    radial-gradient(900px 420px at 100% -8%, color-mix(in srgb, var(--cab-accent) 14%, transparent), transparent 60%),
     var(--cab-page);
+  color: var(--cab-ink);
+}
+
+/* Полноэкранные инструменты: ровный фон страницы без пятна, которое режется overflow. */
+:global(body.theme-dark) .toolHost {
+  background: var(--cab-page);
   color: var(--cab-ink);
 }
 
@@ -3148,6 +3159,8 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow: visible;
+  background: transparent;
 }
 
 .todayHead {
@@ -3221,6 +3234,59 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.todayStageList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.todayStageItem {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--cab-border);
+}
+
+.todayStageItem:last-child {
+  border-bottom: 0;
+}
+
+.todayStage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.todayStage:focus-visible {
+  outline: 2px solid var(--cab-accent);
+  outline-offset: 2px;
+}
+
+.todayStageCount {
+  color: var(--cab-muted);
+  font-size: 0.85rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.todayStageItem .todayList {
+  padding: 0 0 8px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--cab-accent) 35%, transparent);
+  margin: 0 0 8px;
 }
 
 .todayTask {

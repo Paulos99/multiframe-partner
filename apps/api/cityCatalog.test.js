@@ -8,10 +8,13 @@ import {
   searchCities,
 } from '../../packages/shared/cityCatalog.js';
 import ruCitiesTsv from '../../packages/shared/data/ru-cities.js';
+import cisCitiesTsv from '../../packages/shared/data/cis-cities.js';
 
-const tsvFile = readFileSync(new URL('../../packages/shared/data/ru-cities.tsv', import.meta.url), 'utf8');
-assert.equal(ruCitiesTsv.replace(/\r\n/g, '\n'), tsvFile.replace(/\r\n/g, '\n'));
-ensureIndexFromTsv(ruCitiesTsv);
+const ruFile = readFileSync(new URL('../../packages/shared/data/ru-cities.tsv', import.meta.url), 'utf8');
+const cisFile = readFileSync(new URL('../../packages/shared/data/cis-cities.tsv', import.meta.url), 'utf8');
+assert.equal(ruCitiesTsv.replace(/\r\n/g, '\n'), ruFile.replace(/\r\n/g, '\n'));
+assert.equal(cisCitiesTsv.replace(/\r\n/g, '\n'), cisFile.replace(/\r\n/g, '\n'));
+ensureIndexFromTsv(`${ruCitiesTsv}\n${cisCitiesTsv}`);
 
 test('Шуя находится с регионом', () => {
   const hits = searchCities('Шуя');
@@ -21,12 +24,26 @@ test('Шуя находится с регионом', () => {
   assert.equal(resolveCity('Шуя — Ивановская область').city, 'Шуя — Ивановская область');
 });
 
+test('города Беларуси, Казахстана и Узбекистана находятся', () => {
+  assert.equal(resolveCity('Минск').city, 'Минск — Минск');
+  assert.equal(resolveCity('Алматы').city, 'Алматы — Алматы');
+  assert.equal(resolveCity('Ташкент').city, 'Ташкент — Ташкент');
+  assert.ok(searchCities('Минск').some((row) => row.name === 'Минск'));
+  assert.ok(searchCities('Алматы').some((row) => row.name === 'Алматы'));
+  assert.ok(searchCities('Ташкент').some((row) => row.name === 'Ташкент'));
+});
+
 test('произвольный текст не принимается', () => {
   const bad = resolveCity('ГГ');
   assert.equal(bad.ok, false);
+  assert.equal(bad.message, 'Такого города нет');
   assert.equal(isKnownCity('ГГ'), false);
   assert.equal(isKnownCity(''), true);
   assert.equal(isKnownCity('Москва'), true);
+  assert.equal(isKnownCity('1'), false);
+  const one = resolveCity('1');
+  assert.equal(one.ok, false);
+  assert.equal(one.message, 'Такого города нет');
 });
 
 test('одноимённые города требуют регион', () => {

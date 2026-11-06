@@ -138,7 +138,7 @@ export function CityField({
               </li>
             ))
           ) : (
-            <li className={styles.comboEmpty}>Нет в справочнике городов РФ</li>
+            <li className={styles.comboEmpty}>Такого города нет</li>
           )}
         </ul>
       ) : null}
@@ -148,7 +148,7 @@ export function CityField({
         </span>
       ) : (
         <span className={styles.hint}>
-          Город и регион из справочника РФ · Википедия, CC BY-SA 4.0
+          Город из справочника РФ, Беларуси, Казахстана и Узбекистана · Википедия, CC BY-SA 4.0
         </span>
       )}
     </div>

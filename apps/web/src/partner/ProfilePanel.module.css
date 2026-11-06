@@ -10,10 +10,10 @@
 .nameHint { margin: 0; color: var(--cab-muted); font-size: .9rem; line-height: 1.4; }
 .fields form { display: grid; gap: 12px; border-top: 1px solid var(--cab-border); padding-top: 16px; }
 .fields label { display: grid; gap: 7px; font-size: .9rem; min-width: 0; }
-.fields input,
-.confirm input { box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid var(--cab-border); border-radius: 10px; padding: 10px; background: var(--cab-subtle); color: inherit; font: inherit; font-size: max(16px, 1rem); }
-.fields input:focus-visible,
-.confirm input:focus-visible { outline: 2px solid var(--cab-accent); outline-offset: 1px; }
+.fields input:not([type='file']),
+.confirm input:not([type='file']) { box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid var(--cab-border); border-radius: 10px; padding: 10px; background: var(--cab-subtle); color: inherit; font: inherit; font-size: max(16px, 1rem); }
+.fields input:not([type='file']):focus-visible,
+.confirm input:not([type='file']):focus-visible { outline: 2px solid var(--cab-accent); outline-offset: 1px; }
 .close,
 .action { min-height: 44px; min-width: 44px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--cab-border); color: var(--cab-accent-text); background: var(--cab-accent-soft); font: inherit; cursor: pointer; }
 .close { padding: 0; font-size: 1.4rem; line-height: 1; }
@@ -28,18 +28,31 @@
 .avatar img,
 .avatar > span { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; background: var(--cab-subtle); display: grid; place-items: center; font-size: 1.5rem; font-weight: 750; color: var(--cab-accent-text); }
 .avatar[data-drag='true'] { box-shadow: 0 0 0 3px var(--cab-accent), 0 0 0 7px var(--cab-accent-soft); }
-.photoSide { display: grid; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.photoSide { position: relative; display: grid; gap: 8px; min-width: 0; flex: 1 1 auto; }
 .fileRow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
 .fileRow > button { min-height: 44px; }
 .fileName { min-width: 0; flex: 1 1 120px; color: var(--cab-muted); font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .photoSide small { color: var(--cab-muted); line-height: 1.4; }
 /* Нативное поле файла скрыто — открывается кнопкой «Загрузить фото». */
-.fileInput { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0; opacity: 0; }
+.fileInput {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
 
 .error { margin: 0; color: var(--cab-danger); font-size: .9rem; }
 
 /* Окно подтверждения текущим паролем. */
-.confirm { width: min(400px, calc(100vw - 32px)); box-sizing: border-box; border: 1px solid var(--cab-border); border-radius: 18px; background: var(--cab-card); color: var(--cab-ink); padding: 22px; box-shadow: var(--cab-shadow-md); }
+.confirm { width: min(400px, calc(100% - 32px)); max-width: min(400px, calc(100vw - 32px)); box-sizing: border-box; border: 1px solid var(--cab-border); border-radius: 18px; background: var(--cab-card); color: var(--cab-ink); padding: 22px; box-shadow: var(--cab-shadow-md); }
 .confirm::backdrop { background: rgba(10, 14, 18, .45); }
 .confirmForm { display: grid; gap: 14px; }
 .confirmForm h3 { margin: 0; font-size: 1.1rem; }
@@ -63,8 +76,9 @@
 /* Телефон: профиль — полноэкранный лист с учётом safe-area. */
 @media (max-width: 640px) {
   .dialog {
-    width: 100vw;
-    max-width: 100vw;
+    /* 100% от вьюпорта диалога, не 100vw: иначе появляется лишняя горизонтальная полоса. */
+    width: 100%;
+    max-width: 100%;
     height: 100dvh;
     max-height: 100dvh;
     margin: 0;

@@ -1088,7 +1088,13 @@ export function upsertLocalProject(input: ProjectInput, actor: SessionUser): Pro
     clientName: String(input.clientName ?? existing?.clientName ?? '').trim(),
     clientPhone,
     address: String(input.address ?? existing?.address ?? '').trim(),
-    city: String(input.city ?? existing?.city ?? '').trim(),
+    city: (() => {
+      const raw = String(input.city ?? existing?.city ?? '').trim();
+      // Пустой город допустим; уже сохранённое значение не ломаем.
+      const resolved = resolveCity(raw, existing?.city ?? null);
+      if (!resolved.ok) throw new Error(resolved.message);
+      return resolved.city;
+    })(),
     description: String(input.description ?? existing?.description ?? '').trim().slice(0, 4000),
     ...(status ? { status } : {}),
     ...(refusal ? { refusal } : {}),
