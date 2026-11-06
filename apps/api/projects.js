@@ -20,6 +20,7 @@ import { cleanRefusal } from '../../packages/shared/refusal.js';
 import { PROJECT_LIMITS } from '../../packages/shared/schemas.js';
 import { parseBody, schemas } from './validation.js';
 import { resolveCity } from '../../packages/shared/cityCatalog.js';
+import { applyAutoArchive, archivePatchResult } from '../../packages/shared/autoArchive.js';
 
 const NAME_MAX = PROJECT_LIMITS.name;
 const TEXT_MAX = 250;
@@ -160,10 +161,9 @@ function refusalField(body, existing, status, actor, now) {
   return cleaned.value || null;
 }
 
-function archiveField(body, existing) {
-  if (!Object.prototype.hasOwnProperty.call(body, 'archived')) return existing?.archivedAt || null;
-  if (body.archived) return existing?.archivedAt || new Date().toISOString();
-  return null;
+function archiveFields(body, existing, nowIso) {
+  const patch = Object.prototype.hasOwnProperty.call(body, 'archived') ? Boolean(body.archived) : undefined;
+  return archivePatchResult(patch, existing, nowIso);
 }
 
 function clientProjectId(raw) {
@@ -181,6 +181,7 @@ function writeProject(body, existing, actor, uid, platform) {
   const status = statusField(source, existing);
   const clientPhone = phoneField(source, existing, status, platform);
   const refusal = refusalField(source, existing, status, actor, now);
+  const archive = archiveFields(source, existing, now);
   return {
     id: existing?.id || clientProjectId(source.id) || uid('prj'),
     orgId,
@@ -202,7 +203,8 @@ function writeProject(body, existing, actor, uid, platform) {
     crewUserId: assignee(source, existing, 'crewUserId', platform, orgId, ['crew'], 'Бригада'),
     startsAt: dateField(source, existing, 'startsAt'),
     dueAt: dateField(source, existing, 'dueAt'),
-    archivedAt: archiveField(source, existing),
+    archivedAt: archive.archivedAt,
+    unarchiveHold: archive.unarchiveHold || undefined,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     createdBy: existing?.createdBy || actor.id,
@@ -293,6 +295,11 @@ export async function handleProjects(ctx) {
   const rows = projectRows(platform);
 
   if (method === 'GET' && listRoute) {
+    if (!Array.isArray(platform.projects)) platform.projects = [];
+    const archived = applyAutoArchive(platform.projects, platform.objects || [], Date.now());
+    if (archived > 0 && typeof ctx.savePlatform === 'function') {
+      await ctx.savePlatform(platform);
+    }
     const build = () => {
       // Комнаты группируются один раз: раньше для каждого проекта перебирались все комнаты сети.
       const roomsByProject = new Map();
@@ -302,7 +309,7 @@ export async function handleProjects(ctx) {
         if (list) list.push(obj);
         else roomsByProject.set(obj.projectId, [obj]);
       }
-      return rows
+      return projectRows(platform)
         .filter((project) => projectVisible(user, project, platform, ctx.objectVisibleTo, roomsByProject))
         .map((project) => publicProject(project, user, platform, roomsByProject));
     };
