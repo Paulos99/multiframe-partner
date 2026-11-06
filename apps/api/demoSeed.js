@@ -174,6 +174,7 @@ function makeObject(spec) {
     roomType,
     houseType,
     objectStage,
+    refusalKey = null,
   } = spec;
   const createdAt = daysAgo(dayOffset, 9, 30);
   const quoteAt = daysAgo(Math.max(0, dayOffset - 3), 14, 0);
@@ -198,6 +199,10 @@ function makeObject(spec) {
     history.unshift(historyStamp(moveAuthor, closedAt, 'status', 'install→closed'));
     updatedAt = closedAt;
   }
+  const refusal =
+    status === 'closed' && refusalKey
+      ? { reasonKey: refusalKey, comment: '', at: closedAt, by: moveAuthor }
+      : null;
   return {
     id,
     orgId,
@@ -222,12 +227,13 @@ function makeObject(spec) {
     estimate: est,
     clientSummary: `${clientName} · ${areaM2} м² · ${address}`,
     history,
+    refusal,
   };
 }
 
 const OBJECT_SPECS_A = [
-  { id: 'obj_a01', status: 'closed', clientName: 'Иванова А.', phone: '+7 495 111-01-01', address: 'ул. Арбат, 12', area: 18, day: 28, rt: 0, ht: 0, st: 2 },
-  { id: 'obj_a02', status: 'closed', clientName: 'Петров С.', phone: '+7 495 111-01-02', address: 'Ленинский пр., 45', area: 22, day: 25, rt: 1, ht: 1, st: 1 },
+  { id: 'obj_a01', status: 'closed', clientName: 'Иванова А.', phone: '+7 495 111-01-01', address: 'ул. Арбат, 12', area: 18, day: 3, rt: 0, ht: 0, st: 2, refusalKey: 'price_too_high' },
+  { id: 'obj_a02', status: 'closed', clientName: 'Петров С.', phone: '+7 495 111-01-02', address: 'Ленинский пр., 45', area: 22, day: 2, rt: 1, ht: 1, st: 1 },
   { id: 'obj_a03', status: 'install', clientName: 'Сидорова М.', phone: '+7 495 111-01-03', address: 'ул. Тверская, 8', area: 16, day: 18, rt: 2, ht: 2, st: 0 },
   { id: 'obj_a04', status: 'install', clientName: 'Козлов Д.', phone: '+7 495 111-01-04', address: 'пр. Мира, 70', area: 28, day: 15, rt: 0, ht: 3, st: 1 },
   { id: 'obj_a05', status: 'quote_sent', clientName: 'Вася', phone: '+7 495 111-01-05', address: 'ул. Смирнова, 74', area: 13, day: 8, rt: 1, ht: 1, st: 2 },
@@ -240,8 +246,8 @@ const OBJECT_SPECS_A = [
 ];
 
 const OBJECT_SPECS_B = [
-  { id: 'obj_b01', status: 'closed', clientName: 'Смирнов В.', phone: '+7 812 222-01-01', address: 'Невский пр., 28', area: 21, day: 27, rt: 0, ht: 2, st: 1 },
-  { id: 'obj_b02', status: 'closed', clientName: 'Кузнецова Л.', phone: '+7 812 222-01-02', address: 'Литейный пр., 14', area: 14, day: 22, rt: 1, ht: 0, st: 2 },
+  { id: 'obj_b01', status: 'closed', clientName: 'Смирнов В.', phone: '+7 812 222-01-01', address: 'Невский пр., 28', area: 21, day: 4, rt: 0, ht: 2, st: 1, refusalKey: 'not_needed' },
+  { id: 'obj_b02', status: 'closed', clientName: 'Кузнецова Л.', phone: '+7 812 222-01-02', address: 'Литейный пр., 14', area: 14, day: 1, rt: 1, ht: 0, st: 2 },
   { id: 'obj_b03', status: 'install', clientName: 'Орлов К.', phone: '+7 812 222-01-03', address: 'ул. Рубинштейна, 9', area: 26, day: 16, rt: 0, ht: 3, st: 0 },
   { id: 'obj_b04', status: 'install', clientName: 'Павлова Т.', phone: '+7 812 222-01-04', address: 'Васильевский остр., 7-я линия, 22', area: 18, day: 12, rt: 2, ht: 1, st: 1 },
   { id: 'obj_b05', status: 'quote_sent', clientName: 'Волков Р.', phone: '+7 812 222-01-05', address: 'ул. Садовая, 40', area: 23, day: 9, rt: 4, ht: 2, st: 2 },
@@ -274,6 +280,7 @@ function buildObjects() {
       roomType: pick(ROOM_TYPES, spec.rt),
       houseType: pick(HOUSE_TYPES, spec.ht),
       objectStage: pick(STAGES, spec.st),
+      refusalKey: spec.refusalKey || null,
     });
   };
 

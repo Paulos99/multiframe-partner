@@ -103,6 +103,29 @@ base.objects.push({
   ],
 });
 base.objects.push({...base.objects[0], id:'ui_measured', roomName:'Кухня', status:'measured', stageOrder:100});
+// Закрытые комнаты для плиток «Отказы, %» / «Доведено до монтажа, %» в аналитике.
+base.objects.push({
+  ...base.objects[0],
+  id: 'ui_closed_done',
+  roomName: 'Кабинет',
+  status: 'closed',
+  updatedAt: '2026-11-03T16:00:00Z',
+  createdAt: '2026-10-17T09:30:00Z',
+  room: { areaM2: 18, classBefore: 'V', classAfter: 'B', answers: { roomType: 'office' } },
+  estimate: { panels: 12, totalCost: 100000 },
+  refusal: null,
+});
+base.objects.push({
+  ...base.objects[0],
+  id: 'ui_closed_refused',
+  roomName: 'Детская',
+  status: 'closed',
+  updatedAt: '2026-10-22T16:00:00Z',
+  createdAt: '2026-10-02T09:30:00Z',
+  room: { areaM2: 14 },
+  refusal: { reasonKey: 'price_too_high', comment: '', at: '2026-10-22T16:00:00Z', by: 'ui_owner' },
+});
+
 writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(base));
 const { setObjectStoreTransportForTests } =
   await import('../../api/objectStore.js');

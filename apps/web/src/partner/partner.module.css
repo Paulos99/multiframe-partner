@@ -973,6 +973,13 @@
   color: var(--cab-muted);
 }
 
+.funnelCount {
+  font-weight: 600;
+  color: var(--cab-ink);
+  opacity: 0.85;
+}
+
+
 .seriesWrap {
   display: flex;
   flex-direction: column;
@@ -3601,4 +3608,43 @@ div.drillPerson {
   background: var(--cab-card);
   color: inherit;
   text-overflow: ellipsis;
+}
+
+
+.staffNameList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.staffNameBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 14px 12px;
+  border: 1px solid var(--cab-border);
+  border-radius: 12px;
+  background: var(--cab-card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.staffNameBtn:hover,
+.staffNameBtn:focus-visible {
+  border-color: color-mix(in srgb, var(--cab-accent) 45%, var(--cab-border));
+  outline: none;
+}
+
+.staffPersonal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }

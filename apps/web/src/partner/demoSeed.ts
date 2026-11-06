@@ -182,11 +182,13 @@ type Spec = {
   rt: number;
   ht: number;
   st: number;
+  /** Закрыта с отказом — для плиток «Отказы, %» в аналитике. */
+  refusalKey?: string;
 };
 
 const SPECS_A: Spec[] = [
-  { id: 'obj_a01', status: 'closed', clientName: 'Иванова А.', phone: '+7 495 111-01-01', address: 'ул. Арбат, 12', area: 18, day: 28, rt: 0, ht: 0, st: 2 },
-  { id: 'obj_a02', status: 'closed', clientName: 'Петров С.', phone: '+7 495 111-01-02', address: 'Ленинский пр., 45', area: 22, day: 25, rt: 1, ht: 1, st: 1 },
+  { id: 'obj_a01', status: 'closed', clientName: 'Иванова А.', phone: '+7 495 111-01-01', address: 'ул. Арбат, 12', area: 18, day: 3, rt: 0, ht: 0, st: 2, refusalKey: 'price_too_high' },
+  { id: 'obj_a02', status: 'closed', clientName: 'Петров С.', phone: '+7 495 111-01-02', address: 'Ленинский пр., 45', area: 22, day: 2, rt: 1, ht: 1, st: 1 },
   { id: 'obj_a03', status: 'install', clientName: 'Сидорова М.', phone: '+7 495 111-01-03', address: 'ул. Тверская, 8', area: 16, day: 18, rt: 2, ht: 2, st: 0 },
   { id: 'obj_a04', status: 'install', clientName: 'Козлов Д.', phone: '+7 495 111-01-04', address: 'пр. Мира, 70', area: 28, day: 15, rt: 0, ht: 3, st: 1 },
   { id: 'obj_a05', status: 'quote_sent', clientName: 'Вася', phone: '+7 495 111-01-05', address: 'ул. Смирнова, 74', area: 13, day: 8, rt: 1, ht: 1, st: 2 },
@@ -228,6 +230,10 @@ function makeObject(
   const roomType = pick(ROOM_TYPES, spec.rt);
   const houseType = pick(HOUSE_TYPES, spec.ht);
   const objectStage = pick(STAGES, spec.st);
+  const refusal =
+    spec.status === 'closed' && spec.refusalKey
+      ? { reasonKey: spec.refusalKey, comment: '', at: closedAt, by: createdBy }
+      : null;
   return {
     id: spec.id,
     orgId,
@@ -258,6 +264,7 @@ function makeObject(
     estimate: estimate(spec.area),
     clientSummary: `${spec.clientName} · ${spec.area} м² · ${spec.address}`,
     history,
+    refusal,
   };
 }
 

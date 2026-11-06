@@ -3,7 +3,6 @@ import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type
 import type {
   AnalyticsBreakdownItem,
   AnalyticsDashboard as DashData,
-  AnalyticsFunnel,
   AnalyticsKpi,
   AnalyticsSeriesPoint,
 } from '../../../../packages/shared/partner';
@@ -16,7 +15,6 @@ import {
   type RoomType,
 } from '../state/types';
 import { comfortTransitionLabel, comfortTransitionRank, mergeComfortTransitions } from '../state/simulation';
-import { funnelStopCounts, funnelStopPercents } from '../../../../packages/shared/funnel';
 import type { DrillPeriod } from '../../../../packages/shared/staffDrill.js';
 import { goAnalytics, OVERVIEW_LOCATION, useAnalyticsRoute } from './analyticsRoute';
 import {
@@ -49,11 +47,13 @@ import { PeriodCalendar } from './PeriodCalendar';
 import { PhotoCases } from './photos/PhotoCases';
 import { usePartner } from './PartnerContext';
 import { StaffDrillDrawer } from './StaffDrillDrawer';
-import { refusalStats } from '../../../../packages/shared/refusal.js';
+import { closedOutcomeRates, refusalStats } from '../../../../packages/shared/refusal.js';
+import { computeClientJourney } from '../../../../packages/shared/clientJourney';
 import { TrainingCompanyPage, TrainingTab, TrainingUserPage } from './TrainingAnalytics';
-import { normalizeRole } from '../../../../packages/shared/partner';
+import { ROLE_LABELS, normalizeRole } from '../../../../packages/shared/partner';
+import { JourneyFunnel, KpiPctCard } from './JourneyFunnel';
+import { StaffPersonalAnalytics } from './StaffPersonalAnalytics';
 import styles from './partner.module.css';
-import { FunnelIcon } from '../icons';
 
 const HOUSE_LABELS = Object.fromEntries(
   HOUSE_TYPE_OPTIONS.map((o) => [o.id, o.label]),
@@ -233,51 +233,6 @@ function KpiCard({
   );
 }
 
-function FunnelBlock({
-  title,
-  steps,
-}: {
-  title: string;
-  steps: Array<{ label: string; value: number }>;
-}) {
-  const reached = steps.map((step) => step.value);
-  const stopped = funnelStopCounts(reached);
-  const percents = funnelStopPercents(reached);
-  const opened = stopped.reduce((sum, value) => sum + value, 0);
-  const ref = useRef<HTMLDivElement>(null);
-  const funnelKey = stopped.join(',');
-  useStaggerIn(ref, 'li', funnelKey, { y: 8, stagger: 0.06, duration: 0.4 });
-  useGrow(ref, `.${styles.funnelBarFill}`, 'x', funnelKey, { stagger: 0.06, duration: 0.7, delay: 0.1, max: 0.5 });
-  return (
-    <div className={styles.funnelBlock} ref={ref}>
-      <h4 className={styles.funnelTitle}>
-        <FunnelIcon size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
-        {title}
-        <span
-          className={styles.funnelLabel}
-          style={{ display: 'block', marginTop: 4, fontSize: '0.75rem', fontWeight: 650 }}
-        >
-          Открыли: {opened} · где остановились, в сумме 100%
-        </span>
-      </h4>
-      <ol className={styles.funnelSteps}>
-        {steps.map((step, index) => (
-          <li key={step.label}>
-            <span className={styles.funnelLabel}>{step.label}</span>
-            <strong title="Остановились на этом этапе">
-              <AnimatedNumber value={stopped[index]} duration={0.7} />
-            </strong>
-            <span className={styles.funnelPct}>{percents[index]}</span>
-            <span className={styles.funnelBar} aria-hidden="true">
-              <span className={styles.funnelBarFill} style={{ width: `${opened > 0 ? (stopped[index] / opened) * 100 : 0}%` }} />
-            </span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
 type SliceRow = { label: string; total: number };
 
 function monthsFromSeries(series: AnalyticsSeriesPoint[]): SliceRow[] {
@@ -294,6 +249,7 @@ function monthsFromSeries(series: AnalyticsSeriesPoint[]): SliceRow[] {
 }
 
 function MonthSlice({ rows }: { rows: SliceRow[] }) {
+
   const max = Math.max(1, ...rows.map((r) => r.total));
   const ref = useRef<HTMLUListElement>(null);
   useGrow(ref, `.${styles.sliceFill}`, 'x', rows.map((r) => r.total).join(','));
@@ -367,22 +323,6 @@ function SeriesChart({ series, title = 'Динамика по дням' }: { ser
   );
 }
 
-function funnelStepsPm(f: AnalyticsFunnel) {
-  return [
-    { label: 'Только открыл', value: f.problemomer.open },
-    { label: 'Посчитал, без PDF', value: f.problemomer.result },
-    { label: 'Скачал PDF, не поделился', value: f.problemomer.pdf },
-    { label: 'Поделился', value: f.problemomer.share },
-  ];
-}
-
-function funnelStepsCalc(f: AnalyticsFunnel) {
-  return [
-    { label: 'Только открыл', value: f.calculator.open },
-    { label: 'Посчитал, без PDF', value: f.calculator.calcDone },
-    { label: 'Скачал PDF', value: f.calculator.pdf },
-  ];
-}
 
 function BreakdownList({
   title,
@@ -499,6 +439,7 @@ export function AnalyticsDashboard({
   const [panelData, setPanelData] = useState<{ period: DrillPeriod; dash: DashData } | null>(null);
   const [model, setModel] = useState<AnalyticsTileModel | null>(null);
   const [loading, setLoading] = useState(true);
+  const [focusStaffId, setFocusStaffId] = useState<string | null>(null);
   const data = model?.dash ?? null;
 
   const partnersList = useMemo(
@@ -528,6 +469,12 @@ export function AnalyticsDashboard({
   useEffect(() => {
     if (mode !== 'admin' && section === 'photos') setSection('overview');
   }, [mode, section]);
+  useEffect(() => {
+    if (section !== 'team') setFocusStaffId(null);
+  }, [section]);
+  useEffect(() => {
+    if (mode !== 'admin' && section === 'objects') setSection('overview');
+  }, [mode, section]);
   const sectionTabs: Array<{ id: AnalyticsTab; label: string }> = [
     { id: 'overview', label: 'Сводка' },
     { id: 'portrait', label: 'Комнаты' },
@@ -535,7 +482,8 @@ export function AnalyticsDashboard({
     { id: 'team', label: mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники' },
     ...(canTraining ? [{ id: 'training' as const, label: 'Обучение' }] : []),
     ...(mode === 'admin' ? [{ id: 'photos' as const, label: 'Фото отчёты' }] : []),
-    { id: 'objects', label: 'Журнал' },
+    // «Журнал» только у админа StP; в «Аналитике команды» вкладку убрали.
+    ...(mode === 'admin' ? [{ id: 'objects' as const, label: 'Журнал' }] : []),
   ];
   function openSection(id: AnalyticsTab) {
     if (id === 'photos') {
@@ -686,6 +634,32 @@ export function AnalyticsDashboard({
     }));
     return { total: stats.total, items };
   })();
+  const outcomeRates = closedOutcomeRates((model?.objects || []) as never, rangeFromYmd(fromYmd, toYmd));
+  const companyJourney = computeClientJourney({
+    rooms: (model?.objects || []) as never,
+    events: (model?.events || []) as never,
+    users: (model?.users || []) as never,
+    from: rangeFromYmd(fromYmd, toYmd).from,
+    to: rangeFromYmd(fromYmd, toYmd).to,
+  });
+  const staffPeople = (() => {
+    const list = (api.partnerListStaff() || []).map((member) => ({
+      id: member.id,
+      displayName: member.displayName,
+      login: member.login,
+      role: normalizeRole(member.role),
+    }));
+    // Владелец тоже в списке, если его нет среди staff.
+    if (mode === 'partner' && user.role === 'owner' && !list.some((p) => p.id === user.id)) {
+      list.unshift({
+        id: user.id,
+        displayName: user.displayName,
+        login: user.login,
+        role: 'owner' as const,
+      });
+    }
+    return list;
+  })();
   const tilePanels = dash.kpi.panels;
   const tileArea = dash.kpi.areaM2;
   const showDelta = Boolean(dash.kpiPrev);
@@ -752,11 +726,17 @@ export function AnalyticsDashboard({
             const bounds = panelPeriod ? presetRange(panelPeriod) : { fromYmd, toYmd };
             return (
               <>
-                <h3 className={styles.dashSub}>Воронка</h3>
-                <div className={styles.funnelGrid}>
-                  <FunnelBlock title="Проблемомер" steps={funnelStepsPm(view.funnel)} />
-                  <FunnelBlock title="Калькулятор" steps={funnelStepsCalc(view.funnel)} />
-                </div>
+                <h3 className={styles.dashSub}>Путь клиента</h3>
+                <JourneyFunnel
+                  title="Общая воронка"
+                  steps={computeClientJourney({
+                    rooms: (model?.objects || []) as never,
+                    events: (model?.events || []) as never,
+                    users: (model?.users || []) as never,
+                    from: rangeFromYmd(bounds.fromYmd, bounds.toYmd).from,
+                    to: rangeFromYmd(bounds.fromYmd, bounds.toYmd).to,
+                  }).steps}
+                />
                 <h3 className={styles.dashSub}>{chartTitle}</h3>
                 {chartSeries.length ? (
                   <SeriesChart series={chartSeries} title={chartTitle} />
@@ -824,7 +804,16 @@ export function AnalyticsDashboard({
             ))}
           </KpiRow>
           )}
-          <p className={styles.hint}>Нажмите показатель — откроются воронка и динамика.</p>
+          <div className={styles.kpiRow} data-outcome-kpis>
+            <KpiPctCard label="Отказы, %" pct={outcomeRates.refusedPct} />
+            <KpiPctCard label="Доведено до монтажа, %" pct={outcomeRates.completedPct} />
+          </div>
+          <JourneyFunnel
+            title="Путь клиента"
+            steps={companyJourney.steps}
+            hint="Шаги 1–19 — доля от предыдущего; «Отказ» — доля от всех закрытых. «нет данных» — шаг пока не пишется в системе."
+          />
+          <p className={styles.hint}>Нажмите показатель выше — откроются динамика и детализация.</p>
         </DashSection>
       ) : null}
 
@@ -922,23 +911,52 @@ export function AnalyticsDashboard({
 
       {section === 'team' ? (
         <DashSection>
-          <div className={styles.table}>
-            {dash.executors.map((ex) => (
-              <div key={ex.userId || ex.login} className={styles.tableRow}>
-                <div>
-                  <strong>{ex.displayName}</strong>
-                  <div className={styles.hint}>
-                    {ex.login} · входы {ex.logins} · расчёты PM {ex.problemomer} · расчёты кальк.{' '}
-                    {ex.calculator} · PDF {ex.pdf} · объекты {ex.results}
-                  </div>
-                </div>
-                <span className={styles.hint}>{formatWhen(ex.lastActiveAt)}</span>
-              </div>
-            ))}
-            {!dash.executors.length ? (
-              <p className={styles.lead}>Пока нет активности сотрудников</p>
-            ) : null}
-          </div>
+          {focusStaffId ? (
+            (() => {
+              const person = staffPeople.find((row) => row.id === focusStaffId);
+              if (!person) {
+                return (
+                  <p className={styles.lead}>
+                    Сотрудник не найден.{' '}
+                    <button type="button" className={styles.ghost} onClick={() => setFocusStaffId(null)}>
+                      К списку
+                    </button>
+                  </p>
+                );
+              }
+              return (
+                <StaffPersonalAnalytics
+                  person={person}
+                  rooms={(model?.objects || []) as never}
+                  events={(model?.events || []) as never}
+                  projects={(model?.projects || []) as never}
+                  users={staffPeople}
+                  from={rangeFromYmd(fromYmd, toYmd).from}
+                  to={rangeFromYmd(fromYmd, toYmd).to}
+                  onBack={() => setFocusStaffId(null)}
+                />
+              );
+            })()
+          ) : (
+            <>
+              <p className={styles.lead}>Нажмите имя — откроется личная аналитика и воронка роли.</p>
+              <ul className={styles.staffNameList}>
+                {staffPeople.map((person) => (
+                  <li key={person.id}>
+                    <button
+                      type="button"
+                      className={styles.staffNameBtn}
+                      onClick={() => setFocusStaffId(person.id)}
+                    >
+                      <strong>{person.displayName || person.login}</strong>
+                      <span className={styles.hint}>{ROLE_LABELS[person.role] || person.role}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {!staffPeople.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
+            </>
+          )}
         </DashSection>
       ) : null}
 
