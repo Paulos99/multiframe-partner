@@ -666,7 +666,6 @@ function OwnerCabinet({
             </div>
           </form>
           )}
-          <InstallHint />
     </>
   );
 

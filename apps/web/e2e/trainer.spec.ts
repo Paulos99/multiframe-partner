@@ -233,7 +233,10 @@ test('викторина: десять вопросов, верный ответ
     }
     await page.getByRole('button', { name: 'Проверить', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Разбор вопроса' })).toContainText('Верно');
-    await expect(page.getByRole('region', { name: 'Разбор вопроса' })).toContainText('Источник');
+    // У части вопросов (например quiz-certs) цитат нет — блок «Источник» не рисуется.
+    if ((q.sourceQuotes?.length ?? 0) > 0) {
+      await expect(page.getByRole('region', { name: 'Разбор вопроса' })).toContainText('Источник');
+    }
     await page.getByRole('button', { name: i === 10 ? 'Показать итог' : 'Дальше', exact: true }).click();
   }
   await expect(page).toHaveURL(/#trainer\/quiz\/result$/);

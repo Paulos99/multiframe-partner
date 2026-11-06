@@ -12,12 +12,19 @@ const MID = '/tmp/mf-carry-3ee8094';
 function ensureMidCheckout() {
   if (!existsSync(path.join(MID, 'apps/web/src/main.tsx'))) {
     // В CI checkout неглубокий и старого коммита в нём нет: докачиваем его по хешу.
+    const sha = '3ee8094b8fb6da1a04b3f7565dc009321c89ff25';
     try {
-      execSync('git cat-file -e 3ee8094b8fb6da1a04b3f7565dc009321c89ff25^{commit}', { cwd: ROOT, stdio: 'ignore' });
+      execSync(`git cat-file -e ${sha}^{commit}`, { cwd: ROOT, stdio: 'ignore' });
     } catch {
-      execSync('git fetch --no-tags --depth=1 origin 3ee8094b8fb6da1a04b3f7565dc009321c89ff25', { cwd: ROOT, stdio: 'inherit' });
+      // depth=1 по SHA часто не проходит в Actions — без depth или через ref.
+      try {
+        execSync(`git fetch --no-tags origin ${sha}`, { cwd: ROOT, stdio: 'inherit' });
+      } catch {
+        execSync(`git fetch --no-tags --deepen=200 origin HEAD`, { cwd: ROOT, stdio: 'inherit' });
+        execSync(`git fetch --no-tags origin ${sha}`, { cwd: ROOT, stdio: 'inherit' });
+      }
     }
-    execSync(`git worktree add --detach ${MID} 3ee8094b8fb6da1a04b3f7565dc009321c89ff25`, { cwd: ROOT, stdio: 'inherit' });
+    execSync(`git worktree add --detach ${MID} ${sha}`, { cwd: ROOT, stdio: 'inherit' });
   }
   const modules = path.join(MID, 'apps/web/node_modules');
   if (!existsSync(modules)) symlinkSync(path.join(ROOT, 'apps/web/node_modules'), modules);
