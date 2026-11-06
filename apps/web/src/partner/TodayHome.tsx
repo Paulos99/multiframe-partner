@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   JOB_OBJECT_STATUS_LABELS,
   canCreateObjects,
@@ -9,15 +9,8 @@ import { greetingLine, greetingName } from '../../../../packages/shared/personNa
 import { roomDisplayName } from './kanban';
 import { projectStatusLabel, roomProjectStatuses } from './projectDesk';
 import { usePartner } from './PartnerContext';
+import { groupRoomsByProjectStage, nearestFlat, openRoomsForRole } from './todayNearest';
 import styles from './partner.module.css';
-
-const NEXT_RANK: Record<JobObject['status'], number> = {
-  measured: 0,
-  draft: 1,
-  quote_sent: 2,
-  install: 3,
-  closed: 4,
-};
 
 function roomTitle(room: JobObject): string {
   return roomDisplayName(room);
@@ -30,17 +23,8 @@ export function roomMeta(room: JobObject, projectStatus?: Parameters<typeof proj
   return [projectStatus ? projectStatusLabel(projectStatus) : JOB_OBJECT_STATUS_LABELS[room.status], place, area].filter(Boolean).join(' · ');
 }
 
-function nearest(rooms: JobObject[], role: UserRole): JobObject[] {
-  const list =
-    role === 'crew' ? rooms.filter((room) => room.status === 'install' || room.status === 'measured') : rooms;
-  return [...list]
-    .filter((room) => room.status !== 'closed')
-    .sort(
-      (a, b) =>
-        (NEXT_RANK[a.status] ?? 9) - (NEXT_RANK[b.status] ?? 9) ||
-        String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')),
-    )
-    .slice(0, 5);
+function usesStageGroups(role: UserRole): boolean {
+  return role === 'owner' || role === 'sales';
 }
 
 export function TodayHome({
@@ -63,11 +47,18 @@ export function TodayHome({
   const api = usePartner();
   const user = api.user!;
   const role = user.role;
-  const tasks = nearest(api.objects, role);
   const stages = useMemo(() => roomProjectStatuses(api.projects, api.objects), [api.projects, api.objects]);
-  const first = tasks[0];
+  const openRooms = useMemo(() => openRoomsForRole(api.objects, role), [api.objects, role]);
+  const flatTasks = useMemo(() => nearestFlat(api.objects, role), [api.objects, role]);
+  const stageGroups = useMemo(
+    () => (usesStageGroups(role) ? groupRoomsByProjectStage(openRooms, stages) : []),
+    [role, openRooms, stages],
+  );
+  const [openStage, setOpenStage] = useState<string | null>(null);
+  const first = usesStageGroups(role) ? openRooms[0] : flatTasks[0];
   const canCreate = canCreateObjects(role);
   const showTools = true;
+  const hasRooms = usesStageGroups(role) ? openRooms.length > 0 : flatTasks.length > 0;
 
   let primaryLabel = 'Открыть проекты';
   let primary = onProjects;
@@ -107,13 +98,9 @@ export function TodayHome({
       <div className={styles.todayHead}>
         <div>
           <h2>{greetingLine(user.displayName)}</h2>
-          <button
-            type="button"
-            className={named ? styles.todayNameQuiet : styles.todayName}
-            onClick={() => api.requestOpenProfile()}
-          >
-            {named ? 'Изменить имя' : 'Указать имя'}
-          </button>
+          {!named ? (
+            <p className={styles.lead}>Имя можно указать в профиле — кнопка «Мой профиль» в шапке.</p>
+          ) : null}
           <p className={styles.lead}>
             {role === 'admin'
               ? 'Сеть партнёров. Следующий шаг — компания, которой ещё нет в списке.'
@@ -121,7 +108,7 @@ export function TodayHome({
                 ? 'Комнаты, которые назначили вам на монтаж.'
                 : role === 'measurer'
                   ? 'Комнаты, которые назначили вам на замер.'
-                  : 'Ближайшие комнаты компании и один следующий шаг.'}
+                  : 'Ближайшие комнаты компании по стадиям и один следующий шаг.'}
           </p>
         </div>
         {primary ? (
@@ -153,9 +140,43 @@ export function TodayHome({
                 <p className={styles.lead}>{api.partnersLoading ? 'Загружаем партнёров…' : empty}</p>
               </div>
             )
-          ) : tasks.length ? (
+          ) : usesStageGroups(role) && hasRooms ? (
+            <ul className={styles.todayStageList}>
+              {stageGroups.map((group) => {
+                const expanded = openStage === group.status;
+                return (
+                  <li key={group.status} className={styles.todayStageItem}>
+                    <button
+                      type="button"
+                      className={styles.todayStage}
+                      aria-expanded={expanded}
+                      onClick={() => setOpenStage(expanded ? null : group.status)}
+                    >
+                      <strong>{group.label}</strong>
+                      <span className={styles.todayStageCount}>
+                        {group.rooms.length}{' '}
+                        {group.rooms.length === 1 ? 'комната' : group.rooms.length < 5 ? 'комнаты' : 'комнат'}
+                      </span>
+                    </button>
+                    {expanded ? (
+                      <ul className={styles.todayList}>
+                        {group.rooms.map((room) => (
+                          <li key={room.id}>
+                            <button type="button" className={styles.todayTask} onClick={() => onOpenRoom?.(room.id)}>
+                              <strong>{roomTitle(room)}</strong>
+                              <span>{roomMeta(room, stages[room.id] || group.status)}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : hasRooms ? (
             <ul className={styles.todayList}>
-              {tasks.map((room) => (
+              {flatTasks.map((room) => (
                 <li key={room.id}>
                   <button type="button" className={styles.todayTask} onClick={() => onOpenRoom?.(room.id)}>
                     <strong>{roomTitle(room)}</strong>

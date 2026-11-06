@@ -1,7 +1,7 @@
 /**
- * Справочник городов РФ.
- * Данные: packages/shared/data/ru-cities.tsv
- * Источник: Википедия, «Список городов России» (CC BY-SA 4.0).
+ * Справочник городов РФ, Беларуси, Казахстана и Узбекистана.
+ * Данные: packages/shared/data/ru-cities.tsv + cis-cities.tsv
+ * Источники: Википедия (CC BY-SA 4.0).
  */
 
 /** @typedef {{ name: string, subject: string, population: number, label: string }} CityRow */
@@ -131,7 +131,7 @@ export function resolveCity(input, previous) {
       message: 'Несколько городов с таким названием — выберите с регионом',
     };
   }
-  return { ok: false, message: 'Выберите город из справочника РФ' };
+  return { ok: false, message: 'Такого города нет' };
 }
 
 /** @param {unknown} input */

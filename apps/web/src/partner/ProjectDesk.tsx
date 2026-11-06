@@ -60,6 +60,8 @@ import styles from './ProjectDesk.module.css';
 import pill from '../ui/SlidingPill.module.css';
 import { useSlidingPill } from '../ui/useSlidingPill';
 import { AnimatedNumber, useFlipReflow, useLift, useStaggerIn } from '../ui/gsapMotion';
+import { CityField } from './CityField';
+import { loadCities, resolveCity } from './cityCatalog';
 
 type Person = { id: string; role: UserRole; displayName: string };
 
@@ -1355,6 +1357,13 @@ function Settings({
     setBusy(true);
     setError('');
     try {
+      await loadCities();
+      const resolvedCity = resolveCity(form.city, project.city || null);
+      if (!resolvedCity.ok) {
+        setError(resolvedCity.message);
+        setBusy(false);
+        return;
+      }
       await onSave(project.id, {
         name: form.name.trim(),
         description: form.description,
@@ -1362,7 +1371,7 @@ function Settings({
         // Телефон уходит только на стадиях «Замер», «Предложение», «Монтаж».
         ...(phoneStageAllowed(form.status) ? { clientPhone: form.clientPhone } : {}),
         address: form.address,
-        city: form.city,
+        city: resolvedCity.city,
         status: form.status,
         ...(form.status === 'done'
           ? { refusal: form.outcome === 'refused' ? { reasonKey: form.reasonKey, comment: form.comment.trim() } : null }
@@ -1435,7 +1444,7 @@ function Settings({
         </label>
         <label>
           Город
-          <input value={form.city} maxLength={120} onChange={(event) => setForm({ ...form, city: event.target.value })} />
+          <CityField value={form.city} onChange={(city) => setForm({ ...form, city })} />
         </label>
       </div>
       <label>
