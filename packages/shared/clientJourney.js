@@ -31,16 +31,57 @@ export const CLIENT_JOURNEY_STEPS = [
   { id: 'refusal', label: 'Отказ' },
 ];
 
-/** Шаги без надёжного события в системе — не выдумываем числа. */
-export const UNTRACKED_JOURNEY_IDS = new Set([
-  'survey_done',
-  'panel_view',
-  'calc_input',
-  'offer',
-  'client_agreed',
-  'quote_accepted',
-  'install_done',
-]);
+/** Исторически неотслеживаемые шаги; сейчас пишутся событиями (см. AnalyticsAction). */
+export const UNTRACKED_JOURNEY_IDS = new Set();
+
+/** Сжатая воронка: 6 групп + отказ отдельно. */
+export const JOURNEY_GROUPS = [
+  { id: 'room', label: 'Комната', stepIds: ['created'] },
+  { id: 'problemomer', label: 'Проблемомер', stepIds: ['pm_open', 'survey_done', 'pm_result', 'panel_view'] },
+  { id: 'calculator', label: 'Калькулятор', stepIds: ['calc_open', 'calc_input', 'calc_done', 'pdf', 'share'] },
+  { id: 'offer', label: 'Предложение', stepIds: ['offer', 'client_agreed'] },
+  { id: 'measure_quote', label: 'Замер и КП', stepIds: ['assign_measure', 'measured', 'quote', 'quote_accepted'] },
+  { id: 'install', label: 'Монтаж', stepIds: ['install_assigned', 'install_done', 'completed'] },
+];
+
+/**
+ * @param {Array<{ id: string, label: string, count: number|null, fromPrevPct: string }>} steps
+ * @returns {{ groups: Array<object>, refusal: object|null }}
+ */
+export function groupJourneySteps(steps) {
+  const byId = new Map((steps || []).map((s) => [s.id, s]));
+  const groups = JOURNEY_GROUPS.map((g) => {
+    const items = g.stepIds.map((id) => byId.get(id)).filter(Boolean);
+    const last = items[items.length - 1] || null;
+    return {
+      id: g.id,
+      label: g.label,
+      stepIds: g.stepIds,
+      steps: items,
+      count: last ? last.count : null,
+      finalStepId: last ? last.id : null,
+    };
+  });
+  // % группы относительно предыдущей с числом
+  let prevCount = null;
+  for (const g of groups) {
+    if (g.count == null) {
+      g.fromPrevPct = 'нет данных';
+    } else if (prevCount == null) {
+      g.fromPrevPct = g.count > 0 ? '100%' : '—';
+      prevCount = g.count;
+    } else if (prevCount <= 0) {
+      g.fromPrevPct = '—';
+      prevCount = g.count;
+    } else {
+      g.fromPrevPct = `${Math.round((g.count / prevCount) * 100)}%`;
+      prevCount = g.count;
+    }
+  }
+  const refusal = byId.get('refusal') || null;
+  return { groups, refusal };
+}
+
 
 const STATUS_RANK = {
   draft: 0,
@@ -170,22 +211,22 @@ export function computeClientJourney({
   const counts = {
     created: created.length,
     pm_open: uniquePasses(events, 'problemomer', 'open', { userId, from, to }),
-    survey_done: null,
+    survey_done: uniquePasses(events, 'problemomer', 'survey_done', { userId, from, to }),
     pm_result: uniquePasses(events, 'problemomer', 'result', { userId, from, to }),
-    panel_view: null,
+    panel_view: uniquePasses(events, 'problemomer', 'panel_view', { userId, from, to }),
     calc_open: uniquePasses(events, 'calculator', 'open', { userId, from, to }),
-    calc_input: null,
+    calc_input: uniquePasses(events, 'calculator', 'calc_input', { userId, from, to }),
     calc_done: uniquePasses(events, 'calculator', 'calc_done', { userId, from, to }),
     pdf: uniquePdfPasses(events, { userId, from, to }),
     share: uniquePasses(events, 'problemomer', 'share', { userId, from, to }),
-    offer: null,
-    client_agreed: null,
+    offer: uniquePasses(events, 'cabinet', 'offer', { userId, from, to }),
+    client_agreed: uniquePasses(events, 'cabinet', 'client_agreed', { userId, from, to }),
     assign_measure: assignMeasureCount(list, users, { from, to, userId }),
     measured: roomsReached(list, 'measured', { from, to, userId }),
     quote: roomsReached(list, 'quote_sent', { from, to, userId }),
-    quote_accepted: null,
+    quote_accepted: uniquePasses(events, 'cabinet', 'quote_accepted', { userId, from, to }),
     install_assigned: roomsReached(list, 'install', { from, to, userId }),
-    install_done: null,
+    install_done: uniquePasses(events, 'cabinet', 'install_done', { userId, from, to }),
     completed,
     refusal: refused,
   };

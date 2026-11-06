@@ -1820,6 +1820,7 @@ async function runCalculation(options = {}) {
   state.resultsStale = false;
   applyResultsToUi();
   $('resultsTabs').style.display = 'flex';
+  trackPartnerCalcEvent('calc_input');
   trackPartnerCalcEvent('calc_done');
 
   populateWallSelect();

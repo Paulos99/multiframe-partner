@@ -651,6 +651,43 @@ export function buildDemoAnalyticsEvents(opts = {}) {
     }
   }
 
+  // Добиваем 7 шагов воронки, раньше «нет данных», согласованно по дням.
+  for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 1) {
+    if (!includeDemoDay(day)) continue;
+    const isWeekend = day % 7 === 5 || day % 7 === 6;
+    if (isWeekend && day % 2 === 0) continue;
+    for (const org of orgs) {
+      const sales = org.sales;
+      const crew = org.crew;
+      const measurer = org.measurer;
+      const base = {
+        at: analyticsAt(day),
+        orgId: org.orgId,
+        companyName: org.companyName,
+        city: org.city,
+      };
+      const add = (id, tool, action, user, extra = {}) => {
+        pushEvent(events, {
+          id: `${id}_${org.orgId}_${day}`,
+          ...base,
+          userId: user.id,
+          login: user.login,
+          role: user.role,
+          tool,
+          action,
+          ...extra,
+        });
+      };
+      if (day % 2 === 0) add('ev_survey', 'problemomer', 'survey_done', measurer);
+      if (day % 3 === 0) add('ev_panel', 'problemomer', 'panel_view', sales);
+      if (day % 2 === 1) add('ev_calc_input', 'calculator', 'calc_input', sales);
+      if (day % 5 === 0) add('ev_offer', 'cabinet', 'offer', sales);
+      if (day % 6 === 0) add('ev_agreed', 'cabinet', 'client_agreed', sales);
+      if (day % 7 === 0) add('ev_quote_ok', 'cabinet', 'quote_accepted', sales);
+      if (day % 8 === 0) add('ev_install_done', 'cabinet', 'install_done', crew);
+    }
+  }
+
   events.push({
     id: 'ev_demo_history_schema',
     schema: DEMO_HISTORY_SCHEMA,
