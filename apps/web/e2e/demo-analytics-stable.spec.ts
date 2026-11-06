@@ -152,7 +152,7 @@ test('схема до заморозки: владелец видит роли, 
       // У монтажников главное число — смонтированные м², а не расчёты: в плитку они не входят.
       if ((await tabs.nth(index).innerText()).trim() === 'Монтажники') continue;
       await tabs.nth(index).click();
-      const rows = await drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
+      const rows = await drill.locator('button:not([data-journey-funnel] button)').filter({ hasText: /^\d+\./ }).allInnerTexts();
       if (!rows.length) return 0;
       sum += rows.reduce((total, row) => total + rowNumber(row), 0);
     }
@@ -160,7 +160,7 @@ test('схема до заморозки: владелец видит роли, 
     // Плитка = рейтинг без монтажников + 6 м² из их расчётов (событие ae_legacy_crew).
   }).toBe(Math.round((tileNumber(tileText) - 6) * 10) / 10);
 
-  const periodRows = () => drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
+  const periodRows = () => drill.locator('button:not([data-journey-funnel] button)').filter({ hasText: /^\d+\./ }).allInnerTexts();
   await drill.getByRole('tab', { name: 'Менеджеры' }).click();
   await drill.getByRole('button', { name: 'Месяц', exact: true }).click();
   await expect.poll(async () => (await periodRows()).length).toBeGreaterThan(0);
@@ -272,7 +272,7 @@ test('короткий архив остаётся в хранилище, а м�
   const drill = page.getByRole('region', { name: 'Площадь, м²' });
   await drill.getByRole('button', { name: 'Месяц', exact: true }).click();
   await expect(drill.getByRole('button', { name: 'Месяц', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  const monthRows = () => drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
+  const monthRows = () => drill.locator('button:not([data-journey-funnel] button)').filter({ hasText: /^\d+\./ }).allInnerTexts();
   await expect.poll(async () => (await monthRows()).length).toBeGreaterThan(0);
   const monthText = (await monthRows()).join('\n');
   const monthFunnel = (await drill.locator('[data-journey-funnel]').allInnerTexts()).join('\n');
@@ -471,12 +471,12 @@ test('сервер: реальные события с чужими id попа�
     // У монтажников главное число — смонтированные м², а не расчёты: в плитку они не входят.
     if ((await tabs.nth(index).innerText()).trim() === 'Монтажники') continue;
     await tabs.nth(index).click();
-    const rows = await drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
+    const rows = await drill.locator('button:not([data-journey-funnel] button)').filter({ hasText: /^\d+\./ }).allInnerTexts();
     sum += rows.reduce((total, row) => total + rowNumber(row), 0);
   }
   // Плитка 31 = рейтинг без монтажников + 7 м² из расчётов монтажника.
   expect(Math.round(sum * 10) / 10).toBe(24);
-  const periodRows = () => drill.getByRole('button').filter({ hasText: /^\d+\./ }).allInnerTexts();
+  const periodRows = () => drill.locator('button:not([data-journey-funnel] button)').filter({ hasText: /^\d+\./ }).allInnerTexts();
   await drill.getByRole('tab', { name: 'Менеджеры' }).click();
   await drill.getByRole('button', { name: 'Месяц', exact: true }).click();
   await expect.poll(async () => (await periodRows()).length).toBeGreaterThan(0);
