@@ -64,24 +64,26 @@ function roomMine(room, userId) {
   return String(room.createdBy || '') === uid || String(room.assignedTo || '') === uid;
 }
 
-function uniquePasses(events, tool, action, { userId = null } = {}) {
+function uniquePasses(events, tool, action, { userId = null, from = null, to = null } = {}) {
   const keys = new Set();
   for (const raw of Array.isArray(events) ? events : []) {
     if (!raw || typeof raw !== 'object') continue;
     if (tool && raw.tool !== tool) continue;
     if (action && raw.action !== action) continue;
+    if (!inRange(raw.at, from, to)) continue;
     if (userId && String(raw.userId || '') !== String(userId) && String(raw.login || '') !== String(userId)) continue;
     keys.add(funnelPassKey(raw, tool || String(raw.tool || 'x')));
   }
   return keys.size;
 }
 
-function uniquePdfPasses(events, { userId = null } = {}) {
+function uniquePdfPasses(events, { userId = null, from = null, to = null } = {}) {
   const keys = new Set();
   for (const raw of Array.isArray(events) ? events : []) {
     if (!raw || typeof raw !== 'object') continue;
     if (raw.action !== 'pdf') continue;
     if (raw.tool !== 'problemomer' && raw.tool !== 'calculator') continue;
+    if (!inRange(raw.at, from, to)) continue;
     if (userId && String(raw.userId || '') !== String(userId) && String(raw.login || '') !== String(userId)) continue;
     keys.add(funnelPassKey(raw, String(raw.tool)));
   }
@@ -167,15 +169,15 @@ export function computeClientJourney({
 
   const counts = {
     created: created.length,
-    pm_open: uniquePasses(events, 'problemomer', 'open', { userId }),
+    pm_open: uniquePasses(events, 'problemomer', 'open', { userId, from, to }),
     survey_done: null,
-    pm_result: uniquePasses(events, 'problemomer', 'result', { userId }),
+    pm_result: uniquePasses(events, 'problemomer', 'result', { userId, from, to }),
     panel_view: null,
-    calc_open: uniquePasses(events, 'calculator', 'open', { userId }),
+    calc_open: uniquePasses(events, 'calculator', 'open', { userId, from, to }),
     calc_input: null,
-    calc_done: uniquePasses(events, 'calculator', 'calc_done', { userId }),
-    pdf: uniquePdfPasses(events, { userId }),
-    share: uniquePasses(events, 'problemomer', 'share', { userId }),
+    calc_done: uniquePasses(events, 'calculator', 'calc_done', { userId, from, to }),
+    pdf: uniquePdfPasses(events, { userId, from, to }),
+    share: uniquePasses(events, 'problemomer', 'share', { userId, from, to }),
     offer: null,
     client_agreed: null,
     assign_measure: assignMeasureCount(list, users, { from, to, userId }),

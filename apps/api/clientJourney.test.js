@@ -54,4 +54,31 @@ describe('clientJourney', () => {
     assert.equal(steps.find((s) => s.id === 'survey_done').count, null);
     assert.equal(steps.find((s) => s.id === 'pm_open').count, 1);
   });
+
+  it('события режутся по from/to — месяц и год расходятся', () => {
+    const events = [
+      { id: 'e1', at: '2026-01-15T12:00:00.000Z', tool: 'problemomer', action: 'open', sessionId: 'a' },
+      { id: 'e2', at: '2026-10-15T12:00:00.000Z', tool: 'problemomer', action: 'open', sessionId: 'b' },
+      { id: 'e3', at: '2026-10-16T12:00:00.000Z', tool: 'calculator', action: 'calc_done', sessionId: 'c' },
+      { id: 'e4', at: '2026-01-20T12:00:00.000Z', tool: 'calculator', action: 'calc_done', sessionId: 'd' },
+    ];
+    const rooms = [{ id: '1', status: 'draft', createdAt: '2026-10-01T10:00:00Z', updatedAt: '2026-10-01T10:00:00Z' }];
+    const month = computeClientJourney({
+      rooms,
+      events,
+      from: '2026-10-01T00:00:00.000Z',
+      to: '2026-10-31T23:59:59.999Z',
+    });
+    const year = computeClientJourney({
+      rooms,
+      events,
+      from: '2026-01-01T00:00:00.000Z',
+      to: '2026-12-31T23:59:59.999Z',
+    });
+    assert.equal(month.steps.find((s) => s.id === 'pm_open').count, 1);
+    assert.equal(year.steps.find((s) => s.id === 'pm_open').count, 2);
+    assert.equal(month.steps.find((s) => s.id === 'calc_done').count, 1);
+    assert.equal(year.steps.find((s) => s.id === 'calc_done').count, 2);
+  });
+
 });
