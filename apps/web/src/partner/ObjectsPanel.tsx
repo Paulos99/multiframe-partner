@@ -24,6 +24,7 @@ import { answersFromStoredRoom, roomStubFromLabel } from './roomLink';
 import { createInitialSession, withDerived } from '../state/session';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { ensureClientLinkUrl } from './clientLink';
+import { isDocStale } from './docStale';
 import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
 import { StatusSwap } from './motionBits';
@@ -123,23 +124,35 @@ function ObjectDocuments({
           {docs.map((doc, index) => {
             const kind = documentDisplayKind(doc.kind);
             const latest = docs.findIndex((item) => documentDisplayKind(item.kind) === kind) === index;
+            const stale = latest && isDocStale(doc, obj);
             return (
-              <li key={doc.id} className={styles.docRow} data-doc-kind={kind}>
+              <li
+                key={doc.id}
+                className={stale ? `${styles.docRow} ${styles.docRowStale}` : styles.docRow}
+                data-doc-kind={kind}
+                data-stale={stale ? 'true' : undefined}
+              >
                 <div className={styles.docMeta}>
-                  <strong>{documentLabel(doc.kind)}</strong>
+                  <strong>
+                    {documentLabel(doc.kind)}
+                    {stale ? <span className={styles.staleBadge}>Устарел</span> : null}
+                  </strong>
                   <span className={styles.hint}>
                     {latest ? 'Последняя версия' : 'Предыдущая версия'}
                     {formatDocWhen(doc.createdAt) ? ` · ${formatDocWhen(doc.createdAt)}` : ''}
                     {doc.areaM2 ? ` · ${doc.areaM2} м²` : ''}
-                    {doc.areaM2 != null && obj.room?.areaM2 != null && Math.abs(doc.areaM2 - obj.room.areaM2) > 0.049
-                      ? ' · устарел, пересобрать'
-                      : ''}
+                    {stale ? ` · площадь комнаты теперь ${obj.room?.areaM2} м²` : ''}
                     {kind === 'estimate' && doc.panels ? ` · ${doc.panels} пан.` : ''}
                     {kind === 'estimate' ? (doc.hasScheme ? ' · схема раскладки' : ' · без схемы') : ''}
                     {doc.kind === 'spec' ? ' · старый файл без цен' : ''}
                   </span>
                 </div>
                 <div className={styles.docActions}>
+                  {stale ? (
+                    <button type="button" className={styles.rebuildBtn} data-doc-action="rebuild" onClick={() => onResults(doc)}>
+                      Пересобрать
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={styles.ghost}
@@ -627,7 +640,29 @@ export function ObjectsPanel({
           if (projectId) navigateProject({ kind: 'room', projectId, roomId: room.id });
         }}
         onAddRoom={canCreate ? addRoom : undefined}
+        onArchiveProject={
+          canMove
+            ? async (project, archived) => {
+                setErr(null);
+                try {
+                  await api.updateProject(project.id, { archived });
+                  setMsg(archived ? `«${project.name}» в архиве.` : `«${project.name}» возвращён из архива.`);
+                } catch (e) {
+                  setErr(e instanceof Error ? e.message : 'Не удалось изменить архив');
+                }
+              }
+            : undefined
+        }
         onDocAction={async (room, doc, action) => {
+          if (action === 'rebuild') {
+            navigateProject({
+              kind: 'room',
+              projectId: room.projectId || '',
+              roomId: room.id,
+              view: documentDisplayKind(doc.kind) === 'profile' ? 'profile' : 'estimate',
+            });
+            return;
+          }
           if (action === 'share') await shareDocument(room, doc);
           else await openDocument(room, doc, action === 'download');
         }}

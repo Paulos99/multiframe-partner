@@ -3714,3 +3714,39 @@ div.drillPerson {
   flex-direction: column;
   gap: 16px;
 }
+
+/* Устаревший документ: красная рамка, подложка, метка и кнопка «Пересобрать». Цвета из темы. */
+.docRowStale {
+  border-color: color-mix(in srgb, var(--cab-danger, #c0392b) 55%, var(--cab-border, #d8dee6));
+  background: color-mix(in srgb, var(--cab-danger, #c0392b) 9%, var(--cab-card, #fff));
+}
+
+.staleBadge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cab-danger-soft, #fdecea);
+  color: var(--cab-danger, #b42318);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.rebuildBtn {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--cab-danger, #b42318);
+  border-radius: 999px;
+  background: var(--cab-danger, #b42318);
+  /* Текст — цвет фона страницы: белый на тёмно-красном (светлая), тёмный на розовом (тёмная). */
+  color: var(--cab-card, #fff);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rebuildBtn:disabled {
+  opacity: 0.6;
+}

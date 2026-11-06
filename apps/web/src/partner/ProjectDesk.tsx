@@ -21,6 +21,7 @@ import {
   documentLabel,
   roleSeesProjectMoney,
   visibleDocuments,
+  documentDisplayKind,
   type JobObject,
   type Project,
   type ProjectInput,
@@ -49,6 +50,7 @@ import {
   type ProjectDeskView,
 } from './projectDesk';
 import type { ProjectTab } from './projectRoute';
+import { isDocStale } from './docStale';
 import { preliminaryRoomTotal } from './projectSummary';
 import { CloseDialog, closeChoiceError, type CloseChoice } from './CloseDialog';
 import { projectStageLabel, refusalLine, refusalReasonPlain, roomStageLabel } from './closeOutcome';
@@ -84,7 +86,101 @@ type Row = {
   archived: boolean;
 };
 
-export type DocAction = 'open' | 'download' | 'share';
+export type OnArchiveProject = (project: Project, archived: boolean) => Promise<void> | void;
+
+/** Меню «⋯» карточки/строки проекта: архив и удаление. */
+function ProjectActionsMenu({
+  menu,
+  onClose,
+  onArchive,
+  onDelete,
+}: {
+  menu: { project: Project; x: number; y: number };
+  onClose: () => void;
+  onArchive?: OnArchiveProject;
+  onDelete?: (project: Project) => void;
+}) {
+  const archived = Boolean(menu.project.archivedAt);
+  return createPortal(
+    <div
+      className={styles.menuBackdrop}
+      onPointerDown={onClose}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <div
+        role="menu"
+        aria-label={`Действия с проектом «${menu.project.name}»`}
+        className={styles.menu}
+        style={{
+          left: Math.max(8, Math.min(menu.x, window.innerWidth - 208)),
+          top: Math.max(8, Math.min(menu.y, window.innerHeight - 110)),
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onClose();
+        }}
+      >
+        {onArchive ? (
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.menuItem}
+            autoFocus
+            onClick={() => {
+              const project = menu.project;
+              onClose();
+              void onArchive(project, !archived);
+            }}
+          >
+            {archived ? 'Вернуть из архива' : 'В архив'}
+          </button>
+        ) : null}
+        {onDelete ? (
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.menuDanger}
+            autoFocus={!onArchive}
+            onClick={() => {
+              const project = menu.project;
+              onClose();
+              onDelete(project);
+            }}
+          >
+            Удалить проект…
+          </button>
+        ) : null}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function MenuButton({ project, onMenu }: { project: Project; onMenu: (x: number, y: number) => void }) {
+  return (
+    <button
+      type="button"
+      className={styles.cardMenu}
+      aria-label={`Действия с проектом «${project.name}»`}
+      aria-haspopup="menu"
+      onPointerDown={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        const box = event.currentTarget.getBoundingClientRect();
+        onMenu(box.right - 200, box.bottom + 4);
+      }}
+    >
+      <MoreIcon size={18} />
+    </button>
+  );
+}
+
+export type DocAction = 'open' | 'download' | 'share' | 'rebuild';
 export type OnDocAction = (room: JobObject, doc: NonNullable<JobObject['documents']>[number], action: DocAction) => Promise<void>;
 
 export function ProjectDesk({
@@ -104,6 +200,7 @@ export function ProjectDesk({
   onAddRoom,
   onDeleteProject,
   onDocAction,
+  onArchiveProject,
 }: {
   projects: Project[];
   rooms: JobObject[];
@@ -122,6 +219,7 @@ export function ProjectDesk({
   onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
   onDeleteProject?: (project: Project) => void;
   onDocAction?: OnDocAction;
+  onArchiveProject?: OnArchiveProject;
 }) {
   const [view, setView] = useState<ProjectDeskView>(() =>
     readProjectView(typeof localStorage === 'undefined' ? null : localStorage),
@@ -218,9 +316,9 @@ export function ProjectDesk({
           {query ? 'По этому запросу проектов нет.' : archive ? 'В архиве пусто.' : 'Пока нет проектов. Новый проект создаётся вместе с первой комнатой.'}
         </p>
       ) : view === 'list' ? (
-        <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} />
+        <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onArchive={onArchiveProject} onDelete={onDeleteProject} />
       ) : (
-        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onMoveStatus={onMoveStatus} onDelete={onDeleteProject} />
+        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onMoveStatus={onMoveStatus} onDelete={onDeleteProject} onArchive={onArchiveProject} />
       )}
     </section>
   );
@@ -354,13 +452,20 @@ function ProjectTable({
   rows,
   seesMoney,
   onOpen,
+  onArchive,
+  onDelete,
 }: {
   rows: Row[];
   seesMoney: boolean;
   onOpen: (id: string) => void;
+  onArchive?: OnArchiveProject;
+  onDelete?: (project: Project) => void;
 }) {
+  const [menu, setMenu] = useState<{ project: Project; x: number; y: number } | null>(null);
+  const hasMenu = Boolean(onArchive || onDelete);
   return (
     <div className={styles.scroller}>
+      {menu ? <ProjectActionsMenu menu={menu} onClose={() => setMenu(null)} onArchive={onArchive} onDelete={onDelete} /> : null}
       <table className={styles.table}>
         <thead>
           <tr>
@@ -372,6 +477,7 @@ function ProjectTable({
             <th>Площадь</th>
             {seesMoney ? <th>Сумма</th> : null}
             <th>Срок</th>
+            {hasMenu ? <th aria-label="Действия" /> : null}
           </tr>
         </thead>
         <tbody>
@@ -394,6 +500,11 @@ function ProjectTable({
                   <td className={styles.cell}>{money.calculated ? formatRub(money.total) : 'Нет расчёта'}</td>
                 ) : null}
                 <td className={styles.cell}>{formatProjectDay(row.project.dueAt)}</td>
+                {hasMenu ? (
+                  <td className={styles.menuCell} onClick={(event) => event.stopPropagation()}>
+                    <MenuButton project={row.project} onMenu={(x, y) => setMenu({ project: row.project, x, y })} />
+                  </td>
+                ) : null}
               </tr>
             );
           })}
@@ -555,12 +666,14 @@ function ProjectBoard({
   onOpen,
   onMoveStatus,
   onDelete,
+  onArchive,
 }: {
   rows: Row[];
   seesMoney: boolean;
   onOpen: (id: string) => void;
   onMoveStatus?: (id: string, status: ProjectStatus, refusal?: CloseChoice) => Promise<void>;
   onDelete?: (project: Project) => void;
+  onArchive?: OnArchiveProject;
 }) {
   const [closing, setClosing] = useState<{ id: string; name: string } | null>(null);
   const movable = Boolean(onMoveStatus);
@@ -721,7 +834,7 @@ function ProjectBoard({
                   saving={Boolean(moved[row.project.id])}
                   onOpen={onOpen}
                   onStep={step}
-                  onMenu={onDelete ? (x, y) => setMenu({ project: row.project, x, y }) : undefined}
+                  onMenu={onDelete || onArchive ? (x, y) => setMenu({ project: row.project, x, y }) : undefined}
                 />
               ))}
               {!column.length ? <p className={styles.empty}>Пока пусто</p> : null}
@@ -732,48 +845,9 @@ function ProjectBoard({
     </div>
   );
 
-  const menuView =
-    menu && onDelete
-      ? createPortal(
-          <div
-            className={styles.menuBackdrop}
-            onPointerDown={() => setMenu(null)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setMenu(null);
-            }}
-          >
-            <div
-              role="menu"
-              aria-label={`Действия с проектом «${menu.project.name}»`}
-              className={styles.menu}
-              style={{
-                left: Math.max(8, Math.min(menu.x, window.innerWidth - 208)),
-                top: Math.max(8, Math.min(menu.y, window.innerHeight - 64)),
-              }}
-              onPointerDown={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setMenu(null);
-              }}
-            >
-              <button
-                type="button"
-                role="menuitem"
-                className={styles.menuDanger}
-                autoFocus
-                onClick={() => {
-                  const project = menu.project;
-                  setMenu(null);
-                  onDelete(project);
-                }}
-              >
-                Удалить проект…
-              </button>
-            </div>
-          </div>,
-          document.body,
-        )
-      : null;
+  const menuView = menu ? (
+    <ProjectActionsMenu menu={menu} onClose={() => setMenu(null)} onArchive={onArchive} onDelete={onDelete} />
+  ) : null;
 
   if (!movable) {
     return (
@@ -1254,19 +1328,42 @@ function Documents({
     <div className={styles.docs}>
       {docs.map(({ room, doc }) => {
         const title = doc.kind === 'profile' ? 'Профиль проблемомера' : 'Смета калькулятора';
+        const latest =
+          docs.find((item) => item.room.id === room.id && documentDisplayKind(item.doc.kind) === documentDisplayKind(doc.kind))?.doc.id === doc.id;
+        const stale = latest && isDocStale(doc, room);
         return (
-          <div key={doc.id} className={styles.docRow} data-doc-row>
+          <div
+            key={doc.id}
+            className={stale ? `${styles.docRow} ${styles.docRowStale}` : styles.docRow}
+            data-doc-row
+            data-stale={stale ? 'true' : undefined}
+          >
             <button type="button" className={styles.docMain} onClick={() => onOpenRoom(room)}>
-              <strong>{title}</strong>
+              <strong>
+                {title}
+                {stale ? <span className={styles.staleBadge}>Устарел</span> : null}
+              </strong>
               <span className={styles.docMeta} data-doc-meta>
                 {doc.kind === 'profile' ? documentLabel(doc.kind) : 'Коммерческое предложение'}
                 {' · '}
                 {roomTitle(room)}
                 {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
+                {stale && room.room?.areaM2 != null ? ` · в комнате теперь ${formatArea(room.room.areaM2)}` : ''}
               </span>
             </button>
             {onDocAction ? (
               <div className={styles.docActions} role="group" aria-label={`Действия: ${title}`}>
+                {stale ? (
+                  <button
+                    type="button"
+                    className={styles.rebuildBtn}
+                    data-doc-action="rebuild"
+                    disabled={busy != null}
+                    onClick={() => void run(room, doc, 'rebuild')}
+                  >
+                    Пересобрать
+                  </button>
+                ) : null}
                 {(
                   [
                     ['open', 'Открыть'],
@@ -1432,7 +1529,6 @@ function Settings({
         crewUserId: form.crewUserId || null,
         startsAt: form.startsAt || null,
         dueAt: form.dueAt || null,
-        archived: form.archived,
       });
       setSavedTick((tick) => tick + 1);
     } catch (err) {
@@ -1553,10 +1649,6 @@ function Settings({
           <input type="date" value={form.dueAt} onChange={(event) => setForm({ ...form, dueAt: event.target.value })} />
         </label>
       </div>
-      <label className={styles.check}>
-        <input type="checkbox" checked={form.archived} onChange={(event) => setForm({ ...form, archived: event.target.checked })} />
-        В архиве
-      </label>
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       <button type="submit" className={styles.primary} disabled={busy || !form.name.trim()}>
         {busy ? 'Сохраняем…' : 'Сохранить'}
