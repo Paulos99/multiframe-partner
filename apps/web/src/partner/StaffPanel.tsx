@@ -9,9 +9,8 @@ import {
 } from '../../../../packages/shared/partner';
 import { Button } from '../ui/Button';
 import { ActivationLinkButton } from './ActivationLinkButton';
-import { canIssueLinks } from './activation';
 import { NewPasswordButton } from './NewPasswordButton';
-import { generatePassword, usePartner } from './PartnerContext';
+import { usePartner } from './PartnerContext';
 import { navigateCompany, navigateStaff, parseStaffHash, type StaffRoute } from './projectRoute';
 import styles from './partner.module.css';
 
@@ -20,10 +19,10 @@ export function StaffPanel() {
   const api = usePartner();
   const reduce=usePrefersReducedMotion();
   const user = api.user;
-  const [execLogin, setExecLogin] = useState('');
+  const isOwner = user?.role === 'owner';
   const [execName, setExecName] = useState('');
   const [execRole, setExecRole] = useState<UserRole>('measurer');
-  const [issued, setIssued] = useState<{ id: string; login: string; displayName: string; password: string } | null>(null);
+  const [issued, setIssued] = useState<{ id: string; login: string; displayName: string; password: string; pendingActivation?: boolean } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [savingStaff, setSavingStaff] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -51,17 +50,22 @@ export function StaffPanel() {
     setErr(null);
     setSavingStaff(true);
     try {
-      // С сервером пароль не создаём: сотрудник задаст его сам по ссылке активации.
-      const password = canIssueLinks() ? '' : generatePassword();
-      const displayName = execName.trim() || execLogin.trim();
+      // Только имя и роль: пароль и логин сотрудник задаёт по ссылке активации.
+      const displayName = execName.trim();
+      if (!displayName) throw new Error('Укажите имя');
       const res = await api.partnerCreateStaff({
-        login: execLogin.trim(),
-        password,
+        login: '',
+        password: '',
         displayName,
         role: execRole,
       });
-      setIssued({ id: res.id, login: res.login, displayName, password: res.password });
-      setExecLogin('');
+      setIssued({
+        id: res.id,
+        login: res.login,
+        displayName,
+        password: res.password || '',
+        pendingActivation: res.pendingActivation ?? !res.password,
+      });
       setExecName('');
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Ошибка');
@@ -119,6 +123,7 @@ export function StaffPanel() {
                 К списку
               </button>
             </div>
+            {isOwner ? (
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -149,6 +154,7 @@ export function StaffPanel() {
                 Сохранить имя
               </Button>
             </form>
+            ) : null}
             {open.pendingActivation ? (
               <p className={styles.hint}>Пароль ещё не задан. Нажмите «Ссылка для входа» и отправьте её сотруднику.</p>
             ) : null}
@@ -156,7 +162,7 @@ export function StaffPanel() {
               <ActivationLinkButton userId={open.id} userName={open.displayName} />
               <NewPasswordButton staffId={open.id} staffName={open.displayName} />
             </div>
-            {open.id === user.id ? null : (
+            {isOwner && open.id !== user.id ? (
               <button
                 type="button"
                 className={styles.danger}
@@ -168,7 +174,7 @@ export function StaffPanel() {
               >
                 Удалить
               </button>
-            )}
+            ) : null}
           </>
         ) : null}
       </section>
@@ -184,6 +190,15 @@ export function StaffPanel() {
       <button type="button" className={styles.primary} onClick={() => setAdding((open) => !open)}>
         {adding ? 'Закрыть' : 'Добавить'}
       </button>
+      {issued ? (
+        <p className={styles.flash} role="status">
+          Сотрудник «{issued.displayName}» создан. Отправьте ссылку:{' '}
+          <ActivationLinkButton userId={issued.id} userName={issued.displayName} />{' '}
+          <button type="button" className={styles.ghost} onClick={() => setIssued(null)}>
+            Скрыть
+          </button>
+        </p>
+      ) : null}
       {adding ? (
         <form onSubmit={(e) => void onCreateStaff(e)}>
           <div className={styles.grid2}>
@@ -194,6 +209,7 @@ export function StaffPanel() {
                 onChange={(e) => setExecName(e.target.value)}
                 placeholder="Например, Иван Петров"
                 maxLength={80}
+                required
               />
             </label>
             <label className={styles.field}>
@@ -206,41 +222,10 @@ export function StaffPanel() {
                 ))}
               </select>
             </label>
-            <label className={styles.field}>
-              Логин
-              <input
-                value={execLogin}
-                onChange={(e) => setExecLogin(e.target.value)}
-                required
-                autoComplete="off"
-              />
-            </label>
           </div>
           <p className={styles.hint}>
-            {canIssueLinks()
-              ? 'Пароль вы не задаёте: после сохранения нажмите «Ссылка для входа» и отправьте её сотруднику. Он придумает пароль сам.'
-              : 'Пароль создаётся при сохранении и показывается один раз.'}
+            Логин и пароль сотрудник задаёт сам по ссылке. После создания нажмите «Ссылка для входа» и отправьте её.
           </p>
-          {issued ? (
-            <p className={styles.flash} role="status">
-              {issued.password ? (
-                <>
-                  Сотрудник {issued.login}. Пароль: {issued.password}{' '}
-                  <button type="button" className={styles.ghost} onClick={() => setIssued(null)}>
-                    Скрыть пароль
-                  </button>
-                </>
-              ) : (
-                <>
-                  Сотрудник {issued.login} создан. Пароля пока нет:{' '}
-                  <ActivationLinkButton userId={issued.id} userName={issued.displayName} />{' '}
-                  <button type="button" className={styles.ghost} onClick={() => setIssued(null)}>
-                    Скрыть
-                  </button>
-                </>
-              )}
-            </p>
-          ) : null}
           {err ? (
             <p className={styles.error} role="alert">
               {err}

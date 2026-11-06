@@ -91,8 +91,8 @@ const OBJECTS_CAP = Number(process.env.MAX_OBJECTS) || 100000;
 
 const ORG_ROLES = ['owner', 'sales', 'measurer', 'crew'];
 const STAFF_ROLES = ['sales', 'measurer', 'crew'];
-/** Владелец и менеджер компании. Админ StP сотрудников компании здесь не ведёт. */
-const STAFF_MANAGER_ROLES = ['owner'];
+/** Владелец и менеджер компании создают сотрудников и выдают ссылку. Админ StP здесь не ведёт. */
+const STAFF_MANAGER_ROLES = ['owner', 'sales'];
 const OFFICIAL_PANEL = 2396;
 const OFFICIAL_M2 = 5990;
 const DEFAULT_INSTALL = 1500;
@@ -1709,9 +1709,21 @@ async function handleRequest(event = {}) {
       const weakActivation = passwordProblem(password);
       if (weakActivation) return json(400, { message: weakActivation });
       const idx = platform.users.findIndex((u) => u.id === found.id);
-      // Одна запись: новый пароль, закрытые сеансы (sessionVersion) и стёртая ссылка сохраняются вместе.
+      let nextLogin = platform.users[idx].login;
+      const wantedLogin = typeof body.login === 'string' ? body.login.trim() : '';
+      if (wantedLogin) {
+        if (wantedLogin.length > 64) return json(400, { message: 'Логин слишком длинный' });
+        if (loginTaken(platform, wantedLogin) && wantedLogin !== platform.users[idx].login) {
+          return json(409, { message: 'Такой логин уже есть' });
+        }
+        nextLogin = wantedLogin;
+      } else if (!platform.users[idx].passwordHash && String(platform.users[idx].login || '').startsWith('inv_')) {
+        return json(400, { message: 'Укажите логин' });
+      }
+      // Одна запись: логин, пароль, закрытые сеансы и стёртая ссылка.
       const nextUser = {
         ...platform.users[idx],
+        login: nextLogin,
         passwordHash: await hashPassword(password),
         sessionVersion: (Number(platform.users[idx].sessionVersion) || 0) + 1,
       };
@@ -1725,7 +1737,7 @@ async function handleRequest(event = {}) {
         userId: nextUser.id,
         login: nextUser.login,
         action: 'activate_account',
-        detail: 'Пароль задан по ссылке',
+        detail: 'Аккаунт активирован по ссылке',
       });
       await savePlatform(platform);
       return json(200, { ok: true });
@@ -2077,9 +2089,11 @@ async function handleRequest(event = {}) {
       const { platform, user } = await requireAuth(event);
       assertRole(user, STAFF_MANAGER_ROLES);
       if (!user.orgId) return json(400, { message: 'Нет организации' });
-      const { login, password, displayName, role } = parseBody(schemas.staffCreate, getBody(event));
+      const parsed = parseBody(schemas.staffCreate, getBody(event));
+      let { login, password, displayName, role } = parsed;
       const weak = password ? passwordProblem(password) : '';
       if (weak) return json(400, { message: weak });
+      if (!login) login = `inv_${uid('x').slice(2, 10)}`;
       if (loginTaken(platform, login)) return json(409, { message: 'Такой логин уже есть' });
       const staff = {
         id: uid('u'),
@@ -2191,7 +2205,7 @@ async function handleRequest(event = {}) {
 
     if (method === 'DELETE' && /\/org\/staff\/[^/]+$/.test(path)) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, STAFF_MANAGER_ROLES);
+      assertRole(user, ['owner']);
       if (!user.orgId) return json(400, { message: 'Нет организации' });
       const staffUserId = decodeURIComponent(path.split('/').pop() || '');
       const target = platform.users.find((u) => u.id === staffUserId);

@@ -1,28 +1,26 @@
 /**
- * Ссылка активации: выдача (для владельца и админа) и задание пароля по ссылке (для сотрудника).
- * Токен живёт только в адресе и в теле запроса. В журнал, хранилище браузера и текст ошибок он не попадает.
+ * Ссылка активации: выдача и задание логина/пароля по ссылке.
+ * Без удалённого API (или когда ссылка локальная) — имитация в браузере, TTL 24 часа.
  */
 import { passwordProblem } from '../../../../packages/shared/passwordPolicy.js';
 import { hasRemoteApi, request } from './apiClient';
+import { activateLocal, issueLocalActivation } from './localActivation';
 import { loadToken } from './localStore';
 
 export const ACTIVATE_PARAM = 'activate';
-export const ACTIVATED_MESSAGE = 'Пароль задан. Войдите в аккаунт.';
+export const ACTIVATED_MESSAGE = 'Аккаунт активирован. Войдите в кабинет.';
 export { passwordProblem };
 
-/** Ссылки выдаёт сервер, поэтому без сервера и без входа кнопка не нужна. */
+/** Ссылки доступны и на сервере, и в локальном демо. */
 export function canIssueLinks(): boolean {
-  return hasRemoteApi() && Boolean(loadToken());
+  return true;
 }
 
-/** Токен из адреса или null. Без сервера ссылка активации не имеет смысла. */
 export function activationTokenFromSearch(search: string): string | null {
-  if (!hasRemoteApi()) return null;
   const value = new URLSearchParams(search).get(ACTIVATE_PARAM);
   return value ? value.trim() : null;
 }
 
-/** Полный адрес по ответу сервера. Адрес страницы берётся из текущего окна, поэтому путь /cabinet/ сохраняется. */
 export function activationUrl(
   path: string,
   where: { origin: string; pathname: string } = window.location,
@@ -31,7 +29,6 @@ export function activationUrl(
   return `${where.origin}${where.pathname}${query}`;
 }
 
-/** Убирает токен из адресной строки, остальное (путь, другие параметры, #) остаётся. */
 export function removeActivationFromUrl(): void {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
@@ -41,13 +38,34 @@ export function removeActivationFromUrl(): void {
 }
 
 export async function apiIssueActivation(userId: string): Promise<{ path: string; expiresAt: string }> {
-  return request('/auth/invite', { method: 'POST', body: JSON.stringify({ userId }) });
+  if (hasRemoteApi() && loadToken()) {
+    try {
+      return await request('/auth/invite', { method: 'POST', body: JSON.stringify({ userId }) });
+    } catch {
+      /* демо/стенд без живого API */
+    }
+  }
+  return issueLocalActivation(userId);
 }
 
-export async function apiActivate(token: string, password: string): Promise<void> {
-  await request('/auth/activate', {
-    method: 'POST',
-    body: JSON.stringify({ token, password }),
-    token: null,
-  });
+export async function apiActivate(
+  token: string,
+  password: string,
+  login?: string | null,
+): Promise<void> {
+  const body = JSON.stringify({ token, password, ...(login ? { login } : {}) });
+  if (hasRemoteApi()) {
+    try {
+      await request('/auth/activate', { method: 'POST', body, token: null });
+      return;
+    } catch (remoteError) {
+      try {
+        activateLocal(token, password, login);
+        return;
+      } catch {
+        throw remoteError;
+      }
+    }
+  }
+  activateLocal(token, password, login);
 }

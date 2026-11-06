@@ -767,6 +767,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         login: res.user.login,
         password: res.password,
         role: res.user.role,
+        pendingActivation: Boolean(res.user.pendingActivation) || !res.password,
       };
     },
     [user, remote],
