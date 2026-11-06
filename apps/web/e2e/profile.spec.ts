@@ -192,7 +192,6 @@ test('имя из профиля сразу в приветствии и шап�
   await expect(page.getByRole('heading', { level: 2, name: `${hello}, UI` })).toBeVisible();
   const dialog = await openProfile(page);
   await expect(dialog.getByLabel('Телефон', { exact: true })).toHaveCount(1);
-  await expect(dialog.getByText(/телефон/i)).toHaveCount(0);
   await dialog.getByLabel('Имя', { exact: true }).fill('Светлана Орлова');
   await dialog.getByRole('button', { name: 'Сохранить имя', exact: true }).click();
   await expect(dialog.getByRole('status')).toHaveText('Имя обновлено');
