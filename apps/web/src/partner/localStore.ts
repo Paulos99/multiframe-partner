@@ -86,6 +86,8 @@ export type StoredUser = {
   password: string;
   role: UserRole;
   displayName: string;
+  /** Рабочий телефон из профиля. */
+  phone?: string;
   orgId: string | null;
   createdAt: string;
   /** Пароль ещё не задан — ждёт ссылку активации (демо/локально). */
@@ -494,6 +496,7 @@ export function userToSession(u: StoredUser, db: PartnerDb): SessionUser {
     login: u.login,
     role,
     displayName: u.displayName,
+    phone: u.phone || '',
     orgId: u.orgId,
     org: settings,
   };
@@ -804,7 +807,7 @@ export function updateOwnPhone(actor: SessionUser, phone: string): SessionUser {
   const idx = db.users.findIndex((u) => u.id === actor.id);
   if (idx < 0) throw new Error('Пользователь не найден');
   const users = [...db.users];
-  users[idx] = { ...users[idx]!, phone: value || undefined } as (typeof users)[number];
+  users[idx] = { ...users[idx]!, phone: value || undefined };
   saveDb({ ...db, users });
   const next = { ...actor, phone: value };
   saveSession(next);
