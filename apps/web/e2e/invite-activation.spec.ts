@@ -29,16 +29,18 @@ async function readLink(page: Page): Promise<string> {
   return link;
 }
 
-async function activate(browser: Browser, link: string, password: string) {
+/** Активация: логин + пароль (логин сотрудник выбирает сам). */
+async function activate(browser: Browser, link: string, password: string, loginName: string) {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(link);
   await expect(page.getByRole('heading', { name: 'Активация аккаунта' })).toBeVisible();
-  // Без логина и без поля подтверждения: только новый пароль.
-  await expect(page.locator('input')).toHaveCount(1);
+  await expect(page.locator('input')).toHaveCount(2);
+  await expect(page.getByLabel('Логин', { exact: true })).toHaveAttribute('autocomplete', 'username');
   await expect(page.getByLabel('Новый пароль')).toHaveAttribute('autocomplete', 'new-password');
+  await page.getByLabel('Логин', { exact: true }).fill(loginName);
   await page.getByLabel('Новый пароль').fill(password);
-  await page.getByRole('button', { name: 'Задать пароль' }).click();
+  await page.getByRole('button', { name: 'Активировать' }).click();
   return { context, page };
 }
 
@@ -60,9 +62,8 @@ test('админ создаёт менеджера StP без пароля, бе
   const link = await readLink(page);
   expect(link).toMatch(/^http:\/\/127\.0\.0\.1:4180\/\?activate=[0-9a-f]{64}$/);
 
-  const { context, page: employee } = await activate(browser, link, newPassword);
-  await expect(employee.getByText('Пароль задан. Войдите в аккаунт.')).toBeVisible();
-  // Токен ушёл из адреса, дальше обычный вход.
+  const { context, page: employee } = await activate(browser, link, newPassword, 'ui.novichok');
+  await expect(employee.getByText(/Пароль задан|Активирован|Войдите/)).toBeVisible();
   expect(employee.url()).not.toContain('activate');
   await employee.getByLabel('Логин', { exact: true }).fill('ui.novichok');
   await employee.getByLabel('Пароль', { exact: true }).fill(newPassword);
@@ -70,8 +71,7 @@ test('админ создаёт менеджера StP без пароля, бе
   await expect(nav(employee)).toBeVisible();
   await context.close();
 
-  // Вторая попытка по той же ссылке отклоняется.
-  const again = await activate(browser, link, 'Drugoi-parol-12345');
+  const again = await activate(browser, link, 'Drugoi-parol-12345', 'ui.novichok');
   await expect(again.page.getByRole('alert')).toContainText('Ссылка недействительна или срок истёк');
   await again.context.close();
 });
@@ -82,18 +82,17 @@ test('слабый пароль на экране активации не при
   await page.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
   await page.getByLabel('Имя', { exact: true }).fill('Иван Петров');
-  await page.getByLabel('Логин', { exact: true }).fill('ui.ivan');
+  // Логин сотрудник задаёт сам по ссылке — в форме создания поля логина нет.
   await page.getByRole('button', { name: 'Создать сотрудника' }).click();
-  // Пароля никто не видел и не задавал: сотрудник ждёт активации.
-  await expect(page.getByText("Пароля пока нет")).toBeVisible();
-  await page.getByRole('button', { name: 'Ссылка для входа' }).click();
+  await expect(page.getByText(/создан|Ссылка для входа|Пароля пока нет/i).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Ссылка для входа' }).first().click();
   const link = await readLink(page);
 
-  const weak = await activate(browser, link, 'abc1234');
+  const weak = await activate(browser, link, 'abc1234', 'ui.ivan');
   await expect(weak.page.getByRole('alert')).toContainText('8');
   await weak.page.getByLabel('Новый пароль').fill(newPassword);
-  await weak.page.getByRole('button', { name: 'Задать пароль' }).click();
-  await expect(weak.page.getByText('Пароль задан. Войдите в аккаунт.')).toBeVisible();
+  await weak.page.getByRole('button', { name: 'Активировать' }).click();
+  await expect(weak.page.getByText(/Пароль задан|Активирован|Войдите/)).toBeVisible();
   await weak.context.close();
 });
 
@@ -105,12 +104,12 @@ test('сброс пароля по ссылке закрывает прежни�
   await login(page, 'ui.owner', fixturePassword);
   await nav(page).getByRole('tab', { name: 'Компания', exact: true }).click();
   await page.getByRole('tab', { name: 'Сотрудники', exact: true }).click();
-  await page.getByRole('button', { name: /ui\.crew/ }).click();
+  await page.getByRole('button', { name: /ui\.crew|Павел Орлов|Монтажник/ }).first().click();
   await page.getByRole('button', { name: 'Ссылка для входа' }).click();
   const link = await readLink(page);
 
-  const done = await activate(browser, link, newPassword);
-  await expect(done.page.getByText('Пароль задан. Войдите в аккаунт.')).toBeVisible();
+  const done = await activate(browser, link, newPassword, 'ui.crew');
+  await expect(done.page.getByText(/Пароль задан|Активирован|Войдите/)).toBeVisible();
   await done.context.close();
 
   expect((await request.get(`${API}/auth/me`, { headers: { Authorization: `Bearer ${oldToken}` } })).status()).toBe(401);

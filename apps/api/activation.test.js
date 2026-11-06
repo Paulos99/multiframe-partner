@@ -92,6 +92,34 @@ describe('ссылка активации', { concurrency: false }, () => {
     assert.equal(list.find((row) => row.login === 'sales1').pendingActivation, false);
   });
 
+  test('создание без логина и активация со своим логином; занятый — 409', async () => {
+    const created = await call('POST', '/org/staff', {
+      token: tokens.owner,
+      body: { displayName: 'Без логина', role: 'sales' },
+    });
+    assert.equal(created.statusCode, 200);
+    const body = read(created);
+    assert.equal(body.pendingActivation, true);
+    assert.match(body.login, /^inv_/);
+    const link = tokenOf(await call('POST', '/auth/invite', { token: tokens.owner, body: { userId: body.id } }));
+    const taken = await call('POST', '/auth/activate', {
+      body: { token: link, password: 'choose-login-pass-1', login: 'sales1' },
+    });
+    assert.equal(taken.statusCode, 409);
+    assert.match(read(taken).message, /логин уже есть/i);
+    const missing = await call('POST', '/auth/activate', {
+      body: { token: link, password: 'choose-login-pass-1' },
+    });
+    assert.equal(missing.statusCode, 400);
+    assert.match(read(missing).message, /Укажите логин/);
+    const ok = await call('POST', '/auth/activate', {
+      body: { token: link, password: 'choose-login-pass-1', login: 'chooses.own' },
+    });
+    assert.equal(ok.statusCode, 200);
+    assert.equal(userByLogin('chooses.own').login, 'chooses.own');
+    assert.equal((await login('chooses.own', 'choose-login-pass-1')).status, 200);
+  });
+
   test('прежнее создание с паролем работает как раньше', async () => {
     const created = await call('POST', '/org/staff', {
       token: tokens.owner,
@@ -107,14 +135,21 @@ describe('ссылка активации', { concurrency: false }, () => {
     assert.equal(weak.statusCode, 400);
   });
 
-  test('ссылку выдают только по правилам: чужая компания, менеджер, админ для сотрудника, неизвестный — 404', async () => {
+  test('ссылку выдают только по правилам: чужая компания, админ для сотрудника, неизвестный — 404; менеджер своей компании — 200', async () => {
     tokens.admin = (await login('admin', 'admin1234')).token;
     tokens.owner2 = (await login('partner2', 'demo1234')).token;
     tokens.sales = (await login('sales1', 'exec1234')).token;
     assert.equal((await call('POST', '/auth/invite', { body: { userId: staffId } })).statusCode, 401);
+    const salesOk = await call('POST', '/auth/invite', { token: tokens.sales, body: { userId: staffId } });
+    assert.equal(salesOk.statusCode, 200, 'менеджер выдаёт ссылку своему сотруднику');
+    // Сбросим activation в файле, чтобы 404-кейсы ниже проверяли отсутствие выдачи.
+    const stored = platformFile();
+    const newbie = stored.users.find((user) => user.login === 'newbie');
+    if (newbie) delete newbie.activation;
+    writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(stored));
+    resetStoredDocumentsForTests();
     for (const [token, userId] of [
       [tokens.owner2, staffId],
-      [tokens.sales, staffId],
       [tokens.admin, staffId],
       [tokens.owner, 'no-such-user'],
       [tokens.owner, 'u_partner1'],

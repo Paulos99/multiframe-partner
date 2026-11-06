@@ -10,6 +10,10 @@ import {
 import { PASSWORD_MIN } from '../../../../packages/shared/passwordPolicy.js';
 
 vi.mock('./localStore', () => ({ loadToken: () => 'owner-session', saveToken: vi.fn() }));
+vi.mock('./localActivation', () => ({
+  issueLocalActivation: () => { throw new Error('local issue should not run'); },
+  activateLocal: () => { throw new Error('local activate should not run'); },
+}));
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -27,8 +31,8 @@ test('адрес собирается от текущей страницы и с
   );
 });
 
-test('токен читается из адреса только при настроенном сервере', () => {
-  expect(activationTokenFromSearch(`?activate=${token}`)).toBeNull();
+test('токен читается из адреса', () => {
+  expect(activationTokenFromSearch(`?activate=${token}`)).toBe(token);
   vi.stubEnv('VITE_API_URL', 'https://api.example.test');
   expect(activationTokenFromSearch(`?activate=${token}`)).toBe(token);
   expect(activationTokenFromSearch('?demo=1')).toBeNull();

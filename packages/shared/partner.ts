@@ -75,11 +75,11 @@ export function canEditOrg(role: UserRole): boolean {
 }
 
 /**
- * Создание, удаление и смена пароля сотрудников своей компании.
- * Только владелец. Менеджер видит список, чтобы назначить комнату, но не управляет людьми.
+ * Создание сотрудников и ссылка активации: владелец и менеджер своей компании.
+ * Удаление и переименование — только владелец (см. API).
  */
 export function canManageStaff(role: UserRole): boolean {
-  return role === 'owner';
+  return role === 'owner' || role === 'sales';
 }
 
 export function canSeeOrgAnalytics(role: UserRole): boolean {
