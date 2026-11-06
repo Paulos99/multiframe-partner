@@ -10,6 +10,13 @@
   font-family: var(--cab-font);
 }
 
+/* Тёмная тема: мягкое пятно на весь каркас страницы, не на блок .work. */
+:global(body.theme-dark) .frame {
+  background:
+    radial-gradient(900px 420px at 100% -8%, color-mix(in srgb, var(--cab-accent) 14%, transparent), transparent 60%),
+    var(--cab-page);
+}
+
 .main {
   min-width: 0;
   display: flex;

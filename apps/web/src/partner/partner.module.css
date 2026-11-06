@@ -35,6 +35,12 @@
   align-items: stretch;
 }
 
+/* В тёмной теме общий градиент .shellWide сильнее по специфичности — явно оставляем прозрачный фон у вложенной оболочки. */
+:global(body.theme-dark) .framed.shell,
+:global(body.theme-dark) .framed.shellWide {
+  background: transparent;
+}
+
 .cabinetGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1603,11 +1609,16 @@
 }
 
 :global(body.theme-dark) .shell,
-:global(body.theme-dark) .shellWide,
-:global(body.theme-dark) .toolHost {
+:global(body.theme-dark) .shellWide {
   background:
-    radial-gradient(800px 380px at 0% 0%, color-mix(in srgb, var(--cab-accent) 28%, transparent), transparent 58%),
+    radial-gradient(900px 420px at 100% -8%, color-mix(in srgb, var(--cab-accent) 14%, transparent), transparent 60%),
     var(--cab-page);
+  color: var(--cab-ink);
+}
+
+/* Полноэкранные инструменты: ровный фон страницы без пятна, которое режется overflow. */
+:global(body.theme-dark) .toolHost {
+  background: var(--cab-page);
   color: var(--cab-ink);
 }
 

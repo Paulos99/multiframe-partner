@@ -3,7 +3,7 @@
  * Замена обучающего ролика роли одной командой:
  *   npm run video:swap -- <роль> <путь к новому mp4> [--poster-at=сек]
  * Роли: owner, sales, measurer, crew (см. src/partner/roleVideos.ts).
- * Скрипт сжимает ролик (16:9, 1280×720, быстрый старт), снимает афишу, обновляет «duration»
+ * Скрипт приводит ролик к 16:9 1920×1080 (H.264, crf 20, быстрый старт), снимает афишу, обновляет «duration»
  * и поднимает «version» в roleVideos.ts. Нужен ffmpeg в PATH. Затем: проверить на экране и закоммитить.
  */
 import { execFileSync } from 'node:child_process';
@@ -53,7 +53,7 @@ const duration = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2,
 const mp4 = path.join(videosDir, `${file}.mp4`);
 const jpg = path.join(videosDir, `${file}.jpg`);
 fs.mkdirSync(videosDir, { recursive: true });
-ff('ffmpeg', ['-y', '-i', source, '-vf', 'scale=1280:720', '-c:v', 'libx264', '-crf', '30', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-r', '30', '-c:a', 'aac', '-b:a', '64k', '-movflags', '+faststart', mp4]);
+ff('ffmpeg', ['-y', '-i', source, '-vf', 'scale=1920:1080', '-c:v', 'libx264', '-crf', '20', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-r', '30', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', mp4]);
 ff('ffmpeg', ['-y', '-ss', String(posterAt), '-i', mp4, '-frames:v', '1', '-q:v', '4', jpg]);
 
 const nextVersion = String((Number.parseInt(m[6], 10) || 0) + 1);
@@ -61,4 +61,4 @@ fs.writeFileSync(configPath, config.replace(lineRe, `$1$2$3${duration}$5${nextVe
 
 const mb = (fs.statSync(mp4).size / 1048576).toFixed(1);
 console.log(`Готово: ${role} → ${file}.mp4 (${mb} МБ, ${duration}), афиша ${file}.jpg, версия ${nextVersion}.`);
-if (fs.statSync(mp4).size > 10_000_000) console.warn('Внимание: ролик тяжелее 10 МБ, тест на размер не пройдёт.');
+if (fs.statSync(mp4).size > 55_000_000) console.warn('Внимание: ролик тяжелее 55 МБ, тест на размер не пройдёт.');
