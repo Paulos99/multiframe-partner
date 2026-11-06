@@ -7,7 +7,7 @@ const PERIOD = 'mf_partner_analytics_period_v1';
 const DB = 'mf_partner_db_v5';
 const OBJECTS_CACHE = 'mf_partner_objects_v1';
 const ORIGIN = 'http://127.0.0.1:4180';
-const COMPANY_ROOMS = 12;
+const COMPANY_ROOMS = 14; // у Чернова три комнаты под КП
 
 const events = [
   {
