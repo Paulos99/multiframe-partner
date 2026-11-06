@@ -645,7 +645,7 @@ test('старые id и роли: монтажники не нули, топ п
   assert.ok(mounted[2] > mounted[0]);
 });
 
-test('доска проектов: 11 комнат считаются монтажом и проектами менеджера', () => {
+test('доска проектов: 12 комнат считаются монтажом и проектами менеджера', () => {
   const directory = buildLocalDemoUsers().map((user) => ({
     ...user,
     id: `fresh_${user.login}`,
@@ -702,7 +702,7 @@ test('доска проектов: 11 комнат считаются монта
         assert.equal(row.value, row.mountedPanels);
       }
       const salesRow = result.ranking.find((row) => row.userId === salesId);
-      assert.equal(salesRow?.projectCount, 11, period);
+      assert.equal(salesRow?.projectCount, 12, period);
       assert.ok((result.detail?.projects.length || 0) > 0);
       assert.ok(result.detail?.projects.every((project) => project.roomId));
       assert.equal(
@@ -941,14 +941,14 @@ test('плитка сводки и рейтинг сходятся, даже е�
     to: result.to,
     orgId: 'org_demo',
   });
-  assert.equal(result.drops.rooms, 11);
+  assert.equal(result.drops.rooms, 12);
   assert.equal(result.drops.tilePanels, dash.kpi.panels);
   assert.equal(displayedSum(result.ranking, 'panels'), dash.kpi.panels);
   assert.equal(displayedSum(result.ranking, 'areaM2'), dash.kpi.areaM2);
   assert.equal(result.ranking.find((row) => row.displayName === 'Без исполнителя')?.panels, 5206);
   assert.ok((result.ranking.find((row) => row.role === 'crew')?.mountedRooms || 0) > 0);
   const sales = result.ranking.find((row) => row.role === 'sales');
-  assert.equal(sales?.projectCount, 11);
+  assert.equal(sales?.projectCount, 12);
   const opened = buildStaffDrill({
     viewer: { id: 'owner', role: 'owner', orgId: 'org_demo' },
     users: buildLocalDemoUsers(),
@@ -962,7 +962,7 @@ test('плитка сводки и рейтинг сходятся, даже е�
     demoFill: false,
   });
   const count = opened.ranking.find((row) => row.userId === sales?.userId)?.projectCount || 0;
-  assert.equal(count, 11);
+  assert.equal(count, 12);
   assert.equal(opened.detail?.projects.length, count);
   assert.ok(opened.detail?.projects.every((project) => project.roomId));
 });
