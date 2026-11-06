@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 
-const OUT = process.env.KP_SHOT_DIR || '/workspace/handover/screenshots-kp-1.1.0';
+const OUT = process.env.KP_SHOT_DIR || 'test-results/kp-shots';
 
 async function openChernovDocs(page: Page) {
   await page.goto('/?demo=1');
