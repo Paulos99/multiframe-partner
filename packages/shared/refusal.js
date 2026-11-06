@@ -97,3 +97,30 @@ export function refusalStats(rooms, { from = null, to = null } = {}) {
     .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title, 'ru'));
   return { total, byReason };
 }
+
+/**
+ * Доли закрытых комнат за период: отказы и доведённые до монтажа (закрыты без отказа).
+ * Границы from/to — по моменту отказа (refusal.at) или updatedAt, как в refusalStats.
+ * @returns {{ closed: number, refused: number, completed: number, refusedPct: number | null, completedPct: number | null }}
+ */
+export function closedOutcomeRates(rooms, { from = null, to = null } = {}) {
+  let closed = 0;
+  let refused = 0;
+  for (const room of Array.isArray(rooms) ? rooms : []) {
+    if (!room || room.status !== 'closed') continue;
+    const at = String((room.refusal && room.refusal.at) || room.updatedAt || '');
+    if (from && at && at < from) continue;
+    if (to && at && at > to) continue;
+    closed += 1;
+    if (isRefused(room)) refused += 1;
+  }
+  const completed = closed - refused;
+  return {
+    closed,
+    refused,
+    completed,
+    refusedPct: closed ? Math.round((refused / closed) * 100) : null,
+    completedPct: closed ? Math.round((completed / closed) * 100) : null,
+  };
+}
+

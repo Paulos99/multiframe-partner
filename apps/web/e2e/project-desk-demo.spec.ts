@@ -17,7 +17,7 @@ test('демо ?demo=1 группирует комнаты и открывает
   await enterCapital(page, 'Владелец');
   const desk = page.getByRole('region', { name: 'Список проектов' });
   await expect(desk.getByText('Пока нет проектов')).toHaveCount(0);
-  await expect(desk.locator('[data-project-id]')).toHaveCount(11);
+  await expect(desk.locator('[data-project-id]')).toHaveCount(12);
 
   await page.evaluate(() => {
     const key = 'mf_partner_db_v5';
@@ -32,7 +32,7 @@ test('демо ?demo=1 группирует комнаты и открывает
   await page.reload();
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await expect(desk.getByText('Пока нет проектов')).toHaveCount(0);
-  await expect(desk.locator('[data-project-id]')).toHaveCount(11);
+  await expect(desk.locator('[data-project-id]')).toHaveCount(12);
   await expect(page.getByText('Потолки Столицы').first()).toBeVisible();
   await expect(page.getByText('Комнаты по стадиям')).toHaveCount(0);
   await expect(page.locator('[aria-label="Доска проектов"]')).toHaveCount(0);

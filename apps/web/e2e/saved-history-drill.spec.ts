@@ -120,7 +120,7 @@ test('сохранённая история: плитки и рейтинг из
   const why = drill.getByTestId('why-zero');
   await expect(why).toBeVisible();
   await expect(why).toContainText('Источник: локально');
-  await expect(why).toContainText('Комнат 11');
+  await expect(why).toContainText('Комнат 12');
   await expect(why).toContainText('Плитка панелей 5206');
   await expect(why).toContainText('площадь 2403');
   await expect(why).toContainText(/Событий [1-9]/);

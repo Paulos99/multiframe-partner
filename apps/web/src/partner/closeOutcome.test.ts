@@ -7,6 +7,7 @@ import {
   REFUSAL_REASONS,
   cleanRefusal,
   refusalStats,
+  closedOutcomeRates,
 } from '../../../../packages/shared/refusal.js';
 import { PHONE_ROLES, cleanClientPhone, phoneStageAllowed, phoneRoomStatusAllowed, roleSeesClientPhone, projectStageOf } from '../../../../packages/shared/clientPhone.js';
 import { closeChoiceError, projectStageLabel, refusalLine, roomStageLabel } from './closeOutcome.ts';
@@ -66,6 +67,35 @@ test('аналитика отказов: считает только закры�
   assert.equal(october.total, 3);
   assert.equal(refusalStats(null).total, 0);
 });
+
+
+test('доли закрытых: отказы и доведено до монтажа, пусто — null', () => {
+  const room = (id: string, status: string, reasonKey: string | null, at: string) => ({
+    id, status, updatedAt: at, ...(reasonKey ? { refusal: { reasonKey, comment: '', at, by: null } } : {}),
+  });
+  const rooms = [
+    room('a', 'closed', 'price_too_high', '2026-10-05T10:00:00Z'),
+    room('b', 'closed', null, '2026-10-06T10:00:00Z'),
+    room('c', 'closed', 'not_needed', '2026-10-07T10:00:00Z'),
+    room('d', 'closed', null, '2026-09-01T10:00:00Z'),
+    room('e', 'install', null, '2026-10-07T10:00:00Z'),
+  ];
+  const all = closedOutcomeRates(rooms);
+  assert.equal(all.closed, 4);
+  assert.equal(all.refused, 2);
+  assert.equal(all.completed, 2);
+  assert.equal(all.refusedPct, 50);
+  assert.equal(all.completedPct, 50);
+  const october = closedOutcomeRates(rooms, { from: '2026-10-01T00:00:00Z', to: '2026-10-31T23:59:59Z' });
+  assert.equal(october.closed, 3);
+  assert.equal(october.refusedPct, 67);
+  assert.equal(october.completedPct, 33);
+  const empty = closedOutcomeRates([]);
+  assert.equal(empty.closed, 0);
+  assert.equal(empty.refusedPct, null);
+  assert.equal(empty.completedPct, null);
+});
+
 
 test('номер клиента: формат и стадии', () => {
   assert.equal(cleanClientPhone('').value, '');

@@ -169,7 +169,7 @@ for (const viewport of [
     await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
     await page.getByRole('tab', { name: 'Комнаты', exact: true }).click();
     const block = page.locator('[data-refusals]');
-    await expect(block).toContainText('Отказы клиентов: 1');
+    await expect(block).toContainText('Отказы клиентов: 2');
     await expect(block).toContainText('Дорого');
     await block.scrollIntoViewIfNeeded();
     await snap(page, 'item2-analytics-refusals');

@@ -15,3 +15,15 @@ export function refusalStats(
   rooms: ReadonlyArray<{ status?: string; refusal?: RefusalRecord | null; updatedAt?: string }> | null | undefined,
   range?: { from?: string | null; to?: string | null },
 ): { total: number; byReason: Array<{ key: string; title: string; count: number }> };
+
+export function closedOutcomeRates(
+  rooms: ReadonlyArray<{ status?: string; refusal?: RefusalRecord | null; updatedAt?: string }> | null | undefined,
+  range?: { from?: string | null; to?: string | null },
+): {
+  closed: number;
+  refused: number;
+  completed: number;
+  refusedPct: number | null;
+  completedPct: number | null;
+};
+
