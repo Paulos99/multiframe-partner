@@ -152,6 +152,8 @@ export type SessionUser = {
   login: string;
   role: UserRole;
   displayName: string;
+  /** Рабочий телефон из профиля (+7 900 123-45-67). Пусто, если не указан. */
+  phone?: string;
   /** Set for org roles. */
   orgId: string | null;
   org: OrgSettings | null;

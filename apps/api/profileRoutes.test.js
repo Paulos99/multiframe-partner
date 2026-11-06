@@ -34,7 +34,7 @@ function call(method, path, body = {}) {
     savePlatform: async () => {
       writes++;
     },
-    publicUser: (u) => ({ id: u.id, login: u.login, role: u.role }),
+    publicUser: (u) => ({ id: u.id, login: u.login, role: u.role, phone: u.phone || '' }),
     signToken: async () => 'unit-token',
     json: (status, body) => ({ status, body }),
   });
@@ -109,7 +109,6 @@ test('profile accepts only login, never role or org changes', async () => {
     currentPassword: current,
     role: 'admin',
     orgId: 'foreign',
-    phone: 'should-not-exist',
   });
   assert.equal(r.body.user.login, 'updated.login');
   assert.equal(platform.users[0].role, 'owner');
@@ -147,12 +146,11 @@ test('avatar cannot fall back to data bucket', async () => {
   assert.equal(storage.length, 0);
   assert.equal(writes, 0);
 });
-test('own name saves without password and ignores phone, role and org', async () => {
+test('own name saves without password and ignores role and org', async () => {
   user.displayName = 'Старое имя';
   user.sessionVersion = 2;
   const r = await call('PATCH', '/me', {
     displayName: '  Анна   Соколова  ',
-    phone: '+79990001122',
     role: 'admin',
     orgId: 'foreign',
   });
@@ -196,5 +194,23 @@ test('profile reads never expose password hashes', async () => {
   const r = await call('GET', '/me');
   assert.equal(r.status, 200);
   assert.equal(r.body.user.passwordHash, undefined);
-  assert.equal(r.body.user.phone, undefined);
+  assert.equal(r.body.user.phone, '');
+});
+test('own phone: saved in RU format, cleared by empty value, foreign and broken numbers rejected', async () => {
+  delete user.phone;
+  const saved = await call('PATCH', '/me', { phone: '8 (999) 000-11-22' });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.token, undefined);
+  assert.equal(platform.users[0].phone, '+7 999 000-11-22');
+  assert.equal(saved.body.user.phone, '+7 999 000-11-22');
+  for (const bad of ['+44 20 7946 0958', '12345', 'позвоните мне', '+7 999 000-11-2']) {
+    await assert.rejects(call('PATCH', '/me', { phone: bad }), (e) => e.status === 400, bad);
+  }
+  assert.equal(platform.users[0].phone, '+7 999 000-11-22');
+  const nameOnly = await call('PATCH', '/me', { displayName: 'Анна' });
+  assert.equal(nameOnly.status, 200);
+  assert.equal(platform.users[0].phone, '+7 999 000-11-22', 'имя без поля phone телефон не стирает');
+  const cleared = await call('PATCH', '/me', { phone: '' });
+  assert.equal(cleared.status, 200);
+  assert.equal(platform.users[0].phone, undefined);
 });

@@ -10,3 +10,8 @@ export function projectStageOf(
   rooms: ReadonlyArray<{ status?: string }> | null | undefined,
 ): 'new' | 'measure' | 'proposal' | 'install' | 'done';
 export function cleanClientPhone(raw: unknown): { value?: string; error?: string };
+export function cleanStaffPhone(raw: unknown): { value?: string; error?: string };
+export function projectManagerContact(
+  project: { managerUserId?: string | null; orgId?: string | null } | null | undefined,
+  users: ReadonlyArray<{ id: string; role?: string; orgId?: string | null; displayName?: string; login?: string; phone?: string | null }> | null | undefined,
+): { id: string; name: string; phone: string } | null;

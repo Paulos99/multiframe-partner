@@ -673,6 +673,9 @@ export async function apiUpdateDisplayName(displayName:string) {
   if(result.token) saveToken(result.token);
   return result.user;
 }
+export async function apiUpdatePhone(phone:string) {
+  return (await request<{user:SessionUser}>('/me',{method:'PATCH',body:JSON.stringify({phone})})).user;
+}
 export async function apiChangePassword(currentPassword:string,newPassword:string) {
   const result=await request<{token:string}>('/me/password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});
   saveToken(result.token);

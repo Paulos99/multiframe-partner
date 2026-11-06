@@ -43,6 +43,7 @@ import {
   apiLogin,
   apiRenameStaff,
   apiUpdateDisplayName,
+  apiUpdatePhone,
   apiLogout,
   apiMe,
   apiResetStaffPassword,
@@ -88,6 +89,7 @@ import {
   enqueueObjectDocuments,
   renameStaffDisplayName,
   updateOwnDisplayName,
+  updateOwnPhone,
   generatePassword,
   listActivity,
   listPartners,
@@ -198,6 +200,7 @@ type PartnerApi = {
   partnerListStaff: () => StaffMember[];
   renameStaff: (staffUserId: string, displayName: string) => Promise<{ id: string; displayName: string }>;
   updateDisplayName: (displayName: string) => Promise<SessionUser>;
+  updatePhone: (phone: string) => Promise<SessionUser>;
   profileOpenToken: number;
   requestOpenProfile: () => void;
   /** @deprecated */
@@ -804,6 +807,22 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, remote],
   );
 
+  const updatePhone = useCallback(
+    async (phone: string) => {
+      if (!user) throw new Error('Нет сессии');
+      if (remote && loadToken()) {
+        const next = { ...user, ...(await apiUpdatePhone(phone)) };
+        saveSession(next);
+        setUser(next);
+        return next;
+      }
+      const next = updateOwnPhone(user, phone);
+      setUser(next);
+      return next;
+    },
+    [user, remote],
+  );
+
   const renameStaff = useCallback(
     async (staffUserId: string, displayName: string) => {
       if (!user) throw new Error('Нет сессии');
@@ -1153,6 +1172,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerDeleteStaff,
       renameStaff,
       updateDisplayName,
+      updatePhone,
       profileOpenToken,
       requestOpenProfile,
       partnerListStaff: () =>
@@ -1232,6 +1252,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerDeleteStaff,
       renameStaff,
       updateDisplayName,
+      updatePhone,
       profileOpenToken,
       requestOpenProfile,
       refreshObjects,
