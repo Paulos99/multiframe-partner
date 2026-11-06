@@ -135,14 +135,21 @@ describe('ссылка активации', { concurrency: false }, () => {
     assert.equal(weak.statusCode, 400);
   });
 
-  test('ссылку выдают только по правилам: чужая компания, менеджер, админ для сотрудника, неизвестный — 404', async () => {
+  test('ссылку выдают только по правилам: чужая компания, админ для сотрудника, неизвестный — 404; менеджер своей компании — 200', async () => {
     tokens.admin = (await login('admin', 'admin1234')).token;
     tokens.owner2 = (await login('partner2', 'demo1234')).token;
     tokens.sales = (await login('sales1', 'exec1234')).token;
     assert.equal((await call('POST', '/auth/invite', { body: { userId: staffId } })).statusCode, 401);
+    const salesOk = await call('POST', '/auth/invite', { token: tokens.sales, body: { userId: staffId } });
+    assert.equal(salesOk.statusCode, 200, 'менеджер выдаёт ссылку своему сотруднику');
+    // Сбросим activation в файле, чтобы 404-кейсы ниже проверяли отсутствие выдачи.
+    const stored = platformFile();
+    const newbie = stored.users.find((user) => user.login === 'newbie');
+    if (newbie) delete newbie.activation;
+    writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(stored));
+    resetStoredDocumentsForTests();
     for (const [token, userId] of [
       [tokens.owner2, staffId],
-      [tokens.sales, staffId],
       [tokens.admin, staffId],
       [tokens.owner, 'no-such-user'],
       [tokens.owner, 'u_partner1'],
