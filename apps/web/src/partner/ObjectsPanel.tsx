@@ -27,6 +27,8 @@ import { ensureClientLinkUrl } from './clientLink';
 import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
 import { StatusSwap } from './motionBits';
+import { CityField } from './CityField';
+import { loadCities, resolveCity } from './cityCatalog';
 import { usePartner } from './PartnerContext';
 import { useProfileAttach } from './profileAttach';
 import { formatDocStamp } from './historyFormatting';
@@ -422,16 +424,24 @@ export function ObjectsPanel({
     setSaving(true);
     setErr(null);
     const roomLabel = draft.roomName.trim();
-    const fields = {
-      status: 'draft' as const,
-      clientName: draft.clientName.trim(),
-      clientPhone: '',
-      address: draft.address.trim(),
-      city: draft.city.trim() || user.org?.city || '',
-      roomName: roomLabel,
-      room: roomStubFromLabel(roomLabel),
-    };
     try {
+      await loadCities();
+      const cityRaw = draft.city.trim() || user.org?.city || '';
+      const resolved = resolveCity(cityRaw, null);
+      if (!resolved.ok) {
+        setErr(resolved.message);
+        setSaving(false);
+        return;
+      }
+      const fields = {
+        status: 'draft' as const,
+        clientName: draft.clientName.trim(),
+        clientPhone: '',
+        address: draft.address.trim(),
+        city: resolved.city,
+        roomName: roomLabel,
+        room: roomStubFromLabel(roomLabel),
+      };
       let saved: JobObject;
       if (!api.remote && (user.role === 'owner' || user.role === 'sales')) {
         const project = await api.createProject({
@@ -652,7 +662,7 @@ export function ObjectsPanel({
                   </label>
                   <label className={styles.field}>
                     Город
-                    <input value={draft.city} onChange={(event) => setDraft((value) => ({ ...value, city: event.target.value }))} />
+                    <CityField value={draft.city} onChange={(city) => setDraft((value) => ({ ...value, city }))} />
                   </label>
                   <label className={styles.field}>
                     Первая комната

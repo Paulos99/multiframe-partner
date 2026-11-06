@@ -1,4 +1,6 @@
 import { Skeleton } from './Skeleton';
+import { CityField } from './CityField';
+import { loadCities, resolveCity } from './cityCatalog';
 import { useState, type FormEvent } from 'react';
 import type { UserRole } from '../../../../packages/shared/partner';
 import { ProjectDetail, type ProjectRoom, type ProjectView } from './ProjectDetail';
@@ -26,7 +28,10 @@ export function ProjectsPanel({ projects, rooms, role, loading, error, onRetry, 
     if (!onCreate || !form.name.trim()) return;
     setBusy(true); setSaveError('');
     try {
-      const project = await onCreate({ ...form, name: form.name.trim() });
+      await loadCities();
+      const resolved = resolveCity(form.city, null);
+      if (!resolved.ok) { setSaveError(resolved.message); setBusy(false); return; }
+      const project = await onCreate({ ...form, name: form.name.trim(), city: resolved.city });
       setSelectedId(project.id); setCreating(false);
       setForm({ name: '', clientName: '', clientPhone: '', address: '', city: '' });
     } catch (err) { setSaveError(err instanceof Error ? err.message : 'Не удалось сохранить проект'); }
@@ -40,8 +45,9 @@ export function ProjectsPanel({ projects, rooms, role, loading, error, onRetry, 
       <p className={styles.muted}>Объедините комнаты одной квартиры. Расчёты и документы останутся у каждого помещения.</p>
     </div>{canManage && onCreate ? <button className={styles.primary} onClick={() => setCreating(value => !value)} aria-expanded={creating}>{creating ? 'Закрыть форму' : '+ Новый проект'}</button> : null}</div>
     {creating ? <form className={styles.form} onSubmit={event => void create(event)}>
-      {([['name', 'Название проекта'], ['clientName', 'Клиент'], ['clientPhone', 'Телефон'], ['address', 'Адрес'], ['city', 'Город']] as const).map(([key, label]) =>
+      {([['name', 'Название проекта'], ['clientName', 'Клиент'], ['clientPhone', 'Телефон'], ['address', 'Адрес']] as const).map(([key, label]) =>
         <label key={key}>{label}<input type={key === 'clientPhone' ? 'tel' : 'text'} maxLength={250} required={key === 'name'} value={form[key]} disabled={busy} onChange={event => setForm(value => ({ ...value, [key]: event.target.value }))} /></label>)}
+      <label>Город<CityField value={form.city} onChange={(city) => setForm((value) => ({ ...value, city }))} /></label>
       {saveError ? <p className={styles.error} role="alert">{saveError}</p> : null}
       <button className={styles.primary} type="submit" disabled={busy || !form.name.trim()}>{busy ? 'Сохраняем…' : 'Создать проект'}</button>
     </form> : null}

@@ -109,9 +109,9 @@ for (const [role, title] of VIDEO_ROLES) {
   if (!html.includes('Обучающее видео') || !html.includes(`«${title}»`) || !html.includes(`/videos/role-${role}.jpg`)) {
     throw new Error(`В обучении роли ${role} нет своего видео`);
   }
-  if ((html.match(/<video/g) || []).length !== 1) throw new Error(`У роли ${role} должно быть ровно одно видео`);
-  for (const part of ['<video', ' controls', 'playsInline', 'preload="none"', 'poster="']) {
-    if (!html.includes(part)) throw new Error(`Видео роли ${role}: нет «${part.trim()}»`);
+  if (html.includes('<video')) throw new Error(`У роли ${role} видео не должно играть в карточке — только кнопка «Смотреть»`);
+  if (!html.includes('Смотреть') || !html.includes(`role-${role}.jpg`)) {
+    throw new Error(`Видео роли ${role}: нет кнопки «Смотреть» или афиши`);
   }
   // Первым пунктом: раньше папок материалов.
   if (html.indexOf('Обучающее видео') > html.indexOf('Папки') && html.includes('Папки')) {
@@ -123,7 +123,8 @@ if (renderToStaticMarkup(<HelpTrainingPanel role={'stp_manager'} />).includes('�
 }
 {
   const html = renderToStaticMarkup(<HelpTrainingPanel role="admin" />);
-  if ((html.match(/<video/g) || []).length !== 4) throw new Error('Админ StP должен видеть все четыре видео');
+  if (html.includes('<video')) throw new Error('Админ StP: видео не должны быть встроены в карточку');
+  if ((html.match(/Смотреть/g) || []).length < 4) throw new Error('Админ StP должен видеть все четыре кнопки «Смотреть»');
   for (const [role, title] of VIDEO_ROLES) {
     if (!html.includes(`«${title}»`) || !html.includes(`/videos/role-${role}.jpg`)) throw new Error(`Админ StP не видит видео роли ${role}`);
   }

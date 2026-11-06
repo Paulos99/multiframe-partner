@@ -19,6 +19,7 @@ import {
 import { cleanRefusal } from '../../packages/shared/refusal.js';
 import { PROJECT_LIMITS } from '../../packages/shared/schemas.js';
 import { parseBody, schemas } from './validation.js';
+import { resolveCity } from '../../packages/shared/cityCatalog.js';
 import { applyAutoArchive, archivePatchResult } from '../../packages/shared/autoArchive.js';
 
 const NAME_MAX = PROJECT_LIMITS.name;
@@ -188,7 +189,12 @@ function writeProject(body, existing, actor, uid, platform) {
     clientName: pick('clientName', TEXT_MAX),
     clientPhone,
     address: pick('address', TEXT_MAX),
-    city: pick('city', CITY_MAX),
+    city: (() => {
+      const raw = pick('city', CITY_MAX);
+      const resolved = resolveCity(raw, existing?.city ?? null);
+      if (!resolved.ok) throw httpError(400, resolved.message);
+      return resolved.city;
+    })(),
     description: pick('description', DESCRIPTION_MAX),
     ...(status ? { status } : {}),
     ...(refusal ? { refusal } : {}),
