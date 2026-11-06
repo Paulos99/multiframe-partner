@@ -3,18 +3,14 @@
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   align-items: start;
-  background:
-    radial-gradient(900px 420px at 100% -8%, color-mix(in srgb, var(--cab-accent) 7%, transparent), transparent 60%),
-    var(--cab-page);
+  background: var(--cab-page);
   color: var(--cab-ink);
   font-family: var(--cab-font);
 }
 
-/* Тёмная тема: мягкое пятно на весь каркас страницы, не на блок .work. */
+/* Тёмная тема: ровный фон каркаса; пятно рисуем на .work от верхнего левого угла. */
 :global(body.theme-dark) .frame {
-  background:
-    radial-gradient(900px 420px at 100% -8%, color-mix(in srgb, var(--cab-accent) 14%, transparent), transparent 60%),
-    var(--cab-page);
+  background: var(--cab-page);
 }
 
 .main {
@@ -80,10 +76,21 @@
 
 .work {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: var(--cab-space-5);
   padding: 20px 24px calc(156px + env(safe-area-inset-bottom));
+  overflow: visible;
+  /* Светлая тема: мягкое пятно от верхнего левого угла блока работы. */
+  background:
+    radial-gradient(1100px 560px at 0% 0%, color-mix(in srgb, var(--cab-accent) 8%, transparent), transparent 62%);
+}
+
+/* Тёмная тема: то же пятно сильнее, без обрезки по section.today. */
+:global(body.theme-dark) .work {
+  background:
+    radial-gradient(1100px 560px at 0% 0%, color-mix(in srgb, var(--cab-accent) 16%, transparent), transparent 62%);
 }
 
 /* Планшет: рельс 88 px слева (см. Sidebar.module.css), логотип — в шапке. */

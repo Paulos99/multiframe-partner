@@ -200,7 +200,7 @@ test('имя из профиля сразу в приветствии и шап�
   await expect(page.getByRole('heading', { level: 2, name: `${hello}, Светлана` })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Мой профиль' })).toContainText('Светлана Орлова');
 
-  await page.getByRole('button', { name: 'Изменить имя', exact: true }).click();
+  await page.getByRole('button', { name: 'Мой профиль' }).click();
   const again = page.getByRole('dialog', { name: 'Мой профиль' });
   await expect(again.getByLabel('Имя', { exact: true })).toHaveValue('Светлана Орлова');
   await again.getByLabel('Имя', { exact: true }).fill('');
@@ -208,7 +208,8 @@ test('имя из профиля сразу в приветствии и шап�
   await expect(again.getByRole('status')).toHaveText('Имя обновлено');
   await again.getByRole('button', { name: 'Закрыть профиль' }).click();
   await expect(page.getByRole('heading', { level: 2, name: hello, exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Указать имя', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Изменить имя', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Указать имя', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Мой профиль' })).toContainText('Укажите имя');
 });
 
