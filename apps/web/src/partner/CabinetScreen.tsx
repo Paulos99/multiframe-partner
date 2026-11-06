@@ -762,18 +762,23 @@ function SalesCabinet({
   const api = usePartner();
   const user = api.user!;
   const [createToken, setCreateToken] = useState(0);
-  const [tab, setTab] = useCabinetSection<'today' | 'projects' | 'tools' | 'analytics' | 'help'>('analytics', () => {
+  type SalesTab = 'today' | 'projects' | 'tools' | 'company' | 'analytics' | 'help';
+  const [tab, setTab] = useCabinetSection<SalesTab>('analytics', () => {
     if (consumeReturnToTools()) return 'tools';
+    if (typeof window !== 'undefined' && companyHashOpen(window.location.hash)) return 'company';
     if (trainerHashOpen()) return 'help';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setTab('projects'), []);
+  const showCompany = useMemo(() => () => setTab('company'), []);
   useFollowProjectHash(showProjects);
+  useFollowCompanyHash(showCompany);
 
   const salesNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
+    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { navigateCompany('staff', 'replace'); setTab('company'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
@@ -844,6 +849,20 @@ function SalesCabinet({
         </TabPanel>
       ) : null}
 
+      {tab === 'company' ? (
+        <TabPanel>
+          <CompanySection
+            about={
+              <section className={`${styles.card} ${styles.panelCard}`}>
+                <h2>Компания</h2>
+                <p className={styles.lead}>{user.org?.companyName?.trim() || 'Без названия'}</p>
+                <p className={styles.hint}>{user.org?.city?.trim() || 'Город не указан'}</p>
+                <p className={styles.hint}>Менеджер создаёт сотрудников и выдаёт ссылку для входа. Удаление — у владельца.</p>
+              </section>
+            }
+          />
+        </TabPanel>
+      ) : null}
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="sales" />

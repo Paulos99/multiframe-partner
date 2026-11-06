@@ -89,8 +89,8 @@ const OBJECTS_CAP = Number(process.env.MAX_OBJECTS) || 100000;
 
 const ORG_ROLES = ['owner', 'sales', 'measurer', 'crew'];
 const STAFF_ROLES = ['sales', 'measurer', 'crew'];
-/** Владелец и менеджер компании. Админ StP сотрудников компании здесь не ведёт. */
-const STAFF_MANAGER_ROLES = ['owner'];
+/** Владелец и менеджер компании создают сотрудников и выдают ссылку. Админ StP здесь не ведёт. */
+const STAFF_MANAGER_ROLES = ['owner', 'sales'];
 const OFFICIAL_PANEL = 2396;
 const OFFICIAL_M2 = 5990;
 const DEFAULT_INSTALL = 1500;
@@ -2203,7 +2203,7 @@ async function handleRequest(event = {}) {
 
     if (method === 'DELETE' && /\/org\/staff\/[^/]+$/.test(path)) {
       const { platform, user } = await requireAuth(event);
-      assertRole(user, STAFF_MANAGER_ROLES);
+      assertRole(user, ['owner']);
       if (!user.orgId) return json(400, { message: 'Нет организации' });
       const staffUserId = decodeURIComponent(path.split('/').pop() || '');
       const target = platform.users.find((u) => u.id === staffUserId);

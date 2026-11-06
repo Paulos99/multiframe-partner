@@ -19,6 +19,7 @@ export function StaffPanel() {
   const api = usePartner();
   const reduce=usePrefersReducedMotion();
   const user = api.user;
+  const isOwner = user?.role === 'owner';
   const [execName, setExecName] = useState('');
   const [execRole, setExecRole] = useState<UserRole>('measurer');
   const [issued, setIssued] = useState<{ id: string; login: string; displayName: string; password: string; pendingActivation?: boolean } | null>(null);
@@ -122,6 +123,7 @@ export function StaffPanel() {
                 К списку
               </button>
             </div>
+            {isOwner ? (
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -152,6 +154,7 @@ export function StaffPanel() {
                 Сохранить имя
               </Button>
             </form>
+            ) : null}
             {open.pendingActivation ? (
               <p className={styles.hint}>Пароль ещё не задан. Нажмите «Ссылка для входа» и отправьте её сотруднику.</p>
             ) : null}
@@ -159,7 +162,7 @@ export function StaffPanel() {
               <ActivationLinkButton userId={open.id} userName={open.displayName} />
               <NewPasswordButton staffId={open.id} staffName={open.displayName} />
             </div>
-            {open.id === user.id ? null : (
+            {isOwner && open.id !== user.id ? (
               <button
                 type="button"
                 className={styles.danger}
@@ -171,7 +174,7 @@ export function StaffPanel() {
               >
                 Удалить
               </button>
-            )}
+            ) : null}
           </>
         ) : null}
       </section>
