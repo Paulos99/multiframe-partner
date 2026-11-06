@@ -84,6 +84,9 @@ type Row = {
   archived: boolean;
 };
 
+export type DocAction = 'open' | 'download' | 'share';
+export type OnDocAction = (room: JobObject, doc: NonNullable<JobObject['documents']>[number], action: DocAction) => Promise<void>;
+
 export function ProjectDesk({
   projects,
   rooms,
@@ -100,6 +103,7 @@ export function ProjectDesk({
   onOpenRoom,
   onAddRoom,
   onDeleteProject,
+  onDocAction,
 }: {
   projects: Project[];
   rooms: JobObject[];
@@ -117,6 +121,7 @@ export function ProjectDesk({
   onOpenRoom: (room: JobObject) => void;
   onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
   onDeleteProject?: (project: Project) => void;
+  onDocAction?: OnDocAction;
 }) {
   const [view, setView] = useState<ProjectDeskView>(() =>
     readProjectView(typeof localStorage === 'undefined' ? null : localStorage),
@@ -188,6 +193,7 @@ export function ProjectDesk({
         onOpenRoom={onOpenRoom}
         onAddRoom={onAddRoom}
         onDeleteProject={onDeleteProject}
+        onDocAction={onDocAction}
       />
     );
   }
@@ -830,6 +836,7 @@ function ProjectPage({
   onOpenRoom,
   onAddRoom,
   onDeleteProject,
+  onDocAction,
 }: {
   row: Row;
   staff: Person[];
@@ -843,6 +850,7 @@ function ProjectPage({
   onOpenRoom: (room: JobObject) => void;
   onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
   onDeleteProject?: (project: Project) => void;
+  onDocAction?: OnDocAction;
 }) {
   const { boxRef: tabsRef, pillRef: tabsPillRef } = useSlidingPill(tab);
   const people = actor && !staff.some((person) => person.id === actor.id) ? [actor, ...staff] : staff;
@@ -917,7 +925,7 @@ function ProjectPage({
         {tab === 'team' ? <Team project={project} rooms={rooms} staff={people} /> : null}
         {tab === 'tasks' ? <Tasks steps={steps} rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
         {tab === 'reports' ? <Reports rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
-        {tab === 'documents' ? <Documents rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
+        {tab === 'documents' ? <Documents rooms={rooms} onOpenRoom={onOpenRoom} onDocAction={onDocAction} /> : null}
         {tab === 'settings' ? (
           <Settings project={project} rooms={rooms} status={status} staff={people} actor={actor} canEdit={canEdit} onSave={onSave} onDelete={onDeleteProject} />
         ) : null}
@@ -1215,7 +1223,16 @@ function Reports({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room:
   );
 }
 
-function Documents({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room: JobObject) => void }) {
+function Documents({
+  rooms,
+  onOpenRoom,
+  onDocAction,
+}: {
+  rooms: JobObject[];
+  onOpenRoom: (room: JobObject) => void;
+  onDocAction?: OnDocAction;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
   const docs = rooms.flatMap((room) => visibleDocuments(room.documents).map((doc) => ({ room, doc })));
   if (!docs.length) {
     return (
@@ -1224,21 +1241,55 @@ function Documents({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (roo
       </p>
     );
   }
+  async function run(room: JobObject, doc: (typeof docs)[number]['doc'], action: DocAction) {
+    if (!onDocAction) return;
+    setBusy(`${doc.id}:${action}`);
+    try {
+      await onDocAction(room, doc, action);
+    } finally {
+      setBusy(null);
+    }
+  }
   return (
     <div className={styles.docs}>
-      {docs.map(({ room, doc }) => (
-        <button key={doc.id} type="button" className={styles.doc} onClick={() => onOpenRoom(room)}>
-          <span>
-            <strong>{doc.kind === 'profile' ? 'Профиль проблемомера' : 'Смета калькулятора'}</strong>
-            <span>
-              {doc.kind === 'profile' ? documentLabel(doc.kind) : 'Коммерческое предложение'}
-              {' · '}
-              {roomTitle(room)}
-              {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
-            </span>
-          </span>
-        </button>
-      ))}
+      {docs.map(({ room, doc }) => {
+        const title = doc.kind === 'profile' ? 'Профиль проблемомера' : 'Смета калькулятора';
+        return (
+          <div key={doc.id} className={styles.docRow} data-doc-row>
+            <button type="button" className={styles.docMain} onClick={() => onOpenRoom(room)}>
+              <strong>{title}</strong>
+              <span className={styles.docMeta} data-doc-meta>
+                {doc.kind === 'profile' ? documentLabel(doc.kind) : 'Коммерческое предложение'}
+                {' · '}
+                {roomTitle(room)}
+                {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
+              </span>
+            </button>
+            {onDocAction ? (
+              <div className={styles.docActions} role="group" aria-label={`Действия: ${title}`}>
+                {(
+                  [
+                    ['open', 'Открыть'],
+                    ['download', 'Скачать'],
+                    ['share', 'Поделиться'],
+                  ] as const
+                ).map(([action, label]) => (
+                  <button
+                    key={action}
+                    type="button"
+                    className={styles.docAction}
+                    data-doc-action={action}
+                    disabled={busy != null}
+                    onClick={() => void run(room, doc, action)}
+                  >
+                    {busy === `${doc.id}:${action}` ? '…' : label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

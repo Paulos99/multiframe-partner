@@ -385,8 +385,19 @@ export function ObjectsPanel({
         );
         setMsg('Окно «Поделиться» открыто. Само по себе ничего не отправлено.');
       } else {
-        await navigator.clipboard.writeText(doc.filename);
-        setMsg('Имя файла скопировано. Отправка клиенту — только из этого окна.');
+        // Без Web Share: ссылка клиента (та же, что в QR); без неё — скачиваем файл.
+        const url = await ensureClientLinkUrl(
+          obj.id,
+          user.role,
+          (answersFromStoredRoom(obj.room) || {}) as unknown as Record<string, unknown>,
+        );
+        if (url && navigator.clipboard) {
+          await navigator.clipboard.writeText(url);
+          setMsg('Ссылка для клиента скопирована.');
+        } else {
+          openPdfBlob(blob, doc.filename, true);
+          setMsg('Ссылка для клиента недоступна — файл скачан, отправьте его сами.');
+        }
       }
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
@@ -616,6 +627,10 @@ export function ObjectsPanel({
           if (projectId) navigateProject({ kind: 'room', projectId, roomId: room.id });
         }}
         onAddRoom={canCreate ? addRoom : undefined}
+        onDocAction={async (room, doc, action) => {
+          if (action === 'share') await shareDocument(room, doc);
+          else await openDocument(room, doc, action === 'download');
+        }}
         onDeleteProject={canDelete ? (project) => setProjectToDelete({ id: project.id, name: project.name, rooms: api.objects.filter((room) => room.projectId === project.id).length }) : undefined}
       />
       )}

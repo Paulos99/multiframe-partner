@@ -904,3 +904,70 @@
   padding: 0 6px;
   font-weight: 700;
 }
+
+/* Документы проекта: заголовок, мета отдельной строкой, действия. */
+.docRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--cab-border);
+  border-radius: 12px;
+  background: var(--cab-card, #fff);
+}
+
+.docMain {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.docMain strong {
+  color: var(--cab-ink);
+}
+
+.docMeta {
+  display: block;
+  font-size: 13px;
+  color: var(--cab-muted, #6b7280);
+}
+
+.docActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.docAction {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--cab-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.docAction:disabled {
+  opacity: 0.6;
+}
+
+@media (max-width: 560px) {
+  .docActions {
+    width: 100%;
+  }
+  .docAction {
+    flex: 1 1 0;
+  }
+}
