@@ -45,7 +45,7 @@ test('демо ?demo=1 группирует комнаты и открывает
   await page.screenshot({ path: `${shots}/02-kanban.png` });
   await desk.getByRole('button', { name: 'Список', exact: true }).click();
 
-  await desk.getByRole('button', { name: 'Иванова А.', exact: true }).click();
+  await desk.getByRole('button', { name: 'Сидорова М.', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
   await expect(card).toBeVisible();
   const tabs = ['Обзор', 'Комнаты', 'Команда', 'Задачи', 'Отчёты', 'Документы', 'Настройки'] as const;
@@ -58,7 +58,7 @@ test('демо ?demo=1 группирует комнаты и открывает
   await card.getByRole('tab', { name: 'Команда', exact: true }).click();
   await expect(card.getByText('Павел Орлов').first()).toBeVisible();
   await card.getByRole('tab', { name: 'Комнаты', exact: true }).click();
-  await card.getByRole('button', { name: /Гостиная/ }).click();
+  await card.getByRole('button', { name: /Детская/ }).click();
   const room = page.getByRole('region', { name: 'Комната' });
   await expect(room).toBeVisible();
   await room.screenshot({ path: `${shots}/04-room.png` });
@@ -102,11 +102,11 @@ test('демо-бригада видит список комнат без кан
 
   const done = desk.locator('details').filter({ hasText: 'Готовые' });
   await expect(done).not.toHaveAttribute('open', '');
-  await expect(done.getByRole('heading', { name: 'Иванова А.', exact: true })).toBeHidden();
+  // Иванова А. автоархивирована через 14 суток после закрытия — в списке только активные.
+  await expect(done.getByRole('heading', { name: 'Иванова А.', exact: true })).toHaveCount(0);
   await done.locator('summary').click();
-  await expect(done.getByRole('heading', { name: 'Иванова А.', exact: true })).toBeVisible();
-  await expect(done.getByRole('button', { name: 'Гостиная' })).toContainText('Завершён');
   await expect(done.getByRole('heading', { name: 'Петров С.', exact: true })).toBeVisible();
+  await expect(done.getByRole('button').filter({ hasText: 'Завершён' }).first()).toBeVisible();
 
   await open.getByRole('button', { name: 'Детская' }).click();
   const room = page.getByRole('region', { name: 'Комната' });

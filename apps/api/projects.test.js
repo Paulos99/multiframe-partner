@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { after, describe } from 'node:test';
@@ -536,4 +536,61 @@ describe('projects', { concurrency: false }, () => {
     assert.equal(restored.project.description, 'Тихая спальня над улицей');
     assert.equal(restored.project.status, 'measure');
   });
+
+  test('автоархив: все комнаты closed 14+ суток → archivedAt; unarchiveHold держит', async () => {
+    const owner = await login('partner1', 'demo1234');
+    const created = readJson(
+      await call('POST', '/projects', {
+        token: owner,
+        body: { name: 'Автоархив тест', clientName: 'Архивов', address: 'ул. Архивная, 1', city: 'Москва' },
+      }),
+    );
+    const projectId = created.project.id;
+    assert.equal(created.project.archivedAt, null);
+
+    const room = readJson(
+      await call('POST', '/objects', {
+        token: owner,
+        body: {
+          clientName: 'Архивов',
+          address: 'ул. Архивная, 1',
+          city: 'Москва',
+          projectId,
+          roomName: 'Зал',
+          status: 'closed',
+        },
+      }),
+    );
+    const roomId = room.object?.id || room.id;
+    assert.ok(roomId, JSON.stringify(room));
+
+    const platform = storedPlatform();
+    const obj = platform.objects.find((item) => item.id === roomId);
+    assert.ok(obj);
+    obj.status = 'closed';
+    obj.updatedAt = '2026-01-01T00:00:00.000Z';
+    obj.projectId = projectId;
+    const prj = platform.projects.find((item) => item.id === projectId);
+    prj.archivedAt = null;
+    delete prj.unarchiveHold;
+    writeFileSync(platformFile, JSON.stringify(platform));
+    resetPlatformMemoryForTests();
+
+    const listed = readJson(await call('GET', '/projects', { token: owner }));
+    const found = listed.projects.find((item) => item.id === projectId);
+    assert.ok(found, 'проект в списке');
+    assert.ok(found.archivedAt, 'должен быть автоархивирован');
+
+    const restored = readJson(
+      await call('PATCH', `/projects/${projectId}`, { token: owner, body: { archived: false } }),
+    );
+    assert.equal(restored.project.archivedAt, null);
+
+    const again = readJson(await call('GET', '/projects', { token: owner }));
+    const held = again.projects.find((item) => item.id === projectId);
+    assert.equal(held.archivedAt, null, 'после ручного возврата не архивируем снова');
+    const stored = storedPlatform().projects.find((item) => item.id === projectId);
+    assert.equal(stored.unarchiveHold, true);
+  });
+
 });
