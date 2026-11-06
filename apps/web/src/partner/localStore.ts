@@ -1,3 +1,4 @@
+import { cleanStaffPhone } from '../../../../packages/shared/clientPhone.js';
 /**
  * Local-first store for partner portal (offline / no API).
  * Survives reloads and works as PWA cache.
@@ -790,6 +791,22 @@ export function updateOwnDisplayName(actor: SessionUser, displayName: string): S
   users[idx] = { ...users[idx]!, displayName: name };
   saveDb({ ...db, users });
   const next = { ...actor, displayName: name };
+  saveSession(next);
+  return next;
+}
+
+/** Свой рабочий телефон: только российский номер; пустое значение стирает номер. */
+export function updateOwnPhone(actor: SessionUser, phone: string): SessionUser {
+  const cleaned = cleanStaffPhone(phone);
+  if (cleaned.error) throw new Error(cleaned.error);
+  const value = cleaned.value || '';
+  const db = loadDb();
+  const idx = db.users.findIndex((u) => u.id === actor.id);
+  if (idx < 0) throw new Error('Пользователь не найден');
+  const users = [...db.users];
+  users[idx] = { ...users[idx]!, phone: value || undefined } as (typeof users)[number];
+  saveDb({ ...db, users });
+  const next = { ...actor, phone: value };
   saveSession(next);
   return next;
 }

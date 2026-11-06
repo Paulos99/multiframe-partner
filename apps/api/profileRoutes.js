@@ -1,3 +1,4 @@
+import { cleanStaffPhone } from '../../packages/shared/clientPhone.js';
 import bcrypt from 'bcryptjs';
 import { normalizePersonName } from '../../packages/shared/personName.js';
 import {
@@ -77,7 +78,14 @@ export async function handleProfile(ctx) {
     const body = ctx.getBody();
     const hasLogin = Object.prototype.hasOwnProperty.call(body, 'login');
     const hasName = Object.prototype.hasOwnProperty.call(body, 'displayName');
-    if (!hasLogin && !hasName) fail('Укажите имя или логин');
+    const hasPhone = Object.prototype.hasOwnProperty.call(body, 'phone');
+    if (!hasLogin && !hasName && !hasPhone) fail('Укажите имя, телефон или логин');
+    let phone;
+    if (hasPhone) {
+      const cleaned = cleanStaffPhone(body.phone);
+      if (cleaned.error) fail(cleaned.error);
+      phone = cleaned.value;
+    }
     const next = {
       ...platform.users[index],
       updatedAt: new Date().toISOString(),
@@ -104,7 +112,11 @@ export async function handleProfile(ctx) {
       next.login = login;
       next.sessionVersion = (user.sessionVersion || 0) + 1;
     }
-    delete next.phone;
+    // Телефон меняет только сам человек и только явным полем phone.
+    if (hasPhone) {
+      if (phone) next.phone = phone;
+      else delete next.phone;
+    }
     platform.users[index] = next;
     await ctx.savePlatform(platform);
     const payload = { user: await profileWithAvatar(next, platform, ctx) };

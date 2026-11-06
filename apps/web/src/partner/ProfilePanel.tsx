@@ -19,8 +19,9 @@ type Pending = 'login' | 'password';
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export function ProfilePanel({ onClose }: { onClose: () => void }) {
-  const { user, acceptProfile, updateDisplayName } = usePartner();
+  const { user, acceptProfile, updateDisplayName, updatePhone } = usePartner();
   const [name, setName] = useState(() => personName(user?.displayName));
+  const [phone, setPhone] = useState(user?.phone || '');
   const [login, setLogin] = useState(user?.login || '');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -93,6 +94,24 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
       setMessage('Имя обновлено');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить имя');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const phoneDirty = phone.trim() !== (user?.phone || '');
+
+  async function savePhone(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    setBusy(true);
+    try {
+      const next = await updatePhone(phone);
+      setPhone(next.phone || '');
+      setMessage(next.phone ? 'Телефон сохранён' : 'Телефон удалён');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить телефон');
     } finally {
       setBusy(false);
     }
@@ -186,8 +205,26 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
           Сохранить имя
         </button>
       </form>
+      <form className={styles.nameForm} onSubmit={(event) => void savePhone(event)} data-profile-phone>
+        <label>
+          Телефон
+          <input
+            type="tel"
+            inputMode="tel"
+            value={phone}
+            maxLength={24}
+            autoComplete="tel"
+            placeholder="+7 900 123-45-67"
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </label>
+        <p className={styles.nameHint}>Рабочий номер. Его увидят клиенты в коммерческом предложении.</p>
+        <button className={styles.action} disabled={busy || !phoneDirty}>
+          Сохранить телефон
+        </button>
+      </form>
       {!remote ? (
-        <p role="status">Логин, пароль и фото доступны при подключении к серверу. Имя сохранится на этом устройстве.</p>
+        <p role="status">Логин, пароль и фото доступны при подключении к серверу. Имя и телефон сохранятся на этом устройстве.</p>
       ) : null}
       <fieldset disabled={busy || !remote} className={styles.fields}>
         <div className={styles.photo}>
