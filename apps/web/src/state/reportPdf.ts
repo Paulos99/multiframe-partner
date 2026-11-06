@@ -1164,7 +1164,7 @@ export async function renderAcousticProfilePdf(
     const room = full.answers.room;
     const roomName = roomTypeLabel(room, 'komnata');
     const safe = roomName.replace(/[^\wа-яА-ЯёЁ\-]+/gi, '_').slice(0, 24);
-    const filename = `MultiFrame_результаты_${safe}_${room.ceilingAreaM2 ?? 'area'}.pdf`;
+    const filename = `Акустический профиль помещения — ${safe}${room.ceilingAreaM2 ? ` — ${room.ceilingAreaM2} м²` : ''}.pdf`;
     return { blob: pdf.output('blob'), filename };
   } finally {
     iframe.remove();

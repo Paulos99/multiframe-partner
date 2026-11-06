@@ -1220,7 +1220,7 @@ function Documents({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (roo
   if (!docs.length) {
     return (
       <p className={styles.lead}>
-        Профиль проблемомера появится после сохранения профиля, смета калькулятора и коммерческое предложение — после расчёта комнаты.
+        Акустический профиль помещения появится после Проблемомера, смета и схема монтажа — после расчёта в калькуляторе.
       </p>
     );
   }
@@ -1229,9 +1229,9 @@ function Documents({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (roo
       {docs.map(({ room, doc }) => (
         <button key={doc.id} type="button" className={styles.doc} onClick={() => onOpenRoom(room)}>
           <span>
-            <strong>{doc.kind === 'profile' ? 'Профиль проблемомера' : 'Смета калькулятора'}</strong>
+            <strong>{documentLabel(doc.kind)}</strong>
             <span>
-              {doc.kind === 'profile' ? documentLabel(doc.kind) : 'Коммерческое предложение'}
+              {doc.kind === 'profile' ? 'Проблемомер' : 'Калькулятор'}
               {' · '}
               {roomTitle(room)}
               {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
