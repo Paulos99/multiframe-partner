@@ -13,9 +13,12 @@ let pending: Promise<void> | null = null;
 export function loadCities(): Promise<void> {
   if (citiesReady()) return Promise.resolve();
   if (!pending) {
-    pending = import('../../../../packages/shared/data/ru-cities.js')
-      .then((mod) => {
-        ensureIndexFromTsv(mod.default);
+    pending = Promise.all([
+      import('../../../../packages/shared/data/ru-cities.js'),
+      import('../../../../packages/shared/data/cis-cities.js'),
+    ])
+      .then(([ru, cis]) => {
+        ensureIndexFromTsv(`${ru.default}\n${cis.default}`);
       })
       .catch((error: unknown) => {
         pending = null;
