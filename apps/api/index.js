@@ -2308,7 +2308,7 @@ async function handleRequest(event = {}) {
             .replace(/[^\w.\-а-яА-ЯёЁ \u2014\u2013]+/g, ' ')
             .replace(/\s+/g, ' ')
             .trim()
-            .slice(0, 120) || (kind === 'profile' ? 'профиль.pdf' : 'смета.pdf');
+            .slice(0, 120) || (kind === 'profile' ? 'профиль.pdf' : kind === 'offer' ? 'кп.pdf' : 'смета.pdf');
         added.push({
           id: docId,
           versionId,
@@ -2320,6 +2320,12 @@ async function handleRequest(event = {}) {
           hasScheme: Boolean(raw.hasScheme),
           panels: Number.isFinite(Number(raw.panels)) ? Number(raw.panels) : null,
           areaM2: Number.isFinite(Number(raw.areaM2)) ? Number(raw.areaM2) : null,
+          ...(kind === 'offer'
+            ? {
+                stamp: String(raw.stamp || '').replace(/[^\w-]/g, '').slice(0, 64) || null,
+                projectId: existing.projectId || null,
+              }
+            : {}),
         });
       }
       const next = {
@@ -2330,7 +2336,7 @@ async function handleRequest(event = {}) {
           historyEvent(
             user,
             now,
-            added.every((d) => d.kind === 'profile') ? 'profile_pdf' : 'calc_pdf',
+            added.every((d) => d.kind === 'profile') ? 'profile_pdf' : added.every((d) => d.kind === 'offer') ? 'offer_pdf' : 'calc_pdf',
             added.map((d) => d.kind).join('+'),
           ),
           ...(existing.history || []),

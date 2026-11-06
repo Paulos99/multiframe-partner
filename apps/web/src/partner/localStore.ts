@@ -1520,12 +1520,13 @@ const DOC_QUEUE_KEY = 'mf_partner_doc_queue_v1';
 export type QueuedObjectDocument = {
   objectId: string;
   versionId: string;
-  kind: 'estimate' | 'profile';
+  kind: 'estimate' | 'profile' | 'offer';
   filename: string;
   pdfBase64: string;
   hasScheme: boolean;
   panels?: number | null;
   areaM2?: number | null;
+  stamp?: string | null;
 };
 
 const memoryDocBytes = new Map<string, string>();

@@ -1045,3 +1045,22 @@
 .rebuildBtn:disabled {
   opacity: 0.6;
 }
+
+.kpBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--cab-border, #dce6e1);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  color: var(--cab-muted, #5f6b73);
+}
+@media (max-width: 640px) {
+  .kpBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

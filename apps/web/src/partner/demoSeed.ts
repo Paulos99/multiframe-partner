@@ -1,3 +1,4 @@
+import { kpStamp } from './kp/kpStamp';
 /**
  * Client-side mirror of apps/api/demoSeed.js for offline / local fallback.
  */
@@ -341,11 +342,69 @@ export function assignDemoRoomStaff<T extends { id?: string; orgId?: string | nu
   });
 }
 
+/** Ответы Проблемомера для квартиры Чернова: те же, что в утверждённом образце КП. */
+export const DEMO_KP_ANSWERS = {
+  slabType: 'hollow',
+  slabThickness: 'about_160_200',
+  houseType: 'block',
+  plannedCeiling: 'stretch',
+  objectStage: 'newbuild',
+  floorAbove: 'ordinary',
+} as const;
+
+const KP_ROOMS: Array<{ id: string; roomName: string; roomType: string; area: number }> = [
+  { id: 'obj_a11', roomName: 'Кабинет', roomType: 'office', area: 22 },
+  { id: 'obj_a11b', roomName: 'Спальня', roomType: 'bedroom', area: 14 },
+  { id: 'obj_a11c', roomName: 'Гостиная', roomType: 'living', area: 26 },
+];
+
+/** Проект Чернова: три комнаты и демо-КП по ним (файл собирается в браузере). */
+function withDemoKpProject(objects: JobObject[]): JobObject[] {
+  const base = objects.find((o) => o.id === 'obj_a11');
+  if (!base) return objects;
+  const rooms: JobObject[] = KP_ROOMS.map((spec) => ({
+    ...base,
+    id: spec.id,
+    roomName: spec.roomName,
+    room: {
+      ...base.room,
+      roomType: spec.roomType,
+      areaM2: spec.area,
+      houseType: DEMO_KP_ANSWERS.houseType,
+      objectStage: DEMO_KP_ANSWERS.objectStage,
+      answers: { ...DEMO_KP_ANSWERS, roomType: spec.roomType, ceilingAreaM2: spec.area },
+    },
+    estimate: estimate(spec.area),
+    clientSummary: `${base.clientName} · ${spec.area} м² · ${base.address}`,
+    history: base.history.map((h) => ({ ...h })),
+  }));
+  const at = daysAgo(0, 10, 0);
+  rooms[0] = {
+    ...rooms[0]!,
+    documents: [
+      {
+        id: 'doc_kp_demo',
+        versionId: 'ver_kp_demo',
+        createdAt: at,
+        createdBy: 'u_sales1',
+        kind: 'offer',
+        filename: 'Коммерческое предложение — Чернов А. — ДЕМО-001.pdf',
+        hasScheme: false,
+        panels: rooms.reduce((n, r) => n + (r.estimate?.panels || 0), 0),
+        areaM2: rooms.reduce((n, r) => n + (r.room.areaM2 || 0), 0),
+        demo: true,
+        stamp: kpStamp(rooms),
+      },
+    ],
+  };
+  return [...objects.filter((o) => o.id !== 'obj_a11'), ...rooms];
+}
+
 export function buildLocalDemoObjects(): JobObject[] {
   const moscow = SPECS_A.map((s) =>
     makeObject(s, 'org_demo', 'Москва', 'u_partner1', 'u_exec1', s.id === 'obj_a04' ? 'u_crew1b' : 'u_crew1', 'u_sales1'),
   );
-  return moscow;
+  return withDemoKpProject(moscow);
 }
 
 export type LocalAnalyticsEvent = {

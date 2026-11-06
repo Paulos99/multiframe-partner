@@ -1,3 +1,4 @@
+import { kpRooms, kpStamp } from './kp/kpStamp';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreIcon } from '../icons';
@@ -181,6 +182,9 @@ function MenuButton({ project, onMenu }: { project: Project; onMenu: (x: number,
 }
 
 export type DocAction = 'open' | 'download' | 'share' | 'rebuild';
+/** Собрать или пересобрать коммерческое предложение по комнатам проекта. */
+export type OnBuildKp = (project: Project, rooms: JobObject[]) => Promise<void>;
+
 export type OnDocAction = (room: JobObject, doc: NonNullable<JobObject['documents']>[number], action: DocAction) => Promise<void>;
 
 export function ProjectDesk({
@@ -201,6 +205,7 @@ export function ProjectDesk({
   onDeleteProject,
   onDocAction,
   onArchiveProject,
+  onBuildKp,
 }: {
   projects: Project[];
   rooms: JobObject[];
@@ -220,6 +225,7 @@ export function ProjectDesk({
   onDeleteProject?: (project: Project) => void;
   onDocAction?: OnDocAction;
   onArchiveProject?: OnArchiveProject;
+  onBuildKp?: OnBuildKp;
 }) {
   const [view, setView] = useState<ProjectDeskView>(() =>
     readProjectView(typeof localStorage === 'undefined' ? null : localStorage),
@@ -292,6 +298,7 @@ export function ProjectDesk({
         onAddRoom={onAddRoom}
         onDeleteProject={onDeleteProject}
         onDocAction={onDocAction}
+        onBuildKp={onBuildKp}
       />
     );
   }
@@ -911,6 +918,7 @@ function ProjectPage({
   onAddRoom,
   onDeleteProject,
   onDocAction,
+  onBuildKp,
 }: {
   row: Row;
   staff: Person[];
@@ -925,6 +933,7 @@ function ProjectPage({
   onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
   onDeleteProject?: (project: Project) => void;
   onDocAction?: OnDocAction;
+  onBuildKp?: OnBuildKp;
 }) {
   const { boxRef: tabsRef, pillRef: tabsPillRef } = useSlidingPill(tab);
   const people = actor && !staff.some((person) => person.id === actor.id) ? [actor, ...staff] : staff;
@@ -999,7 +1008,7 @@ function ProjectPage({
         {tab === 'team' ? <Team project={project} rooms={rooms} staff={people} /> : null}
         {tab === 'tasks' ? <Tasks steps={steps} rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
         {tab === 'reports' ? <Reports rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
-        {tab === 'documents' ? <Documents rooms={rooms} onOpenRoom={onOpenRoom} onDocAction={onDocAction} /> : null}
+        {tab === 'documents' ? <Documents project={project} rooms={rooms} onOpenRoom={onOpenRoom} onDocAction={onDocAction} onBuildKp={onBuildKp} /> : null}
         {tab === 'settings' ? (
           <Settings project={project} rooms={rooms} status={status} staff={people} actor={actor} canEdit={canEdit} onSave={onSave} onDelete={onDeleteProject} />
         ) : null}
@@ -1297,22 +1306,63 @@ function Reports({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room:
   );
 }
 
+function kpRoomsLabel(n: number): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  const w = m10 === 1 && m100 !== 11 ? 'комната' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'комнаты' : 'комнат';
+  return `${n} ${w}`;
+}
+
 function Documents({
+  project,
   rooms,
   onOpenRoom,
   onDocAction,
+  onBuildKp,
 }: {
+  project: Project;
   rooms: JobObject[];
   onOpenRoom: (room: JobObject) => void;
   onDocAction?: OnDocAction;
+  onBuildKp?: OnBuildKp;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
-  const docs = rooms.flatMap((room) => visibleDocuments(room.documents).map((doc) => ({ room, doc })));
+  const all = rooms.flatMap((room) => visibleDocuments(room.documents).map((doc) => ({ room, doc })));
+  // КП — один документ на проект: показываем только последнее, первым в списке.
+  const offers = all.filter((item) => item.doc.kind === 'offer').sort((a, b) => (a.doc.createdAt < b.doc.createdAt ? 1 : -1));
+  const docs = [...offers.slice(0, 1), ...all.filter((item) => item.doc.kind !== 'offer')];
+  const currentStamp = kpStamp(rooms);
+  const kpReady = kpRooms(rooms).length > 0;
+  async function buildKp() {
+    if (!onBuildKp) return;
+    setBusy('kp:build');
+    try {
+      await onBuildKp(project, rooms);
+    } finally {
+      setBusy(null);
+    }
+  }
+  const kpBar =
+    onBuildKp && !offers.length ? (
+      <div className={styles.kpBar} data-kp-build>
+        <span>
+          {kpReady
+            ? 'Коммерческое предложение соберётся из смет и Проблемомера всех комнат проекта.'
+            : 'Коммерческое предложение появится, когда хотя бы в одной комнате будет расчёт калькулятора.'}
+        </span>
+        <button type="button" className={styles.docAction} disabled={!kpReady || busy != null} onClick={() => void buildKp()}>
+          {busy === 'kp:build' ? 'Собираем…' : 'Собрать КП'}
+        </button>
+      </div>
+    ) : null;
   if (!docs.length) {
     return (
-      <p className={styles.lead}>
-        Акустический профиль помещения появится после Проблемомера, смета и схема монтажа — после расчёта в калькуляторе.
-      </p>
+      <>
+        {kpBar}
+        <p className={styles.lead}>
+          Акустический профиль помещения появится после Проблемомера, смета и схема монтажа — после расчёта в калькуляторе.
+        </p>
+      </>
     );
   }
   async function run(room: JobObject, doc: (typeof docs)[number]['doc'], action: DocAction) {
@@ -1326,29 +1376,47 @@ function Documents({
   }
   return (
     <div className={styles.docs}>
+      {kpBar}
       {docs.map(({ room, doc }) => {
         const title = documentLabel(doc.kind);
+        const offer = doc.kind === 'offer';
         const latest =
+          offer ||
           docs.find((item) => item.room.id === room.id && documentDisplayKind(item.doc.kind) === documentDisplayKind(doc.kind))?.doc.id === doc.id;
-        const stale = latest && isDocStale(doc, room);
+        const stale = offer ? Boolean(doc.stamp) && doc.stamp !== currentStamp : latest && isDocStale(doc, room);
         return (
           <div
             key={doc.id}
             className={stale ? `${styles.docRow} ${styles.docRowStale}` : styles.docRow}
             data-doc-row
+            data-doc-kind={documentDisplayKind(doc.kind)}
             data-stale={stale ? 'true' : undefined}
           >
-            <button type="button" className={styles.docMain} onClick={() => onOpenRoom(room)}>
+            <button
+              type="button"
+              className={styles.docMain}
+              onClick={() => (offer && onDocAction ? void run(room, doc, 'open') : onOpenRoom(room))}
+            >
               <strong>
                 {title}
-                {stale ? <span className={styles.staleBadge}>Устарел</span> : null}
+                {stale ? <span className={styles.staleBadge}>{offer ? 'Устарело' : 'Устарел'}</span> : null}
               </strong>
               <span className={styles.docMeta} data-doc-meta>
-                {doc.kind === 'profile' ? 'Проблемомер' : 'Калькулятор'}
-                {' · '}
-                {roomTitle(room)}
-                {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
-                {stale && room.room?.areaM2 != null ? ` · в комнате теперь ${formatArea(room.room.areaM2)}` : ''}
+                {offer ? (
+                  <>
+                    Весь проект · {kpRoomsLabel(kpRooms(rooms).length)}
+                    {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
+                    {stale ? ' · сметы или ответы комнат изменились' : ''}
+                  </>
+                ) : (
+                  <>
+                    {doc.kind === 'profile' ? 'Проблемомер' : 'Калькулятор'}
+                    {' · '}
+                    {roomTitle(room)}
+                    {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
+                    {stale && room.room?.areaM2 != null ? ` · в комнате теперь ${formatArea(room.room.areaM2)}` : ''}
+                  </>
+                )}
               </span>
             </button>
             {onDocAction ? (
@@ -1359,9 +1427,9 @@ function Documents({
                     className={styles.rebuildBtn}
                     data-doc-action="rebuild"
                     disabled={busy != null}
-                    onClick={() => void run(room, doc, 'rebuild')}
+                    onClick={() => void (offer && onBuildKp ? buildKp() : run(room, doc, 'rebuild'))}
                   >
-                    Пересобрать
+                    {busy === 'kp:build' ? 'Собираем…' : 'Пересобрать'}
                   </button>
                 ) : null}
                 {(

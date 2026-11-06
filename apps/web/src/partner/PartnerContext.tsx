@@ -131,6 +131,8 @@ export type StaffMember = {
   login: string;
   role: UserRole;
   displayName: string;
+  /** Рабочий телефон из профиля. */
+  phone?: string;
   orgId: string | null;
   createdAt?: string;
   /** Пароль ещё не задан: сотрудник ждёт ссылку активации. */
@@ -245,13 +247,19 @@ type PartnerApi = {
   applyCalculation: (message: CabinetCalcMessage, objectId: string | null, room?: JobObject) => Promise<JobObject | null>;
   /** «Профиль» — PDF проблемомера в карточку объекта. */
   attachProfile: (saved: JobObject, pdfBase64: string) => Promise<JobObject | null>;
+  /** КП проекта: файл лежит в первой комнате проекта, отпечаток — по всем комнатам. */
+  attachOffer: (
+    anchor: JobObject,
+    file: { pdfBase64: string; filename: string; stamp: string; panels: number; areaM2: number },
+  ) => Promise<JobObject | null>;
   noteTool: (tool: 'problemomer' | 'calculator') => void;
   refresh: () => void;
   apiBase: string;
 };
 
 type AttachFile = {
-  kind: 'estimate' | 'profile';
+  kind: 'estimate' | 'profile' | 'offer';
+  stamp?: string | null;
   filename: string;
   pdfBase64: string;
   hasScheme: boolean;
@@ -1041,6 +1049,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         panels: d.panels,
         areaM2: d.areaM2,
         dataBase64: d.pdfBase64,
+        ...(d.kind === 'offer' ? { stamp: d.stamp || null, projectId: saved.projectId || null } : {}),
       }));
       enqueueObjectDocuments(
         saved.id,
@@ -1053,6 +1062,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
           hasScheme: d.hasScheme,
           panels: d.panels,
           areaM2: d.areaM2,
+          ...(d.stamp ? { stamp: d.stamp } : {}),
         })),
       );
       const withDocs = await rememberObjectDocuments(saved, localDocs, user);
@@ -1122,6 +1132,27 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
           hasScheme: false,
           panels: null,
           areaM2: saved.room?.areaM2 ?? null,
+        },
+      ]);
+    },
+    [user, attachDocuments],
+  );
+
+  const attachOffer = useCallback(
+    async (
+      anchor: JobObject,
+      file: { pdfBase64: string; filename: string; stamp: string; panels: number; areaM2: number },
+    ) => {
+      if (!user || (user.role !== 'owner' && user.role !== 'sales')) return null;
+      return attachDocuments(anchor, [
+        {
+          kind: 'offer',
+          filename: file.filename,
+          pdfBase64: file.pdfBase64,
+          hasScheme: false,
+          panels: file.panels,
+          areaM2: file.areaM2,
+          stamp: file.stamp,
         },
       ]);
     },
@@ -1221,6 +1252,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       attachCalculation,
       applyCalculation,
       attachProfile,
+      attachOffer,
       noteTool,
       refresh,
       apiBase: remote ? (import.meta.env.VITE_API_URL as string) || '' : '',
@@ -1280,6 +1312,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       attachCalculation,
       applyCalculation,
       attachProfile,
+      attachOffer,
       noteTool,
       refresh,
       tick,

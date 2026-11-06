@@ -11,10 +11,11 @@
  * То же правило, что visibleDocuments в packages/shared/partner.ts.
  */
 
-const KINDS = new Set(['estimate', 'profile', 'spec']);
+const KINDS = new Set(['estimate', 'profile', 'spec', 'offer']);
 
 /** Тип нового файла из запроса. Неизвестное и старое 'spec' сохраняем как смету. */
 export function incomingDocumentKind(raw) {
+  if (raw === 'offer') return 'offer';
   return raw === 'profile' ? 'profile' : 'estimate';
 }
 
@@ -31,6 +32,7 @@ export function publicDocument(doc) {
     hasScheme: Boolean(doc.hasScheme),
     panels: doc.panels ?? null,
     areaM2: doc.areaM2 ?? null,
+    ...(doc.kind === 'offer' ? { stamp: doc.stamp || null, projectId: doc.projectId || null } : {}),
   };
 }
 
@@ -43,7 +45,7 @@ export function visibleDocuments(docs) {
     list.filter((doc) => doc.kind === 'estimate').map((doc) => doc.versionId || doc.id),
   );
   const picked = list.filter((doc) => {
-    if (doc.kind === 'estimate' || doc.kind === 'profile') return true;
+    if (doc.kind === 'estimate' || doc.kind === 'profile' || doc.kind === 'offer') return true;
     if (doc.kind === 'spec') return !pricedVersions.has(doc.versionId || doc.id);
     return false;
   });

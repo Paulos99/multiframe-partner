@@ -44,6 +44,11 @@ import { assigneeCandidates, assigneeRoleLabel, deleteProjectWarning, roomTitle 
 import { navigateProject, parseProjectHash, PROJECT_TABS, type ProjectRoute } from './projectRoute';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { RoomPhotoReport } from './photos/RoomPhotoReport';
+import { buildKpModel, kpRooms } from './kp/kpModel';
+import { renderKpPdf } from './kp/kpPdf';
+import { projectManagerContact } from '../../../../packages/shared/clientPhone.js';
+import { isDemoModeEnabled } from './demoMode';
+import type { Project } from '../../../../packages/shared/partner';
 import styles from './partner.module.css';
 
 const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
@@ -108,7 +113,8 @@ function ObjectDocuments({
   onResults: (doc: JobObjectDocument) => void;
   onShare: (doc: JobObjectDocument) => void;
 }) {
-  const docs = visibleDocuments(obj.documents);
+  // КП собирается на весь проект и живёт во вкладке «Документы» проекта.
+  const docs = visibleDocuments(obj.documents).filter((doc) => doc.kind !== 'offer');
   return (
     <details className={styles.docBlock}>
       <summary>Документы</summary>
@@ -359,7 +365,71 @@ export function ObjectsPanel({
     }
   }
 
+  function kpManager(project: Project) {
+    const people = [
+      { id: user.id, role: user.role, orgId: user.orgId, displayName: user.displayName, login: user.login, phone: user.phone || '' },
+      ...staff.filter((s) => s.id !== user.id),
+    ];
+    // Ответственного менеджера нет — в КП контакт того, кто его собирает.
+    const contact = projectManagerContact(project.managerUserId ? project : { ...project, managerUserId: user.id }, people);
+    return contact ? { name: contact.name, phone: contact.phone } : null;
+  }
+
+  function kpInput(projectId: string | null | undefined) {
+    const project = api.projects.find((item) => item.id === projectId);
+    if (!project) throw new Error('Проект не найден');
+    const rooms = api.objects.filter((room) => room.projectId === project.id);
+    return { project, rooms };
+  }
+
+  async function renderKp(project: Project, rooms: JobObject[], demo: boolean) {
+    const model = buildKpModel({ project, rooms, org: user.org, manager: kpManager(project), demo });
+    const anchor = kpRooms(rooms)[0]!;
+    const clientLink = await ensureClientLinkUrl(
+      model.effectRoomId,
+      user.role,
+      (answersFromStoredRoom(rooms.find((r) => r.id === model.effectRoomId)?.room) || {}) as unknown as Record<string, unknown>,
+    );
+    const file = await renderKpPdf(model, { clientLink, compact: true });
+    return { model, anchor, file };
+  }
+
+  async function buildKp(project: Project, rooms: JobObject[]) {
+    setErr(null);
+    setMsg(null);
+    try {
+      const { model, anchor, file } = await renderKp(project, rooms, isDemoModeEnabled());
+      const bytes = new Uint8Array(await file.blob.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      await api.attachOffer(anchor, {
+        pdfBase64: btoa(bin),
+        filename: file.filename,
+        stamp: model.stamp,
+        panels: model.totals.panels,
+        areaM2: model.areaM2,
+      });
+      setMsg('Коммерческое предложение собрано. Клиенту уходит только по кнопке «Поделиться».');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Не удалось собрать КП');
+    }
+  }
+
+  /** КП ушло клиенту: комнаты до этапа «Отправил КП» переходят на него. */
+  async function markKpSent(projectId: string | null | undefined) {
+    if (!canMove || !projectId) return;
+    const rooms = api.objects.filter((room) => room.projectId === projectId && (room.status === 'draft' || room.status === 'measured'));
+    for (const room of rooms) await api.saveObject({ ...room, status: 'quote_sent', id: room.id });
+  }
+
   async function blobForDocument(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+    if (doc.kind === 'offer') {
+      if (documentOpenPolicy(user.role) === 'without-prices') throw new Error('КП доступно владельцу и менеджеру');
+      if (doc.demo) {
+        const { project, rooms } = kpInput(doc.projectId || obj.projectId);
+        return (await renderKp(project, rooms, true)).file.blob;
+      }
+    }
     if (documentOpenPolicy(user.role) === 'without-prices') {
       if (documentDisplayKind(doc.kind) === 'profile') return plainProfileBlob(obj, doc, user.role);
       return buildDemoPdfBlob(obj, doc, { hidePrices: true });
@@ -412,6 +482,8 @@ export function ObjectsPanel({
           setMsg('Ссылка для клиента недоступна — файл скачан, отправьте его сами.');
         }
       }
+      // КП ушло клиенту (окно «Поделиться», ссылка или файл) — комнаты переходят на «Отправил КП».
+      if (doc.kind === 'offer') await markKpSent(doc.projectId || obj.projectId);
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       setErr(e instanceof Error ? e.message : 'Не удалось поделиться');
@@ -653,7 +725,13 @@ export function ObjectsPanel({
               }
             : undefined
         }
+        onBuildKp={canMove ? buildKp : undefined}
         onDocAction={async (room, doc, action) => {
+          if (action === 'rebuild' && doc.kind === 'offer') {
+            const { project, rooms } = kpInput(doc.projectId || room.projectId);
+            await buildKp(project, rooms);
+            return;
+          }
           if (action === 'rebuild') {
             navigateProject({
               kind: 'room',
@@ -757,7 +835,7 @@ export function ObjectsPanel({
           {(() => {
             const wanted = route.view;
             const doc =
-              visibleDocuments(selected.documents).find((item) => {
+              visibleDocuments(selected.documents).filter((item) => item.kind !== 'offer').find((item) => {
                 const kind = documentDisplayKind(item.kind) === 'profile' ? 'profile' : 'estimate';
                 return kind === wanted;
               }) || null;
