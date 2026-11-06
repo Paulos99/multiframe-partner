@@ -361,6 +361,8 @@ export type Project = {
   dueAt?: string | null;
   /** Момент архивации. Пусто — проект в работе. */
   archivedAt?: string | null;
+  /** Пользователь вернул проект из архива вручную — автоархив не трогает. */
+  unarchiveHold?: boolean;
 };
 
 export type ProjectInput = {

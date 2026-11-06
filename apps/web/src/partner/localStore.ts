@@ -4,6 +4,7 @@
  */
 import type { MaterialNode } from '../../../../packages/shared/materialsLib.js';
 import { resolveCity } from '../../../../packages/shared/cityCatalog.js';
+import { applyAutoArchive, archivePatchResult } from '../../../../packages/shared/autoArchive.js';
 import type {
   ActivityEvent,
   AnalyticsDashboard,
@@ -133,6 +134,8 @@ function defaultDb(): PartnerDb {
     projects: [],
   };
   groupOrphanRooms(db);
+  if (!Array.isArray(db.projects)) db.projects = [];
+  applyAutoArchive(db.projects, db.objects || [], Date.now());
   return db;
 }
 
@@ -191,6 +194,8 @@ function migrateDb(input: PartnerDb): PartnerDb {
     ...(materials ? { materials } : {}),
   };
   groupOrphanRooms(next);
+  if (!Array.isArray(next.projects)) next.projects = [];
+  applyAutoArchive(next.projects, next.objects || [], Date.now());
   return next;
 }
 
@@ -1018,7 +1023,11 @@ function projectVisibleLocal(user: SessionUser, project: Project, objects: JobOb
 
 export function listLocalProjects(user: SessionUser): Project[] {
   const db = loadDb();
-  return (db.projects || [])
+  const projects = db.projects || [];
+  if (applyAutoArchive(projects, db.objects || [], Date.now()) > 0) {
+    saveDb({ ...db, projects });
+  }
+  return projects
     .filter((project) => projectVisibleLocal(user, project, db.objects))
     .map((project) => presentProject(project, user.role, db.objects));
 }
@@ -1061,10 +1070,13 @@ function projectDateField(
   return cleaned.value;
 }
 
-function projectArchiveField(input: ProjectInput, existing: Project | undefined, now: string): string | null {
-  if (!Object.prototype.hasOwnProperty.call(input, 'archived')) return existing?.archivedAt || null;
-  if (input.archived) return existing?.archivedAt || now;
-  return null;
+function projectArchiveFields(
+  input: ProjectInput,
+  existing: Project | undefined,
+  now: string,
+): { archivedAt: string | null; unarchiveHold: boolean } {
+  const patch = Object.prototype.hasOwnProperty.call(input, 'archived') ? Boolean(input.archived) : undefined;
+  return archivePatchResult(patch, existing, now);
 }
 
 export function upsertLocalProject(input: ProjectInput, actor: SessionUser): Project {
@@ -1097,7 +1109,12 @@ export function upsertLocalProject(input: ProjectInput, actor: SessionUser): Pro
     crewUserId: projectAssignee(db, input, existing, 'crewUserId', orgId, ['crew'], 'Бригада'),
     startsAt: projectDateField(input, existing, 'startsAt'),
     dueAt: projectDateField(input, existing, 'dueAt'),
-    archivedAt: projectArchiveField(input, existing, now),
+    ...(() => {
+      const archive = projectArchiveFields(input, existing, now);
+      const next: Pick<Project, 'archivedAt' | 'unarchiveHold'> = { archivedAt: archive.archivedAt };
+      if (archive.unarchiveHold) next.unarchiveHold = true;
+      return next;
+    })(),
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     createdBy: existing?.createdBy || actor.id,
