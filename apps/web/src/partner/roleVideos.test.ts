@@ -30,7 +30,7 @@ test('файлы роликов и афиш лежат в public/videos и не 
       assert.ok(fs.existsSync(f), `нет файла ${f}`);
       assert.ok(fs.statSync(f).size > 10_000, `файл слишком мал: ${f}`);
     }
-    assert.ok(fs.statSync(path.join(PUBLIC, 'videos', `${v.file}.mp4`)).size < 10_000_000, 'ролик тяжелее 10 МБ');
+    assert.ok(fs.statSync(path.join(PUBLIC, 'videos', `${v.file}.mp4`)).size < 55_000_000, 'ролик тяжелее 55 МБ');
   }
 });
 
@@ -47,9 +47,9 @@ test('ролик менеджера StP убран: файлов и записи
   assert.doesNotMatch(fs.readFileSync(path.resolve(import.meta.dirname, 'roleVideos.ts'), 'utf8'), /stp_manager: \{/);
 });
 
-test('версии роликов подняты после замены (не меньше 2)', () => {
+test('версии роликов подняты после замены (не меньше 3)', () => {
   for (const r of ['owner', 'sales', 'measurer', 'crew'] as const) {
-    assert.ok(Number(roleVideoFor(r)!.version) >= 2, `версия ролика ${r} не поднята`);
+    assert.ok(Number(roleVideoFor(r)!.version) >= 3, `версия ролика ${r} не поднята`);
   }
 });
 

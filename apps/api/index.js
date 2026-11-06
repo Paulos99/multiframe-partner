@@ -23,6 +23,7 @@ import { signToken as signAuthToken, verifyToken } from './authTokens.js';
 import { awaitsActivation, findUserByActivation, issueActivation, looksLikeActivationToken } from './activation.js';
 import { ensureIndexFromTsv, resolveCity } from '../../packages/shared/cityCatalog.js';
 import ruCitiesTsv from '../../packages/shared/data/ru-cities.js';
+import cisCitiesTsv from '../../packages/shared/data/cis-cities.js';
 import {
   buildDemoAnalyticsEvents,
   buildDemoPlatform,
@@ -69,7 +70,8 @@ import {
   putObject,
 } from './objectStore.js';
 
-ensureIndexFromTsv(ruCitiesTsv);
+ensureIndexFromTsv(`${ruCitiesTsv}
+${cisCitiesTsv}`);
 
 const ANALYTICS_ADMIN_KEY = () => {
   const key = process.env.ANALYTICS_ADMIN_KEY;
