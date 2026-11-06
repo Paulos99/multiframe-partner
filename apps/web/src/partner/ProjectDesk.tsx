@@ -1,3 +1,4 @@
+import { kpRooms, kpStamp } from './kp/kpStamp';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreIcon } from '../icons';
@@ -21,6 +22,7 @@ import {
   documentLabel,
   roleSeesProjectMoney,
   visibleDocuments,
+  documentDisplayKind,
   type JobObject,
   type Project,
   type ProjectInput,
@@ -49,6 +51,7 @@ import {
   type ProjectDeskView,
 } from './projectDesk';
 import type { ProjectTab } from './projectRoute';
+import { isDocStale } from './docStale';
 import { preliminaryRoomTotal } from './projectSummary';
 import { CloseDialog, closeChoiceError, type CloseChoice } from './CloseDialog';
 import { projectStageLabel, refusalLine, refusalReasonPlain, roomStageLabel } from './closeOutcome';
@@ -84,6 +87,106 @@ type Row = {
   archived: boolean;
 };
 
+export type OnArchiveProject = (project: Project, archived: boolean) => Promise<void> | void;
+
+/** Меню «⋯» карточки/строки проекта: архив и удаление. */
+function ProjectActionsMenu({
+  menu,
+  onClose,
+  onArchive,
+  onDelete,
+}: {
+  menu: { project: Project; x: number; y: number };
+  onClose: () => void;
+  onArchive?: OnArchiveProject;
+  onDelete?: (project: Project) => void;
+}) {
+  const archived = Boolean(menu.project.archivedAt);
+  return createPortal(
+    <div
+      className={styles.menuBackdrop}
+      onPointerDown={onClose}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <div
+        role="menu"
+        aria-label={`Действия с проектом «${menu.project.name}»`}
+        className={styles.menu}
+        style={{
+          left: Math.max(8, Math.min(menu.x, window.innerWidth - 208)),
+          top: Math.max(8, Math.min(menu.y, window.innerHeight - 110)),
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onClose();
+        }}
+      >
+        {onArchive ? (
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.menuItem}
+            autoFocus
+            onClick={() => {
+              const project = menu.project;
+              onClose();
+              void onArchive(project, !archived);
+            }}
+          >
+            {archived ? 'Вернуть из архива' : 'В архив'}
+          </button>
+        ) : null}
+        {onDelete ? (
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.menuDanger}
+            autoFocus={!onArchive}
+            onClick={() => {
+              const project = menu.project;
+              onClose();
+              onDelete(project);
+            }}
+          >
+            Удалить проект…
+          </button>
+        ) : null}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function MenuButton({ project, onMenu }: { project: Project; onMenu: (x: number, y: number) => void }) {
+  return (
+    <button
+      type="button"
+      className={styles.cardMenu}
+      aria-label={`Действия с проектом «${project.name}»`}
+      aria-haspopup="menu"
+      onPointerDown={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        const box = event.currentTarget.getBoundingClientRect();
+        onMenu(box.right - 200, box.bottom + 4);
+      }}
+    >
+      <MoreIcon size={18} />
+    </button>
+  );
+}
+
+export type DocAction = 'open' | 'download' | 'share' | 'rebuild';
+/** Собрать или пересобрать коммерческое предложение по комнатам проекта. */
+export type OnBuildKp = (project: Project, rooms: JobObject[]) => Promise<void>;
+
+export type OnDocAction = (room: JobObject, doc: NonNullable<JobObject['documents']>[number], action: DocAction) => Promise<void>;
+
 export function ProjectDesk({
   projects,
   rooms,
@@ -100,6 +203,9 @@ export function ProjectDesk({
   onOpenRoom,
   onAddRoom,
   onDeleteProject,
+  onDocAction,
+  onArchiveProject,
+  onBuildKp,
 }: {
   projects: Project[];
   rooms: JobObject[];
@@ -117,6 +223,9 @@ export function ProjectDesk({
   onOpenRoom: (room: JobObject) => void;
   onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
   onDeleteProject?: (project: Project) => void;
+  onDocAction?: OnDocAction;
+  onArchiveProject?: OnArchiveProject;
+  onBuildKp?: OnBuildKp;
 }) {
   const [view, setView] = useState<ProjectDeskView>(() =>
     readProjectView(typeof localStorage === 'undefined' ? null : localStorage),
@@ -188,6 +297,8 @@ export function ProjectDesk({
         onOpenRoom={onOpenRoom}
         onAddRoom={onAddRoom}
         onDeleteProject={onDeleteProject}
+        onDocAction={onDocAction}
+        onBuildKp={onBuildKp}
       />
     );
   }
@@ -212,9 +323,9 @@ export function ProjectDesk({
           {query ? 'По этому запросу проектов нет.' : archive ? 'В архиве пусто.' : 'Пока нет проектов. Новый проект создаётся вместе с первой комнатой.'}
         </p>
       ) : view === 'list' ? (
-        <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} />
+        <ProjectTable rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onArchive={onArchiveProject} onDelete={onDeleteProject} />
       ) : (
-        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onMoveStatus={onMoveStatus} onDelete={onDeleteProject} />
+        <ProjectBoard rows={rows} seesMoney={seesMoney} onOpen={onOpenProject} onMoveStatus={onMoveStatus} onDelete={onDeleteProject} onArchive={onArchiveProject} />
       )}
     </section>
   );
@@ -348,13 +459,20 @@ function ProjectTable({
   rows,
   seesMoney,
   onOpen,
+  onArchive,
+  onDelete,
 }: {
   rows: Row[];
   seesMoney: boolean;
   onOpen: (id: string) => void;
+  onArchive?: OnArchiveProject;
+  onDelete?: (project: Project) => void;
 }) {
+  const [menu, setMenu] = useState<{ project: Project; x: number; y: number } | null>(null);
+  const hasMenu = Boolean(onArchive || onDelete);
   return (
     <div className={styles.scroller}>
+      {menu ? <ProjectActionsMenu menu={menu} onClose={() => setMenu(null)} onArchive={onArchive} onDelete={onDelete} /> : null}
       <table className={styles.table}>
         <thead>
           <tr>
@@ -366,6 +484,7 @@ function ProjectTable({
             <th>Площадь</th>
             {seesMoney ? <th>Сумма</th> : null}
             <th>Срок</th>
+            {hasMenu ? <th aria-label="Действия" /> : null}
           </tr>
         </thead>
         <tbody>
@@ -388,6 +507,11 @@ function ProjectTable({
                   <td className={styles.cell}>{money.calculated ? formatRub(money.total) : 'Нет расчёта'}</td>
                 ) : null}
                 <td className={styles.cell}>{formatProjectDay(row.project.dueAt)}</td>
+                {hasMenu ? (
+                  <td className={styles.menuCell} onClick={(event) => event.stopPropagation()}>
+                    <MenuButton project={row.project} onMenu={(x, y) => setMenu({ project: row.project, x, y })} />
+                  </td>
+                ) : null}
               </tr>
             );
           })}
@@ -549,12 +673,14 @@ function ProjectBoard({
   onOpen,
   onMoveStatus,
   onDelete,
+  onArchive,
 }: {
   rows: Row[];
   seesMoney: boolean;
   onOpen: (id: string) => void;
   onMoveStatus?: (id: string, status: ProjectStatus, refusal?: CloseChoice) => Promise<void>;
   onDelete?: (project: Project) => void;
+  onArchive?: OnArchiveProject;
 }) {
   const [closing, setClosing] = useState<{ id: string; name: string } | null>(null);
   const movable = Boolean(onMoveStatus);
@@ -715,7 +841,7 @@ function ProjectBoard({
                   saving={Boolean(moved[row.project.id])}
                   onOpen={onOpen}
                   onStep={step}
-                  onMenu={onDelete ? (x, y) => setMenu({ project: row.project, x, y }) : undefined}
+                  onMenu={onDelete || onArchive ? (x, y) => setMenu({ project: row.project, x, y }) : undefined}
                 />
               ))}
               {!column.length ? <p className={styles.empty}>Пока пусто</p> : null}
@@ -726,48 +852,9 @@ function ProjectBoard({
     </div>
   );
 
-  const menuView =
-    menu && onDelete
-      ? createPortal(
-          <div
-            className={styles.menuBackdrop}
-            onPointerDown={() => setMenu(null)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setMenu(null);
-            }}
-          >
-            <div
-              role="menu"
-              aria-label={`Действия с проектом «${menu.project.name}»`}
-              className={styles.menu}
-              style={{
-                left: Math.max(8, Math.min(menu.x, window.innerWidth - 208)),
-                top: Math.max(8, Math.min(menu.y, window.innerHeight - 64)),
-              }}
-              onPointerDown={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setMenu(null);
-              }}
-            >
-              <button
-                type="button"
-                role="menuitem"
-                className={styles.menuDanger}
-                autoFocus
-                onClick={() => {
-                  const project = menu.project;
-                  setMenu(null);
-                  onDelete(project);
-                }}
-              >
-                Удалить проект…
-              </button>
-            </div>
-          </div>,
-          document.body,
-        )
-      : null;
+  const menuView = menu ? (
+    <ProjectActionsMenu menu={menu} onClose={() => setMenu(null)} onArchive={onArchive} onDelete={onDelete} />
+  ) : null;
 
   if (!movable) {
     return (
@@ -830,6 +917,8 @@ function ProjectPage({
   onOpenRoom,
   onAddRoom,
   onDeleteProject,
+  onDocAction,
+  onBuildKp,
 }: {
   row: Row;
   staff: Person[];
@@ -843,6 +932,8 @@ function ProjectPage({
   onOpenRoom: (room: JobObject) => void;
   onAddRoom?: (projectId: string, roomName: string) => Promise<void>;
   onDeleteProject?: (project: Project) => void;
+  onDocAction?: OnDocAction;
+  onBuildKp?: OnBuildKp;
 }) {
   const { boxRef: tabsRef, pillRef: tabsPillRef } = useSlidingPill(tab);
   const people = actor && !staff.some((person) => person.id === actor.id) ? [actor, ...staff] : staff;
@@ -917,7 +1008,7 @@ function ProjectPage({
         {tab === 'team' ? <Team project={project} rooms={rooms} staff={people} /> : null}
         {tab === 'tasks' ? <Tasks steps={steps} rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
         {tab === 'reports' ? <Reports rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
-        {tab === 'documents' ? <Documents rooms={rooms} onOpenRoom={onOpenRoom} /> : null}
+        {tab === 'documents' ? <Documents project={project} rooms={rooms} onOpenRoom={onOpenRoom} onDocAction={onDocAction} onBuildKp={onBuildKp} /> : null}
         {tab === 'settings' ? (
           <Settings project={project} rooms={rooms} status={status} staff={people} actor={actor} canEdit={canEdit} onSave={onSave} onDelete={onDeleteProject} />
         ) : null}
@@ -1215,30 +1306,155 @@ function Reports({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room:
   );
 }
 
-function Documents({ rooms, onOpenRoom }: { rooms: JobObject[]; onOpenRoom: (room: JobObject) => void }) {
-  const docs = rooms.flatMap((room) => visibleDocuments(room.documents).map((doc) => ({ room, doc })));
+function kpRoomsLabel(n: number): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  const w = m10 === 1 && m100 !== 11 ? 'комната' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'комнаты' : 'комнат';
+  return `${n} ${w}`;
+}
+
+function Documents({
+  project,
+  rooms,
+  onOpenRoom,
+  onDocAction,
+  onBuildKp,
+}: {
+  project: Project;
+  rooms: JobObject[];
+  onOpenRoom: (room: JobObject) => void;
+  onDocAction?: OnDocAction;
+  onBuildKp?: OnBuildKp;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const all = rooms.flatMap((room) => visibleDocuments(room.documents).map((doc) => ({ room, doc })));
+  // КП — один документ на проект: показываем только последнее, первым в списке.
+  const offers = all.filter((item) => item.doc.kind === 'offer').sort((a, b) => (a.doc.createdAt < b.doc.createdAt ? 1 : -1));
+  const docs = [...offers.slice(0, 1), ...all.filter((item) => item.doc.kind !== 'offer')];
+  const currentStamp = kpStamp(rooms);
+  const kpReady = kpRooms(rooms).length > 0;
+  async function buildKp() {
+    if (!onBuildKp) return;
+    setBusy('kp:build');
+    try {
+      await onBuildKp(project, rooms);
+    } finally {
+      setBusy(null);
+    }
+  }
+  const kpBar =
+    onBuildKp && !offers.length ? (
+      <div className={styles.kpBar} data-kp-build>
+        <span>
+          {kpReady
+            ? 'Коммерческое предложение соберётся из смет и Проблемомера всех комнат проекта.'
+            : 'Коммерческое предложение появится, когда хотя бы в одной комнате будет расчёт калькулятора.'}
+        </span>
+        <button type="button" className={styles.docAction} disabled={!kpReady || busy != null} onClick={() => void buildKp()}>
+          {busy === 'kp:build' ? 'Собираем…' : 'Собрать КП'}
+        </button>
+      </div>
+    ) : null;
   if (!docs.length) {
     return (
-      <p className={styles.lead}>
-        Профиль проблемомера появится после сохранения профиля, смета калькулятора и коммерческое предложение — после расчёта комнаты.
-      </p>
+      <>
+        {kpBar}
+        <p className={styles.lead}>
+          Акустический профиль помещения появится после Проблемомера, смета и схема монтажа — после расчёта в калькуляторе.
+        </p>
+      </>
     );
+  }
+  async function run(room: JobObject, doc: (typeof docs)[number]['doc'], action: DocAction) {
+    if (!onDocAction) return;
+    setBusy(`${doc.id}:${action}`);
+    try {
+      await onDocAction(room, doc, action);
+    } finally {
+      setBusy(null);
+    }
   }
   return (
     <div className={styles.docs}>
-      {docs.map(({ room, doc }) => (
-        <button key={doc.id} type="button" className={styles.doc} onClick={() => onOpenRoom(room)}>
-          <span>
-            <strong>{doc.kind === 'profile' ? 'Профиль проблемомера' : 'Смета калькулятора'}</strong>
-            <span>
-              {doc.kind === 'profile' ? documentLabel(doc.kind) : 'Коммерческое предложение'}
-              {' · '}
-              {roomTitle(room)}
-              {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
-            </span>
-          </span>
-        </button>
-      ))}
+      {kpBar}
+      {docs.map(({ room, doc }) => {
+        const title = documentLabel(doc.kind);
+        const offer = doc.kind === 'offer';
+        const latest =
+          offer ||
+          docs.find((item) => item.room.id === room.id && documentDisplayKind(item.doc.kind) === documentDisplayKind(doc.kind))?.doc.id === doc.id;
+        const stale = offer ? Boolean(doc.stamp) && doc.stamp !== currentStamp : latest && isDocStale(doc, room);
+        return (
+          <div
+            key={doc.id}
+            className={stale ? `${styles.docRow} ${styles.docRowStale}` : styles.docRow}
+            data-doc-row
+            data-doc-kind={documentDisplayKind(doc.kind)}
+            data-stale={stale ? 'true' : undefined}
+          >
+            <button
+              type="button"
+              className={styles.docMain}
+              onClick={() => (offer && onDocAction ? void run(room, doc, 'open') : onOpenRoom(room))}
+            >
+              <strong>
+                {title}
+                {stale ? <span className={styles.staleBadge}>{offer ? 'Устарело' : 'Устарел'}</span> : null}
+              </strong>
+              <span className={styles.docMeta} data-doc-meta>
+                {offer ? (
+                  <>
+                    Весь проект · {kpRoomsLabel(kpRooms(rooms).length)}
+                    {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
+                    {stale ? ' · сметы или ответы комнат изменились' : ''}
+                  </>
+                ) : (
+                  <>
+                    {doc.kind === 'profile' ? 'Проблемомер' : 'Калькулятор'}
+                    {' · '}
+                    {roomTitle(room)}
+                    {doc.areaM2 ? ` · ${formatArea(doc.areaM2)}` : ''}
+                    {stale && room.room?.areaM2 != null ? ` · в комнате теперь ${formatArea(room.room.areaM2)}` : ''}
+                  </>
+                )}
+              </span>
+            </button>
+            {onDocAction ? (
+              <div className={styles.docActions} role="group" aria-label={`Действия: ${title}`}>
+                {stale ? (
+                  <button
+                    type="button"
+                    className={styles.rebuildBtn}
+                    data-doc-action="rebuild"
+                    disabled={busy != null}
+                    onClick={() => void (offer && onBuildKp ? buildKp() : run(room, doc, 'rebuild'))}
+                  >
+                    {busy === 'kp:build' ? 'Собираем…' : 'Пересобрать'}
+                  </button>
+                ) : null}
+                {(
+                  [
+                    ['open', 'Открыть'],
+                    ['download', 'Скачать'],
+                    ['share', 'Поделиться'],
+                  ] as const
+                ).map(([action, label]) => (
+                  <button
+                    key={action}
+                    type="button"
+                    className={styles.docAction}
+                    data-doc-action={action}
+                    disabled={busy != null}
+                    onClick={() => void run(room, doc, action)}
+                  >
+                    {busy === `${doc.id}:${action}` ? '…' : label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1381,7 +1597,6 @@ function Settings({
         crewUserId: form.crewUserId || null,
         startsAt: form.startsAt || null,
         dueAt: form.dueAt || null,
-        archived: form.archived,
       });
       setSavedTick((tick) => tick + 1);
     } catch (err) {
@@ -1502,10 +1717,6 @@ function Settings({
           <input type="date" value={form.dueAt} onChange={(event) => setForm({ ...form, dueAt: event.target.value })} />
         </label>
       </div>
-      <label className={styles.check}>
-        <input type="checkbox" checked={form.archived} onChange={(event) => setForm({ ...form, archived: event.target.checked })} />
-        В архиве
-      </label>
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       <button type="submit" className={styles.primary} disabled={busy || !form.name.trim()}>
         {busy ? 'Сохраняем…' : 'Сохранить'}

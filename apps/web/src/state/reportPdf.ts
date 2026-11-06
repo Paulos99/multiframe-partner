@@ -52,7 +52,7 @@ export const PAGE_H = 1123;
 
 const SITE_URL = 'https://stp-multiframe.ru';
 
-const PILLARS = [
+export const PILLARS = [
   {
     title: 'Звукоизоляция и акустический комфорт',
     text: 'Снижает шум сверху и поглощает звук в комнате — меньше эха, спокойнее пространство.',
@@ -1014,7 +1014,7 @@ export async function buildAcousticProfileHtml(
   return buildReportDocument(full, { qr, logos: logoBundle, panel });
 }
 
-async function fetchPanelDataUrl(): Promise<string> {
+export async function fetchPanelDataUrl(): Promise<string> {
   const base = new URL(import.meta.env.BASE_URL || '/', window.location.href);
   return fetchDataUrl(new URL('images/multiframe-panel-transparent.png', base).href);
 }
@@ -1164,7 +1164,7 @@ export async function renderAcousticProfilePdf(
     const room = full.answers.room;
     const roomName = roomTypeLabel(room, 'komnata');
     const safe = roomName.replace(/[^\wа-яА-ЯёЁ\-]+/gi, '_').slice(0, 24);
-    const filename = `MultiFrame_результаты_${safe}_${room.ceilingAreaM2 ?? 'area'}.pdf`;
+    const filename = `Акустический профиль помещения — ${safe}${room.ceilingAreaM2 ? ` — ${room.ceilingAreaM2} м²` : ''}.pdf`;
     return { blob: pdf.output('blob'), filename };
   } finally {
     iframe.remove();

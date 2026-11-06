@@ -191,8 +191,7 @@ test('имя из профиля сразу в приветствии и шап�
   const hello = helloNow();
   await expect(page.getByRole('heading', { level: 2, name: `${hello}, UI` })).toBeVisible();
   const dialog = await openProfile(page);
-  await expect(dialog.getByLabel(/телефон/i)).toHaveCount(0);
-  await expect(dialog.getByText(/телефон/i)).toHaveCount(0);
+  await expect(dialog.getByLabel('Телефон', { exact: true })).toHaveCount(1);
   await dialog.getByLabel('Имя', { exact: true }).fill('Светлана Орлова');
   await dialog.getByRole('button', { name: 'Сохранить имя', exact: true }).click();
   await expect(dialog.getByRole('status')).toHaveText('Имя обновлено');
@@ -251,3 +250,23 @@ async function openProfileSettings(page: Page) {
     await page.getByRole('button', { name: 'Мой профиль', exact: true }).click();
   }
 }
+
+test('телефон в профиле: российский номер сохраняется, чужой формат отклоняется', async ({ page }) => {
+  await enter(page);
+  const dialog = await openProfile(page);
+  const phone = dialog.getByLabel('Телефон', { exact: true });
+  const save = dialog.getByRole('button', { name: 'Сохранить телефон', exact: true });
+  await expect(save).toBeDisabled();
+  await phone.fill('+44 20 7946 0958');
+  await save.click();
+  await expect(dialog.getByRole('alert').or(dialog.getByText(/российский номер/))).toContainText('российский номер');
+  await phone.fill('8 999 000 11 22');
+  const patch = page.waitForRequest((r) => new URL(r.url()).pathname === '/me' && r.method() === 'PATCH');
+  await save.click();
+  expect((await patch).postDataJSON()).toEqual({ phone: '8 999 000 11 22' });
+  await expect(dialog.getByRole('status')).toHaveText('Телефон сохранён');
+  await expect(phone).toHaveValue('+7 999 000-11-22');
+  await page.reload();
+  const again = await openProfile(page);
+  await expect(again.getByLabel('Телефон', { exact: true })).toHaveValue('+7 999 000-11-22');
+});

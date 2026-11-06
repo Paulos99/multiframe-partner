@@ -27,7 +27,8 @@ export function withDemoDocuments(objects: JobObject[]): JobObject[] {
     .filter((obj) => !autoCalcDraft(obj))
     .map((obj) => ({
       ...obj,
-      documents: visibleDocuments((obj.documents || []).filter((doc) => !doc.demo)),
+      // Демо-КП остаётся: его PDF собирается в браузере из комнат проекта.
+      documents: visibleDocuments((obj.documents || []).filter((doc) => !doc.demo || doc.kind === 'offer')),
       pendingSync: false,
     }));
 }

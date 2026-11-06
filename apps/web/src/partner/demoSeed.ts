@@ -1,3 +1,4 @@
+import { kpStamp } from './kp/kpStamp';
 /**
  * Client-side mirror of apps/api/demoSeed.js for offline / local fallback.
  */
@@ -21,6 +22,7 @@ type DemoUser = {
   password: string;
   role: UserRole;
   displayName: string;
+  phone?: string;
   orgId: string | null;
   createdAt: string;
 };
@@ -275,7 +277,7 @@ export function buildLocalDemoUsers(): DemoUser[] {
     { id: 'u_admin', login: 'admin', password: 'admin1234', role: 'admin', displayName: DEMO_PERSONAL_NAMES.u_admin, orgId: null, createdAt: now },
     { id: 'u_stpmgr1', login: 'stpmgr1', password: 'exec1234', role: 'stp_manager', displayName: DEMO_PERSONAL_NAMES.u_stpmgr1, orgId: 'org_stp', createdAt: now },
     { id: 'u_partner1', login: 'partner1', password: 'demo1234', role: 'owner', displayName: DEMO_PERSONAL_NAMES.u_partner1, orgId: 'org_demo', createdAt: now },
-    { id: 'u_sales1', login: 'sales1', password: 'exec1234', role: 'sales', displayName: DEMO_PERSONAL_NAMES.u_sales1, orgId: 'org_demo', createdAt: now },
+    { id: 'u_sales1', login: 'sales1', password: 'exec1234', role: 'sales', displayName: DEMO_PERSONAL_NAMES.u_sales1, phone: '+7 495 111-00-21', orgId: 'org_demo', createdAt: now },
     { id: 'u_exec1', login: 'exec1', password: 'exec1234', role: 'measurer', displayName: DEMO_PERSONAL_NAMES.u_exec1, orgId: 'org_demo', createdAt: now },
     { id: 'u_crew1', login: 'crew1', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew1, orgId: 'org_demo', createdAt: now },
     { id: 'u_crew1b', login: 'crew1b', password: 'exec1234', role: 'crew', displayName: DEMO_PERSONAL_NAMES.u_crew1b, orgId: 'org_demo', createdAt: now },
@@ -341,11 +343,69 @@ export function assignDemoRoomStaff<T extends { id?: string; orgId?: string | nu
   });
 }
 
+/** Ответы Проблемомера для квартиры Чернова: те же, что в утверждённом образце КП. */
+export const DEMO_KP_ANSWERS = {
+  slabType: 'hollow',
+  slabThickness: 'about_160_200',
+  houseType: 'block',
+  plannedCeiling: 'stretch',
+  objectStage: 'newbuild',
+  floorAbove: 'ordinary',
+} as const;
+
+const KP_ROOMS: Array<{ id: string; roomName: string; roomType: string; area: number }> = [
+  { id: 'obj_a11', roomName: 'Кабинет', roomType: 'office', area: 22 },
+  { id: 'obj_a11b', roomName: 'Спальня', roomType: 'bedroom', area: 14 },
+  { id: 'obj_a11c', roomName: 'Гостиная', roomType: 'living', area: 26 },
+];
+
+/** Проект Чернова: три комнаты и демо-КП по ним (файл собирается в браузере). */
+function withDemoKpProject(objects: JobObject[]): JobObject[] {
+  const base = objects.find((o) => o.id === 'obj_a11');
+  if (!base) return objects;
+  const rooms: JobObject[] = KP_ROOMS.map((spec) => ({
+    ...base,
+    id: spec.id,
+    roomName: spec.roomName,
+    room: {
+      ...base.room,
+      roomType: spec.roomType,
+      areaM2: spec.area,
+      houseType: DEMO_KP_ANSWERS.houseType,
+      objectStage: DEMO_KP_ANSWERS.objectStage,
+      answers: { ...DEMO_KP_ANSWERS, roomType: spec.roomType, ceilingAreaM2: spec.area },
+    },
+    estimate: estimate(spec.area),
+    clientSummary: `${base.clientName} · ${spec.area} м² · ${base.address}`,
+    history: base.history.map((h) => ({ ...h })),
+  }));
+  const at = daysAgo(0, 10, 0);
+  rooms[0] = {
+    ...rooms[0]!,
+    documents: [
+      {
+        id: 'doc_kp_demo',
+        versionId: 'ver_kp_demo',
+        createdAt: at,
+        createdBy: 'u_sales1',
+        kind: 'offer',
+        filename: 'Коммерческое предложение — Чернов А. — ДЕМО-001.pdf',
+        hasScheme: false,
+        panels: rooms.reduce((n, r) => n + (r.estimate?.panels || 0), 0),
+        areaM2: rooms.reduce((n, r) => n + (r.room.areaM2 || 0), 0),
+        demo: true,
+        stamp: kpStamp(rooms),
+      },
+    ],
+  };
+  return [...objects.filter((o) => o.id !== 'obj_a11'), ...rooms];
+}
+
 export function buildLocalDemoObjects(): JobObject[] {
   const moscow = SPECS_A.map((s) =>
     makeObject(s, 'org_demo', 'Москва', 'u_partner1', 'u_exec1', s.id === 'obj_a04' ? 'u_crew1b' : 'u_crew1', 'u_sales1'),
   );
-  return moscow;
+  return withDemoKpProject(moscow);
 }
 
 export type LocalAnalyticsEvent = {
@@ -358,7 +418,7 @@ export type LocalAnalyticsEvent = {
   companyName: string;
   city?: string;
   tool: 'problemomer' | 'calculator' | 'cabinet';
-  action: 'login' | 'open' | 'result' | 'pdf' | 'share' | 'calc_done' | 'schema';
+  action: 'login' | 'open' | 'result' | 'pdf' | 'share' | 'calc_done' | 'schema' | 'survey_done' | 'panel_view' | 'calc_input' | 'offer' | 'client_agreed' | 'quote_accepted' | 'install_done';
   schema?: number;
   object?: Record<string, unknown> | null;
 };
@@ -497,6 +557,39 @@ export function buildLocalDemoAnalytics(): LocalAnalyticsEvent[] {
           object,
         });
       }
+    }
+  }
+
+  // 7 шагов воронки, раньше «нет данных».
+  for (let day = DEMO_HISTORY_DAYS - 1; day >= 0; day -= 1) {
+    if (!includeDemoDay(day)) continue;
+    const isWeekend = day % 7 === 5 || day % 7 === 6;
+    if (isWeekend && day % 2 === 0) continue;
+    for (const org of orgs) {
+      const base = {
+        at: analyticsAt(day),
+        orgId: org.orgId,
+        companyName: org.companyName,
+        city: org.city,
+      };
+      const add = (id: string, tool: LocalAnalyticsEvent['tool'], action: string, user: { id: string; login: string; role: string }) => {
+        events.push({
+          id: `${id}_${org.orgId}_${day}`,
+          ...base,
+          userId: user.id,
+          login: user.login,
+          role: user.role as LocalAnalyticsEvent['role'],
+          tool,
+          action: action as LocalAnalyticsEvent['action'],
+        });
+      };
+      if (day % 2 === 0) add('ev_survey', 'problemomer', 'survey_done', org.measurer);
+      if (day % 3 === 0) add('ev_panel', 'problemomer', 'panel_view', org.sales);
+      if (day % 2 === 1) add('ev_calc_input', 'calculator', 'calc_input', org.sales);
+      if (day % 5 === 0) add('ev_offer', 'cabinet', 'offer', org.sales);
+      if (day % 6 === 0) add('ev_agreed', 'cabinet', 'client_agreed', org.sales);
+      if (day % 7 === 0) add('ev_quote_ok', 'cabinet', 'quote_accepted', org.sales);
+      if (day % 8 === 0) add('ev_install_done', 'cabinet', 'install_done', org.crew);
     }
   }
 

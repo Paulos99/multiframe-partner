@@ -482,7 +482,7 @@ function pdfFileName({ hidePrices, fileLabel, fileDate }) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 80) || 'Расчёт';
-  const kind = hidePrices ? 'спецификация' : 'смета';
+  const kind = hidePrices ? 'схема монтажа' : 'смета и схема монтажа';
   const day = /^\d{4}-\d{2}-\d{2}/.test(String(fileDate || ''))
     ? String(fileDate).slice(0, 10)
     : new Date().toISOString().slice(0, 10);
@@ -526,7 +526,7 @@ export async function exportCalculationPDF({
 
   pages.push(
     pageShell({
-      title: `${hidePrices ? 'Спецификация материалов' : 'Расчёт материалов'} | ${dateStr}`,
+      title: `${hidePrices ? 'Схема монтажа' : 'Смета и схема монтажа'} | ${dateStr}`,
       subtitle: hidePrices
         ? 'Без цен · для закупки и монтажа'
         : areaEstimate
@@ -543,7 +543,7 @@ export async function exportCalculationPDF({
   if (includeCeilingPage) {
     pages.push(
       pageShell({
-        title: `${hidePrices ? 'Спецификация материалов' : 'Расчёт материалов'} | ${dateStr}`,
+        title: `${hidePrices ? 'Схема монтажа' : 'Смета и схема монтажа'} | ${dateStr}`,
         subtitle: 'Потолок',
         bodyHtml: buildCeilingBody({
           bom,
@@ -560,7 +560,7 @@ export async function exportCalculationPDF({
     const stats = buildWallSurfaceStats(wallResult, bom.wallMounting, room.wallHeight);
     pages.push(
       pageShell({
-        title: `${hidePrices ? 'Спецификация материалов' : 'Расчёт материалов'} | ${dateStr}`,
+        title: `${hidePrices ? 'Схема монтажа' : 'Смета и схема монтажа'} | ${dateStr}`,
         subtitle: 'Развёртка стены',
         bodyHtml: buildWallBody({
           wr: wallResult,

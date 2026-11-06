@@ -152,6 +152,8 @@ export type SessionUser = {
   login: string;
   role: UserRole;
   displayName: string;
+  /** Рабочий телефон из профиля (+7 900 123-45-67). Пусто, если не указан. */
+  phone?: string;
   /** Set for org roles. */
   orgId: string | null;
   org: OrgSettings | null;
@@ -226,15 +228,18 @@ export type JobObjectEstimate = {
  * spec — старые записи «спецификация без цен» (до 18.10.2026). Новые не создаются,
  * читаются как смета той же версии, если цены у версии нет.
  */
-export type JobDocumentKind = 'estimate' | 'profile' | 'spec';
+export type JobDocumentKind = 'estimate' | 'profile' | 'spec' | 'offer';
+export type JobDocumentDisplayKind = 'estimate' | 'profile' | 'offer';
 
-export const JOB_DOCUMENT_LABELS: Record<'estimate' | 'profile', string> = {
-  estimate: 'Смета',
-  profile: 'Профиль',
+export const JOB_DOCUMENT_LABELS: Record<JobDocumentDisplayKind, string> = {
+  estimate: 'Смета и схема монтажа',
+  profile: 'Акустический профиль помещения',
+  offer: 'Коммерческое предложение',
 };
 
 /** Как показывать запись: старая spec — это смета. */
-export function documentDisplayKind(kind: string | null | undefined): 'estimate' | 'profile' {
+export function documentDisplayKind(kind: string | null | undefined): JobDocumentDisplayKind {
+  if (kind === 'offer') return 'offer';
   return kind === 'profile' ? 'profile' : 'estimate';
 }
 
@@ -259,6 +264,10 @@ export type JobObjectDocument = {
   demo?: boolean;
   /** Только локальное хранилище. API это поле не отдаёт. */
   dataBase64?: string | null;
+  /** offer: отпечаток комнат проекта, из которых собрано КП. Не совпал — КП устарело. */
+  stamp?: string | null;
+  /** offer: проект, по которому собрано КП. */
+  projectId?: string | null;
 };
 
 /**
@@ -271,16 +280,16 @@ export function visibleDocuments(docs: JobObjectDocument[] | null | undefined): 
   const list = [...(docs || [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   const pricedVersions = new Set(list.filter((d) => d.kind === 'estimate').map((d) => d.versionId || d.id));
   return list.filter((d) => {
-    if (d.kind === 'estimate' || d.kind === 'profile') return true;
+    if (d.kind === 'estimate' || d.kind === 'profile' || d.kind === 'offer') return true;
     if (d.kind === 'spec') return !pricedVersions.has(d.versionId || d.id);
     return false;
   });
 }
 
-/** «Смета · Профиль» — какие документы есть у объекта. Пусто, если документов нет. */
+/** «Смета и схема монтажа · Акустический профиль помещения» — какие документы есть у объекта. Пусто, если документов нет. */
 export function documentKindsSummary(docs: JobObjectDocument[] | null | undefined): string {
   const kinds = new Set(visibleDocuments(docs).map((d) => documentDisplayKind(d.kind)));
-  return (['estimate', 'profile'] as const)
+  return (['estimate', 'profile', 'offer'] as const)
     .filter((kind) => kinds.has(kind))
     .map((kind) => JOB_DOCUMENT_LABELS[kind])
     .join(' · ');
@@ -402,7 +411,15 @@ export type AnalyticsAction =
   | 'result'
   | 'pdf'
   | 'share'
-  | 'calc_done';
+  | 'calc_done'
+  | 'schema'
+  | 'survey_done'
+  | 'panel_view'
+  | 'calc_input'
+  | 'offer'
+  | 'client_agreed'
+  | 'quote_accepted'
+  | 'install_done';
 
 export type AnalyticsObject = {
   roomType?: string | null;

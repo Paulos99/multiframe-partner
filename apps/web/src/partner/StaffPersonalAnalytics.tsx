@@ -170,7 +170,7 @@ export function StaffPersonalAnalytics({
       <JourneyFunnel
         title={funnelTitle}
         steps={journey.steps}
-        hint="Шаги без учёта в системе показаны как «нет данных» — цифры не выдумываем."
+        hint="Для менеджера — сжатая воронка клиента (6 этапов). % от предыдущего; «Отказ» — от закрытых."
       />
 
       {role === 'sales' || role === 'owner' ? (

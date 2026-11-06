@@ -326,12 +326,19 @@ export function useResultProfile() {
   }, []);
 
   useEffect(() => {
+    // Опрос пройден → результат; оба шага воронки.
+    trackPartnerAnalytics({ tool: 'problemomer', action: 'survey_done', object: partnerObject });
     trackPartnerAnalytics({
       tool: 'problemomer',
       action: 'result',
       object: partnerObject,
     });
   }, []);
+
+  useEffect(() => {
+    if (!hybridAfter) return;
+    trackPartnerAnalytics({ tool: 'problemomer', action: 'panel_view', object: partnerObject });
+  }, [hybridAfter]);
 
   function openCalc() {
     track('pm_cta_calc', eventParamsFromSession(session));
@@ -377,6 +384,7 @@ export function useResultProfile() {
   async function onShare() {
     track('pm_share', eventParamsFromSession(session));
     trackPartnerAnalytics({ tool: 'problemomer', action: 'share', object: partnerObject });
+    trackPartnerAnalytics({ tool: 'cabinet', action: 'offer', object: partnerObject });
     const result = await shareAcousticProfile(session);
     setShareState(result === 'failed' ? 'failed' : result);
     window.setTimeout(() => setShareState('idle'), 2500);

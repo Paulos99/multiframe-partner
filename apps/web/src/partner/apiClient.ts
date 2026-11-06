@@ -415,7 +415,8 @@ export async function apiDeleteObject(
 export async function apiUploadObjectDocuments(
   objectId: string,
   documents: Array<{
-    kind: 'estimate' | 'profile';
+    kind: 'estimate' | 'profile' | 'offer';
+    stamp?: string | null;
     filename: string;
     pdfBase64: string;
     hasScheme: boolean;
@@ -672,6 +673,9 @@ export async function apiUpdateDisplayName(displayName:string) {
   const result=await request<{user:SessionUser;token?:string}>('/me',{method:'PATCH',body:JSON.stringify({displayName})});
   if(result.token) saveToken(result.token);
   return result.user;
+}
+export async function apiUpdatePhone(phone:string) {
+  return (await request<{user:SessionUser}>('/me',{method:'PATCH',body:JSON.stringify({phone})})).user;
 }
 export async function apiChangePassword(currentPassword:string,newPassword:string) {
   const result=await request<{token:string}>('/me/password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});

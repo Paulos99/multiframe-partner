@@ -63,6 +63,31 @@ export function cleanClientPhone(raw) {
   return { error: `Телефон указан неверно. Пример: ${PHONE_EXAMPLE}` };
 }
 
+/**
+ * Телефон сотрудника в профиле: только российский номер (+7, 8 или 10 цифр).
+ * Пусто — допустимо, номер стирается. Приводится к виду «+7 900 123-45-67».
+ */
+export function cleanStaffPhone(raw) {
+  const res = cleanClientPhone(raw);
+  if (res.error || !res.value) return res;
+  if (!res.value.startsWith('+7 ')) return { error: `Нужен российский номер. Пример: ${PHONE_EXAMPLE}` };
+  return res;
+}
+
+/**
+ * Телефон менеджера проекта для коммерческого предложения.
+ * Берётся у ответственного менеджера проекта; если его нет или номер пуст — у владельца компании.
+ */
+export function projectManagerContact(project, users) {
+  const list = Array.isArray(users) ? users : [];
+  const byId = (id) => (id ? list.find((u) => u && u.id === id) : null);
+  const pick = (u) => (u ? { id: u.id, name: u.displayName || u.login || '', phone: u.phone || '' } : null);
+  const manager = pick(byId(project?.managerUserId));
+  if (manager?.phone) return manager;
+  const owner = pick(list.find((u) => u && u.role === 'owner' && u.orgId === project?.orgId && u.phone));
+  return owner || manager || null;
+}
+
 function formatRu(ten) {
   return `+7 ${ten.slice(0, 3)} ${ten.slice(3, 6)}-${ten.slice(6, 8)}-${ten.slice(8, 10)}`;
 }

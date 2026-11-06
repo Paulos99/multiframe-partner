@@ -1,4 +1,5 @@
 import { roomCountLabel } from './kanban';
+import { trackPartnerAnalytics } from './analytics';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -24,6 +25,7 @@ import { answersFromStoredRoom, roomStubFromLabel } from './roomLink';
 import { createInitialSession, withDerived } from '../state/session';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { ensureClientLinkUrl } from './clientLink';
+import { isDocStale } from './docStale';
 import { formatRub } from './estimate';
 import { loadLocalDocBytes } from './localStore';
 import { StatusSwap } from './motionBits';
@@ -43,6 +45,11 @@ import { assigneeCandidates, assigneeRoleLabel, deleteProjectWarning, roomTitle 
 import { navigateProject, parseProjectHash, PROJECT_TABS, type ProjectRoute } from './projectRoute';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { RoomPhotoReport } from './photos/RoomPhotoReport';
+import { buildKpModel, kpRooms } from './kp/kpModel';
+import { renderKpPdf } from './kp/kpPdf';
+import { projectManagerContact } from '../../../../packages/shared/clientPhone.js';
+import { isDemoModeEnabled } from './demoMode';
+import type { Project } from '../../../../packages/shared/partner';
 import styles from './partner.module.css';
 
 const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
@@ -107,7 +114,8 @@ function ObjectDocuments({
   onResults: (doc: JobObjectDocument) => void;
   onShare: (doc: JobObjectDocument) => void;
 }) {
-  const docs = visibleDocuments(obj.documents);
+  // КП собирается на весь проект и живёт во вкладке «Документы» проекта.
+  const docs = visibleDocuments(obj.documents).filter((doc) => doc.kind !== 'offer');
   return (
     <details className={styles.docBlock}>
       <summary>Документы</summary>
@@ -115,31 +123,43 @@ function ObjectDocuments({
         {docs.length
           ? hidePrices
             ? 'Схема, материалы и количества. Цен в этих файлах нет. Клиенту файл уходит только по кнопке «Клиенту».'
-            : '«Смета» — цены, количество и схема. «Профиль» — акустика комнаты. Само никому не отправляется: «Клиенту» — только по нажатию.'
-          : '«Смета» появится после PDF в калькуляторе, «Профиль» — после PDF в проблемомере. В комнате файл лежит до нажатия.'}
+            : '«Смета и схема монтажа» — цены, количество и раскладка. «Акустический профиль» — что изменится в комнате. Само никому не уходит: клиенту — только по кнопке «Клиенту».'
+          : 'Смета и схема монтажа появится после PDF в калькуляторе, акустический профиль — после PDF в Проблемомере. Файл лежит в комнате, пока вы его не отправите.'}
       </span>
       {docs.length ? (
         <ul className={styles.docList}>
           {docs.map((doc, index) => {
             const kind = documentDisplayKind(doc.kind);
             const latest = docs.findIndex((item) => documentDisplayKind(item.kind) === kind) === index;
+            const stale = latest && isDocStale(doc, obj);
             return (
-              <li key={doc.id} className={styles.docRow} data-doc-kind={kind}>
+              <li
+                key={doc.id}
+                className={stale ? `${styles.docRow} ${styles.docRowStale}` : styles.docRow}
+                data-doc-kind={kind}
+                data-stale={stale ? 'true' : undefined}
+              >
                 <div className={styles.docMeta}>
-                  <strong>{documentLabel(doc.kind)}</strong>
+                  <strong>
+                    {documentLabel(doc.kind)}
+                    {stale ? <span className={styles.staleBadge}>Устарел</span> : null}
+                  </strong>
                   <span className={styles.hint}>
                     {latest ? 'Последняя версия' : 'Предыдущая версия'}
                     {formatDocWhen(doc.createdAt) ? ` · ${formatDocWhen(doc.createdAt)}` : ''}
                     {doc.areaM2 ? ` · ${doc.areaM2} м²` : ''}
-                    {doc.areaM2 != null && obj.room?.areaM2 != null && Math.abs(doc.areaM2 - obj.room.areaM2) > 0.049
-                      ? ' · устарел, пересобрать'
-                      : ''}
+                    {stale ? ` · площадь комнаты теперь ${obj.room?.areaM2} м²` : ''}
                     {kind === 'estimate' && doc.panels ? ` · ${doc.panels} пан.` : ''}
                     {kind === 'estimate' ? (doc.hasScheme ? ' · схема раскладки' : ' · без схемы') : ''}
                     {doc.kind === 'spec' ? ' · старый файл без цен' : ''}
                   </span>
                 </div>
                 <div className={styles.docActions}>
+                  {stale ? (
+                    <button type="button" className={styles.rebuildBtn} data-doc-action="rebuild" onClick={() => onResults(doc)}>
+                      Пересобрать
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={styles.ghost}
@@ -346,7 +366,71 @@ export function ObjectsPanel({
     }
   }
 
+  function kpManager(project: Project) {
+    const people = [
+      { id: user.id, role: user.role, orgId: user.orgId, displayName: user.displayName, login: user.login, phone: user.phone || '' },
+      ...staff.filter((s) => s.id !== user.id),
+    ];
+    // Ответственного менеджера нет — в КП контакт того, кто его собирает.
+    const contact = projectManagerContact(project.managerUserId ? project : { ...project, managerUserId: user.id }, people);
+    return contact ? { name: contact.name, phone: contact.phone } : null;
+  }
+
+  function kpInput(projectId: string | null | undefined) {
+    const project = api.projects.find((item) => item.id === projectId);
+    if (!project) throw new Error('Проект не найден');
+    const rooms = api.objects.filter((room) => room.projectId === project.id);
+    return { project, rooms };
+  }
+
+  async function renderKp(project: Project, rooms: JobObject[], demo: boolean) {
+    const model = buildKpModel({ project, rooms, org: user.org, manager: kpManager(project), demo });
+    const anchor = kpRooms(rooms)[0]!;
+    const clientLink = await ensureClientLinkUrl(
+      model.effectRoomId,
+      user.role,
+      (answersFromStoredRoom(rooms.find((r) => r.id === model.effectRoomId)?.room) || {}) as unknown as Record<string, unknown>,
+    );
+    const file = await renderKpPdf(model, { clientLink, compact: true });
+    return { model, anchor, file };
+  }
+
+  async function buildKp(project: Project, rooms: JobObject[]) {
+    setErr(null);
+    setMsg(null);
+    try {
+      const { model, anchor, file } = await renderKp(project, rooms, isDemoModeEnabled());
+      const bytes = new Uint8Array(await file.blob.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      await api.attachOffer(anchor, {
+        pdfBase64: btoa(bin),
+        filename: file.filename,
+        stamp: model.stamp,
+        panels: model.totals.panels,
+        areaM2: model.areaM2,
+      });
+      setMsg('Коммерческое предложение собрано. Клиенту уходит только по кнопке «Поделиться».');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Не удалось собрать КП');
+    }
+  }
+
+  /** КП ушло клиенту: комнаты до этапа «Отправил КП» переходят на него. */
+  async function markKpSent(projectId: string | null | undefined) {
+    if (!canMove || !projectId) return;
+    const rooms = api.objects.filter((room) => room.projectId === projectId && (room.status === 'draft' || room.status === 'measured'));
+    for (const room of rooms) await api.saveObject({ ...room, status: 'quote_sent', id: room.id });
+  }
+
   async function blobForDocument(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+    if (doc.kind === 'offer') {
+      if (documentOpenPolicy(user.role) === 'without-prices') throw new Error('КП доступно владельцу и менеджеру');
+      if (doc.demo) {
+        const { project, rooms } = kpInput(doc.projectId || obj.projectId);
+        return (await renderKp(project, rooms, true)).file.blob;
+      }
+    }
     if (documentOpenPolicy(user.role) === 'without-prices') {
       if (documentDisplayKind(doc.kind) === 'profile') return plainProfileBlob(obj, doc, user.role);
       return buildDemoPdfBlob(obj, doc, { hidePrices: true });
@@ -385,9 +469,22 @@ export function ObjectsPanel({
         );
         setMsg('Окно «Поделиться» открыто. Само по себе ничего не отправлено.');
       } else {
-        await navigator.clipboard.writeText(doc.filename);
-        setMsg('Имя файла скопировано. Отправка клиенту — только из этого окна.');
+        // Без Web Share: ссылка клиента (та же, что в QR); без неё — скачиваем файл.
+        const url = await ensureClientLinkUrl(
+          obj.id,
+          user.role,
+          (answersFromStoredRoom(obj.room) || {}) as unknown as Record<string, unknown>,
+        );
+        if (url && navigator.clipboard) {
+          await navigator.clipboard.writeText(url);
+          setMsg('Ссылка для клиента скопирована.');
+        } else {
+          openPdfBlob(blob, doc.filename, true);
+          setMsg('Ссылка для клиента недоступна — файл скачан, отправьте его сами.');
+        }
       }
+      // КП ушло клиенту (окно «Поделиться», ссылка или файл) — комнаты переходят на «Отправил КП».
+      if (doc.kind === 'offer') await markKpSent(doc.projectId || obj.projectId);
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       setErr(e instanceof Error ? e.message : 'Не удалось поделиться');
@@ -540,6 +637,9 @@ export function ObjectsPanel({
               status: 'closed',
               refusal: choice ? { reasonKey: choice.reasonKey, comment: choice.comment, at: '', by: null } : null,
             });
+            if (!choice) {
+              trackPartnerAnalytics({ tool: 'cabinet', action: 'install_done' });
+            }
           }}
         />
       ) : null}
@@ -616,6 +716,38 @@ export function ObjectsPanel({
           if (projectId) navigateProject({ kind: 'room', projectId, roomId: room.id });
         }}
         onAddRoom={canCreate ? addRoom : undefined}
+        onArchiveProject={
+          canMove
+            ? async (project, archived) => {
+                setErr(null);
+                try {
+                  await api.updateProject(project.id, { archived });
+                  setMsg(archived ? `«${project.name}» в архиве.` : `«${project.name}» возвращён из архива.`);
+                } catch (e) {
+                  setErr(e instanceof Error ? e.message : 'Не удалось изменить архив');
+                }
+              }
+            : undefined
+        }
+        onBuildKp={canMove ? buildKp : undefined}
+        onDocAction={async (room, doc, action) => {
+          if (action === 'rebuild' && doc.kind === 'offer') {
+            const { project, rooms } = kpInput(doc.projectId || room.projectId);
+            await buildKp(project, rooms);
+            return;
+          }
+          if (action === 'rebuild') {
+            navigateProject({
+              kind: 'room',
+              projectId: room.projectId || '',
+              roomId: room.id,
+              view: documentDisplayKind(doc.kind) === 'profile' ? 'profile' : 'estimate',
+            });
+            return;
+          }
+          if (action === 'share') await shareDocument(room, doc);
+          else await openDocument(room, doc, action === 'download');
+        }}
         onDeleteProject={canDelete ? (project) => setProjectToDelete({ id: project.id, name: project.name, rooms: api.objects.filter((room) => room.projectId === project.id).length }) : undefined}
       />
       )}
@@ -707,7 +839,7 @@ export function ObjectsPanel({
           {(() => {
             const wanted = route.view;
             const doc =
-              visibleDocuments(selected.documents).find((item) => {
+              visibleDocuments(selected.documents).filter((item) => item.kind !== 'offer').find((item) => {
                 const kind = documentDisplayKind(item.kind) === 'profile' ? 'profile' : 'estimate';
                 return kind === wanted;
               }) || null;
@@ -909,7 +1041,14 @@ export function ObjectsPanel({
                       onClick={() => {
                         if (s === selected.status) return;
                         if (s === 'closed') setClosingRoom(selected);
-                        else void patch(selected, { status: s });
+                        else {
+                          void patch(selected, { status: s });
+                          if (s === 'measured') {
+                            trackPartnerAnalytics({ tool: 'cabinet', action: 'client_agreed' });
+                          } else if (s === 'install') {
+                            trackPartnerAnalytics({ tool: 'cabinet', action: 'quote_accepted' });
+                          }
+                        }
                       }}
                     >
                       {JOB_OBJECT_STATUS_LABELS[s]}

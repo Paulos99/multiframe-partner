@@ -904,3 +904,163 @@
   padding: 0 6px;
   font-weight: 700;
 }
+
+/* Документы проекта: заголовок, мета отдельной строкой, действия. */
+.docRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--cab-border);
+  border-radius: 12px;
+  background: var(--cab-card, #fff);
+}
+
+.docMain {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.docMain strong {
+  color: var(--cab-ink);
+}
+
+.docMeta {
+  display: block;
+  font-size: 13px;
+  color: var(--cab-muted, #6b7280);
+}
+
+.docActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.docAction {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--cab-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.docAction:disabled {
+  opacity: 0.6;
+}
+
+@media (max-width: 560px) {
+  .docActions {
+    width: 100%;
+  }
+  .docAction {
+    flex: 1 1 0;
+  }
+}
+
+.menuItem {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--cab-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuItem:hover,
+.menuItem:focus-visible {
+  background: var(--cab-accent-soft, #e7f3ef);
+  outline: none;
+}
+
+@media (pointer: coarse) {
+  .menuItem {
+    min-height: 44px;
+  }
+}
+
+.menuCell {
+  position: relative;
+  width: 44px;
+}
+
+.menuCell .cardMenu {
+  position: static;
+  opacity: 0.8;
+}
+
+/* Устаревший документ: красная рамка, подложка, метка и кнопка «Пересобрать». Цвета из темы. */
+.docRowStale {
+  border-color: color-mix(in srgb, var(--cab-danger, #c0392b) 55%, var(--cab-border, #d8dee6));
+  background: color-mix(in srgb, var(--cab-danger, #c0392b) 9%, var(--cab-card, #fff));
+}
+
+.staleBadge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cab-danger-soft, #fdecea);
+  color: var(--cab-danger, #b42318);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.rebuildBtn {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--cab-danger, #b42318);
+  border-radius: 999px;
+  background: var(--cab-danger, #b42318);
+  /* Текст — цвет фона страницы: белый на тёмно-красном (светлая), тёмный на розовом (тёмная). */
+  color: var(--cab-card, #fff);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rebuildBtn:disabled {
+  opacity: 0.6;
+}
+
+.kpBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--cab-border, #dce6e1);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  color: var(--cab-muted, #5f6b73);
+}
+@media (max-width: 640px) {
+  .kpBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
