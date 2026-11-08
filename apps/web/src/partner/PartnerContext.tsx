@@ -234,9 +234,10 @@ type PartnerApi = {
   /** Открыть калькулятор на комнате. Без objectId площадь никуда не пишется. */
   requestCalculator: (objectId: string | null) => void;
   calcRequest: { objectId: string | null; nonce: number; areaM2?: number | null } | null;
-  requestDiagnosis: (objectId: string) => void;
+  /** fresh — «Пересобрать»: опрос заново с первого вопроса. */
+  requestDiagnosis: (objectId: string, opts?: { fresh?: boolean }) => void;
   clearDiagnosis: () => void;
-  diagnosisRequest: { objectId: string; nonce: number } | null;
+  diagnosisRequest: { objectId: string; nonce: number; fresh?: boolean } | null;
   openObject: (id: string | null) => void;
   openedObjectId: string | null;
   /** Закрыть инструмент и открыть карточку комнаты, из которой пришли. */
@@ -247,8 +248,6 @@ type PartnerApi = {
   applyCalculation: (message: CabinetCalcMessage, objectId: string | null, room?: JobObject) => Promise<JobObject | null>;
   /** «Профиль» — PDF проблемомера в карточку объекта. */
   attachProfile: (saved: JobObject, pdfBase64: string) => Promise<JobObject | null>;
-  /** «Пересобрать» смету: новый PDF по сохранённой площади комнаты. */
-  attachEstimate: (saved: JobObject, pdfBase64: string) => Promise<JobObject | null>;
   /** КП проекта: файл лежит в первой комнате проекта, отпечаток — по всем комнатам. */
   attachOffer: (
     anchor: JobObject,
@@ -287,7 +286,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [projectsUnavailable, setProjectsUnavailable] = useState(false);
-  const [diagnosisRequest, setDiagnosisRequest] = useState<{ objectId: string; nonce: number } | null>(null);
+  const [diagnosisRequest, setDiagnosisRequest] = useState<{ objectId: string; nonce: number; fresh?: boolean } | null>(null);
   const [openedObjectId, setOpenedObjectId] = useState<string | null>(null);
   const [cabinetLeaveNonce, setCabinetLeaveNonce] = useState(0);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
@@ -1003,8 +1002,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, remote, refreshObjects, refreshProjects],
   );
 
-  const requestDiagnosis = useCallback((objectId: string) => {
-    setDiagnosisRequest({ objectId, nonce: Date.now() });
+  const requestDiagnosis = useCallback((objectId: string, opts?: { fresh?: boolean }) => {
+    setDiagnosisRequest({ objectId, nonce: Date.now(), ...(opts?.fresh ? { fresh: true } : {}) });
   }, []);
 
   const clearDiagnosis = useCallback(() => setDiagnosisRequest(null), []);
@@ -1140,23 +1139,6 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, attachDocuments],
   );
 
-  const attachEstimate = useCallback(
-    async (saved: JobObject, pdfBase64: string) => {
-      if (!user || (!canCreateObjects(user.role) && user.role !== 'measurer')) return null;
-      return attachDocuments(saved, [
-        {
-          kind: 'estimate',
-          filename: readablePdfName(saved.clientName, 'estimate', new Date().toISOString()),
-          pdfBase64,
-          hasScheme: true,
-          panels: saved.estimate?.panels ?? null,
-          areaM2: saved.room?.areaM2 ?? null,
-        },
-      ]);
-    },
-    [user, attachDocuments],
-  );
-
   const attachOffer = useCallback(
     async (
       anchor: JobObject,
@@ -1271,7 +1253,6 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       attachCalculation,
       applyCalculation,
       attachProfile,
-      attachEstimate,
       attachOffer,
       noteTool,
       refresh,
@@ -1332,7 +1313,6 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       attachCalculation,
       applyCalculation,
       attachProfile,
-      attachEstimate,
       attachOffer,
       noteTool,
       refresh,
