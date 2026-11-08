@@ -156,7 +156,10 @@ test('устаревший документ подсвечен красным и
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/docs-stale-dark.png` });
   await stale.getByRole('button', { name: 'Пересобрать', exact: true }).click();
-  // «Пересобрать» ведёт к результатам этой комнаты.
-  await expect(page.locator('[data-doc-row]')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: /Результаты (Проблемомера|калькулятора)/ })).toBeVisible();
+  // «Пересобрать» собирает документ заново из сохранённых данных: вопросы Проблемомера не открываются.
+  await expect(
+    page.getByText(/пересобран|Не получилось пересобрать/).first(),
+  ).toBeVisible({ timeout: 30000 });
+  await expect(page.locator('[data-doc-row]').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Результаты (Проблемомера|калькулятора)/ })).toHaveCount(0);
 });

@@ -124,9 +124,25 @@ export async function buildDemoPdfBlob(
   const cacheKey = `${doc.id}:${opts?.hidePrices ? 'plain' : 'priced'}`;
   const cached = demoPdfCache.get(cacheKey);
   if (cached) return cached;
-  const calc = await loadCalculator();
   const older = /_v1$/.test(doc.versionId) && (obj.id === 'obj_a03' || obj.id === 'obj_b03');
-  const [length, width] = roomSize(obj, older);
+  const blob = await renderCalcPdf(roomSize(obj, older), obj.clientName || 'Комната', doc.createdAt, opts?.hidePrices === true);
+  demoPdfCache.set(cacheKey, blob);
+  return blob;
+}
+
+/** «Пересобрать» смету: заново по сохранённой площади комнаты, без кэша и без вопросов. */
+export async function rebuildEstimatePdf(obj: JobObject, opts?: { hidePrices?: boolean }): Promise<Blob> {
+  const size = roomSize({ ...obj, id: '' }, false);
+  return renderCalcPdf(size, obj.clientName || 'Комната', new Date().toISOString(), opts?.hidePrices === true);
+}
+
+async function renderCalcPdf(
+  [length, width]: [number, number],
+  fileLabel: string,
+  fileDate: string,
+  hidePrices: boolean,
+): Promise<Blob> {
+  const calc = await loadCalculator();
   const room = new calc.Room({
     vertices: calc.createRectangleVertices(length, width),
     wallHeight: 2.7,
@@ -161,12 +177,11 @@ export async function buildDemoPdfBlob(
     wallSurfaces: images.wallSurfaces,
     planImage: images.planImage,
     areaEstimate: false,
-    hidePrices: opts?.hidePrices === true,
+    hidePrices,
     download: false,
-    fileLabel: obj.clientName || 'Комната',
-    fileDate: doc.createdAt,
+    fileLabel,
+    fileDate,
   });
-  demoPdfCache.set(cacheKey, file.blob);
   return file.blob;
 }
 

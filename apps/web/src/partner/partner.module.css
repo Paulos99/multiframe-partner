@@ -352,6 +352,12 @@
   gap: 8px;
 }
 
+.docBlockTitle {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 750;
+}
+
 .docBlock > summary {
   cursor: pointer;
   font-weight: 750;

@@ -19,7 +19,8 @@ import {
   type UserRole,
 } from '../../../../packages/shared/partner';
 import { apiFetchObjectDocument } from './apiClient';
-import { buildDemoPdfBlob, openPdfBlob } from './demoDocuments';
+import { buildDemoPdfBlob, openPdfBlob, rebuildEstimatePdf } from './demoDocuments';
+import { planRebuild } from './docRebuild';
 import { documentOpenPolicy } from './roomDocuments';
 import { answersFromStoredRoom, roomStubFromLabel } from './roomLink';
 import { createInitialSession, withDerived } from '../state/session';
@@ -56,6 +57,15 @@ const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install
 
 function telHref(phone: string): string {
   return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 function formatDocWhen(iso: string): string {
@@ -106,6 +116,7 @@ function ObjectDocuments({
   onOpen,
   onResults,
   onShare,
+  onRebuild,
 }: {
   obj: JobObject;
   busyId: string | null;
@@ -113,12 +124,13 @@ function ObjectDocuments({
   onOpen: (doc: JobObjectDocument, download: boolean) => void;
   onResults: (doc: JobObjectDocument) => void;
   onShare: (doc: JobObjectDocument) => void;
+  onRebuild: (doc: JobObjectDocument) => void;
 }) {
   // КП собирается на весь проект и живёт во вкладке «Документы» проекта.
   const docs = visibleDocuments(obj.documents).filter((doc) => doc.kind !== 'offer');
   return (
-    <details className={styles.docBlock}>
-      <summary>Документы</summary>
+    <section className={styles.docBlock} aria-label="Документы" data-doc-block>
+      <h4 className={styles.docBlockTitle}>Документы</h4>
       <span className={styles.hint}>
         {docs.length
           ? hidePrices
@@ -156,8 +168,8 @@ function ObjectDocuments({
                 </div>
                 <div className={styles.docActions}>
                   {stale ? (
-                    <button type="button" className={styles.rebuildBtn} data-doc-action="rebuild" onClick={() => onResults(doc)}>
-                      Пересобрать
+                    <button type="button" className={styles.rebuildBtn} data-doc-action="rebuild" disabled={busyId === doc.id} onClick={() => onRebuild(doc)}>
+                      {busyId === doc.id ? 'Собираем…' : 'Пересобрать'}
                     </button>
                   ) : null}
                   <button
@@ -198,7 +210,7 @@ function ObjectDocuments({
           })}
         </ul>
       ) : null}
-    </details>
+    </section>
   );
 }
 
@@ -250,6 +262,8 @@ export function ObjectsPanel({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [closingRoom, setClosingRoom] = useState<JobObject | null>(null);
   const [docBusy, setDocBusy] = useState<string | null>(null);
+  /** «Пересобрать» не нашло сохранённых данных: причина и куда пройти. */
+  const [rebuildGap, setRebuildGap] = useState<{ room: JobObject; message: string; next: 'survey' | 'calculator' } | null>(null);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<RoomDraft>(() => emptyDraft(user.org?.city || ''));
   const [saving, setSaving] = useState(false);
@@ -440,6 +454,48 @@ export function ObjectsPanel({
     const pdfBase64 = local || (await apiFetchObjectDocument(obj.id, doc.id)).pdfBase64;
     const bin = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
     return new Blob([bin], { type: 'application/pdf' });
+  }
+
+  /** «Пересобрать»: новый PDF из сохранённых ответов и расчёта комнаты, вопросы не показываем. */
+  async function rebuildDocument(obj: JobObject, doc: JobObjectDocument) {
+    setErr(null);
+    setMsg(null);
+    setRebuildGap(null);
+    const projectRooms = obj.projectId ? api.objects.filter((room) => room.projectId === obj.projectId) : [obj];
+    const plan = planRebuild(doc, obj, projectRooms);
+    if (!plan.ok) {
+      setRebuildGap({ room: obj, message: plan.message, next: plan.next });
+      return;
+    }
+    if (plan.kind === 'offer') {
+      const { project, rooms } = kpInput(doc.projectId || obj.projectId);
+      await buildKp(project, rooms);
+      return;
+    }
+    setDocBusy(doc.id);
+    try {
+      if (plan.kind === 'profile') {
+        const base = createInitialSession();
+        const session = withDerived({
+          ...base,
+          answers: { ...base.answers, room: { ...base.answers.room, ...plan.answers, plannedCeiling: 'stretch' } },
+        });
+        const shareUrl = await ensureClientLinkUrl(obj.id, user.role, session.answers.room as unknown as Record<string, unknown>);
+        const { blob } = await renderAcousticProfilePdf(session, { compact: true, hidePrices: hideMoney, shareUrl });
+        const saved = await api.attachProfile(obj, await blobToBase64(blob));
+        if (!saved) throw new Error('Пересобрать профиль может владелец, менеджер или замерщик');
+        setMsg('Акустический профиль помещения пересобран по сохранённым ответам.');
+      } else {
+        const blob = await rebuildEstimatePdf(obj, { hidePrices: false });
+        const saved = await api.attachEstimate(obj, await blobToBase64(blob));
+        if (!saved) throw new Error('Пересобрать смету может владелец, менеджер или замерщик');
+        setMsg('Смета и схема монтажа пересобраны по сохранённой площади комнаты.');
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Не удалось пересобрать документ');
+    } finally {
+      setDocBusy(null);
+    }
   }
 
   async function openDocument(obj: JobObject, doc: JobObjectDocument, download: boolean) {
@@ -731,18 +787,8 @@ export function ObjectsPanel({
         }
         onBuildKp={canMove ? buildKp : undefined}
         onDocAction={async (room, doc, action) => {
-          if (action === 'rebuild' && doc.kind === 'offer') {
-            const { project, rooms } = kpInput(doc.projectId || room.projectId);
-            await buildKp(project, rooms);
-            return;
-          }
           if (action === 'rebuild') {
-            navigateProject({
-              kind: 'room',
-              projectId: room.projectId || '',
-              roomId: room.id,
-              view: documentDisplayKind(doc.kind) === 'profile' ? 'profile' : 'estimate',
-            });
+            await rebuildDocument(room, doc);
             return;
           }
           if (action === 'share') await shareDocument(room, doc);
@@ -982,6 +1028,7 @@ export function ObjectsPanel({
                 })
               }
               onShare={(doc) => void shareDocument(selected, doc)}
+              onRebuild={(doc) => void rebuildDocument(selected, doc)}
             />
 
             <RoomPhotoReport key={selected.id} objectId={selected.id} />
@@ -1118,6 +1165,28 @@ export function ObjectsPanel({
         <p className={`${styles.toast} ${styles.toastErr}`} role="alert">
           {err}
         </p>
+      ) : null}
+      {rebuildGap ? (
+        <div className={`${styles.toast} ${styles.toastErr}`} role="alert" data-rebuild-gap>
+          <p>{rebuildGap.message}</p>
+          <div className={styles.navRow}>
+            <button
+              type="button"
+              className={styles.primary}
+              onClick={() => {
+                const room = rebuildGap.room;
+                setRebuildGap(null);
+                if (rebuildGap.next === 'survey') api.requestDiagnosis(room.id);
+                else api.requestCalculator(room.id);
+              }}
+            >
+              {rebuildGap.next === 'survey' ? 'Пройти Проблемомер' : 'Открыть калькулятор'}
+            </button>
+            <button type="button" className={styles.ghost} onClick={() => setRebuildGap(null)}>
+              Закрыть
+            </button>
+          </div>
+        </div>
       ) : null}
       <ConfirmDialog
         open={!!toDelete}

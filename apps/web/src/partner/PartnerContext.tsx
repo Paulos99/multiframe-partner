@@ -247,6 +247,8 @@ type PartnerApi = {
   applyCalculation: (message: CabinetCalcMessage, objectId: string | null, room?: JobObject) => Promise<JobObject | null>;
   /** «Профиль» — PDF проблемомера в карточку объекта. */
   attachProfile: (saved: JobObject, pdfBase64: string) => Promise<JobObject | null>;
+  /** «Пересобрать» смету: новый PDF по сохранённой площади комнаты. */
+  attachEstimate: (saved: JobObject, pdfBase64: string) => Promise<JobObject | null>;
   /** КП проекта: файл лежит в первой комнате проекта, отпечаток — по всем комнатам. */
   attachOffer: (
     anchor: JobObject,
@@ -1138,6 +1140,23 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, attachDocuments],
   );
 
+  const attachEstimate = useCallback(
+    async (saved: JobObject, pdfBase64: string) => {
+      if (!user || (!canCreateObjects(user.role) && user.role !== 'measurer')) return null;
+      return attachDocuments(saved, [
+        {
+          kind: 'estimate',
+          filename: readablePdfName(saved.clientName, 'estimate', new Date().toISOString()),
+          pdfBase64,
+          hasScheme: true,
+          panels: saved.estimate?.panels ?? null,
+          areaM2: saved.room?.areaM2 ?? null,
+        },
+      ]);
+    },
+    [user, attachDocuments],
+  );
+
   const attachOffer = useCallback(
     async (
       anchor: JobObject,
@@ -1252,6 +1271,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       attachCalculation,
       applyCalculation,
       attachProfile,
+      attachEstimate,
       attachOffer,
       noteTool,
       refresh,
@@ -1312,6 +1332,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       attachCalculation,
       applyCalculation,
       attachProfile,
+      attachEstimate,
       attachOffer,
       noteTool,
       refresh,
