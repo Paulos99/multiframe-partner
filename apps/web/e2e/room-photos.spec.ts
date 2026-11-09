@@ -267,7 +267,8 @@ test('админ СТП: «Фото отчёты» внутри аналитик
   // Отдельных вкладок «Кейсы» и «Отчёты» нет: фотоотчёты лежат в «Аналитика → Фото отчёты».
   await expect(page.getByRole('tab', { name: 'Кейсы', exact: true })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'Отчёты', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('tab')).toHaveCount(5);
+  // Сегодня, Партнёры, Календарь, Инструменты, Аналитика, Обучение.
+  await expect(page.getByRole('tab')).toHaveCount(6);
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   await page.getByRole('tab', { name: 'Фото отчёты', exact: true }).click();
   await expect(page).toHaveURL(/#analytics\/photo-reports$/);
