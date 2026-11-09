@@ -1603,6 +1603,7 @@ async function handleRequest(event = {}) {
       requireAuth: () => requireAuth(event),
       json,
       getBody: () => getBody(event),
+      getQuery: () => getQuery(event),
       savePlatform,
       uid,
       pushActivity,

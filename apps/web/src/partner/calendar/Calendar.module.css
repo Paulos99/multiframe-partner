@@ -129,6 +129,18 @@
   gap: 8px;
   margin-left: auto;
   flex-wrap: wrap;
+  align-items: flex-end;
+}
+.partnerFilter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: min(220px, 100%);
+}
+.filterLabel {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--cab-muted);
 }
 .filters select,
 .field select,
@@ -339,6 +351,13 @@
   font-weight: 700;
 }
 @media (max-width: 1024px) {
+  .partnerFilter {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .partnerFilter select {
+    width: 100%;
+  }
   .week {
     grid-template-columns: 1fr;
   }
@@ -554,6 +573,17 @@
   border-radius: 12px;
   border-left: 4px solid var(--cab-info);
   background: var(--cab-subtle);
+  overflow: hidden;
+  transform-origin: center top;
+}
+.reminderError {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cab-danger) 12%, var(--cab-card));
+  color: var(--cab-danger);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 .reminders li[data-tone='warn'] {
   border-left-color: var(--cab-warn);

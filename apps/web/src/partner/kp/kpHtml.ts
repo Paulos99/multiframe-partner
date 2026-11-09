@@ -31,7 +31,6 @@ function chrome(m: KpModel, a: KpAssets): string {
       <span class="doc-title">Коммерческое предложение</span>
     </div>
     <div class="badges">
-      ${m.demo ? '<span class="pill demo">Демо</span>' : ''}
       <span class="pill kind">КП № ${esc(m.number)}</span>
     </div>
   </div>
@@ -73,7 +72,7 @@ function effectBlock(m: KpModel, a: KpAssets): string {
       <div class="pct-row">
         ${pct('Ударный шум', `тише ≈ на ${e.impactPct}%`)}
         ${pct('Воздушный шум', `тише ≈ на ${e.airPct}%`)}
-        ${pct('Эхо в комнате', `меньше ≈ на ${e.echoPct}%`)}
+        ${pct('Эхо', `меньше ≈ на ${e.echoPct}%`)}
       </div>
     </div>
     ${
@@ -89,7 +88,8 @@ function effectBlock(m: KpModel, a: KpAssets): string {
 }
 
 function roomsBlock(m: KpModel): string {
-  return `<div class="rooms">${m.rooms
+  const count = Math.min(Math.max(m.rooms.length, 1), 6);
+  return `<div class="rooms" data-count="${count}">${m.rooms
     .map(
       (r) => `
       <div class="room" data-kp-room>
@@ -151,10 +151,63 @@ export function buildKpHtml(m: KpModel, a: KpAssets): string {
     .filter(Boolean)
     .join(' · ');
   const contact = [managerName, m.companyName].filter(Boolean).join(' · ');
+  const roomCount = m.rooms.length;
+  // Одна комната: «О материале» на первую страницу — иначе снизу большая пустота.
+  // При 2+ комнатах блоки 05–07 остаются на второй (иначе обрезаются).
+  const page1HasAbout = roomCount <= 1;
+  const page1HasPillars = false;
+  const pageDensity = roomCount <= 1 ? 'balanced' : roomCount <= 3 ? 'comfortable' : 'dense';
+
+  const aboutBlock = `<h2><span class="h2-idx">05</span>О материале</h2>
+  <div class="about">
+    <img src="${a.panel}" alt="Панель MultiFrame" />
+    <div>
+      <h3>Что такое MultiFrame</h3>
+      ${a.about.map((p) => `<p>${esc(p)}</p>`).join('\n      ')}
+    </div>
+  </div>`;
+
+  const pillarsBlock = `<h2><span class="h2-idx">06</span>Уникальность системы</h2>
+  <ul class="pillars">${a.pillars.map((p) => `<li><span class="t">${esc(p.title)}</span><span class="d">${esc(p.text)}</span></li>`).join('')}</ul>`;
+
+  const nextBlock = `<h2><span class="h2-idx">07</span>Что дальше</h2>
+  <div class="next">
+    <div class="next-card">
+      <h3>Шаги</h3>
+      <ol>
+        <li>Замер на объекте и уточнение схемы.</li>
+        <li>Согласование состава и сроков.</li>
+        <li>Монтаж панелей и натяжного потолка.</li>
+      </ol>
+      ${contact ? `<div class="contact-line">${esc(contact)}</div>` : ''}
+      ${m.manager?.phone ? `<p class="phone-line" data-kp-phone>${esc(m.manager.phone)}</p>` : ''}
+    </div>
+    <div class="next-card">
+      <div class="qr-mini">
+        <img src="${a.qr.site}" alt="QR сайта" />
+        <div><div class="k">Сайт</div><div class="t">stp-multiframe.ru</div><div class="u">Официальный сайт MultiFrame</div></div>
+      </div>
+    </div>
+    <div class="next-card">
+      <div class="qr-mini">
+        <img src="${a.qr.calc}" alt="QR калькулятора" />
+        <div><div class="k">Калькулятор</div><div class="t">Рассчитать количество</div><div class="u">Подбор комплектации под объект</div></div>
+      </div>
+    </div>
+  </div>`;
+
+  const page2Lead = [
+    page1HasAbout ? '' : aboutBlock,
+    page1HasPillars ? '' : pillarsBlock,
+    nextBlock,
+  ]
+    .filter(Boolean)
+    .join('\n  ');
+
   return `<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8" /><title>Коммерческое предложение · ${esc(m.number)}</title>
 <style>${KP_CSS}</style></head><body>
-<section class="page" data-page="1">
+<section class="page" data-page="1" data-density="${pageDensity}">
   ${chrome(m, a)}
   <div class="hero">
     <h1>Коммерческое предложение</h1>
@@ -175,47 +228,15 @@ export function buildKpHtml(m: KpModel, a: KpAssets): string {
   ${priceHint(m)}
   <h2><span class="h2-idx">04</span>Общая смета</h2>
   ${estimateTable(m)}
+  ${page1HasAbout ? aboutBlock : ''}
+  ${page1HasPillars ? pillarsBlock : ''}
   ${footer(1)}
 </section>
-<section class="page" data-page="2">
+<section class="page" data-page="2" data-density="${page1HasAbout ? 'airy' : 'comfortable'}">
   ${chrome(m, a)}
-  <h2><span class="h2-idx">05</span>О материале</h2>
-  <div class="about">
-    <img src="${a.panel}" alt="Панель MultiFrame" />
-    <div>
-      <h3>Что такое MultiFrame</h3>
-      ${a.about.map((p) => `<p>${esc(p)}</p>`).join('\n      ')}
-    </div>
-  </div>
-  <h2><span class="h2-idx">06</span>Уникальность системы</h2>
-  <ul class="pillars">${a.pillars.map((p) => `<li><span class="t">${esc(p.title)}</span><span class="d">${esc(p.text)}</span></li>`).join('')}</ul>
-  <h2><span class="h2-idx">07</span>Что дальше</h2>
-  <div class="next">
-    <div class="next-card">
-      <h3>Шаги</h3>
-      <ol>
-        <li>Замер на объекте и уточнение схемы.</li>
-        <li>Согласование состава и сроков.</li>
-        <li>Монтаж панелей и натяжного потолка.</li>
-      </ol>
-      ${contact ? `<div class="contact-line">${esc(contact)}</div>` : ''}
-      ${m.manager?.phone ? `<p style="margin-top:4px" data-kp-phone>${esc(m.manager.phone)}</p>` : ''}
-    </div>
-    <div class="next-card">
-      <div class="qr-mini">
-        <img src="${a.qr.site}" alt="QR сайта" />
-        <div><div class="k">Сайт</div><div class="t">stp-multiframe.ru</div><div class="u">Официальный сайт MultiFrame</div></div>
-      </div>
-    </div>
-    <div class="next-card">
-      <div class="qr-mini">
-        <img src="${a.qr.calc}" alt="QR калькулятора" />
-        <div><div class="k">Калькулятор</div><div class="t">Рассчитать количество</div><div class="u">Подбор комплектации под объект</div></div>
-      </div>
-    </div>
-  </div>
+  ${page2Lead}
   <div class="disclaimer">
-    ${m.demo ? `Документ собран как <b>демо-образец</b> коммерческого предложения по объекту «${esc(m.clientName)}». ` : ''}Это <b>ориентир для коммерческого предложения</b>, не инженерный расчёт и не гарантия цифр.
+    Это <b>ориентир для коммерческого предложения</b>, не инженерный расчёт и не гарантия цифр.
     Эффект зависит от перекрытия, типа шума и качества монтажа. Проценты — ориентировочные.
   </div>
   ${footer(2)}
