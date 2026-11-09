@@ -55,7 +55,7 @@ test.describe('compact funnel screenshots', () => {
     const staffTab = page.getByRole('tab', { name: 'Сотрудники', exact: true });
     await expect(staffTab).toBeVisible({ timeout: 10000 });
     await staffTab.click();
-    const manager = page.getByRole('button', { name: /Елена Крылова|Крылова/ }).first();
+    const manager = page.getByRole('button', { name: /Елена Крылова|Крылова|Менеджер/ }).first();
     await expect(manager).toBeVisible({ timeout: 20000 });
     await manager.click();
     const personal = page.locator('[data-staff-personal] [data-journey-funnel]').first();
@@ -69,7 +69,9 @@ test.describe('compact funnel screenshots', () => {
     }
     await shot(page, 'funnel-personal-expanded.png');
 
-    await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+    await page.getByRole('button', { name: '← Общая аналитика' }).click();
+    await expect(page.locator('[data-overview-panes]')).toBeVisible({ timeout: 20000 });
+    await page.getByRole('tab', { name: 'Показатели', exact: true }).click();
     const funnelAgain = page.locator('[data-journey-funnel][data-funnel-compact]').first();
     await expect(funnelAgain).toBeVisible({ timeout: 20000 });
     await funnelAgain.scrollIntoViewIfNeeded();

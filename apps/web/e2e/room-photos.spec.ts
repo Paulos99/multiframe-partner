@@ -332,7 +332,7 @@ test('админ СТП: «Фото отчёты» внутри аналитик
   await page.reload();
   await expect(page).toHaveURL(/#analytics\/photo-reports$/);
   await expect(page.getByTestId('photo-cases')).toBeVisible();
-  await page.getByRole('tab', { name: 'Сводка', exact: true }).click();
+  await page.getByRole('tab', { name: 'Обзор', exact: true }).click();
   await expect(page.getByTestId('photo-cases')).toHaveCount(0);
 
   // Остальные роли раздела не видят, сервер им отказывает.

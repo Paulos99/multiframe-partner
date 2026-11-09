@@ -12,6 +12,10 @@ async function enterDemo(page: Page, role: RegExp) {
   await page.getByRole('button', { name: role }).first().click();
   await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible({ timeout: 30000 });
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
+  const panes = page.locator('[data-overview-panes]');
+  await expect(panes).toBeVisible({ timeout: 30000 });
+  await panes.getByRole('tab', { name: 'Сводка', exact: true }).click();
+  await expect(page.locator('[data-overview-pane="summary"]')).toBeVisible();
 }
 
 test.describe('Сводка за период', () => {
@@ -31,10 +35,13 @@ test.describe('Сводка за период', () => {
     await expect(summary.locator('[data-conclusion="not_enough"]')).toHaveCount(0);
     await expect(summary.locator('[data-conclusion="conversion"]')).toContainText('До КП дошли');
     await expect(summary.locator('[data-conclusion="sales"]')).toContainText('₽');
-    // Воронка из шести этапов и отказы на месте.
+    // Воронка и отказы — на вкладке «Показатели».
+    await page.getByRole('tab', { name: 'Показатели', exact: true }).click();
     const funnel = page.locator('[data-journey-funnel][data-funnel-compact]').first();
     await expect(funnel.locator('[data-funnel-group]')).toHaveCount(6);
     await expect(page.locator('[data-outcome-kpis]')).toBeVisible();
+    await page.getByRole('tab', { name: 'Сводка', exact: true }).click();
+    await expect(page.locator('[data-period-summary]')).toBeVisible();
     await page.waitForTimeout(600);
     await summary.screenshot({ path: path.join(OUT, 'owner-summary-7days.png') });
     await page.screenshot({ path: path.join(OUT, 'owner-analytics-page.png'), fullPage: true });

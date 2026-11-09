@@ -6,7 +6,7 @@ export const ANALYTICS_ROUTE_EVENT = 'mf-analytics-route';
 export type AnalyticsPeriod = 'month' | 'quarter' | 'year';
 
 export type AnalyticsLocation = {
-  page: 'overview' | 'rating' | 'staff' | 'training-user' | 'training-company' | 'photos' | 'photo-case';
+  page: 'overview' | 'rating' | 'staff' | 'team' | 'team-user' | 'training-user' | 'training-company' | 'photos' | 'photo-case';
   metric: string | null;
   role: string | null;
   userId: string | null;
@@ -78,6 +78,11 @@ export function parseAnalyticsHash(
       period,
     };
   }
+  if (parts[0] === 'analytics' && parts[1] === 'team') {
+    return parts[2]
+      ? { page: 'team-user', metric: null, role: null, userId: parts[2], period: null }
+      : { page: 'team', metric: null, role: null, userId: null, period: null };
+  }
   if (parts[0] === 'analytics' && parts[1] === 'training' && parts[2]) {
     return { page: 'training-user', metric: null, role: null, userId: parts[2], period: null, orgId: null };
   }
@@ -94,6 +99,12 @@ export function analyticsHash(loc: AnalyticsLocation): string {
   }
   if (loc.page === 'staff' && loc.userId) {
     return `#analytics/staff/${encodeURIComponent(loc.userId)}`;
+  }
+  if (loc.page === 'team-user' && loc.userId) {
+    return `#analytics/team/${encodeURIComponent(loc.userId)}`;
+  }
+  if (loc.page === 'team') {
+    return '#analytics/team';
   }
   if (loc.page === 'training-user' && loc.userId) {
     return `#analytics/training/${encodeURIComponent(loc.userId)}`;
