@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { JourneyStep } from '../../../../packages/shared/clientJourney';
 import { groupJourneySteps } from '../../../../packages/shared/clientJourney';
 import { useGrow, useStaggerIn } from '../ui/gsapMotion';
@@ -9,31 +9,168 @@ function formatCount(count: number | null): string {
   return String(count);
 }
 
-function StepRow({
+/** Показывать процент только когда он посчитан; «—» и пустоту скрываем. */
+function pctLabel(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  if (raw === '—' || raw === '-' || raw === 'нет данных') return null;
+  return raw;
+}
+
+function stageWidthPct(count: number | null, base: number): number {
+  if (base <= 0) return 100;
+  if (count == null) return 36;
+  const ratio = Math.max(0, Math.min(1, count / base));
+  // 0 → 34%, первый этап → 100%: ступени читаются и визуально сужаются.
+  return Math.round(34 + ratio * 66);
+}
+
+function dropBetween(prev: number | null, curr: number | null): string | null {
+  if (prev == null || curr == null) return null;
+  const lost = prev - curr;
+  if (lost <= 0) return null;
+  return `−${lost}`;
+}
+
+const NestedStep = memo(function NestedStep({
   step,
-  index,
-  max,
-  row = false,
+  base,
 }: {
   step: JourneyStep;
-  index: number;
-  max: number;
-  row?: boolean;
+  base: number;
 }) {
-  const width = step.count == null ? 0 : Math.max(4, Math.round((step.count / max) * 100));
+  const width = stageWidthPct(step.count, base);
+  const pct = pctLabel(step.fromPrevPct);
+  const empty = step.count == null || step.count <= 0;
   return (
-    <li data-funnel-row={row ? '' : undefined}>
-      <span className={styles.funnelLabel}>
-        {index + 1}. {step.label}
-      </span>
-      <span className={styles.funnelPct}>{step.fromPrevPct}</span>
-      <span className={styles.funnelCount}>{formatCount(step.count)}</span>
-      <span className={styles.funnelBar} aria-hidden="true">
-        <span className={styles.funnelBarFill} style={{ width: `${width}%` }} />
+    <li className={styles.funnelNestedItem} data-funnel-nested={step.id}>
+      <div className={styles.funnelNestedHead}>
+        <span className={styles.funnelNestedLabel}>{step.label}</span>
+        <span className={styles.funnelNestedNums}>
+          <strong className={styles.funnelCountStrong}>{formatCount(step.count)}</strong>
+          {pct ? <span className={styles.funnelPctTiny}>{pct}</span> : null}
+        </span>
+      </div>
+      <span
+        className={empty ? `${styles.funnelTrack} ${styles.funnelTrackEmpty}` : styles.funnelTrack}
+        style={{ '--funnel-w': `${width}%` } as CSSProperties}
+        aria-hidden="true"
+      >
+        <span className={styles.funnelTrackFill} />
       </span>
     </li>
   );
-}
+});
+
+const FunnelStage = memo(function FunnelStage({
+  id,
+  index,
+  label,
+  count,
+  fromPrevPct,
+  widthPct,
+  expandable,
+  expanded,
+  onToggle,
+  children,
+  dropAfter,
+}: {
+  id: string;
+  index: number;
+  label: string;
+  count: number | null;
+  fromPrevPct: string;
+  widthPct: number;
+  expandable: boolean;
+  expanded: boolean;
+  onToggle: (id: string) => void;
+  children?: ReactNode;
+  dropAfter: string | null;
+}) {
+  const pct = pctLabel(fromPrevPct);
+  const empty = count == null || count <= 0;
+  const head = (
+    <>
+      <span className={styles.funnelStageMeta}>
+        <span className={styles.funnelStageName}>
+          <span className={styles.funnelStageIndex} aria-hidden="true">
+            {index + 1}
+          </span>
+          {label}
+        </span>
+        <span className={styles.funnelStageNums}>
+          <strong className={styles.funnelCountStrong}>{formatCount(count)}</strong>
+          {pct ? <span className={styles.funnelPctTiny}>{pct}</span> : null}
+        </span>
+      </span>
+      <span
+        className={empty ? `${styles.funnelTrack} ${styles.funnelTrackEmpty}` : styles.funnelTrack}
+        aria-hidden="true"
+      >
+        <span className={styles.funnelTrackFill} />
+      </span>
+      {expandable ? (
+        <span className={styles.funnelChevron} aria-hidden="true">
+          <svg viewBox="0 0 12 12" width="12" height="12" focusable="false">
+            <path
+              d="M3.2 1.6 L8.4 6 L3.2 10.4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      ) : null}
+    </>
+  );
+
+  return (
+    <li
+      className={styles.funnelStage}
+      data-funnel-stage={id}
+      data-funnel-group={expandable ? id : undefined}
+      data-funnel-row=""
+      data-expanded={expanded ? '1' : '0'}
+      data-empty={empty ? '1' : '0'}
+      style={{ '--funnel-w': `${widthPct}%` } as CSSProperties}
+    >
+      {expandable ? (
+        <button
+          type="button"
+          className={styles.funnelStageBtn}
+          aria-expanded={expanded}
+          aria-label={`${index + 1}. ${label}`}
+          onClick={() => onToggle(id)}
+        >
+          {head}
+        </button>
+      ) : (
+        <div className={styles.funnelStageBtn} data-static="">
+          {head}
+        </div>
+      )}
+      {expandable ? (
+        <div
+          className={styles.funnelExpand}
+          data-open={expanded ? '1' : '0'}
+          aria-hidden={expanded ? undefined : true}
+        >
+          <div className={styles.funnelExpandInner}>
+            <ol className={styles.funnelNested} data-funnel-expanded={id}>
+              {children}
+            </ol>
+          </div>
+        </div>
+      ) : null}
+      {dropAfter ? (
+        <div className={styles.funnelDrop} aria-hidden="true">
+          <span className={styles.funnelDropVal}>{dropAfter}</span>
+        </div>
+      ) : null}
+    </li>
+  );
+});
 
 /** Сжатая воронка клиента: 6 групп (клик раскрывает шаги) + отказ. Ролевые — плоский список. */
 export function JourneyFunnel({
@@ -49,81 +186,108 @@ export function JourneyFunnel({
   const { groups, refusal } = useMemo(() => groupJourneySteps(steps), [steps]);
   const compact = groups.some((g) => g.steps.length > 0);
   const [openId, setOpenId] = useState<string | null>(null);
-  const key = steps.map((step) => `${step.id}:${step.count}`).join('|') + `|${openId || ''}|${compact ? 'c' : 'f'}`;
-  useStaggerIn(ref, '[data-funnel-row]', key, { y: 8, stagger: 0.04, duration: 0.35 });
-  useGrow(ref, `.${styles.funnelBarFill}`, 'x', key, { stagger: 0.04, duration: 0.55, delay: 0.08, max: 0.5 });
+
+  // Ключ только от данных: раскрытие не перезапускает появление и рост полос.
+  const dataKey = useMemo(
+    () => steps.map((step) => `${step.id}:${step.count}`).join('|') + (compact ? '|c' : '|f'),
+    [steps, compact],
+  );
+  useStaggerIn(ref, '[data-funnel-stage]', dataKey, { y: 8, stagger: 0.04, duration: 0.35 });
+  useGrow(ref, `.${styles.funnelTrackFill}`, 'x', dataKey, {
+    stagger: 0.04,
+    duration: 0.55,
+    delay: 0.08,
+    max: 0.5,
+  });
+
+  const onToggle = useCallback((id: string) => {
+    setOpenId((prev) => (prev === id ? null : id));
+  }, []);
 
   if (!compact) {
     const numeric = steps.map((step) => (typeof step.count === 'number' ? step.count : 0));
-    const max = Math.max(1, ...numeric);
+    const base = Math.max(1, ...numeric);
     return (
       <div className={styles.funnelBlock} ref={ref} data-journey-funnel>
         <h4 className={styles.funnelTitle}>{title}</h4>
         {hint ? <p className={styles.hint}>{hint}</p> : null}
-        <ol className={styles.funnelSteps}>
-          {steps.map((step, index) => (
-            <StepRow key={step.id} step={step} index={index} max={max} row />
-          ))}
+        <ol className={styles.funnelLadder}>
+          {steps.map((step, index) => {
+            const next = steps[index + 1];
+            const drop = next
+              ? dropBetween(
+                  typeof step.count === 'number' ? step.count : null,
+                  typeof next.count === 'number' ? next.count : null,
+                )
+              : null;
+            return (
+              <FunnelStage
+                key={step.id}
+                id={step.id}
+                index={index}
+                label={step.label}
+                count={step.count}
+                fromPrevPct={step.fromPrevPct}
+                widthPct={stageWidthPct(step.count, base)}
+                expandable={false}
+                expanded={false}
+                onToggle={onToggle}
+                dropAfter={drop}
+              />
+            );
+          })}
         </ol>
       </div>
     );
   }
 
-  const numeric = groups.map((g) => (typeof g.count === 'number' ? g.count : 0));
-  const max = Math.max(1, ...numeric);
+  const firstNumeric = groups.find((g) => typeof g.count === 'number' && g.count > 0);
+  const base = firstNumeric && typeof firstNumeric.count === 'number' ? Math.max(1, firstNumeric.count) : 1;
 
   return (
     <div className={styles.funnelBlock} ref={ref} data-journey-funnel data-funnel-compact>
       <h4 className={styles.funnelTitle}>{title}</h4>
       {hint ? <p className={styles.hint}>{hint}</p> : null}
-      <ol className={styles.funnelGroups}>
+      <ol className={styles.funnelLadder}>
         {groups.map((group, gi) => {
           const expanded = openId === group.id;
-          const width = group.count == null ? 0 : Math.max(4, Math.round((group.count / max) * 100));
+          const next = groups[gi + 1];
+          const drop = next
+            ? dropBetween(
+                typeof group.count === 'number' ? group.count : null,
+                typeof next.count === 'number' ? next.count : null,
+              )
+            : null;
           return (
-            <li key={group.id} data-funnel-row data-funnel-group={group.id} data-expanded={expanded ? '1' : '0'}>
-              <button
-                type="button"
-                className={styles.funnelGroupBtn}
-                aria-expanded={expanded}
-                onClick={() => setOpenId(expanded ? null : group.id)}
-              >
-                <span className={styles.funnelLabel}>
-                  {gi + 1}. {group.label}
-                </span>
-                <span className={styles.funnelPct}>{group.fromPrevPct}</span>
-                <span className={styles.funnelCount}>{formatCount(group.count)}</span>
-                <span className={styles.funnelBar} aria-hidden="true">
-                  <span className={styles.funnelBarFill} style={{ width: `${width}%` }} />
-                </span>
-                <span className={styles.funnelChevron} aria-hidden="true">
-                  {expanded ? '▾' : '▸'}
-                </span>
-              </button>
-              {expanded ? (
-                <ol className={styles.funnelSteps} data-funnel-expanded={group.id}>
-                  {group.steps.map((step) => {
-                    const globalIndex = steps.findIndex((s) => s.id === step.id);
-                    return (
-                      <StepRow
-                        key={step.id}
-                        step={step}
-                        index={globalIndex >= 0 ? globalIndex : 0}
-                        max={max}
-                      />
-                    );
-                  })}
-                </ol>
-              ) : null}
-            </li>
+            <FunnelStage
+              key={group.id}
+              id={group.id}
+              index={gi}
+              label={group.label}
+              count={group.count}
+              fromPrevPct={group.fromPrevPct}
+              widthPct={stageWidthPct(group.count, base)}
+              expandable={group.steps.length > 0}
+              expanded={expanded}
+              onToggle={onToggle}
+              dropAfter={drop}
+            >
+              {group.steps.map((step) => (
+                <NestedStep key={step.id} step={step} base={base} />
+              ))}
+            </FunnelStage>
           );
         })}
       </ol>
       {refusal ? (
         <div className={styles.funnelRefusal} data-funnel-refusal>
-          <span className={styles.funnelLabel}>{refusal.label}</span>
-          <span className={styles.funnelPct}>{refusal.fromPrevPct}</span>
-          <span className={styles.funnelCount}>{formatCount(refusal.count)}</span>
+          <div className={styles.funnelRefusalMain}>
+            <span className={styles.funnelRefusalLabel}>{refusal.label}</span>
+            <strong className={styles.funnelCountStrong}>{formatCount(refusal.count)}</strong>
+          </div>
+          {pctLabel(refusal.fromPrevPct) ? (
+            <span className={styles.funnelRefusalPct}>{pctLabel(refusal.fromPrevPct)}</span>
+          ) : null}
           <span className={styles.hint}>доля от всех закрытых за период</span>
         </div>
       ) : null}

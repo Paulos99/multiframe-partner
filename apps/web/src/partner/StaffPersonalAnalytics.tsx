@@ -170,7 +170,7 @@ export function StaffPersonalAnalytics({
       <JourneyFunnel
         title={funnelTitle}
         steps={journey.steps}
-        hint="Для менеджера — сжатая воронка клиента (6 этапов). % от предыдущего; «Отказ» — от закрытых."
+        hint="Для менеджера — шесть этапов пути клиента. Процент от предыдущего. «Отказ» — от закрытых."
       />
 
       {role === 'sales' || role === 'owner' ? (

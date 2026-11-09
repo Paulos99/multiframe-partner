@@ -937,8 +937,11 @@
 .funnelBlock {
   padding: 16px;
   border-radius: var(--cab-radius-lg);
-  background: var(--cab-subtle);
+  background: var(--cab-card, #fff);
   border: 1px solid var(--cab-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .funnelTitle {
@@ -3757,6 +3760,351 @@ div.drillPerson {
   opacity: 0.6;
 }
 
+.funnelLadder {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.funnelStage {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: var(--funnel-w, 100%);
+  max-width: 100%;
+  margin: 0;
+}
+
+.funnelStageBtn {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 6px 10px;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--cab-border, #d8dee6) 85%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cab-card, #fff) 88%, var(--cab-accent, #1f8a5b) 12%);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.funnelStageBtn[data-static] {
+  cursor: default;
+}
+
+.funnelStageBtn:hover {
+  border-color: color-mix(in srgb, var(--cab-accent, #1f8a5b) 40%, var(--cab-border, #d8dee6));
+}
+
+.funnelStageBtn:focus-visible {
+  outline: 2px solid var(--cab-accent, #1f8a5b);
+  outline-offset: 2px;
+}
+
+.funnelStage[data-expanded='1'] > .funnelStageBtn {
+  border-color: color-mix(in srgb, var(--cab-accent, #1f8a5b) 55%, var(--cab-border, #d8dee6));
+  background: color-mix(in srgb, var(--cab-card, #fff) 78%, var(--cab-accent, #1f8a5b) 22%);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--cab-accent, #1f8a5b) 18%, transparent);
+}
+
+.funnelStage[data-empty='1'] > .funnelStageBtn {
+  background: var(--cab-card, #fff);
+  opacity: 0.92;
+}
+
+.funnelStageMeta {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.funnelStageName {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--cab-ink, #142018);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.funnelStageIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cab-accent, #1f8a5b) 16%, transparent);
+  color: var(--cab-accent-text, #146246);
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.funnelStageNums {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.funnelCountStrong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--cab-ink, #142018);
+  line-height: 1;
+}
+
+.funnelPctTiny {
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--cab-muted, #5b6b62);
+}
+
+.funnelTrack {
+  grid-column: 1;
+  grid-row: 2;
+  display: block;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cab-accent, #1f8a5b) 14%, var(--cab-subtle, #eef3f0));
+  overflow: hidden;
+}
+
+.funnelTrackEmpty {
+  background: color-mix(in srgb, var(--cab-border, #d8dee6) 55%, transparent);
+}
+
+.funnelTrackFill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--cab-accent, #1f8a5b) 82%, #0d3d2a),
+    var(--cab-accent, #1f8a5b)
+  );
+}
+
+.funnelTrackEmpty .funnelTrackFill {
+  background: color-mix(in srgb, var(--cab-muted, #5b6b62) 35%, transparent);
+}
+
+.funnelChevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  color: var(--cab-muted, #5b6b62);
+  background: color-mix(in srgb, var(--cab-card, #fff) 70%, transparent);
+  transition: transform 0.22s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.funnelStage[data-expanded='1'] .funnelChevron {
+  transform: rotate(90deg);
+  color: var(--cab-accent-text, #146246);
+  background: color-mix(in srgb, var(--cab-accent, #1f8a5b) 16%, transparent);
+}
+
+.funnelExpand {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  visibility: hidden;
+  transition:
+    max-height 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease,
+    visibility 0.2s ease;
+}
+
+.funnelExpand[data-open='1'] {
+  max-height: 640px;
+  opacity: 1;
+  visibility: visible;
+}
+
+.funnelExpandInner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.funnelNested {
+  list-style: none;
+  margin: 0;
+  padding: 8px 4px 4px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 2px solid color-mix(in srgb, var(--cab-accent, #1f8a5b) 28%, transparent);
+  margin-left: 18px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.funnelNestedItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.funnelNestedHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.funnelNestedLabel {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--cab-ink-soft, #2a3a32);
+}
+
+.funnelNestedNums {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.funnelNested .funnelTrack {
+  height: 6px;
+  width: var(--funnel-w, 100%);
+  max-width: 100%;
+}
+
+.funnelDrop {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 18px;
+  padding: 2px 0 2px 18px;
+}
+
+.funnelDropVal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cab-subtle, #eef3f0) 80%, var(--cab-border, #d8dee6));
+  font-size: 0.68rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--cab-muted, #5b6b62);
+  line-height: 1.4;
+}
+
+.funnelRefusal {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--cab-danger, #c0392b) 45%, var(--cab-border, #d8dee6));
+  background: color-mix(in srgb, var(--cab-danger, #c0392b) 7%, var(--cab-card, #fff));
+}
+
+.funnelRefusalMain {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  grid-column: 1;
+}
+
+.funnelRefusalLabel {
+  font-size: 0.92rem;
+  font-weight: 750;
+  color: var(--cab-ink, #142018);
+}
+
+.funnelRefusalPct {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 0.78rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--cab-danger, #b42318);
+}
+
+.funnelRefusal .hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .funnelStage {
+    width: 100%;
+  }
+
+  .funnelStageBtn {
+    padding: 10px;
+  }
+
+  .funnelStageName {
+    font-size: 0.86rem;
+  }
+
+  .funnelCountStrong {
+    font-size: 0.98rem;
+  }
+
+  .funnelNested {
+    margin-left: 10px;
+    padding-left: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .funnelStageBtn,
+  .funnelTrack,
+  .funnelChevron,
+  .funnelExpand {
+    transition: none !important;
+  }
+
+  .funnelExpand[data-open='0'] {
+    max-height: 0;
+  }
+
+  .funnelExpand[data-open='1'] {
+    max-height: none;
+  }
+}
+
+/* Совместимость: старые селекторы полосы, если встретятся в других местах. */
 .funnelGroups {
   list-style: none;
   margin: 0;
@@ -3786,34 +4134,11 @@ div.drillPerson {
   border-color: color-mix(in srgb, var(--accent, #1f8a5b) 45%, var(--line, #d8dee6));
 }
 
-.funnelChevron {
-  opacity: 0.7;
-  font-size: 12px;
-  width: 1em;
-}
-
 .funnelGroups .funnelSteps {
   margin: 4px 0 8px 12px;
   padding: 6px 0 2px;
   border-left: 2px solid color-mix(in srgb, var(--accent, #1f8a5b) 35%, transparent);
   padding-left: 10px;
-}
-
-.funnelRefusal {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) auto auto;
-  gap: 8px 12px;
-  align-items: baseline;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px dashed color-mix(in srgb, #c45c26 50%, var(--line, #d8dee6));
-  background: color-mix(in srgb, #c45c26 8%, var(--card, #fff));
-}
-
-.funnelRefusal .hint {
-  grid-column: 1 / -1;
-  margin: 0;
 }
 
 /* —— Сводка за период —— */
