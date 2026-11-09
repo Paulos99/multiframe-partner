@@ -4,7 +4,7 @@
  * для чтения старых ключей materials/<id> без поля bucket.
  */
 
-import { MATERIAL_BUCKET_MARKER, materialBase, toPublicMaterial } from '../../packages/shared/materialsLib.js';
+import { MATERIAL_BUCKET_MARKER, materialBase, publicMaterialFor, visibleMaterialNodes } from '../../packages/shared/materialsLib.js';
 import {
   abortMultipartUpload,
   completeMultipartUpload,
@@ -239,14 +239,15 @@ export async function signedThumbnailUrl(node, { now } = {}) {
 
 /**
  * Список материалов для ответа API: публичные поля + thumbnailUrl у файлов с миниатюрой.
+ * Только узлы, видимые роли (role, обязательна). Скрытое не уходит в ответ вовсе. Админ StP получает всё с ролями.
  * Хранилище не настроено или подпись не удалась — thumbnailUrl: null, список всё равно отдаётся.
  */
-export async function signedPublicMaterials(stored, { now } = {}) {
+export async function signedPublicMaterials(stored, { now, role } = {}) {
   const nodes = materialBase(stored);
   const ready = !materialsConfigError();
   return Promise.all(
-    nodes.map(async (node) => {
-      const item = toPublicMaterial(node);
+    visibleMaterialNodes(nodes, role).map(async (node) => {
+      const item = publicMaterialFor(nodes, node, role);
       if (!item.hasThumbnail) return item;
       let thumbnailUrl = null;
       if (ready) {

@@ -673,3 +673,26 @@
   width: 100%;
   min-height: 44px;
 }
+
+/* Отметка «Видят: …» у папок и файлов — только у админа StP. */
+.rolesBadge,
+.rolesAll {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: var(--radius-md);
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.rolesBadge {
+  background: var(--warn-soft);
+  color: var(--cab-warn);
+}
+
+.rolesAll {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}

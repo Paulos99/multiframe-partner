@@ -78,7 +78,7 @@ test('менеджер StP: видео роли нет', async ({ page }) => {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('админ StP: видны все четыре видео ролей, удалить их нельзя', async ({ page }) => {
+test('админ StP: видны все четыре видео ролей с отметкой ролей, удалить можно, заменить нельзя', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Логин', { exact: true }).fill('ui.admin');
   await page.getByLabel('Пароль', { exact: true }).fill(password);
@@ -91,7 +91,9 @@ test('админ StP: видны все четыре видео ролей, уд
     await expect(card).toBeVisible();
     await expect(card.getByRole('button', { name: `Смотреть: ${title}` })).toBeVisible();
     await expect(card.locator('video')).toHaveCount(0);
-    await expect(card.getByRole('button', { name: /Удалить|Заменить/ })).toHaveCount(0);
+    await expect(card.getByRole('button', { name: `Удалить видео: ${title}` })).toBeVisible();
+    await expect(card.getByRole('button', { name: /Заменить/ })).toHaveCount(0);
+    await expect(card.getByTestId('material-roles')).toContainText('Видят:');
   }
   await expect(page.locator('[data-role-video]')).toHaveCount(4);
 });

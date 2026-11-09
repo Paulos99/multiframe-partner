@@ -468,15 +468,32 @@ export async function apiListMaterials(): Promise<
   return data.materials;
 }
 
+/** Кто видит материал: null — все роли (в папке — как у папки). */
+export type MaterialRolesInput = import('../../../../packages/shared/materialsLib.js').MaterialRole[] | null;
+
 export async function apiCreateMaterialFolder(
   name: string,
   parentId: string | null,
+  roles: MaterialRolesInput = null,
 ): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
     materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
   }>('/materials/folders', {
     method: 'POST',
-    body: JSON.stringify({ name, parentId }),
+    body: JSON.stringify({ name, parentId, roles }),
+  });
+  return data.materials;
+}
+
+export async function apiSetMaterialRoles(
+  id: string,
+  roles: MaterialRolesInput,
+): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
+  const data = await request<{
+    materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
+  }>(`/materials/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ roles }),
   });
   return data.materials;
 }
@@ -528,6 +545,8 @@ export async function apiMaterialMultipartComplete(input: {
   partCount: number;
   name: string;
   parentId: string | null;
+  roles?: MaterialRolesInput;
+  section?: 'video' | null;
 }): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
     materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];
@@ -561,6 +580,8 @@ export async function apiUploadMaterial(input: {
   parentId: string | null;
   mime: string;
   contentBase64: string;
+  roles?: MaterialRolesInput;
+  section?: 'video' | null;
 }): Promise<import('../../../../packages/shared/materialsLib.js').PublicMaterial[]> {
   const data = await request<{
     materials: import('../../../../packages/shared/materialsLib.js').PublicMaterial[];

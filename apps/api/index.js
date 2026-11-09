@@ -32,6 +32,7 @@ import {
 } from './demoSeed.js';
 import { findVisibleDocument, incomingDocumentKind, visibleDocuments } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
+import { ensureMaterialVideos } from '../../packages/shared/materialsLib.js';
 import { handleMaterialPreview } from './materialsPreview.js';
 import { handleMaterialThumbnail } from './materialsThumbnail.js';
 import {
@@ -1494,10 +1495,16 @@ async function handleRequest(event = {}) {
   try {
     const profileResponse = await handleProfile({path,method,requireAuth:()=>requireAuth(event),json,getBody:()=>getBody(event),savePlatform,publicUser,signToken});
     if(profileResponse) return profileResponse;
+    // Материалы: документ без флага materialVideosSeeded получает встроенные видео ролей (packages/shared/materialsLib.js).
+    const requireMaterialsAuth = async () => {
+      const auth = await requireAuth(event);
+      ensureMaterialVideos(auth.platform);
+      return auth;
+    };
     const materialPreviewResponse = await handleMaterialPreview({
       path,
       method,
-      requireAuth: () => requireAuth(event),
+      requireAuth: requireMaterialsAuth,
       assertRole,
       json,
       getBody: () => getBody(event),
@@ -1507,7 +1514,7 @@ async function handleRequest(event = {}) {
     const materialThumbResponse = await handleMaterialThumbnail({
       path,
       method,
-      requireAuth: () => requireAuth(event),
+      requireAuth: requireMaterialsAuth,
       assertRole,
       json,
       getBody: () => getBody(event),
@@ -1517,7 +1524,7 @@ async function handleRequest(event = {}) {
     const materialsResponse = await handleMaterials({
       path,
       method,
-      requireAuth: () => requireAuth(event),
+      requireAuth: requireMaterialsAuth,
       assertRole,
       json,
       getBody: () => getBody(event),

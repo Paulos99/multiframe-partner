@@ -114,6 +114,8 @@ export type PartnerDb = {
   projects?: Project[];
   /** Методические материалы. Нет поля — показываем демо и не записываем его. */
   materials?: MaterialNode[];
+  /** Встроенные видео ролей уже добавлены в материалы (см. ensureMaterialVideos). */
+  materialVideosSeeded?: boolean;
 };
 
 function uid(prefix: string): string {
@@ -199,6 +201,7 @@ function migrateDb(input: PartnerDb): PartnerDb {
     objects: assignDemoRoomStaff(repairStoredHistory(raw.objects || [], users), users),
     projects: Array.isArray(raw.projects) ? raw.projects : [],
     ...(materials ? { materials } : {}),
+    ...(raw.materialVideosSeeded ? { materialVideosSeeded: true } : {}),
   };
   groupOrphanRooms(next);
   if (!Array.isArray(next.projects)) next.projects = [];

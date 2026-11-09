@@ -28,6 +28,27 @@ export const MATERIAL_MAX_PARTS = 10000;
 /** Ключ загруженного материала. */
 export const MATERIAL_KEY_PATTERN = /^materials\/mat_[a-z0-9_]+$/i;
 
+/** Роли, которым админ StP открывает материал или обучающее видео. Админ StP видит всё всегда. */
+export const MATERIAL_ROLES = ['owner', 'sales', 'measurer', 'crew', 'stp_manager'];
+
+/**
+ * Роли видимости из запроса: undefined — поле не передано, null — все роли,
+ * массив — только эти роли (в порядке MATERIAL_ROLES). Ошибка — строка с текстом.
+ * @returns {{ ok: true, roles: string[] | null | undefined } | { ok: false, message: string }}
+ */
+export function parseMaterialRoles(value) {
+  if (value === undefined) return { ok: true, roles: undefined };
+  if (value === null || value === 'all') return { ok: true, roles: null };
+  if (!Array.isArray(value)) return { ok: false, message: 'Некорректный список ролей' };
+  const asked = new Set(value.map((role) => String(role)));
+  if ([...asked].some((role) => !MATERIAL_ROLES.includes(role))) {
+    return { ok: false, message: 'Неизвестная роль' };
+  }
+  if (!asked.size) return { ok: false, message: 'Выберите хотя бы одну роль' };
+  const roles = MATERIAL_ROLES.filter((role) => asked.has(role));
+  return { ok: true, roles: roles.length === MATERIAL_ROLES.length ? null : roles };
+}
+
 const NOT_OBJECT = 'Некорректный запрос';
 
 /** Пустое значение (undefined, null, 0, false, '') даёт '', остальное — строку. */
@@ -210,6 +231,17 @@ export function createSchemas(z) {
     return { ...raw, partNumbers: numbers };
   });
 
+  /** Роли видимости материала (POST папки и файла, PATCH материала, регистрация загрузки). */
+  const materialAccess = body().transform((raw, ctx) => {
+    const parsed = parseMaterialRoles(raw.roles);
+    if (!parsed.ok) {
+      issue(ctx, parsed.message);
+      return z.NEVER;
+    }
+    const section = raw.section === 'video' ? 'video' : null;
+    return { ...raw, roles: parsed.roles, section };
+  });
+
   return {
     loginRequest,
     partnerCreate,
@@ -222,6 +254,7 @@ export function createSchemas(z) {
     materialMultipartStart,
     materialMultipartRef,
     materialMultipartParts,
+    materialAccess,
   };
 }
 
