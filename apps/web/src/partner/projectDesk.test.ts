@@ -89,6 +89,14 @@ test('ближайшие шаги и площадь не выдумывают с
     nextSteps(rooms).map((step) => step.text),
     ['Кухня: указать площадь', 'Зал: сделать расчёт'],
   );
+  const counted = [
+    room({ id: 'd', status: 'draft', roomName: 'Кабинет', room: { areaM2: 22 }, estimate: { panels: 54, dowels: 125, totalCost: 1000 } }),
+    room({ id: 'e', status: 'draft', roomName: 'Детская', room: { areaM2: 12 }, estimate: null }),
+  ];
+  assert.deepEqual(
+    nextSteps(counted).map((step) => step.text),
+    ['Кабинет: собрать и отправить КП', 'Детская: провести замер'],
+  );
   assert.deepEqual(areaSum(rooms), { known: 2, total: 20, missing: 1 });
   assert.equal(projectMatches(project, rooms, 'лесная'), true);
   assert.equal(projectMatches(project, rooms, 'нет такого'), false);

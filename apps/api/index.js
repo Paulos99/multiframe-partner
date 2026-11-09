@@ -46,6 +46,7 @@ import {
 import { handleRoomShare } from './roomShare.js';
 import { handleTraining } from './training.js';
 import { handleRoomPhotos, photoCountsForObject, removePhotoFiles, clientReport } from './roomPhotos.js';
+import { handleCalendar } from './calendar.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { parseBody, schemas } from './validation.js';
@@ -891,6 +892,9 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     assignedTo,
     status: finalStatus,
     stageOrder: stageOrderInput(body, existing),
+    // Когда отправили КП: ставит сервер при переходе на «КП отправлено», дальше значение сохраняется.
+    quoteSentAt:
+      finalStatus === 'quote_sent' && existing?.status !== 'quote_sent' ? now : existing?.quoteSentAt || null,
     clientName: String(body.clientName ?? existing?.clientName ?? '').trim().slice(0, 200),
     clientPhone: phone,
     address: String(body.address ?? existing?.address ?? '').trim().slice(0, 300),
@@ -1578,6 +1582,19 @@ async function handleRequest(event = {}) {
       deleteStorage: (key) => s3Delete(key),
     });
     if (projectsResponse) return projectsResponse;
+
+    const calendarResponse = await handleCalendar({
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      json,
+      getBody: () => getBody(event),
+      savePlatform,
+      uid,
+      pushActivity,
+      demoSeedEnabled,
+    });
+    if (calendarResponse) return calendarResponse;
 
     const roomShareResponse = await handleRoomShare({
       ...storageCtx,

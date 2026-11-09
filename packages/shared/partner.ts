@@ -333,6 +333,8 @@ export type JobObject = {
   projectId?: string | null;
   /** Название комнаты внутри проекта. У старых объектов поля нет. */
   roomName?: string | null;
+  /** Когда комнату перевели на «КП отправлено». Ставит сервер. */
+  quoteSentAt?: string | null;
   /** Local-only pending sync flag. */
   pendingSync?: boolean;
 };

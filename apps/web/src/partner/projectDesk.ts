@@ -138,8 +138,11 @@ export function nextSteps(rooms: JobObject[]): NextStep[] {
   for (const room of rooms) {
     const name = roomTitle(room);
     if (room.status === 'closed') continue;
+    const calculated = typeof room.estimate?.totalCost === 'number' || Boolean(room.estimate?.panels && room.estimate.panels > 0);
     if (room.room?.areaM2 == null) {
       steps.push({ roomId: room.id, text: `${name}: указать площадь` });
+    } else if ((room.status === 'draft' || room.status === 'measured') && calculated) {
+      steps.push({ roomId: room.id, text: `${name}: собрать и отправить КП` });
     } else if (room.status === 'draft') {
       steps.push({ roomId: room.id, text: `${name}: провести замер` });
     } else if (
