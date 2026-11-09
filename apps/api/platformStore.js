@@ -33,7 +33,7 @@ const origins = new WeakMap();
 /** Значения из запасного варианта, которых нет в хранилище (локальный режим). */
 const unsavedLocal = new WeakSet();
 
-const ID_LISTS = new Set(['users', 'orgs', 'objects', 'projects', 'materials', 'roomShares']);
+const ID_LISTS = new Set(['users', 'orgs', 'objects', 'projects', 'materials', 'roomShares', 'visits', 'reminderAcks']);
 const LIST_CAPS = { history: 50, documents: 40, photos: 60 };
 
 function cacheMap() {

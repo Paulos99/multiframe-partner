@@ -336,6 +336,8 @@ export type JobObject = {
   roomName?: string | null;
   /** Заметки к комнате: только добавление, через POST /objects/:id/notes. */
   notes?: RoomNote[];
+  /** Когда комнату перевели на «КП отправлено». Ставит сервер. */
+  quoteSentAt?: string | null;
   /** Local-only pending sync flag. */
   pendingSync?: boolean;
 };
