@@ -118,7 +118,7 @@ describe('маршруты /feedback', () => {
         companyName: 'Чужая компания',
         authorRole: 'admin',
         orgId: 'org_other',
-        context: { page: '/cabinet/#projects', device: 'Телефон · Android · Chrome', appVersion: '1.1.0', screen: '412×915' },
+        context: { page: '/cabinet/#projects', device: 'Телефон · Android · Chrome', appVersion: '1.2.0', screen: '412×915' },
       },
     });
     assert.equal(created.statusCode, 200, created.body);

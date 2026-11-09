@@ -26,7 +26,7 @@ export function describeDevice(ua: string, touchPoints = 0): string {
   return `${kind} · ${os} · ${browser}`;
 }
 
-/** Номер сборки из бандла (на боевом — метка выпуска, например v1.1.0). */
+/** Номер сборки из бандла (на боевом — метка выпуска, например v1.2.0). */
 export function appVersion(): string {
   return typeof __BUILD_ID__ === 'string' && __BUILD_ID__ ? __BUILD_ID__ : 'локальная';
 }
