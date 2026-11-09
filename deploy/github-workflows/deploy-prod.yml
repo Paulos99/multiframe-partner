@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Метка выпуска, например v1.1.0 (для отката — предыдущая)'
+        description: 'Метка выпуска, например v1.2.0 (для отката — предыдущая)'
         required: true
       confirm:
         description: 'Введите deploy-prod для подтверждения'

@@ -808,7 +808,7 @@ export function ensureDemoFeedback(platform, now = Date.now()) {
         pageTitle: extra.pageTitle || 'Проекты',
         device: extra.device || 'Телефон · Android · Chrome',
         screen: extra.screen || '412×915',
-        appVersion: 'v1.1.0',
+        appVersion: 'v1.2.0',
         online: true,
       },
       photos: [],
