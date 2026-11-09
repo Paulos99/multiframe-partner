@@ -10,7 +10,7 @@ import { isStpManagerRole, type SessionUser } from '../../../packages/shared/par
 import { isCabinetCalcMessage, type CabinetCalcMessage } from './partner/cabinetCalc';
 import { CalcSaveToProject } from './partner/CalcSaveToProject';
 import { canSaveToProject } from './partner/toolSave';
-import { sessionFromRoom } from './partner/roomLink';
+import { freshSurveyFromRoom, sessionFromRoom } from './partner/roomLink';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
 import { ActivationScreen } from './partner/ActivationScreen';
@@ -263,7 +263,8 @@ function PartnerShell() {
   const diagnosisSeed = useMemo(() => {
     if (!diagnosisRequest) return null;
     const room = objects.find((obj) => obj.id === diagnosisRequest.objectId);
-    return room ? sessionFromRoom(room) : null;
+    if (!room) return null;
+    return diagnosisRequest.fresh ? freshSurveyFromRoom(room) : sessionFromRoom(room);
   }, [diagnosisRequest, objects]);
 
   const calcSrc = useMemo(() => {

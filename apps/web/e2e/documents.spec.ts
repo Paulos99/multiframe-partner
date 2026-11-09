@@ -73,7 +73,9 @@ test('монтажник: PDF в комнате без цен, предпрос�
 
   await openProjectRoom(page, 'Гостиная');
 
-  await page.locator('summary', { hasText: 'Документы' }).click();
+  // Блок «Документы» всегда раскрыт.
+  await expect(page.locator('[data-doc-block]')).toBeVisible();
+  await expect(page.locator('[data-doc-block] summary')).toHaveCount(0);
   const rows = page.locator('[data-doc-kind]');
   await expect(rows).toHaveCount(3);
   await expect(page.locator('[data-doc-kind="profile"]')).toHaveCount(1);
@@ -97,7 +99,9 @@ test('менеджер видит те же PDF в карточке комнат
   await enter(page, 'sales');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await openProjectRoom(page, 'Гостиная');
-  await page.locator('summary', { hasText: 'Документы' }).click();
+  // Блок «Документы» всегда раскрыт.
+  await expect(page.locator('[data-doc-block]')).toBeVisible();
+  await expect(page.locator('[data-doc-block] summary')).toHaveCount(0);
   await expect(page.locator('[data-doc-kind="profile"]')).toHaveCount(1);
   await expect(page.locator('[data-doc-kind="estimate"]')).toHaveCount(2);
   await expect(page.getByText('Итого комнаты')).toBeVisible();
