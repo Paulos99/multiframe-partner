@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 
 const API = 'http://127.0.0.1:4181';
 const password = 'ui-fixture-password-only';
@@ -145,12 +146,8 @@ test('администратор StP создаёт менеджера, тот �
   await expect(page.locator('[data-stp-manager="ui.new.manager"]')).toHaveCount(0);
 });
 
-test('демо: «Менеджер StP» в группе StP, у него два раздела', async ({ page }) => {
-  await page.goto('/?demo=1');
-  await page
-    .getByRole('region', { name: 'StP', exact: true })
-    .getByRole('button', { name: /Менеджер StP/ })
-    .click();
+test('демо: «Менеджер StP» входит по логину, у него два раздела', async ({ page }) => {
+  await demoSignIn(page, 'stp_manager');
   await expect(nav(page)).toBeVisible();
   await expectTwoSections(page);
 });

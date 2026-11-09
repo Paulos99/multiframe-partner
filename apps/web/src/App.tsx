@@ -16,7 +16,6 @@ import { LoginScreen } from './partner/LoginScreen';
 import { ActivationScreen } from './partner/ActivationScreen';
 import { ACTIVATED_MESSAGE, activationTokenFromSearch } from './partner/activation';
 import { CabinetScreen } from './partner/CabinetScreen';
-import { DemoSwitcherFab } from './partner/DemoSwitcher';
 import { SyncStatus } from './partner/SyncStatus';
 import { applyStoredTheme } from './app-shell/theme';
 import styles from './partner/partner.module.css';
@@ -126,7 +125,6 @@ function ToolChrome({
       {/* Переключатель инструментов убран: оба открываются из вкладки «Инструменты». */}
       <span className={styles.toolTitle}>{route === 'calculator' ? 'Калькулятор' : 'Проблемомер'}</span>
       <SyncStatus compact />
-      <DemoSwitcherFab inline />
       <div className={styles.toolMenuWrap} ref={wrapRef}>
         <button
           type="button"
@@ -143,7 +141,6 @@ function ToolChrome({
             <p className={styles.toolMenuCompany}>{company}</p>
             <p className={styles.toolMenuCaption}>{caption}</p>
             {notice ? <p className={styles.toolMenuNotice}>{notice}</p> : null}
-            <DemoSwitcherFab menu />
             <button type="button" className={styles.logoutBtn} onClick={onLogout}>
               Выйти
             </button>
@@ -313,22 +310,19 @@ function PartnerShell() {
     body = <LoginScreen notice={activated ? ACTIVATED_MESSAGE : undefined} />;
   } else if (route === 'cabinet') {
     body = (
-      <>
-        <CabinetScreen
-          onNavigate={(r) => {
-            if (r === 'calculator') {
-              requestCalculator(null);
-              return;
-            }
-            if (r === 'problemomer') {
-              clearDiagnosis();
-              noteTool('problemomer');
-            }
-            setRoute(r);
-          }}
-        />
-        <DemoSwitcherFab />
-      </>
+      <CabinetScreen
+        onNavigate={(r) => {
+          if (r === 'calculator') {
+            requestCalculator(null);
+            return;
+          }
+          if (r === 'problemomer') {
+            clearDiagnosis();
+            noteTool('problemomer');
+          }
+          setRoute(r);
+        }}
+      />
     );
   } else {
     const chrome = (

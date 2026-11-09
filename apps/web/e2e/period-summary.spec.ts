@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn, type DemoRole } from './demo-login';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,10 +8,8 @@ const OUT =
   process.env.SUMMARY_SHOT_DIR ||
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../handover/screenshots-analytics');
 
-async function enterDemo(page: Page, role: RegExp) {
-  await page.goto('/?demo=1');
-  await page.getByRole('button', { name: role }).first().click();
-  await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible({ timeout: 30000 });
+async function enterDemo(page: Page, role: DemoRole) {
+  await demoSignIn(page, role);
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   const panes = page.locator('[data-overview-panes]');
   await expect(panes).toBeVisible({ timeout: 30000 });
@@ -21,7 +20,7 @@ async function enterDemo(page: Page, role: RegExp) {
 test.describe('Сводка за период', () => {
   test('владелец: выводы с советами, сравнение с прошлым периодом, квартал, печать', async ({ page }) => {
     fs.mkdirSync(OUT, { recursive: true });
-    await enterDemo(page, /Владелец/);
+    await enterDemo(page, 'owner');
     const summary = page.locator('[data-period-summary]');
     await expect(summary).toBeVisible({ timeout: 30000 });
     await expect(summary.getByRole('heading', { name: 'Сводка за период' })).toBeVisible();
@@ -76,7 +75,7 @@ test.describe('Сводка за период', () => {
 
   test('админ StP: выводы по сети, выводы по партнёрам и таблица сравнения со стрелками', async ({ page }) => {
     fs.mkdirSync(OUT, { recursive: true });
-    await enterDemo(page, /^Админ StP/);
+    await enterDemo(page, 'admin');
     const summary = page.locator('[data-period-summary]');
     await expect(summary).toBeVisible({ timeout: 30000 });
     await expect(summary.getByRole('heading', { name: 'Сводка по сети за период' })).toBeVisible();
@@ -94,9 +93,7 @@ test.describe('Сводка за период', () => {
   });
 
   test('замерщик не видит аналитику и сводку', async ({ page }) => {
-    await page.goto('/?demo=1');
-    await page.getByRole('button', { name: /Замерщик/ }).first().click();
-    await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible({ timeout: 30000 });
+    await demoSignIn(page, 'measurer');
     await expect(page.getByRole('tab', { name: 'Аналитика', exact: true })).toHaveCount(0);
     await expect(page.locator('[data-period-summary]')).toHaveCount(0);
   });

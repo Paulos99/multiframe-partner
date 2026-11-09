@@ -1,13 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn, type DemoRole } from './demo-login';
 import fs from 'node:fs';
 
 const OUT = process.env.DOCS_SHOT_DIR || 'test-results/docs-shots';
 const TAG = process.env.DOCS_SHOT_TAG || 'after';
 const CHECK = TAG === 'after';
 
-async function enter(page: Page, hint: RegExp) {
-  await page.goto('/?demo=1');
-  await page.getByRole('region', { name: 'Потолки Столицы', exact: true }).getByRole('button', { name: hint }).click();
+async function enter(page: Page, role: DemoRole) {
+  await demoSignIn(page, role);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Список проектов' })).toBeVisible();
 }
@@ -91,7 +91,7 @@ for (const vp of [
 
 test('настройки проекта: без флажка «В архиве», кнопка «Сохранить» с текстом', async ({ page }) => {
   fs.mkdirSync(OUT, { recursive: true });
-  await enter(page, /Прайс и команда/);
+  await enter(page, 'owner');
   const desk = page.getByRole('region', { name: 'Список проектов' });
   await desk.locator('tr[data-project-id] button').first().click();
   await page.getByRole('tab', { name: 'Настройки' }).click();
@@ -104,12 +104,12 @@ test('настройки проекта: без флажка «В архиве»
 });
 
 for (const who of [
-  { role: 'owner', hint: /Прайс и команда/ },
-  { role: 'manager', hint: /Проекты и КП/ },
+  { role: 'owner' as const, demo: 'owner' as DemoRole },
+  { role: 'manager' as const, demo: 'sales' as DemoRole },
 ]) {
   test(`⋯ «В архив» и «Вернуть из архива» (${who.role})`, async ({ page }) => {
     fs.mkdirSync(OUT, { recursive: true });
-    await enter(page, who.hint);
+    await enter(page, who.demo);
     const desk = page.getByRole('region', { name: 'Список проектов' });
     const first = desk.locator('tr[data-project-id]').first();
     const name = (await first.locator('button').first().innerText()).trim();

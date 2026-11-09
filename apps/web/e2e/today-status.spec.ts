@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 
 const password = 'ui-fixture-password-only';
 
@@ -59,8 +60,7 @@ test('«Сегодня» показывает стадию проекта с д�
 });
 
 test('демо: «Чернов А.» после переноса в «Замер» и перезагрузки так же в «Сегодня»', async ({ page }) => {
-  await page.goto('/?demo=1');
-  await page.getByRole('region', { name: 'Потолки Столицы', exact: true }).getByRole('button', { name: /Прайс и команда/ }).click();
+  await demoSignIn(page, 'owner');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.getByRole('button', { name: 'Канбан', exact: true }).click();
   const card = page.locator('[data-project-stage="new"] [data-project-id]', { hasText: 'Чернов А.' });

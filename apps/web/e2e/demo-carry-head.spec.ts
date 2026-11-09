@@ -3,6 +3,7 @@ import { existsSync, symlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, chromium, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 
 const PORT = 4195;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -76,10 +77,18 @@ async function stopVite(child: ChildProcess | null) {
 }
 
 async function signIn(page: Page) {
+  // На старом чекауте ещё могла быть сетка ролей; на текущем — только форма логина.
   const shell = page.getByRole('complementary', { name: 'Разделы кабинета' });
-  const owner = page.getByRole('button', { name: 'Владелец Прайс и команда' }).first();
-  await owner.or(shell).first().waitFor({ timeout: 30000 });
-  if (await owner.isVisible().catch(() => false)) await owner.click();
+  const ownerTile = page.getByRole('button', { name: 'Владелец Прайс и команда' }).first();
+  const login = page.getByLabel('Логин', { exact: true });
+  await ownerTile.or(shell).or(login).first().waitFor({ timeout: 30000 });
+  if (await ownerTile.isVisible().catch(() => false)) {
+    await ownerTile.click();
+  } else if (await login.isVisible().catch(() => false)) {
+    await login.fill('partner1');
+    await page.getByLabel('Пароль', { exact: true }).fill('demo1234');
+    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  }
   await expect(shell).toBeVisible({ timeout: 30000 });
 }
 
