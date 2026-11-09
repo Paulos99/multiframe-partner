@@ -1396,7 +1396,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminResetPassword,
       adminDeletePartner,
       adminUpdatePartnerCity,
-      adminListPartners: () => (remote && partnersCache.length ? partnersCache : listPartners()),
+      adminListPartners: () => (remote ? partnersCache : listPartners()),
       adminActivity: () => listActivity(),
       partnerCreateStaff,
       partnerResetStaffPassword,
@@ -1407,11 +1407,13 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       profileOpenToken,
       requestOpenProfile,
       partnerListStaff: () =>
-        (staffCache.length
+        (remote
           ? staffCache
-          : user?.orgId
-            ? listStaffForOrg(user.orgId)
-            : []
+          : staffCache.length
+            ? staffCache
+            : user?.orgId
+              ? listStaffForOrg(user.orgId)
+              : []
         ).map(asStaff),
       partnerCreateExecutor: async (input) => {
         const res = await partnerCreateStaff({ ...input, role: 'measurer' });
@@ -1420,11 +1422,13 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerResetExecutorPassword: partnerResetStaffPassword,
       partnerDeleteExecutor: partnerDeleteStaff,
       partnerListExecutors: () =>
-        (staffCache.length
+        (remote
           ? staffCache
-          : user?.orgId
-            ? listStaffForOrg(user.orgId)
-            : []
+          : staffCache.length
+            ? staffCache
+            : user?.orgId
+              ? listStaffForOrg(user.orgId)
+              : []
         ).map(asStaff),
       refreshObjects,
       acceptProfile: (profile: SessionUser) => { saveSession(profile); setUser(profile); },
