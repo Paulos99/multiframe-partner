@@ -28,10 +28,12 @@ import {
   buildDemoAnalyticsEvents,
   buildDemoPlatform,
   ensureDemoStpManager,
+  ensureDemoFeedback,
   extendDemoAnalyticsHistory,
 } from './demoSeed.js';
 import { findVisibleDocument, incomingDocumentKind, visibleDocuments } from './documentAccess.js';
 import { handleMaterials } from './materialsRoutes.js';
+import { ensureMaterialVideos } from '../../packages/shared/materialsLib.js';
 import { handleMaterialPreview } from './materialsPreview.js';
 import { handleMaterialThumbnail } from './materialsThumbnail.js';
 import {
@@ -47,10 +49,12 @@ import { handleRoomShare } from './roomShare.js';
 import { handleTraining } from './training.js';
 import { handleRoomPhotos, photoCountsForObject, removePhotoFiles, clientReport } from './roomPhotos.js';
 import { handleCalendar } from './calendar.js';
+import { handleFeedback } from './feedback.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { parseBody, schemas } from './validation.js';
 import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
+import { buildPartnerComparison, buildPeriodSummary } from '../../packages/shared/periodSummary.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { estimateForRole } from '../../packages/shared/projectAccess.js';
 import { ROOM_STAGE_LABELS, canChangeRoomStage, isStageConflict } from '../../packages/shared/roomStage.js';
@@ -408,8 +412,9 @@ async function loadPlatform() {
   const names = Boolean(platform?.users && applyDemoPersonalNames(platform.users));
   const grouped = groupOrphanRooms(platform);
   const stpDemo = Boolean(platform?.users && ensureDemoStpManager(platform));
+  const feedbackDemo = Boolean(platform?.users && ensureDemoFeedback(platform));
   // Первый запуск: пустое хранилище. Стартовый документ записывается сразу, чтобы все экземпляры видели одни и те же записи.
-  if (names || grouped || stpDemo || isUnsavedDocument(platform)) {
+  if (names || grouped || stpDemo || feedbackDemo || isUnsavedDocument(platform)) {
     try {
       await savePlatform(platform);
     } catch (error) {
@@ -1263,6 +1268,42 @@ export function aggregateAnalyticsDashboard(allEvents, opts) {
   };
 }
 
+/**
+ * «Сводка за период» с выводами по правилам. Права уже проверены вызывающим кодом:
+ * сюда приходит orgId компании (владелец, менеджер) или null у админа StP (вся сеть).
+ * Админ сети и его организация в выводы не попадают, как и в остальной аналитике.
+ */
+export function buildAnalyticsSummary(platform, allEvents, { orgId = null, from = null, to = null, now = Date.now(), withPartners = false } = {}) {
+  const scope = networkAdminScope(platform);
+  const adminOrgs = new Set(scope.adminOrgIds);
+  const events = filterAnalyticsEvents(allEvents || [], { orgId, ...scope });
+  const rooms = (platform?.objects || []).filter(
+    (room) => room && room.orgId && !adminOrgs.has(room.orgId) && (!orgId || room.orgId === orgId),
+  );
+  const users = (platform?.users || [])
+    .filter((u) => u && u.role !== 'admin' && (!orgId || u.orgId === orgId))
+    .map((u) => ({ id: u.id, login: u.login, displayName: u.displayName || u.login, role: normalizeRole(u.role) }));
+  const summary = buildPeriodSummary({ rooms, events, users, from, to, now });
+  const result = {
+    from,
+    to,
+    previousRange: summary.previousRange,
+    conclusions: summary.conclusions,
+    enoughData: summary.enoughData,
+    partners: null,
+  };
+  if (withPartners) {
+    const ownerOrgIds = new Set(
+      (platform?.users || []).filter((u) => normalizeRole(u.role) === 'owner' && u.orgId).map((u) => u.orgId),
+    );
+    const orgs = (platform?.orgs || [])
+      .filter((org) => org && ownerOrgIds.has(org.id) && !adminOrgs.has(org.id) && (!orgId || org.id === orgId))
+      .map((org) => ({ id: org.id, name: org.settings?.companyName || org.id, city: org.settings?.city || '' }));
+    result.partners = buildPartnerComparison({ orgs, rooms, events, from, to, now });
+  }
+  return result;
+}
+
 /* —— Списки с проверкой версии и постраничной выдачей ——
  * Ответ зависит от версии документа и от пользователя. Клиент присылает If-None-Match и, если ничего не
  * изменилось, получает 304 без тела и без пересборки списка. Собранные ответы держатся в небольшом кэше. */
@@ -1502,10 +1543,16 @@ async function handleRequest(event = {}) {
   try {
     const profileResponse = await handleProfile({path,method,requireAuth:()=>requireAuth(event),json,getBody:()=>getBody(event),savePlatform,publicUser,signToken});
     if(profileResponse) return profileResponse;
+    // Материалы: документ без флага materialVideosSeeded получает встроенные видео ролей (packages/shared/materialsLib.js).
+    const requireMaterialsAuth = async () => {
+      const auth = await requireAuth(event);
+      ensureMaterialVideos(auth.platform);
+      return auth;
+    };
     const materialPreviewResponse = await handleMaterialPreview({
       path,
       method,
-      requireAuth: () => requireAuth(event),
+      requireAuth: requireMaterialsAuth,
       assertRole,
       json,
       getBody: () => getBody(event),
@@ -1515,7 +1562,7 @@ async function handleRequest(event = {}) {
     const materialThumbResponse = await handleMaterialThumbnail({
       path,
       method,
-      requireAuth: () => requireAuth(event),
+      requireAuth: requireMaterialsAuth,
       assertRole,
       json,
       getBody: () => getBody(event),
@@ -1525,7 +1572,7 @@ async function handleRequest(event = {}) {
     const materialsResponse = await handleMaterials({
       path,
       method,
-      requireAuth: () => requireAuth(event),
+      requireAuth: requireMaterialsAuth,
       assertRole,
       json,
       getBody: () => getBody(event),
@@ -1602,6 +1649,20 @@ async function handleRequest(event = {}) {
       uid,
     });
     if (roomPhotosResponse) return roomPhotosResponse;
+
+    const feedbackResponse = await handleFeedback({
+      ...storageCtx,
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      loadPlatform,
+      getBody: () => getBody(event),
+      getQuery: () => getQuery(event),
+      savePlatform,
+      pushActivity,
+      uid,
+    });
+    if (feedbackResponse) return feedbackResponse;
 
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {
@@ -2686,6 +2747,28 @@ async function handleRequest(event = {}) {
         demoFill: demoOrg && focusDemo,
       });
       return json(200, drill);
+    }
+
+    if (method === 'GET' && path.endsWith('/analytics/summary')) {
+      // Только вход по токену. Владелец и менеджер видят свою компанию, админ StP — всю сеть или выбранного партнёра.
+      const auth = await requireAuth(event);
+      const role = normalizeRole(auth.user.role);
+      if (!['admin', 'owner', 'sales'].includes(role)) {
+        return json(403, { message: 'Аналитика недоступна' });
+      }
+      const query = getQuery(event);
+      const orgId = role === 'admin' ? query.orgId || null : auth.user.orgId;
+      if (role !== 'admin' && !orgId) return json(403, { message: 'Аналитика недоступна' });
+      const events = await eventsForAnalytics();
+      return json(
+        200,
+        buildAnalyticsSummary(auth.platform, events, {
+          orgId,
+          from: query.from || null,
+          to: query.to || null,
+          withPartners: role === 'admin',
+        }),
+      );
     }
 
     if (method === 'GET' && path.endsWith('/analytics/dashboard')) {

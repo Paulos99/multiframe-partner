@@ -53,6 +53,7 @@ import { TrainingCompanyPage, TrainingTab, TrainingUserPage } from './TrainingAn
 import { ROLE_LABELS, normalizeRole } from '../../../../packages/shared/partner';
 import { JourneyFunnel, KpiPctCard } from './JourneyFunnel';
 import { StaffPersonalAnalytics } from './StaffPersonalAnalytics';
+import { PartnerComparisonTable, PeriodSummaryBlock, usePeriodSummary } from './PeriodSummary';
 import styles from './partner.module.css';
 
 const HOUSE_LABELS = Object.fromEntries(
@@ -418,6 +419,8 @@ function SectionTabs({
   );
 }
 
+const NO_ROWS: ReadonlyArray<object> = [];
+
 const DRILL_METRICS = new Set(['staff', 'problemomer', 'calculator', 'pdf', 'area', 'panels', 'avg', 'done']);
 
 export function AnalyticsDashboard({
@@ -584,6 +587,30 @@ export function AnalyticsDashboard({
       return true;
     });
   }, [mode, data, partnersList]);
+
+  const summaryOrgs = useMemo(
+    () =>
+      partnersList
+        .filter((p) => Boolean(p.user.orgId))
+        .map((p) => ({
+          id: p.user.orgId as string,
+          name: p.org?.settings.companyName || p.user.displayName,
+          city: p.org?.settings.city || '',
+        })),
+    [partnersList],
+  );
+  const summaryRange = useMemo(() => rangeFromYmd(fromYmd, toYmd), [fromYmd, toYmd]);
+  const periodSummary = usePeriodSummary({
+    mode,
+    rooms: (model?.objects as ReadonlyArray<object> | undefined) ?? NO_ROWS,
+    events: (model?.events as ReadonlyArray<object> | undefined) ?? NO_ROWS,
+    users: (model?.users as ReadonlyArray<object> | undefined) ?? NO_ROWS,
+    from: summaryRange.from,
+    to: summaryRange.to,
+    orgId: mode === 'partner' ? user.orgId || null : focusOrg || null,
+    orgs: summaryOrgs,
+    preferServer: model?.source === 'server',
+  });
 
   if (onTrainingPage && canTraining) {
     return (
@@ -761,6 +788,14 @@ export function AnalyticsDashboard({
 
       {section === 'overview' ? (
         <DashSection>
+          {!loading && periodSummary ? (
+            <PeriodSummaryBlock
+              view={periodSummary}
+              periodLabel={formatPeriodLabel(fromYmd, toYmd)}
+              mode={mode}
+              onOpenPartners={mode === 'admin' ? () => openSection('companies') : undefined}
+            />
+          ) : null}
           {loading ? (
             <div className={styles.kpiRow} aria-busy="true" data-motion-own>
               {Array.from({ length: mode === 'admin' ? 9 : 8 }, (_, index) => (
@@ -857,6 +892,13 @@ export function AnalyticsDashboard({
 
       {section === 'companies' && mode === 'admin' ? (
         <DashSection>
+          <h3 className={styles.dashSub}>Сравнение партнёров</h3>
+          <p className={styles.hint}>
+            {formatPeriodLabel(fromYmd, toYmd)} · стрелки — к прошлому периоду той же длины. «До КП» — доля комнат периода,
+            дошедших до КП; «Сумма» — по завершённым комнатам.
+          </p>
+          <PartnerComparisonTable rows={periodSummary?.partners?.rows ?? []} />
+          <h3 className={styles.dashSub}>Работа с инструментами</h3>
           <div className={styles.dashTableScroll}>
             <table className={styles.dashTable}>
               <thead>

@@ -1,16 +1,19 @@
-import type { MaterialNode, PublicMaterial } from '../../../../packages/shared/materialsLib.js';
+import type { MaterialNode, MaterialRole, PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import {
   MATERIAL_DIRECT_MAX_BYTES,
   addFile,
   createFolder,
   deleteMaterial,
+  ensureMaterialVideos,
   findMaterial,
-  publicMaterials,
+  publicMaterialsFor,
   renameMaterial,
   replaceFile,
+  setMaterialRoles,
 } from '../../../../packages/shared/materialsLib.js';
 import {
   apiCreateMaterialFolder,
+  apiSetMaterialRoles,
   apiDeleteMaterial,
   apiListMaterials,
   apiMaterialContent,
@@ -32,6 +35,11 @@ import { isLocalOnlySession, loadDb, loadToken, saveDb } from './localStore';
 
 export type { PublicMaterial };
 
+/** Кто видит: null — все роли (в папке — как у папки). */
+export type MaterialRoles = MaterialRole[] | null;
+/** Куда кладётся новый файл: обычный материал или обучающее видео (вне папок). */
+export type MaterialPlacement = { roles?: MaterialRoles; section?: 'video' | null };
+
 const MAX_FILE_BYTES = 2_000_000;
 
 export function materialKindLabel(item: PublicMaterial): string {
@@ -45,10 +53,16 @@ export function materialKindLabel(item: PublicMaterial): string {
   return 'Файл';
 }
 
+/** Локальная библиотека (без сервера) с тем же переходом на встроенные видео, что и на сервере. */
+function localNodes(): MaterialNode[] {
+  const db = loadDb();
+  return ensureMaterialVideos({ materials: db.materials, materialVideosSeeded: db.materialVideosSeeded }).materials as MaterialNode[];
+}
+
 function persistLocal(nodes: MaterialNode[]) {
   const db = loadDb();
   try {
-    saveDb({ ...db, materials: nodes });
+    saveDb({ ...db, materials: nodes, materialVideosSeeded: true });
   } catch {
     throw new Error('Не хватает места в браузере для этого файла');
   }
@@ -61,8 +75,11 @@ function base64ToBlob(b64: string, mime: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
+/** Роль локальной сессии: от неё зависит, что видно (как фильтр на сервере). */
+let localRole = 'admin';
+
 function localList(): PublicMaterial[] {
-  return publicMaterials(loadDb().materials);
+  return publicMaterialsFor(localNodes(), localRole);
 }
 
 /** Материалы идут через API (а не localStorage) — тогда есть миниатюры и их загрузка. */
@@ -110,7 +127,9 @@ function remoteEnabled(): boolean {
   return true;
 }
 
-export async function listMaterials(): Promise<PublicMaterial[]> {
+/** Список материалов. Сервер сам отдаёт только видимое роли; role нужна для работы без сервера. */
+export async function listMaterials(role?: string): Promise<PublicMaterial[]> {
+  if (role) localRole = role;
   if (remoteEnabled()) {
     try {
       return await apiListMaterials();
@@ -132,11 +151,13 @@ export async function listMaterials(): Promise<PublicMaterial[]> {
 export async function createMaterialFolder(
   name: string,
   parentId: string | null,
+  roles: MaterialRoles = null,
 ): Promise<PublicMaterial[]> {
-  if (remoteEnabled()) return apiCreateMaterialFolder(name, parentId);
-  const result = createFolder(loadDb().materials, {
+  if (remoteEnabled()) return apiCreateMaterialFolder(name, parentId, roles);
+  const result = createFolder(localNodes(), {
     name,
     parentId,
+    roles,
     id: `mat_${Math.random().toString(36).slice(2, 10)}`,
     now: new Date().toISOString(),
   });
@@ -191,6 +212,7 @@ async function uploadMaterialMultipart(
   file: File,
   parentId: string | null,
   onProgress?: UploadProgress,
+  placement: MaterialPlacement = {},
 ): Promise<PublicMaterial[]> {
   if (file.size > MATERIAL_DIRECT_MAX_BYTES) throw new Error('Файл больше 5 ТБ');
   const ticket = await apiMaterialMultipartStart({
@@ -245,6 +267,8 @@ async function uploadMaterialMultipart(
       partCount: ticket.partCount,
       name: file.name,
       parentId,
+      roles: placement.roles ?? null,
+      section: placement.section ?? null,
     });
   } catch (error) {
     await apiMaterialMultipartAbort({ storageKey: ticket.storageKey, uploadId: ticket.uploadId }).catch(
@@ -258,9 +282,10 @@ export async function uploadMaterialFile(
   file: File,
   parentId: string | null,
   onProgress?: UploadProgress,
+  placement: MaterialPlacement = {},
 ): Promise<PublicMaterial[]> {
   if (remoteEnabled() && file.size > MAX_FILE_BYTES) {
-    return uploadMaterialMultipart(file, parentId, onProgress);
+    return uploadMaterialMultipart(file, parentId, onProgress, placement);
   }
   const payload = await filePayload(file);
   if (remoteEnabled()) {
@@ -269,11 +294,15 @@ export async function uploadMaterialFile(
       parentId,
       mime: payload.mime,
       contentBase64: payload.contentBase64,
+      roles: placement.roles ?? null,
+      section: placement.section ?? null,
     });
   }
-  const result = addFile(loadDb().materials, {
+  const result = addFile(localNodes(), {
     name: file.name,
     parentId,
+    roles: placement.roles ?? null,
+    section: placement.section ?? null,
     id: `mat_${Math.random().toString(36).slice(2, 10)}`,
     mime: payload.mime,
     size: file.size,
@@ -287,7 +316,7 @@ export async function uploadMaterialFile(
 
 export async function renameMaterialItem(id: string, name: string): Promise<PublicMaterial[]> {
   if (remoteEnabled()) return apiRenameMaterial(id, name);
-  const result = renameMaterial(loadDb().materials, {
+  const result = renameMaterial(localNodes(), {
     id,
     name,
     now: new Date().toISOString(),
@@ -306,7 +335,7 @@ export async function replaceMaterialFile(id: string, file: File): Promise<Publi
       contentBase64: payload.contentBase64,
     });
   }
-  const result = replaceFile(loadDb().materials, {
+  const result = replaceFile(localNodes(), {
     id,
     name: file.name,
     mime: payload.mime,
@@ -321,7 +350,16 @@ export async function replaceMaterialFile(id: string, file: File): Promise<Publi
 
 export async function deleteMaterialItem(id: string): Promise<PublicMaterial[]> {
   if (remoteEnabled()) return apiDeleteMaterial(id);
-  const result = deleteMaterial(loadDb().materials, { id });
+  const result = deleteMaterial(localNodes(), { id });
+  if (!result.ok) throw new Error(result.message);
+  persistLocal(result.nodes);
+  return localList();
+}
+
+/** Кто видит папку, файл или видео. Меняет только админ StP (сервер проверяет роль). */
+export async function setMaterialItemRoles(id: string, roles: MaterialRoles): Promise<PublicMaterial[]> {
+  if (remoteEnabled()) return apiSetMaterialRoles(id, roles);
+  const result = setMaterialRoles(localNodes(), { id, roles, now: new Date().toISOString() });
   if (!result.ok) throw new Error(result.message);
   persistLocal(result.nodes);
   return localList();
@@ -377,7 +415,7 @@ export async function openMaterial(item: PublicMaterial): Promise<MaterialConten
       blob: base64ToBlob(data.base64, mime),
     };
   }
-  const node = findMaterial(loadDb().materials, item.id);
+  const node = findMaterial(localNodes(), item.id);
   if (node?.contentBase64) {
     const mime = node.mime || 'application/octet-stream';
     return {

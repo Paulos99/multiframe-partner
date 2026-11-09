@@ -1,7 +1,17 @@
+import type { MaterialRole } from './schemas.js';
+export type { MaterialRole };
+
 export type MaterialNode = {
   id: string;
   parentId: string | null;
   kind: 'folder' | 'file';
+  /** Кто видит: null или нет поля — все роли (в папке — как у папки). Админ StP видит всё. */
+  roles?: MaterialRole[] | null;
+  /** "video" — обучающее видео (вне папок, над списком). */
+  section?: 'video' | null;
+  /** Встроенный ролик роли из apps/web/public/videos: owner, sales, measurer, crew. */
+  builtin?: string | null;
+  description?: string | null;
   name: string;
   mime: string | null;
   size: number | null;
@@ -52,8 +62,33 @@ export type PublicMaterial = {
   /** Есть лёгкая копия видео для просмотра онлайн. */
   hasStream?: boolean;
   streamSize?: number | null;
+  section?: 'video' | null;
+  builtin?: string | null;
+  description?: string | null;
+  /** Только у админа StP: роли самого узла (null — все). */
+  roles?: MaterialRole[] | null;
+  /** Только у админа StP: кому узел виден с учётом папок (null — всем). */
+  effectiveRoles?: MaterialRole[] | null;
   updatedAt: string;
 };
+
+export const MATERIAL_ROLES: MaterialRole[];
+export const MATERIAL_ROLE_LABELS: Record<MaterialRole, string>;
+export function parseMaterialRoles(
+  value: unknown,
+): { ok: true; roles: MaterialRole[] | null | undefined } | { ok: false; message: string };
+export const BUILTIN_TRAINING_VIDEOS: { key: string; title: string; description: string }[];
+export function builtinVideoNodes(now?: string): MaterialNode[];
+export function ensureMaterialVideos<T extends { materials?: unknown; materialVideosSeeded?: boolean }>(platform: T): T;
+export function effectiveRoles(nodes: MaterialNode[], node: MaterialNode | null | undefined): MaterialRole[] | null;
+export function materialVisibleTo(nodes: MaterialNode[], node: MaterialNode, role: string): boolean;
+export function visibleMaterialNodes(stored: unknown, role: string): MaterialNode[];
+export function publicMaterialsFor(stored: unknown, role: string): PublicMaterial[];
+export function publicMaterialFor(nodes: MaterialNode[], node: MaterialNode, role: string): PublicMaterial;
+export function setMaterialRoles(
+  stored: unknown,
+  input: { id: string; roles: MaterialRole[] | null; now: string },
+): { ok: true; nodes: MaterialNode[] } | { ok: false; message: string };
 
 export function demoMaterialNodes(): MaterialNode[];
 export function materialBase(stored: unknown): MaterialNode[];
@@ -61,7 +96,7 @@ export function toPublicMaterial(node: MaterialNode): PublicMaterial;
 export function publicMaterials(stored: unknown): PublicMaterial[];
 export function createFolder(
   stored: unknown,
-  input: { name: string; parentId?: string | null; id: string; now: string },
+  input: { name: string; parentId?: string | null; id: string; now: string; roles?: MaterialRole[] | null },
 ): { ok: true; nodes: MaterialNode[] } | { ok: false; message: string };
 export function addFile(
   stored: unknown,
@@ -75,6 +110,8 @@ export function addFile(
     bucket?: string | null;
     contentBase64?: string | null;
     now: string;
+    roles?: MaterialRole[] | null;
+    section?: 'video' | null;
   },
 ): { ok: true; nodes: MaterialNode[] } | { ok: false; message: string };
 export function renameMaterial(

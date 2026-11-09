@@ -3,6 +3,9 @@ import { apiProfile, hasRemoteApi } from '../partner/apiClient';
 import { ProfilePanel } from '../partner/ProfilePanel';
 import { usePartner } from '../partner/PartnerContext';
 import { AnimatePresence } from '../partner/motionBits';
+import { canSendFeedback } from '../../../../packages/shared/feedback.js';
+import { FeedbackDialog } from '../partner/feedback/FeedbackDialog';
+import feedbackStyles from '../partner/feedback/feedback.module.css';
 import styles from './ProfileMenu.module.css';
 
 function initials(name: string): string {
@@ -26,6 +29,7 @@ export function ProfileMenu({
   onLogout: () => void;
 }) {
   const [editing,setEditing]=useState(false);
+  const [feedback,setFeedback]=useState(false);
   const {user,acceptProfile,profileOpenToken}=usePartner();
   // Ссылка на фото подписана на ограниченный срок: если она истекла, один раз
   // берём свежую из /me, а пока её нет — показываем инициалы.
@@ -55,6 +59,12 @@ export function ProfileMenu({
         </span>
       </button>
       <AnimatePresence>{editing ? <ProfilePanel key={user?.id} onClose={()=>setEditing(false)}/> : null}</AnimatePresence>
+      {canSendFeedback(user?.role) ? (
+        <button type="button" className={feedbackStyles.trigger} onClick={()=>setFeedback(true)} title="Сообщить об ошибке или предложить улучшение">
+          Обратная связь
+        </button>
+      ) : null}
+      <AnimatePresence>{feedback ? <FeedbackDialog key="feedback" onClose={()=>setFeedback(false)}/> : null}</AnimatePresence>
       <button type="button" className={styles.logout} onClick={onLogout} title="Выйти — смена сотрудника на общем планшете">
         Выйти
       </button>

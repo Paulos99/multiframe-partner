@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { roleVideoFor, roleVideoSrc, roleVideosFor } from './roleVideos.ts';
+import { BUILTIN_TRAINING_VIDEOS } from '../../../../packages/shared/materialsLib.js';
+import { roleVideoFor, roleVideoSrc } from './roleVideos.ts';
 
 const PUBLIC = path.resolve(import.meta.dirname, '../../public');
 
@@ -19,7 +20,6 @@ test('у каждой рабочей роли свой ролик, у admin ег
   assert.equal(files.size, roles.length, 'ролики ролей не должны совпадать');
   assert.equal(roleVideoFor('admin'), null);
   assert.equal(roleVideoFor('stp_manager'), null, 'у менеджера StP ролика нет');
-  assert.deepEqual(roleVideosFor('stp_manager'), []);
 });
 
 test('файлы роликов и афиш лежат в public/videos и не пустые', () => {
@@ -34,10 +34,12 @@ test('файлы роликов и афиш лежат в public/videos и не 
   }
 });
 
-test('администратор StP видит все четыре ролика, остальные только свой', () => {
-  assert.deepEqual(roleVideosFor('admin').map((x) => x.role), ['owner', 'sales', 'measurer', 'crew']);
-  for (const r of ['owner', 'sales', 'measurer', 'crew'] as const) {
-    assert.deepEqual(roleVideosFor(r).map((x) => x.role), [r]);
+test('встроенные видео на сервере совпадают с роликами кабинета: те же ключи, названия и описания', () => {
+  assert.deepEqual(BUILTIN_TRAINING_VIDEOS.map((v) => v.key), ['owner', 'sales', 'measurer', 'crew']);
+  for (const v of BUILTIN_TRAINING_VIDEOS) {
+    const local = roleVideoFor(v.key)!;
+    assert.equal(local.title, v.title, `название ролика ${v.key}`);
+    assert.equal(local.description, v.description, `описание ролика ${v.key}`);
   }
 });
 
@@ -53,9 +55,7 @@ test('версии роликов подняты после замены (не �
   }
 });
 
-test('в карточке ролика нет удаления и изменения: ролики заменяются кодом', () => {
-  const card = fs.readFileSync(path.resolve(import.meta.dirname, 'RoleVideoCard.tsx'), 'utf8');
-  assert.doesNotMatch(card, /Удалить|Заменить|onDelete|fetch\(|DELETE/);
+test('сервер не работает с файлами встроенных роликов: удаление видео убирает только запись', () => {
   const api = path.resolve(import.meta.dirname, '../../../api/src');
   if (fs.existsSync(api)) {
     const hits = fs.readdirSync(api, { recursive: true, encoding: 'utf8' })

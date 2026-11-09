@@ -26,6 +26,9 @@ import { StageConflictDialog, SyncBanner, SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
 import { ToolsPanel } from './ToolsPanel';
 import { StpManagersAdmin } from './StpManagersAdmin';
+import { FeedbackAdminPanel } from './feedback/FeedbackAdminPanel';
+import { apiFeedbackSummary, hasRemoteApi } from './apiClient';
+import { loadToken } from './localStore';
 import { StpToolsPanel } from './StpToolsPanel';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
@@ -168,7 +171,7 @@ function useOpenCalendarTarget(showProjects: () => void) {
   };
 }
 
-type AdminTab = 'today' | 'partners' | 'calendar' | 'tools' | 'analytics' | 'help';
+type AdminTab = 'today' | 'partners' | 'calendar' | 'tools' | 'analytics' | 'help' | 'feedback';
 
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
@@ -248,6 +251,17 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     }
   }
 
+  // Значок новых обращений: число берём с сервера, раздел обновляет его после ответа.
+  const [feedbackNew, setFeedbackNew] = useState(0);
+  useEffect(() => {
+    if (!hasRemoteApi() || !loadToken()) return;
+    const ctrl = new AbortController();
+    void apiFeedbackSummary(ctrl.signal)
+      .then((d) => setFeedbackNew(d.newCount))
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, []);
+
   const adminNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'partners', label: 'Партнёры', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
@@ -255,6 +269,12 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
+    {
+      id: 'feedback',
+      label: feedbackNew > 0 ? `Обратная связь · ${feedbackNew}` : 'Обратная связь',
+      active: tab === 'feedback',
+      onSelect: () => { leaveProjectHash(); setTab('feedback'); },
+    },
   ];
 
   return (
@@ -516,6 +536,12 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="admin" />
+        </TabPanel>
+      ) : null}
+
+      {tab === 'feedback' ? (
+        <TabPanel>
+          <FeedbackAdminPanel onNewCount={setFeedbackNew} />
         </TabPanel>
       ) : null}
       </FrameBody>

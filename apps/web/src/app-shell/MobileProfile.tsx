@@ -6,6 +6,8 @@ import { usePartner } from '../partner/PartnerContext';
 import { AnimatePresence } from '../partner/motionBits';
 import { DemoSwitcherFab } from '../partner/DemoSwitcher';
 import { Button } from '../ui/Button';
+import { canSendFeedback } from '../../../../packages/shared/feedback.js';
+import { FeedbackDialog } from '../partner/feedback/FeedbackDialog';
 import styles from './MobileProfile.module.css';
 
 function initialsOf(name: string): string {
@@ -64,6 +66,7 @@ export function MobileProfileScreen({
   const { user } = usePartner();
   const avatar = useAvatar();
   const [editing, setEditing] = useState(false);
+  const [feedback, setFeedback] = useState(false);
   const meta = company ? `${role} · ${company}` : role;
   const subtitle = meta === name ? role : meta;
   const shown = name.trim() ? name : 'Укажите имя';
@@ -88,12 +91,21 @@ export function MobileProfileScreen({
         </Button>
         <p className={styles.hint}>Имя, фото, логин и пароль.</p>
       </div>
+      {canSendFeedback(user?.role) ? (
+        <div className={styles.card}>
+          <Button variant="secondary" fullWidth onClick={() => setFeedback(true)}>
+            Обратная связь
+          </Button>
+          <p className={styles.hint}>Сообщить об ошибке или предложить улучшение команде StP. Можно приложить фото.</p>
+        </div>
+      ) : null}
       <DemoSwitcherFab menu />
       <button type="button" className={styles.logout} onClick={onLogout}>
         Выйти
       </button>
       <p className={styles.hint}>Если устройство общее, выйдите после смены.</p>
       <AnimatePresence>{editing ? <ProfilePanel key={user?.id} onClose={() => setEditing(false)} /> : null}</AnimatePresence>
+      <AnimatePresence>{feedback ? <FeedbackDialog key="feedback" onClose={() => setFeedback(false)} /> : null}</AnimatePresence>
     </section>
   );
 }

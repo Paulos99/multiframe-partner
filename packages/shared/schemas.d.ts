@@ -15,6 +15,7 @@ export interface Schemas {
   materialMultipartStart: RequestSchema;
   materialMultipartRef: RequestSchema;
   materialMultipartParts: RequestSchema;
+  materialAccess: RequestSchema;
 }
 
 export const LOGIN_MAX: number;
@@ -26,6 +27,11 @@ export const PROJECT_LIMITS: Readonly<{ name: number }>;
 export const MATERIAL_DIRECT_MAX_BYTES: number;
 export const MATERIAL_MAX_PARTS: number;
 export const MATERIAL_KEY_PATTERN: RegExp;
+export type MaterialRole = 'owner' | 'sales' | 'measurer' | 'crew' | 'stp_manager';
+export const MATERIAL_ROLES: MaterialRole[];
+export function parseMaterialRoles(
+  value: unknown,
+): { ok: true; roles: MaterialRole[] | null | undefined } | { ok: false; message: string };
 
 /** `z` — библиотека zod (v4), её передаёт вызывающий код. */
 export function createSchemas(z: unknown): Schemas;

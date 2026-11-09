@@ -15,10 +15,12 @@ export type RoleVideo = {
 };
 
 /**
- * Обучающие ролики по ролям (горизонтальные 16:9, с озвучкой): единственное место, где роль связана с файлом.
- * Как заменить ролик: docs/TRAINING_VIDEOS.md (скрипт `npm run video:swap`). Если коротко:
+ * Встроенные обучающие ролики (горизонтальные 16:9, с озвучкой): файл, длительность и версия по ключу ролика.
+ * Кто какой ролик видит, решает не код, а админ StP в «Обучении» (роли видимости, packages/shared/materialsLib.js):
+ * сначала каждый ролик виден своей роли, потом админ меняет роли или удаляет ролик.
+ * Как заменить файл: docs/TRAINING_VIDEOS.md (скрипт `npm run video:swap`). Если коротко:
  * файлы лежат в apps/web/public/videos как <file>.mp4 и <file>.jpg (афиша), качество 1920×1080;
- * после замены обновите здесь `duration` и поднимите `version`. У менеджера StP своего ролика нет; администратор StP видит все четыре ролика, но только смотрит: удаления в кабинете нет, заменяются ролики кодом (docs/TRAINING_VIDEOS.md).
+ * после замены обновите здесь `duration` и поднимите `version`.
  */
 const VIDEOS: Partial<Record<UserRole, RoleVideo>> = {
   owner: { file: 'role-owner', title: 'Владелец компании', duration: '2:13', description: 'Что это за сервис и как им пользоваться владельцу.', version: '3' },
@@ -27,18 +29,9 @@ const VIDEOS: Partial<Record<UserRole, RoleVideo>> = {
   crew: { file: 'role-crew', title: 'Монтажник', duration: '1:35', description: 'Обучение, схема монтажа по комнате и фотоотчёт до, во время и после монтажа.', version: '3' },
 };
 
-/** Порядок показа администратору StP: все ролики ролей. */
-const ADMIN_ORDER = ['owner', 'sales', 'measurer', 'crew'] as const satisfies readonly UserRole[];
-
-/** Ролики, которые видит роль: свой (рабочие роли) или все четыре (admin). Менеджер StP — ни одного. */
-export function roleVideosFor(role: UserRole): Array<{ role: UserRole; video: RoleVideo }> {
-  if (role === 'admin') return ADMIN_ORDER.map((r) => ({ role: r, video: VIDEOS[r]! }));
-  const own = VIDEOS[role];
-  return own ? [{ role, video: own }] : [];
-}
-
-export function roleVideoFor(role: UserRole): RoleVideo | null {
-  return VIDEOS[role] ?? null;
+/** Встроенный ролик по ключу (owner, sales, measurer, crew). */
+export function roleVideoFor(key: UserRole | string): RoleVideo | null {
+  return VIDEOS[key as UserRole] ?? null;
 }
 
 export function roleVideoSrc(v: RoleVideo, base = '/'): { video: string; poster: string } {
