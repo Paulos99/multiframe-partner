@@ -53,6 +53,7 @@ import { TrainingCompanyPage, TrainingTab, TrainingUserPage } from './TrainingAn
 import { ROLE_LABELS, normalizeRole } from '../../../../packages/shared/partner';
 import { JourneyFunnel, KpiPctCard } from './JourneyFunnel';
 import { StaffPersonalAnalytics } from './StaffPersonalAnalytics';
+import { listStaffForOrg } from './localStore';
 import { PartnerComparisonTable, PeriodSummaryBlock, usePeriodSummary } from './PeriodSummary';
 import styles from './partner.module.css';
 
@@ -442,7 +443,19 @@ export function AnalyticsDashboard({
   const [panelData, setPanelData] = useState<{ period: DrillPeriod; dash: DashData } | null>(null);
   const [model, setModel] = useState<AnalyticsTileModel | null>(null);
   const [loading, setLoading] = useState(true);
-  const [focusStaffId, setFocusStaffId] = useState<string | null>(null);
+  const focusStaffId = route.page === 'team-user' ? route.userId : null;
+  const [overviewPane, setOverviewPane] = useState<'metrics' | 'summary'>(() => {
+    if (typeof window === 'undefined') return 'metrics';
+    const state = window.history.state;
+    const pane = state && typeof state === 'object' ? (state as { mfOverviewPane?: unknown }).mfOverviewPane : null;
+    return pane === 'summary' ? 'summary' : 'metrics';
+  });
+  function openOverviewPane(pane: 'metrics' | 'summary') {
+    setOverviewPane(pane);
+    if (typeof window === 'undefined') return;
+    const prev = window.history.state && typeof window.history.state === 'object' ? window.history.state : {};
+    window.history.replaceState({ ...prev, mfOverviewPane: pane }, '', window.location.href);
+  }
   const data = model?.dash ?? null;
 
   const partnersList = useMemo(
@@ -473,13 +486,13 @@ export function AnalyticsDashboard({
     if (mode !== 'admin' && section === 'photos') setSection('overview');
   }, [mode, section]);
   useEffect(() => {
-    if (section !== 'team') setFocusStaffId(null);
-  }, [section]);
-  useEffect(() => {
     if (mode !== 'admin' && section === 'objects') setSection('overview');
   }, [mode, section]);
+  useEffect(() => {
+    if (route.page === 'team' || route.page === 'team-user') setSection('team');
+  }, [route.page]);
   const sectionTabs: Array<{ id: AnalyticsTab; label: string }> = [
-    { id: 'overview', label: 'Сводка' },
+    { id: 'overview', label: 'Обзор' },
     { id: 'portrait', label: 'Комнаты' },
     ...(mode === 'admin' ? [{ id: 'companies' as const, label: 'Компании' }] : []),
     { id: 'team', label: mode === 'admin' ? 'Сотрудники сети' : 'Сотрудники' },
@@ -491,7 +504,13 @@ export function AnalyticsDashboard({
   function openSection(id: AnalyticsTab) {
     if (id === 'photos') {
       if (route.page !== 'photos') goAnalytics({ ...OVERVIEW_LOCATION, page: 'photos' }, 'push');
-    } else if (route.page === 'photos' || route.page === 'photo-case') {
+    } else if (id === 'team') {
+      if (route.page !== 'team' && route.page !== 'team-user') {
+        goAnalytics({ ...OVERVIEW_LOCATION, page: 'team' }, 'push');
+      }
+    } else if (id === 'overview') {
+      if (route.page !== 'overview') goAnalytics(OVERVIEW_LOCATION, 'push');
+    } else if (route.page === 'photos' || route.page === 'photo-case' || route.page === 'team' || route.page === 'team-user') {
       goAnalytics(OVERVIEW_LOCATION, 'replace');
     }
     setSection(id);
@@ -670,14 +689,32 @@ export function AnalyticsDashboard({
     to: rangeFromYmd(fromYmd, toYmd).to,
   });
   const staffPeople = (() => {
-    const list = (api.partnerListStaff() || []).map((member) => ({
+    const mapMember = (member: { id: string; displayName?: string; login: string; role: string }) => ({
       id: member.id,
-      displayName: member.displayName,
+      displayName: member.displayName || member.login,
       login: member.login,
       role: normalizeRole(member.role),
-    }));
+    });
+    if (mode === 'admin') {
+      const orgIds = focusOrg
+        ? [focusOrg]
+        : partnersList
+            .map((row) => (row.org && 'id' in row.org ? String(row.org.id) : ''))
+            .filter(Boolean);
+      const seen = new Set<string>();
+      const list: Array<{ id: string; displayName: string; login: string; role: ReturnType<typeof normalizeRole> }> = [];
+      for (const orgId of orgIds) {
+        for (const member of listStaffForOrg(orgId)) {
+          if (seen.has(member.id)) continue;
+          seen.add(member.id);
+          list.push(mapMember(member));
+        }
+      }
+      return list;
+    }
+    const list = (api.partnerListStaff() || []).map(mapMember);
     // Владелец тоже в списке, если его нет среди staff.
-    if (mode === 'partner' && user.role === 'owner' && !list.some((p) => p.id === user.id)) {
+    if (user.role === 'owner' && !list.some((p) => p.id === user.id)) {
       list.unshift({
         id: user.id,
         displayName: user.displayName,
@@ -782,73 +819,103 @@ export function AnalyticsDashboard({
         </StaffDrillDrawer>
       ) : null}
 
-      {route.page === 'overview' ? (
+      {route.page === 'overview' || route.page === 'team' || route.page === 'team-user' ? (
       <>
       {sectionTabBar}
 
       {section === 'overview' ? (
         <DashSection>
-          {!loading && periodSummary ? (
-            <PeriodSummaryBlock
-              view={periodSummary}
-              periodLabel={formatPeriodLabel(fromYmd, toYmd)}
-              mode={mode}
-              onOpenPartners={mode === 'admin' ? () => openSection('companies') : undefined}
-            />
-          ) : null}
-          {loading ? (
-            <div className={styles.kpiRow} aria-busy="true" data-motion-own>
-              {Array.from({ length: mode === 'admin' ? 9 : 8 }, (_, index) => (
-                <Skeleton key={index} kind="cards" count={1} label="Загрузка показателя" />
-              ))}
-            </div>
-          ) : (
-          <KpiRow>
-            {(
-              [
-                ...(mode === 'admin'
-                  ? [{ id: 'partners', label: 'Активные компании', value: dash.kpi.activePartners, prev: prev?.activePartners, showDelta }]
-                  : []),
-                { id: 'staff', label: 'Сотрудники', value: dash.kpi.executors, prev: prev?.executors, showDelta },
-                { id: 'problemomer', label: 'Проблемомер', value: dash.kpi.problemomerResults, prev: prev?.problemomerResults, showDelta },
-                { id: 'calculator', label: 'Калькулятор', value: dash.kpi.calculatorDone, prev: prev?.calculatorDone, showDelta },
-                { id: 'pdf', label: 'PDF', value: dash.kpi.pdf, prev: prev?.pdf, showDelta },
-                { id: 'area', label: 'Площадь, м²', value: tileArea, prev: prev?.areaM2, showDelta },
-                { id: 'panels', label: 'Панели', value: tilePanels, prev: prev?.panels, showDelta },
-                { id: 'avg', label: 'Средняя м²', value: dash.volume.areaM2Avg, prev: null, showDelta: false },
-                { id: 'done', label: 'Готовых расчётов', value: dash.volume.completedCount, prev: null, showDelta: false },
-              ] as Array<{ id: string; label: string; value: number; prev?: number | null; showDelta: boolean }>
-            ).map((tile) => (
-              <KpiCard
-                key={tile.id}
-                label={tile.label}
-                value={tile.value}
-                prev={tile.prev}
-                showDelta={tile.showDelta}
-                pressed={false}
-                onSelect={
-                  DRILL_METRICS.has(tile.id)
-                    ? () =>
-                        goAnalytics(
-                          { page: 'rating', metric: tile.id, role: null, userId: null, period: null },
-                          'push',
-                        )
-                    : undefined
-                }
-              />
-            ))}
-          </KpiRow>
-          )}
-          <div className={styles.kpiRow} data-outcome-kpis>
-            <KpiPctCard label="Отказы, %" pct={outcomeRates.refusedPct} />
-            <KpiPctCard label="Доведено до монтажа, %" pct={outcomeRates.completedPct} />
+          <div className={styles.overviewPanes} role="tablist" aria-label="Разделы обзора" data-overview-panes>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={overviewPane === 'metrics'}
+              className={overviewPane === 'metrics' ? styles.overviewPaneActive : styles.overviewPane}
+              onClick={() => openOverviewPane('metrics')}
+            >
+              Показатели
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={overviewPane === 'summary'}
+              className={overviewPane === 'summary' ? styles.overviewPaneActive : styles.overviewPane}
+              onClick={() => openOverviewPane('summary')}
+            >
+              Сводка
+            </button>
           </div>
-          <JourneyFunnel
-            title="Путь клиента"
-            steps={companyJourney.steps}
-            hint="Сжатая воронка: 6 этапов (клик раскрывает шаги). % — от предыдущего этапа; «Отказ» — доля от всех закрытых."
-          />
-          <p className={styles.hint}>Нажмите показатель выше — откроются динамика и детализация.</p>
+
+          <div hidden={overviewPane !== 'summary'} data-overview-pane="summary">
+            {!loading && periodSummary ? (
+              <PeriodSummaryBlock
+                view={periodSummary}
+                periodLabel={formatPeriodLabel(fromYmd, toYmd)}
+                mode={mode}
+                onOpenPartners={mode === 'admin' ? () => openSection('companies') : undefined}
+              />
+            ) : loading ? (
+              <Skeleton kind="rows" count={4} label="Загрузка сводки" />
+            ) : (
+              <p className={styles.lead}>Пока нет сводки за период</p>
+            )}
+          </div>
+
+          <div hidden={overviewPane !== 'metrics'} data-overview-pane="metrics">
+            {loading ? (
+              <div className={styles.kpiRow} aria-busy="true" data-motion-own>
+                {Array.from({ length: mode === 'admin' ? 9 : 8 }, (_, index) => (
+                  <Skeleton key={index} kind="cards" count={1} label="Загрузка показателя" />
+                ))}
+              </div>
+            ) : (
+            <KpiRow>
+              {(
+                [
+                  ...(mode === 'admin'
+                    ? [{ id: 'partners', label: 'Активные компании', value: dash.kpi.activePartners, prev: prev?.activePartners, showDelta }]
+                    : []),
+                  { id: 'staff', label: 'Сотрудники', value: dash.kpi.executors, prev: prev?.executors, showDelta },
+                  { id: 'problemomer', label: 'Проблемомер', value: dash.kpi.problemomerResults, prev: prev?.problemomerResults, showDelta },
+                  { id: 'calculator', label: 'Калькулятор', value: dash.kpi.calculatorDone, prev: prev?.calculatorDone, showDelta },
+                  { id: 'pdf', label: 'PDF', value: dash.kpi.pdf, prev: prev?.pdf, showDelta },
+                  { id: 'area', label: 'Площадь, м²', value: tileArea, prev: prev?.areaM2, showDelta },
+                  { id: 'panels', label: 'Панели', value: tilePanels, prev: prev?.panels, showDelta },
+                  { id: 'avg', label: 'Средняя м²', value: dash.volume.areaM2Avg, prev: null, showDelta: false },
+                  { id: 'done', label: 'Готовых расчётов', value: dash.volume.completedCount, prev: null, showDelta: false },
+                ] as Array<{ id: string; label: string; value: number; prev?: number | null; showDelta: boolean }>
+              ).map((tile) => (
+                <KpiCard
+                  key={tile.id}
+                  label={tile.label}
+                  value={tile.value}
+                  prev={tile.prev}
+                  showDelta={tile.showDelta}
+                  pressed={false}
+                  onSelect={
+                    DRILL_METRICS.has(tile.id)
+                      ? () =>
+                          goAnalytics(
+                            { page: 'rating', metric: tile.id, role: null, userId: null, period: null },
+                            'push',
+                          )
+                      : undefined
+                  }
+                />
+              ))}
+            </KpiRow>
+            )}
+            <div className={styles.kpiRow} data-outcome-kpis>
+              <KpiPctCard label="Отказы, %" pct={outcomeRates.refusedPct} />
+              <KpiPctCard label="Доведено до монтажа, %" pct={outcomeRates.completedPct} />
+            </div>
+            <JourneyFunnel
+              title="Путь клиента"
+              steps={companyJourney.steps}
+              hint="Шесть этапов. Нажмите этап — откроются шаги. Процент от предыдущего этапа. «Отказ» — доля от всех закрытых."
+            />
+            <p className={styles.hint}>Нажмите показатель выше — откроются динамика и детализация.</p>
+          </div>
         </DashSection>
       ) : null}
 
@@ -960,7 +1027,11 @@ export function AnalyticsDashboard({
                 return (
                   <p className={styles.lead}>
                     Сотрудник не найден.{' '}
-                    <button type="button" className={styles.ghost} onClick={() => setFocusStaffId(null)}>
+                    <button
+                      type="button"
+                      className={styles.ghost}
+                      onClick={() => goAnalytics({ ...OVERVIEW_LOCATION, page: 'team' }, 'replace')}
+                    >
                       К списку
                     </button>
                   </p>
@@ -975,12 +1046,28 @@ export function AnalyticsDashboard({
                   users={staffPeople}
                   from={rangeFromYmd(fromYmd, toYmd).from}
                   to={rangeFromYmd(fromYmd, toYmd).to}
-                  onBack={() => setFocusStaffId(null)}
+                  onBack={() => goAnalytics({ ...OVERVIEW_LOCATION, page: 'team' }, 'push')}
+                  onBackToOverview={() => {
+                    goAnalytics(OVERVIEW_LOCATION, 'push');
+                    setSection('overview');
+                  }}
                 />
               );
             })()
           ) : (
             <>
+              <div className={styles.staffNavRow}>
+                <button
+                  type="button"
+                  className={styles.staffBackPrimary}
+                  onClick={() => {
+                    goAnalytics(OVERVIEW_LOCATION, 'push');
+                    setSection('overview');
+                  }}
+                >
+                  ← Общая аналитика
+                </button>
+              </div>
               <p className={styles.lead}>Нажмите имя — откроется личная аналитика и воронка роли.</p>
               <ul className={styles.staffNameList}>
                 {staffPeople.map((person) => (
@@ -988,7 +1075,9 @@ export function AnalyticsDashboard({
                     <button
                       type="button"
                       className={styles.staffNameBtn}
-                      onClick={() => setFocusStaffId(person.id)}
+                      onClick={() =>
+                        goAnalytics({ ...OVERVIEW_LOCATION, page: 'team-user', userId: person.id }, 'push')
+                      }
                     >
                       <strong>{person.displayName || person.login}</strong>
                       <span className={styles.hint}>{ROLE_LABELS[person.role] || person.role}</span>

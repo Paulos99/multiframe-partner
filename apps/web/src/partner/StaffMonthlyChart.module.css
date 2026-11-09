@@ -1,0 +1,182 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--cab-border);
+  border-radius: var(--cab-radius-lg, 14px);
+  background: var(--cab-card, #fff);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--cab-ink);
+}
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.metric,
+.metricActive {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--cab-border);
+  background: var(--cab-subtle);
+  color: var(--cab-ink-soft, #2a3a32);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.metricActive {
+  border-color: color-mix(in srgb, var(--cab-accent) 55%, var(--cab-border));
+  background: color-mix(in srgb, var(--cab-accent) 16%, var(--cab-card));
+  color: var(--cab-accent-text, #146246);
+}
+
+.metric:focus-visible,
+.metricActive:focus-visible {
+  outline: 2px solid var(--cab-accent);
+  outline-offset: 2px;
+}
+
+.chartBox {
+  position: relative;
+  width: 100%;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 180px;
+  touch-action: manipulation;
+}
+
+.grid {
+  stroke: color-mix(in srgb, var(--cab-border) 80%, transparent);
+  stroke-width: 1;
+}
+
+.axis,
+.tick {
+  fill: var(--cab-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.line {
+  stroke: var(--cab-accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 0;
+  animation: draw-line 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.area {
+  animation: fade-in 0.5s ease both;
+}
+
+.dot {
+  fill: var(--cab-card, #fff);
+  stroke: var(--cab-accent);
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.dotActive {
+  fill: var(--cab-accent);
+  stroke: var(--cab-accent);
+  stroke-width: 2;
+  cursor: pointer;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--cab-accent) 45%, transparent));
+}
+
+.tooltip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--cab-border);
+  background: color-mix(in srgb, var(--cab-card) 92%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 8%, transparent);
+  font-size: 0.82rem;
+  color: var(--cab-ink);
+  pointer-events: none;
+}
+
+.empty {
+  margin: 0;
+  color: var(--cab-muted);
+  font-size: 0.92rem;
+}
+
+.srTable {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes draw-line {
+  from {
+    stroke-dashoffset: 1200;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .wrap {
+    padding: 12px;
+  }
+
+  .metric,
+  .metricActive {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line,
+  .area {
+    animation: none;
+  }
+}
