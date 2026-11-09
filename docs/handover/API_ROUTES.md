@@ -51,6 +51,7 @@
 | `/objects`, `/objects/{objectId}` | комнаты: список, создание, правка, статус, назначение, отказ |
 | `/objects/{objectId}/documents`, `/objects/{objectId}/documents/{docId}` | PDF комнаты |
 | `/objects/{objectId}/photos`, `/objects/{objectId}/photos/{photoId}` | фото и подписи; показ клиенту |
+| `/objects/{objectId}/notes` | `POST` заметка к комнате: только добавление, повтор с тем же `clientId` не создаёт дубль |
 | `/photo-file/{photoId}` | файл фото по временной подписанной ссылке |
 | `/photo-cases`, `/photo-cases/{objectId}` | сводка фотоотчётов компании (замерщику и монтажнику недоступна) |
 | `/objects/{objectId}/share` | ссылка для клиента |

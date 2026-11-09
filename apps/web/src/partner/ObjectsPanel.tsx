@@ -18,7 +18,7 @@ import {
   type JobObjectStatus,
   type UserRole,
 } from '../../../../packages/shared/partner';
-import { apiFetchObjectDocument } from './apiClient';
+import { fetchDocumentWithCache } from './docCache';
 import { buildDemoPdfBlob, openPdfBlob } from './demoDocuments';
 import { documentOpenPolicy } from './roomDocuments';
 import { answersFromStoredRoom, roomStubFromLabel } from './roomLink';
@@ -45,6 +45,8 @@ import { assigneeCandidates, assigneeRoleLabel, deleteProjectWarning, problemome
 import { navigateProject, parseProjectHash, PROJECT_TABS, type ProjectRoute } from './projectRoute';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { RoomPhotoReport } from './photos/RoomPhotoReport';
+import { RoomNotes } from './RoomNotes';
+import { roleChangesRoomStage } from '../../../../packages/shared/roomStage.js';
 import { buildKpModel, kpRooms } from './kp/kpModel';
 import { renderKpPdf } from './kp/kpPdf';
 import { projectManagerContact } from '../../../../packages/shared/clientPhone.js';
@@ -340,7 +342,7 @@ export function ObjectsPanel({
         navigateProject({ kind: 'room', projectId: saved.projectId, roomId: saved.id }, 'replace');
       }
       if (next.assignedTo) await fillProjectAssignee(saved, next.assignedTo);
-      setMsg('Сохранено');
+      setMsg(saved.pendingSync ? 'Сохранено на телефоне. Отправим, когда появится связь.' : 'Сохранено');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Ошибка');
     } finally {
@@ -435,7 +437,7 @@ export function ObjectsPanel({
     }
     if (doc.demo) return buildDemoPdfBlob(obj, doc, { hidePrices: false });
     const local = doc.dataBase64 || loadLocalDocBytes(doc.id);
-    const pdfBase64 = local || (await apiFetchObjectDocument(obj.id, doc.id)).pdfBase64;
+    const pdfBase64 = local || (await fetchDocumentWithCache(obj.id, doc.id)).pdfBase64;
     const bin = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
     return new Blob([bin], { type: 'application/pdf' });
   }
@@ -686,7 +688,7 @@ export function ObjectsPanel({
       ) : null}
       {!api.online ? (
         <p className={styles.flash} role="status">
-          Нет сети — показаны комнаты, сохранённые на устройстве.
+          Нет связи — показаны комнаты с телефона. Всё, что вы добавите, сохранится и уйдёт на сервер само.
         </p>
       ) : null}
 
@@ -969,12 +971,44 @@ export function ObjectsPanel({
                   }
                 }}
               />
+            ) : roleChangesRoomStage(user.role) ? (
+              <>
+                {/* Замерщик сам отмечает «Замер» и может вернуть «Черновик»; работает и без связи. */}
+                <StageTrack stages={stages} groupLabel="Этапы комнаты" refused={refused} />
+                <div className={card.measurerStage} data-measurer-stage>
+                  {selected.status === 'draft' ? (
+                    <button
+                      type="button"
+                      className={styles.primary}
+                      disabled={pendingId === selected.id}
+                      onClick={() => void patch(selected, { status: 'measured' })}
+                    >
+                      Замер сделан
+                    </button>
+                  ) : selected.status === 'measured' ? (
+                    <button
+                      type="button"
+                      className={styles.ghost}
+                      disabled={pendingId === selected.id}
+                      onClick={() => void patch(selected, { status: 'draft' })}
+                    >
+                      Вернуть в «Черновик»
+                    </button>
+                  ) : null}
+                  <p className={styles.hint}>
+                    {selected.status === 'draft' || selected.status === 'measured'
+                      ? 'Этап «Замер» вы отмечаете сами. Дальше этапы меняет менеджер или владелец.'
+                      : 'Статус меняет менеджер или владелец.'}
+                  </p>
+                </div>
+              </>
             ) : (
               <>
                 <StageTrack stages={stages} groupLabel="Этапы комнаты" refused={refused} />
                 <p className={styles.hint}>Статус меняет менеджер или владелец.</p>
               </>
             )}
+
             {selected.status === 'closed' ? (
               <p
                 className={selected.refusal ? styles.refusalNote : styles.hint}
@@ -1045,6 +1079,8 @@ export function ObjectsPanel({
             </div>
 
             <div className={card.column}>
+              <RoomNotes room={selected} />
+
               <CardSection title="Команда">
                 {canAssign && staff.length ? (
                   <AssigneeField

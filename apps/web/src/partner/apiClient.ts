@@ -11,6 +11,7 @@ import type {
   UserRole,
 } from '../../../../packages/shared/partner';
 import type { PhotoStage } from '../../../../packages/shared/roomPhotos.js';
+import type { RoomNote } from '../../../../packages/shared/roomNotes.js';
 import { loadToken, saveToken } from './localStore';
 import type {
   TrainingCompanyRow,
@@ -30,10 +31,13 @@ export function hasRemoteApi(): boolean {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Тело ответа с ошибкой: например, code и object при конфликте этапа (409). */
+  data: Record<string, unknown> | null;
+  constructor(status: number, message: string, data: Record<string, unknown> | null = null) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -103,7 +107,7 @@ async function rawRequest<T>(
     if (res.status === 304) return { status: 304, data: {} as T, etag: res.headers.get('ETag') };
     const data = (await res.json().catch(() => ({}))) as T & { message?: string };
     if (!res.ok) {
-      lastError = new ApiError(res.status, data.message || `Ошибка ${res.status}`);
+      lastError = new ApiError(res.status, data.message || `Ошибка ${res.status}`, data as Record<string, unknown>);
       const retryable = RETRY_STATUSES.has(res.status) || (res.status === 429 && attempts > 1);
       if (!retryable || attempt === attempts - 1) throw lastError;
       await sleep(retryDelayMs(attempt, res.headers.get('Retry-After')));
@@ -761,6 +765,8 @@ export async function apiTrainingUser(userId: string): Promise<TrainingUserView>
 
 export interface RoomPhoto {
   id: string;
+  /** Идентификатор с устройства: по нему фото из очереди узнаётся после отправки. */
+  clientId?: string;
   stage: PhotoStage;
   caption: string;
   createdAt: string;
@@ -812,7 +818,7 @@ export async function apiListRoomPhotos(objectId: string, signal?: AbortSignal):
  */
 export function apiUploadRoomPhoto(
   objectId: string,
-  input: { stage: PhotoStage; caption: string; image: string; thumb: string },
+  input: { stage: PhotoStage; caption: string; image: string; thumb: string; clientId?: string },
   onProgress?: (fraction: number) => void,
 ): Promise<RoomPhoto> {
   const base = apiBase();
@@ -844,6 +850,17 @@ export function apiUploadRoomPhoto(
       }
     };
     xhr.send(JSON.stringify(input));
+  });
+}
+
+/** Заметка к комнате. Повтор с тем же clientId возвращает уже сохранённую. */
+export async function apiAddRoomNote(
+  objectId: string,
+  input: { text: string; clientId: string; at: string },
+): Promise<{ note: RoomNote; notes: RoomNote[] }> {
+  return request(`/objects/${encodeURIComponent(objectId)}/notes`, {
+    method: 'POST',
+    body: JSON.stringify(input),
   });
 }
 
