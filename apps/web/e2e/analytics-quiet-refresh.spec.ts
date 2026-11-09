@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const SHOT =
   process.env.ANALYTICS_QUIET_SHOT_DIR ||
-  path.resolve('/workspace/handover/screenshots-analytics-quiet-refresh');
+  path.join(process.cwd(), 'test-results', 'analytics-quiet-refresh-shots');
 
 async function openAnalytics(page: Page, role: 'owner' | 'admin' = 'owner') {
   await demoSignIn(page, role);

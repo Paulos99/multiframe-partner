@@ -274,7 +274,8 @@ test('админ СТП: «Фото отчёты» внутри аналитик
   await expect(page).toHaveURL(/#analytics\/photo-reports$/);
   await expect(page.getByRole('tab', { name: 'Фото отчёты', exact: true })).toHaveAttribute('aria-selected', 'true');
   const cases = page.getByTestId('photo-cases');
-  await expect(cases.getByRole('heading', { name: 'Фото отчёты', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Фото отчёты', exact: true })).toBeVisible();
+  await expect(cases).toBeVisible();
   await expect(cases.getByTestId('case-card')).toHaveCount(2, { timeout: 20000 });
   await shot(page, 'item9-photo-reports-desktop.png');
   const complete = cases.getByTestId('case-card').filter({ hasText: 'Спальня' });
