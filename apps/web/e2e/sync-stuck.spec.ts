@@ -1,17 +1,15 @@
 import { mkdirSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
 
 /**
  * Застрявшие PDF в очереди: «Отправить сейчас» снимает окончательные ошибки,
  * полоса на ПК пишет «На этом компьютере», а не «На телефоне».
  */
-const shots = process.env.REVIEW_SHOTS_DIR || '/workspace/handover/screenshots-sync-stuck';
-mkdirSync(shots, { recursive: true });
+const shots = process.env.REVIEW_SHOTS_DIR;
+if (shots) mkdirSync(shots, { recursive: true });
 
 async function shot(page: Page, name: string) {
-  await page.screenshot({ path: `${shots}/${name}`, fullPage: true });
+  if (shots) await page.screenshot({ path: `${shots}/${name}`, fullPage: true });
 }
 
 async function enter(page: Page, login: string) {
@@ -44,7 +42,6 @@ test('застрявшие PDF: полоса на ПК, «Отправить с�
         lastError: 'Комната не найдена',
       }));
       localStorage.setItem('mf_partner_doc_queue_v1', JSON.stringify(docs));
-      // Свежая синхронизация, чтобы полоса шла только от очереди, а не «больше суток».
       localStorage.setItem(
         'mf_partner_last_sync_v1',
         JSON.stringify({ ui_measurer: new Date().toISOString() }),
@@ -63,7 +60,6 @@ test('застрявшие PDF: полоса на ПК, «Отправить с�
   await shot(page, 'sync-stuck-before.png');
 
   await banner.getByRole('button', { name: 'Отправить сейчас' }).click();
-  // Окончательная ошибка (комнаты нет) снимает собираемые PDF.
   await expect(banner).toHaveCount(0, { timeout: 30000 });
   await expect(page.getByTestId('sync-status').first()).toHaveAttribute('aria-label', 'Всё отправлено', {
     timeout: 15000,
