@@ -41,7 +41,7 @@ import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
 import { ProjectDesk } from './ProjectDesk';
 import { CloseDialog } from './CloseDialog';
 import { refusalLine, roomStageLabel } from './closeOutcome';
-import { assigneeCandidates, assigneeRoleLabel, deleteProjectWarning, roomTitle } from './projectDesk';
+import { assigneeCandidates, assigneeRoleLabel, deleteProjectWarning, problemomerLine, roomTitle } from './projectDesk';
 import { navigateProject, parseProjectHash, PROJECT_TABS, type ProjectRoute } from './projectRoute';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { RoomPhotoReport } from './photos/RoomPhotoReport';
@@ -51,6 +51,8 @@ import { projectManagerContact } from '../../../../packages/shared/clientPhone.j
 import { isDemoModeEnabled } from './demoMode';
 import type { Project } from '../../../../packages/shared/partner';
 import styles from './partner.module.css';
+import { CardSection, FactGrid, NextStep, StageTrack, cardStyles as card, type Fact } from './CardParts';
+import { ROOM_STAGES, roomNextStep, stageStates } from './cardView';
 
 const STATUSES: JobObjectStatus[] = ['draft', 'measured', 'quote_sent', 'install', 'closed'];
 
@@ -119,15 +121,18 @@ function ObjectDocuments({
   // КП собирается на весь проект и живёт во вкладке «Документы» проекта.
   const docs = visibleDocuments(obj.documents).filter((doc) => doc.kind !== 'offer');
   return (
-    <section className={styles.docBlock} aria-label="Документы" data-doc-block>
-      <h4 className={styles.docBlockTitle}>Документы</h4>
-      <span className={styles.hint}>
+    <section className={`${card.section} ${styles.docBlock}`} aria-label="Документы" data-doc-block>
+      <div className={card.sectionHead}>
+        <h2 className={card.sectionTitle}>Документы</h2>
+        {docs.length ? <span className={styles.hint}>{docs.length === 1 ? '1 файл' : `${docs.length} ${docs.length < 5 ? 'файла' : 'файлов'}`}</span> : null}
+      </div>
+      <p className={card.sectionHint}>
         {docs.length
           ? hidePrices
-            ? 'Схема, материалы и количества. Цен в этих файлах нет. Клиенту файл уходит только по кнопке «Клиенту».'
-            : '«Смета и схема монтажа» — цены, количество и раскладка. «Акустический профиль» — что изменится в комнате. Само никому не уходит: клиенту — только по кнопке «Клиенту».'
+            ? 'Схема, материалы и количества, без цен. Клиенту файл уходит только по кнопке «Клиенту».'
+            : 'Сами файлы никому не уходят: клиенту — только по кнопке «Клиенту».'
           : 'Смета и схема монтажа появится после PDF в калькуляторе, акустический профиль — после PDF в Проблемомере. Файл лежит в комнате, пока вы его не отправите.'}
-      </span>
+      </p>
       {docs.length ? (
         <ul className={styles.docList}>
           {docs.map((doc, index) => {
@@ -201,15 +206,6 @@ function ObjectDocuments({
         </ul>
       ) : null}
     </section>
-  );
-}
-
-function StatusBadge({ status, refusal }: { status: JobObjectStatus; refusal?: JobObject['refusal'] }) {
-  const label = roomStageLabel({ status, refusal });
-  return (
-    <StatusSwap statusKey={`${status}${refusal ? ':refusal' : ''}`} className={styles.badge}>
-      {label}
-    </StatusSwap>
   );
 }
 
@@ -683,7 +679,7 @@ export function ObjectsPanel({
         ) : null}
       </div>
       ) : null}
-      {reminder ? (
+      {showDesk && reminder ? (
         <p className={styles.reminder} role="status">
           {reminder}
         </p>
@@ -871,7 +867,35 @@ export function ObjectsPanel({
       ) : null}
 
       {route.kind === 'room' && !route.view && selected && selectedCard
-        ? (
+        ? (() => {
+            const project = selectedCard.project || api.projects.find((item) => item.id === selected.projectId) || null;
+            const projectName = project?.name || selectedCard.title || 'Проект';
+            const client = (project?.clientName || selected.clientName || '').trim();
+            const place = [selected.address || project?.address, selected.city || project?.city].filter(Boolean).join(', ');
+            const next = roomNextStep(selected, canMove);
+            const assignee = staff.find((person) => person.id === selected.assignedTo);
+            const refused = selected.status === 'closed' && Boolean(selected.refusal);
+            const stages = ROOM_STAGES.map((key, index) => ({
+              key,
+              label: JOB_OBJECT_STATUS_LABELS[key],
+              state: stageStates(ROOM_STAGES, selected.status)[index]!,
+            }));
+            const runNext = () => {
+              if (next.action === 'area' || next.action === 'diagnosis') api.requestDiagnosis(selected.id);
+              else if (next.action === 'calculator') api.requestCalculator(selected.id);
+              else if (next.action === 'finish') setClosingRoom(selected);
+              else if (next.action === 'offer' && selected.projectId) navigateProject({ kind: 'project', projectId: selected.projectId, tab: 'documents' });
+            };
+            const facts: Fact[] = [
+              { key: 'area', label: 'Площадь', value: selected.room.areaM2 != null ? `${selected.room.areaM2} м²` : 'Не указана' },
+              { key: 'panels', label: 'Панели', value: selected.estimate ? `${selected.estimate.panels} шт.` : 'Нет расчёта' },
+              ...(selected.estimate ? [{ key: 'dowels', label: 'Дюбели', value: `${selected.estimate.dowels} шт.` }] : []),
+              ...(!hideMoney && selected.estimate?.totalCost != null
+                ? [{ key: 'total', label: 'Итого комнаты', value: formatRub(selected.estimate.totalCost) }]
+                : []),
+              { key: 'comfort', label: 'Проблемомер', value: problemomerLine(selected), wide: true },
+            ];
+            return (
         <section className={styles.roomPage} aria-label="Комната">
           <nav className={styles.crumbs} aria-label="Путь">
             <button type="button" onClick={() => navigateProject({ kind: 'desk' }, 'replace')}>
@@ -879,240 +903,227 @@ export function ObjectsPanel({
             </button>
             <span aria-hidden="true">/</span>
             <button type="button" onClick={closeRoom}>
-              {selectedCard.project?.name || selectedCard.title}
+              {projectName}
             </button>
             <span aria-hidden="true">/</span>
             <span>{roomTitle(selected)}</span>
           </nav>
-            <div className={styles.blockHead}>
+
+          <header className={card.hero} data-room-hero>
+            <div className={card.heroTop}>
               <div>
-                <p className={styles.eyebrow}>Комната</p>
-                <h1>{roomTitle(selected)}</h1>
-                <p className={styles.lead}>
-                  {[
-                    [selected.address, selected.city].filter(Boolean).join(', ') || 'Адрес не заполнен',
-                    roomStageLabel(selected),
-                  ].join(' · ')}
-                </p>
-              </div>
-              <button type="button" className={styles.ghost} onClick={closeRoom}>
-                К проекту
-              </button>
-            </div>
-            {selectedRooms.length > 1 ? (
-            <div className={listStyles.rooms}>
-              {selectedRooms.map((room) => (
-                <button
-                  key={room.id}
-                  type="button"
-                  className={`${listStyles.room} ${selectedId === room.id ? listStyles.roomOn : ''}`}
-                  onClick={() => {
-                    if (room.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: room.id }, 'replace');
-                  }}
-                >
-                  <span>
-                    <strong>{room.roomName || room.clientName || 'Комната'}</strong>
-                    <span className={listStyles.meta}>
-                      {room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'Площадь не указана'} · {roomStageLabel(room)}
-                    </span>
+                <p className={card.heroEyebrow}>Комната · {projectName}</p>
+                <h1 className={card.heroTitle}>
+                  {roomTitle(selected)}
+                  <span className={card.stageBadge} data-tone={refused ? 'refused' : undefined}>
+                    <StatusSwap statusKey={`${selected.status}${refused ? ':refusal' : ''}`}>{roomStageLabel(selected)}</StatusSwap>
                   </span>
-                  <StatusBadge status={room.status} refusal={room.refusal} />
+                </h1>
+                <ul className={card.heroMeta}>
+                  {client ? <li>{client}</li> : null}
+                  <li>{place || 'Адрес не заполнен'}</li>
+                  {roomPhone ? (
+                    <li>
+                      <a href={telHref(roomPhone)} data-room-call>
+                        Позвонить {roomPhone}
+                      </a>
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+              <div className={card.heroActions}>
+                <button type="button" className={styles.ghost} onClick={closeRoom}>
+                  К проекту
                 </button>
-              ))}
+              </div>
             </div>
-            ) : null}
-
-            {selectedRooms.length > 1 ? (
-              <>
-                <h3>
-                  {selected.roomName || selected.clientName || 'Комната'} · {roomStageLabel(selected)}
-                </h3>
-                <p className={styles.lead}>
-                  {[selected.address, selected.city].filter(Boolean).join(' · ') || 'Добавить адрес'}
-                </p>
-              </>
-            ) : (
-              <p className={styles.hint}>{roomStageLabel(selected)}</p>
-            )}
-            {selected.room.areaM2 == null ? (
-              <div className={styles.areaCallout}>
-                <p>
-                  Площадь комнаты не указана. Задайте её в Проблемомере — значение сохранится в эту комнату и попадёт в калькулятор.
-                </p>
-                <button type="button" className={styles.primary} onClick={() => api.requestDiagnosis(selected.id)}>
-                  Указать площадь в Проблемомере
+            <NextStep text={next.text}>
+              {next.button ? (
+                <button type="button" className={styles.primary} data-next-action={next.action || undefined} onClick={runNext}>
+                  {next.button}
                 </button>
-              </div>
-            ) : null}
-            {roomPhone ? (
-              <a className={styles.callLink} href={telHref(roomPhone)}>
-                Позвонить {roomPhone}
-              </a>
-            ) : null}
-            {selected.estimate ? (
-              <div className={styles.grid2}>
-                <div className={styles.field}>
-                  <span>Панели</span>
-                  <strong>{selected.estimate.panels} шт.</strong>
-                </div>
-                <div className={styles.field}>
-                  <span>Дюбели</span>
-                  <strong>{selected.estimate.dowels} шт.</strong>
-                </div>
-                {!hideMoney && selected.estimate.totalCost != null ? (
-                  <div className={styles.field}>
-                    <span>Итого комнаты</span>
-                    <strong>{formatRub(selected.estimate.totalCost)}</strong>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <p className={styles.hint}>Смета ещё не посчитана</p>
-            )}
-
-            {profileAttach === 'pending' ? (
-              <p className={styles.hint} role="status" data-testid="room-profile-pending">
-                Прикладываем «Профиль» к комнате…
-              </p>
-            ) : profileAttach === 'failed' ? (
-              <p className={styles.hint} role="status">
-                Не удалось приложить «Профиль». Откройте Проблемомер этой комнаты и сохраните ещё раз.
-              </p>
-            ) : null}
-
-            <ObjectDocuments
-              obj={selected}
-              busyId={docBusy}
-              hidePrices={hideMoney}
-              onOpen={(doc, download) => void openDocument(selected, doc, download)}
-              onResults={(doc) =>
-                navigateProject({
-                  kind: 'room',
-                  projectId: route.kind === 'room' ? route.projectId : selected.projectId || '',
-                  roomId: selected.id,
-                  view: documentDisplayKind(doc.kind) === 'profile' ? 'profile' : 'estimate',
-                })
-              }
-              onShare={(doc) => void shareDocument(selected, doc)}
-              onRebuild={(doc) => void rebuildDocument(selected, doc)}
-            />
-
-            <RoomPhotoReport key={selected.id} objectId={selected.id} />
-
-            <div className={styles.navRow}>
+              ) : null}
               <button type="button" className={styles.ghost} onClick={() => api.requestDiagnosis(selected.id)}>
                 Проблемомер
               </button>
               <button type="button" className={styles.ghost} onClick={() => api.requestCalculator(selected.id)}>
                 Калькулятор
               </button>
-            </div>
-
-            {canCreate && (api.projects.length || selected.clientName || selectedCard.project) ? (
-              <label className={styles.field}>
-                Проект
-                <span className={styles.hint}>Комнату можно перенести в другой проект своей компании.</span>
-                <select
-                  aria-label="Проект"
-                  value={
-                    selected.projectId && api.projects.some((project) => project.id === selected.projectId)
-                      ? selected.projectId
-                      : selected.projectId || '__current'
-                  }
-                  disabled={pendingId === selected.id}
-                  onChange={(event) => {
-                    if (event.target.value && event.target.value !== '__current') {
-                      void patch(selected, { projectId: event.target.value });
+            </NextStep>
+            {canMove ? (
+              <StageTrack
+                stages={stages}
+                groupLabel="Сменить статус"
+                refused={refused}
+                disabled={pendingId === selected.id}
+                onPick={(s) => {
+                  if (s === selected.status) return;
+                  if (s === 'closed') setClosingRoom(selected);
+                  else {
+                    void patch(selected, { status: s });
+                    if (s === 'measured') {
+                      trackPartnerAnalytics({ tool: 'cabinet', action: 'client_agreed' });
+                    } else if (s === 'install') {
+                      trackPartnerAnalytics({ tool: 'cabinet', action: 'quote_accepted' });
                     }
+                  }
+                }}
+              />
+            ) : (
+              <>
+                <StageTrack stages={stages} groupLabel="Этапы комнаты" refused={refused} />
+                <p className={styles.hint}>Статус меняет менеджер или владелец.</p>
+              </>
+            )}
+            {selected.status === 'closed' ? (
+              <p
+                className={selected.refusal ? styles.refusalNote : styles.hint}
+                data-outcome={selected.refusal ? 'refused' : 'completed'}
+              >
+                {selected.refusal ? refusalLine(selected) : 'Завершён: монтаж выполнен.'}
+              </p>
+            ) : null}
+          </header>
+
+          {selectedRooms.length > 1 ? (
+            <nav className={card.roomSwitch} aria-label="Комнаты проекта">
+              {selectedRooms.map((room) => (
+                <button
+                  key={room.id}
+                  type="button"
+                  className={card.roomChip}
+                  aria-current={selectedId === room.id ? 'page' : undefined}
+                  onClick={() => {
+                    if (room.projectId) navigateProject({ kind: 'room', projectId: room.projectId, roomId: room.id }, 'replace');
                   }}
                 >
-                  {selected.projectId && api.projects.some((project) => project.id === selected.projectId) ? null : (
-                    <option value={selected.projectId || '__current'}>
-                      {selectedCard.project?.name || selected.clientName || selectedCard.title || 'Этот проект'}
-                    </option>
-                  )}
-                  {api.projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name || project.clientName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-
-            {canMove ? (
-              <div className={styles.field}>
-                Статус
-                <div className={styles.chipRow} role="group" aria-label="Сменить статус">
-                  {STATUSES.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className={selected.status === s ? styles.chipOn : styles.chip}
-                      aria-pressed={selected.status === s}
-                      disabled={pendingId === selected.id}
-                      onClick={() => {
-                        if (s === selected.status) return;
-                        if (s === 'closed') setClosingRoom(selected);
-                        else {
-                          void patch(selected, { status: s });
-                          if (s === 'measured') {
-                            trackPartnerAnalytics({ tool: 'cabinet', action: 'client_agreed' });
-                          } else if (s === 'install') {
-                            trackPartnerAnalytics({ tool: 'cabinet', action: 'quote_accepted' });
-                          }
-                        }
-                      }}
-                    >
-                      {JOB_OBJECT_STATUS_LABELS[s]}
-                    </button>
-                  ))}
-                </div>
-                {selected.status === 'closed' ? (
-                  <p
-                    className={selected.refusal ? styles.refusalNote : styles.hint}
-                    data-outcome={selected.refusal ? 'refused' : 'completed'}
-                  >
-                    {selected.refusal ? refusalLine(selected) : 'Завершён: монтаж выполнен.'}
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <p className={styles.hint}>Статус меняет менеджер или владелец.</p>
-            )}
-
-            {canAssign && staff.length ? (
-              <AssigneeField
-                room={selected}
-                staff={staff}
-                disabled={pendingId === selected.id}
-                onChange={(assignedTo) => void patch(selected, { assignedTo })}
-              />
-            ) : null}
-
-            {selected.clientSummary && !hideMoney ? (
-              <div className={styles.field}>
-                Сводка для клиента
-                <pre className={styles.summaryBox}>{selected.clientSummary}</pre>
-              </div>
-            ) : null}
-
-            {(selected.history || []).length ? (
-              <details className={styles.docBlock}>
-                <summary>История</summary>
-                <ObjectHistory key={selected.id} entries={selected.history || []} people={[user, ...staff]} />
-              </details>
-            ) : null}
-
-            {canDelete ? (
-              <div className={styles.navRow}>
-                <button type="button" className={styles.danger} onClick={() => setToDelete(selected)}>
-                  Удалить комнату
+                  <strong>{room.roomName || room.clientName || 'Комната'}</strong>
+                  <span>
+                    {room.room.areaM2 != null ? `${room.room.areaM2} м²` : 'Площадь не указана'} · {roomStageLabel(room)}
+                  </span>
                 </button>
-              </div>
-            ) : null}
+              ))}
+            </nav>
+          ) : null}
+
+          <div className={card.columns}>
+            <div className={card.column}>
+              <CardSection title="Главное о комнате" data={{ 'data-room-facts': '' }}>
+                <FactGrid label="Главное о комнате" facts={facts} />
+              </CardSection>
+
+              {/* Место для блока даты и времени замера и монтажа (календарь). */}
+
+              {profileAttach === 'pending' ? (
+                <p className={styles.hint} role="status" data-testid="room-profile-pending">
+                  Прикладываем «Профиль» к комнате…
+                </p>
+              ) : profileAttach === 'failed' ? (
+                <p className={styles.hint} role="status">
+                  Не удалось приложить «Профиль». Откройте Проблемомер этой комнаты и сохраните ещё раз.
+                </p>
+              ) : null}
+
+              <ObjectDocuments
+                obj={selected}
+                busyId={docBusy}
+                hidePrices={hideMoney}
+                onOpen={(doc, download) => void openDocument(selected, doc, download)}
+                onResults={(doc) =>
+                  navigateProject({
+                    kind: 'room',
+                    projectId: route.kind === 'room' ? route.projectId : selected.projectId || '',
+                    roomId: selected.id,
+                    view: documentDisplayKind(doc.kind) === 'profile' ? 'profile' : 'estimate',
+                  })
+                }
+                onShare={(doc) => void shareDocument(selected, doc)}
+                onRebuild={(doc) => void rebuildDocument(selected, doc)}
+              />
+
+              <RoomPhotoReport key={selected.id} objectId={selected.id} />
+            </div>
+
+            <div className={card.column}>
+              <CardSection title="Команда">
+                {canAssign && staff.length ? (
+                  <AssigneeField
+                    room={selected}
+                    staff={staff}
+                    disabled={pendingId === selected.id}
+                    onChange={(assignedTo) => void patch(selected, { assignedTo })}
+                  />
+                ) : (
+                  <FactGrid
+                    label="Команда"
+                    facts={[{ key: 'assignee', label: 'Исполнитель', value: assignee?.displayName || (selected.assignedTo ? 'Назначен' : 'Не назначен'), wide: true }]}
+                  />
+                )}
+              </CardSection>
+
+              {selected.clientSummary && !hideMoney ? (
+                <details className={card.section}>
+                  <summary className={card.sectionTitle}>Сводка для клиента</summary>
+                  <pre className={styles.summaryBox}>{selected.clientSummary}</pre>
+                </details>
+              ) : null}
+
+              {(selected.history || []).length ? (
+                <details className={card.section}>
+                  <summary className={card.sectionTitle}>История</summary>
+                  <ObjectHistory key={selected.id} entries={selected.history || []} people={[user, ...staff]} />
+                </details>
+              ) : null}
+
+              {(canCreate && (api.projects.length || selected.clientName || selectedCard.project)) || canDelete ? (
+                <CardSection title="Управление комнатой">
+                  <div className={card.manage}>
+                    {canCreate && (api.projects.length || selected.clientName || selectedCard.project) ? (
+                      <label className={styles.field}>
+                        Проект
+                        <span className={styles.hint}>Комнату можно перенести в другой проект своей компании.</span>
+                        <select
+                          aria-label="Проект"
+                          value={
+                            selected.projectId && api.projects.some((item) => item.id === selected.projectId)
+                              ? selected.projectId
+                              : selected.projectId || '__current'
+                          }
+                          disabled={pendingId === selected.id}
+                          onChange={(event) => {
+                            if (event.target.value && event.target.value !== '__current') {
+                              void patch(selected, { projectId: event.target.value });
+                            }
+                          }}
+                        >
+                          {selected.projectId && api.projects.some((item) => item.id === selected.projectId) ? null : (
+                            <option value={selected.projectId || '__current'}>
+                              {selectedCard.project?.name || selected.clientName || selectedCard.title || 'Этот проект'}
+                            </option>
+                          )}
+                          {api.projects.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name || item.clientName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    {canDelete ? (
+                      <div>
+                        <button type="button" className={styles.danger} onClick={() => setToDelete(selected)}>
+                          Удалить комнату
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </CardSection>
+              ) : null}
+            </div>
+          </div>
         </section>
-      )
+            );
+          })()
         : route.kind === 'room' && !(route.view && selected && selectedCard) ? (
           <section className={styles.roomPage} aria-label="Комната">
             <p className={styles.lead}>{api.objectsLoading ? 'Открываем комнату…' : 'Комната не найдена.'}</p>

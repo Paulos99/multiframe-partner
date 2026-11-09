@@ -3815,3 +3815,24 @@ div.drillPerson {
   grid-column: 1 / -1;
   margin: 0;
 }
+
+/* Документы в карточке комнаты: строки на мягком фоне внутри раздела, кнопки компактные. */
+.docBlock .docRow {
+  align-items: center;
+  background: var(--cab-subtle);
+}
+
+.docBlock .docRowStale {
+  background: color-mix(in srgb, var(--cab-danger, #c0392b) 9%, var(--cab-card, #fff));
+}
+
+.docBlock .docActions .ghost {
+  min-height: 38px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.docBlock .docActions .rebuildBtn {
+  min-height: 38px;
+}
