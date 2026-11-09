@@ -786,7 +786,7 @@ function objectVisibleTo(user, obj) {
   return false;
 }
 
-/** Бригада получает количества без цен и сумм. Замерщик и остальные роли видят расчёт целиком. */
+/** Расчёт целиком (с ценами) видят все роли: правило estimateForRole в packages/shared/projectAccess.js. */
 function publicObject(obj, role) {
   // Список фото с ключами бакета наружу не уходит: только число по этапам, которые видит роль.
   const { photos: _photos, photoReport: _photoReport, ...rest } = obj;

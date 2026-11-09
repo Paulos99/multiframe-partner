@@ -85,14 +85,12 @@ test('демо ?demo=1 группирует комнаты и открывает
   await page.screenshot({ path: `${shots}/07-mobile.png` });
 });
 
-test('демо-бригада видит список комнат без канбана и без сумм', async ({ page }) => {
+test('демо-бригада видит список комнат без канбана, с суммами', async ({ page }) => {
   await enterCapital(page, 'Монтажник');
   const desk = page.getByRole('region', { name: 'Список проектов' });
   await expect(page.getByRole('group', { name: 'Вид проектов' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
   await expect(page.locator('[data-project-stage]')).toHaveCount(0);
-  await expect(desk.getByRole('columnheader', { name: 'Сумма' })).toHaveCount(0);
-  await expect(desk).not.toContainText('₽');
 
   const open = desk.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Сидорова М.', exact: true }) });
   await expect(open.getByRole('button', { name: 'Детская' })).toContainText('ул. Тверская, 8');
@@ -111,7 +109,8 @@ test('демо-бригада видит список комнат без кан
   await open.getByRole('button', { name: 'Детская' }).click();
   const room = page.getByRole('region', { name: 'Комната' });
   await expect(room).toBeVisible();
-  await expect(room).not.toContainText('₽');
-  await expect(room.getByText('Итого комнаты')).toHaveCount(0);
+  // Цены видят все роли, монтажник тоже.
+  await expect(room.getByText('Итого комнаты')).toBeVisible();
+  await expect(room).toContainText('₽');
   await expect(room.getByText('Панели', { exact: true })).toBeVisible();
 });

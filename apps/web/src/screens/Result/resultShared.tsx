@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { roleSeesProjectMoney } from '../../../../../packages/shared/partner';
 import { ensureClientLinkUrl } from '../../partner/clientLink';
 import { usePartner } from '../../partner/PartnerContext';
 import { SoundPressureHelpButton } from '../../ui/SoundPressureHelp';
@@ -343,7 +344,7 @@ export function useResultProfile() {
   function openCalc() {
     track('pm_cta_calc', eventParamsFromSession(session));
     const url = new URL(calcUrl, window.location.origin);
-    if (user?.role === 'crew') url.searchParams.set('hidePrices', '1');
+    if (!roleSeesProjectMoney(user?.role)) url.searchParams.set('hidePrices', '1');
     window.open(url.toString(), '_blank', 'noopener,noreferrer');
   }
 
@@ -366,7 +367,7 @@ export function useResultProfile() {
       );
       const { blob, filename } = await renderAcousticProfilePdf(session, {
         compact: true,
-        hidePrices: user?.role === 'crew',
+        hidePrices: !roleSeesProjectMoney(user?.role),
         shareUrl,
       });
       saveBlob(blob, filename);

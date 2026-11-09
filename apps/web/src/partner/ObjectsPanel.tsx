@@ -49,7 +49,7 @@ import { buildKpModel, kpRooms } from './kp/kpModel';
 import { renderKpPdf } from './kp/kpPdf';
 import { projectManagerContact } from '../../../../packages/shared/clientPhone.js';
 import { isDemoModeEnabled } from './demoMode';
-import type { Project } from '../../../../packages/shared/partner';
+import { roleSeesProjectMoney, type Project } from '../../../../packages/shared/partner';
 import styles from './partner.module.css';
 import { CardSection, FactGrid, NextStep, StageTrack, cardStyles as card, type Fact } from './CardParts';
 import { ROOM_STAGES, roomNextStep, stageStates } from './cardView';
@@ -233,7 +233,7 @@ export function ObjectsPanel({
   const canDelete = canDeleteObjects(user.role);
   const canCreate = canCreateObjects(user.role);
   const canMove = canMoveObjects(user.role);
-  const hideMoney = user.role === 'crew';
+  const hideMoney = !roleSeesProjectMoney(user.role);
   const staff = api.partnerListStaff();
   const [toDelete, setToDelete] = useState<JobObject | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string; rooms: number } | null>(null);
@@ -423,7 +423,7 @@ export function ObjectsPanel({
 
   async function blobForDocument(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
     if (doc.kind === 'offer') {
-      if (documentOpenPolicy(user.role) === 'without-prices') throw new Error('КП доступно владельцу и менеджеру');
+      if (documentOpenPolicy(user.role) === 'without-prices') throw new Error('КП доступно ролям, которые видят цены');
       if (doc.demo) {
         const { project, rooms } = kpInput(doc.projectId || obj.projectId);
         return (await renderKp(project, rooms, true)).file.blob;

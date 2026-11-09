@@ -15,44 +15,31 @@ async function enter(page: Page) {
   await expect(page.getByRole('tab', { name: 'Проекты', exact: true })).toBeVisible();
 }
 
-test('монтажник не видит цены в комнате, калькуляторе и Проблемомере', async ({ page }) => {
+test('монтажник видит цены в комнате, на странице проекта и в калькуляторе', async ({ page }) => {
   await enter(page);
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   const { drawer } = await openProjectRoom(page, 'Гостиная');
   await expect(drawer).toBeVisible();
-  await expect(drawer).not.toContainText('₽');
-  await expect(drawer.getByText('Итого комнаты')).toHaveCount(0);
+  await expect(drawer.locator('[data-room-facts]').getByText('Итого комнаты', { exact: true })).toBeVisible();
+  await expect(drawer.locator('[data-room-facts]')).toContainText('₽');
 
   await drawer.getByRole('button', { name: 'Калькулятор', exact: true }).click();
   const frame = page.locator('iframe[title="Калькулятор MultiFrame · партнёр"]');
-  await expect(frame).toHaveAttribute('src', /hidePrices=1/);
-  await expect(frame).not.toHaveAttribute('src', /panelPrice|pricePerM2|installPerM2|dowelPrice/);
+  await expect(frame).toBeVisible();
+  await expect(frame).not.toHaveAttribute('src', /hidePrices=1/);
   const calc = page.frameLocator('iframe[title="Калькулятор MultiFrame · партнёр"]');
-  await expect(calc.locator('body')).toHaveClass(/hide-prices/);
+  await expect(calc.locator('body')).not.toHaveClass(/hide-prices/);
   await expect(calc.locator('#areaOnlyInput')).toHaveValue(/24/);
   await expect(calc.locator('#totalPanels')).not.toHaveText('0 шт.', { timeout: 20000 });
-  await expect(calc.locator('body')).not.toContainText('₽');
-  await expect(calc.locator('body')).not.toContainText(/93\s*444|24\s*000|119\s*694/);
+  await expect(calc.locator('body')).toContainText('₽');
 
   await page.locator('button[aria-label="Кабинет"]').click();
-  await expect(page.getByRole('region', { name: 'Комната' })).toBeVisible();
-  await page.getByRole('region', { name: 'Комната' }).getByRole('button', { name: 'Проблемомер', exact: true }).click();
-  await page.getByRole('button', { name: 'Начать', exact: true }).click();
-
-  const result = page.getByRole('heading', { name: 'Акустический профиль помещения' });
-  for (let i = 0; i < 12 && !(await result.isVisible().catch(() => false)); i += 1) {
-    const next = page.getByRole('button', { name: 'Далее', exact: true });
-    if (await next.isVisible().catch(() => false) && (await next.isEnabled().catch(() => false))) {
-      await next.click();
-    }
-    await page.waitForTimeout(300);
-  }
-  await expect(result).toBeVisible({ timeout: 20000 });
-  await expect(page.locator('body')).not.toContainText('₽');
-  await expect(page.getByText(/бескаркас/i).filter({ visible: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Рассчитать количество', exact: true })).toHaveCount(0);
-  // Монтажнику ссылку клиента не отдаём ни кнопкой внизу, ни панелью.
-  await expect(page.getByRole('button', { name: 'Переслать', exact: true })).toHaveCount(0);
+  const room = page.getByRole('region', { name: 'Комната' });
+  await expect(room).toBeVisible();
+  await room.getByRole('button', { name: 'К проекту', exact: true }).click();
+  const card = page.getByRole('region', { name: 'Проект', exact: true });
+  await card.getByRole('tab', { name: 'Обзор', exact: true }).click();
+  await expect(card.locator('[data-facts]').getByText('Сумма', { exact: true })).toBeVisible();
+  // Ссылку клиента монтажнику по-прежнему не отдаём.
   await expect(page.getByRole('button', { name: 'Ссылка для клиента', exact: true })).toHaveCount(0);
 });

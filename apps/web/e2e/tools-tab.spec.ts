@@ -77,26 +77,19 @@ test('«Сегодня» по-прежнему открывает оба инс�
   await expect(page.getByRole('button', { name: 'Калькулятор', exact: true })).toBeVisible();
 });
 
-test('монтажник: в «Инструментах» и калькуляторе нет цен', async ({ page }) => {
+test('монтажник: калькулятор в «Инструментах» с ценами', async ({ page }) => {
   await enter(page, 'crew');
   await openTools(page);
-  const section = page.getByRole('region', { name: 'Инструменты' });
-  await expect(section).not.toContainText('₽');
-  await expect(section).not.toContainText(/сумм|смет|прайс|цен/i);
   await page.getByRole('button', { name: 'Открыть Калькулятор', exact: true }).click();
   const frame = page.locator(calcTitle);
   await expect(frame).toBeVisible();
-  await expect(frame).toHaveAttribute('src', /hidePrices=1/);
-  await expect(frame).not.toHaveAttribute('src', /panelPrice|pricePerM2|installPerM2|dowelPrice/);
+  await expect(frame).not.toHaveAttribute('src', /hidePrices=1/);
   const calc = page.frameLocator(calcTitle);
   await expect(calc.getByRole('heading', { name: 'Что вы знаете о помещении?' })).toBeVisible();
-  await expect(calc.locator('body')).toHaveClass(/hide-prices/);
-  await expect(calc.locator('body')).not.toContainText('₽');
-  // Проблемомер без проекта тоже без цен.
+  await expect(calc.locator('body')).not.toHaveClass(/hide-prices/);
   await page.getByRole('button', { name: 'Кабинет', exact: true }).click();
   await page.getByRole('button', { name: 'Открыть Проблемомер', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Начать', exact: true })).toBeVisible();
-  await expect(page.locator('body')).not.toContainText('₽');
 });
 
 for (const role of ['measurer', 'sales'] as const) {

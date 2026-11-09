@@ -23,17 +23,22 @@ const MONEY_KEYS = [
   'installPlusFasteners',
 ];
 
-/** Бригада видит количества, но не цены и суммы. Остальные роли — полный расчёт. */
+/**
+ * Цены и суммы видят все роли, в том числе монтажник (решение владельца, 9 ноября 2026).
+ * Правило в одном месте: если понадобится снова скрыть цены у роли, меняется только roleSeesProjectMoney.
+ */
+export function roleSeesProjectMoney(role) {
+  void role;
+  return true;
+}
+
+/** Расчёт для роли: без цен и сумм только у роли, которой цены не положены. */
 export function estimateForRole(estimate, role) {
   if (estimate == null || typeof estimate !== 'object') return estimate ?? null;
-  if (role !== 'crew') return estimate;
+  if (roleSeesProjectMoney(role)) return estimate;
   const next = { ...estimate };
   for (const key of MONEY_KEYS) delete next[key];
   return next;
-}
-
-export function roleSeesProjectMoney(role) {
-  return role !== 'crew';
 }
 
 /** ГГГГ-ММ-ДД или пусто. Некалендарная дата — ошибка. */

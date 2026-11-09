@@ -159,18 +159,15 @@ test('замерщику: сначала проекты с комнатами н
   assert.equal(crewProjectLists([moved, todo], rooms, '').active.length, 2);
 });
 
-test('бригада не получает суммы, замерщик получает', () => {
+test('суммы получают все роли, монтажник тоже', () => {
   const estimate = { panels: 16, dowels: 4, panelsCost: 100, installCost: 20, totalCost: 120 };
   const crew = estimateForRole(estimate, 'crew');
   assert.equal(crew.panels, 16);
   assert.equal(crew.dowels, 4);
-  assert.equal(crew.totalCost, undefined);
-  assert.equal(crew.panelsCost, undefined);
-  assert.equal(estimate.totalCost, 120);
+  assert.equal(crew.totalCost, 120);
+  assert.equal(crew.panelsCost, 100);
   assert.equal(estimateForRole(estimate, 'measurer').totalCost, 120);
-  assert.equal(roleSeesProjectMoney('measurer'), true);
-  assert.equal(roleSeesProjectMoney('crew'), false);
-  assert.equal(roleSeesProjectMoney('owner'), true);
+  for (const role of ['owner', 'sales', 'measurer', 'crew']) assert.equal(roleSeesProjectMoney(role), true);
 });
 
 test('deleteProjectWarning: считает комнаты и склоняет слово', async () => {

@@ -1,12 +1,12 @@
 import type { JobObjectDocument, UserRole } from '../../../../packages/shared/partner';
-import { visibleDocuments } from '../../../../packages/shared/partner';
+import { roleSeesProjectMoney, visibleDocuments } from '../../../../packages/shared/partner';
 
-/** Монтажник видит схему, материалы и количества, но не цены. */
+/** Цены в документах видят все роли (правило roleSeesProjectMoney). */
 export function shouldHideDocumentPrices(role: UserRole): boolean {
-  return role === 'crew';
+  return !roleSeesProjectMoney(role);
 }
 
-/** Как открывать файл: менеджер получает сохранённый PDF, монтажник — сборку без цен. */
+/** Как открывать файл: с ценами — сохранённый PDF; роли без цен — сборка без цен. */
 export function documentOpenPolicy(role: UserRole): 'priced-file' | 'without-prices' {
   return shouldHideDocumentPrices(role) ? 'without-prices' : 'priced-file';
 }
