@@ -1,4 +1,5 @@
 import { kpStamp } from './kp/kpStamp';
+import { kpNumber } from './kp/kpModel';
 /**
  * Client-side mirror of apps/api/demoSeed.js for offline / local fallback.
  */
@@ -389,7 +390,7 @@ function withDemoKpProject(objects: JobObject[]): JobObject[] {
         createdAt: at,
         createdBy: 'u_sales1',
         kind: 'offer',
-        filename: 'Коммерческое предложение — Чернов А. — ДЕМО-001.pdf',
+        filename: `Коммерческое предложение — Чернов А. — ${kpNumber({ id: 'prj_chernov' }, false, new Date())}.pdf`,
         hasScheme: false,
         panels: rooms.reduce((n, r) => n + (r.estimate?.panels || 0), 0),
         areaM2: rooms.reduce((n, r) => n + (r.room.areaM2 || 0), 0),
