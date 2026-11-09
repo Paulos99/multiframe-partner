@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const password = 'ui-fixture-password-only';
-const shots = process.env.CALENDAR_DND_SHOTS_DIR || '/workspace/handover/screenshots-calendar-dnd';
+const shots = process.env.CALENDAR_DND_SHOTS_DIR;
 
 test.beforeEach(async ({ request }) => {
   await request.post('http://127.0.0.1:4181/__reset');
@@ -23,6 +23,7 @@ async function openCalendar(page: Page) {
 }
 
 async function shot(page: Page, name: string) {
+  if (!shots) return;
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${shots}/${name}.png`, fullPage: false });
 }
