@@ -14,7 +14,7 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { redirectLegacyCasesHash, useCabinetSection } from './analyticsRoute';
 import { CityField } from './CityField';
 import { citiesReady, isKnownCity, loadCities } from './cityCatalog';
-import { trainerHashOpen } from '../trainer/route';
+import { trainerHash, trainerHashOpen, type TrainerRoute } from '../trainer/route';
 import { HelpTrainingPanel } from './HelpTrainingPanel';
 import { AnimatePresence, FadeRise, m, motionPresets } from './motionBits';
 import { ObjectsPanel } from './ObjectsPanel';
@@ -71,6 +71,13 @@ function leaveProjectHash() {
     return;
   }
   navigateHash('', 'replace');
+}
+
+
+/** Открыть занятие тренажёра: хеш + вкладка «Обучение». */
+function openTrainerLesson(setHelp: () => void, route: TrainerRoute) {
+  navigateHash(trainerHash(route));
+  setHelp();
 }
 
 /** Адреса раздела «Компания»: вкладки, карточка сотрудника и старый «#staff». */
@@ -303,6 +310,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
             onProblemomer={() => onNavigate('problemomer')}
             onCalculator={() => onNavigate('calculator')}
             onTraining={() => setTab('help')}
+            onOpenLesson={(route) => openTrainerLesson(() => setTab('help'), route)}
           />
         </TabPanel>
       ) : null}
@@ -768,6 +776,8 @@ function OwnerCabinet({
             }}
             onProblemomer={() => onNavigate('problemomer')}
             onCalculator={onOpenCalc}
+            onTraining={() => setTab('help')}
+            onOpenLesson={(route) => openTrainerLesson(() => setTab('help'), route)}
           />
         </TabPanel>
       ) : null}
@@ -891,6 +901,7 @@ function SalesCabinet({
             onProblemomer={() => onNavigate('problemomer')}
             onCalculator={onOpenCalc}
             onTraining={() => setTab('help')}
+            onOpenLesson={(route) => openTrainerLesson(() => setTab('help'), route)}
           />
         </TabPanel>
       ) : null}
@@ -1015,6 +1026,7 @@ function FieldCabinet({
             onProblemomer={() => onNavigate('problemomer')}
             onCalculator={onOpenCalc}
             onTraining={() => setView('help')}
+            onOpenLesson={(route) => openTrainerLesson(() => setView('help'), route)}
           />
         )}
       </FrameBody>

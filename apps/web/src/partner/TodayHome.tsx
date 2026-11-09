@@ -10,6 +10,8 @@ import { roomDisplayName } from './kanban';
 import { projectStatusLabel, roomProjectStatuses } from './projectDesk';
 import { usePartner } from './PartnerContext';
 import { groupRoomsByProjectStage, nearestFlat, openRoomsForRole } from './todayNearest';
+import { TodayTrainingCard } from './TodayTrainingCard';
+import type { TrainerRoute } from '../trainer/route';
 import styles from './partner.module.css';
 
 function roomTitle(room: JobObject): string {
@@ -34,6 +36,7 @@ export function TodayHome({
   onProblemomer,
   onCalculator,
   onTraining,
+  onOpenLesson,
   onAddPartner,
 }: {
   onOpenRoom?: (id: string) => void;
@@ -42,6 +45,7 @@ export function TodayHome({
   onProblemomer?: () => void;
   onCalculator?: () => void;
   onTraining?: () => void;
+  onOpenLesson?: (route: TrainerRoute) => void;
   onAddPartner?: () => void;
 }) {
   const api = usePartner();
@@ -117,6 +121,8 @@ export function TodayHome({
           </button>
         ) : null}
       </div>
+
+      {onOpenLesson ? <TodayTrainingCard onOpenLesson={onOpenLesson} /> : null}
 
       <div className={styles.todayGrid}>
         <div className={styles.todayCard}>
