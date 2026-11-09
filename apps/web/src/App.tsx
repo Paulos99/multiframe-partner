@@ -6,7 +6,7 @@ import { AppShell } from './app-shell/AppShell';
 import { InstallPromptHost } from './app-shell/InstallAppButton';
 import { SmoothScroll } from './ui/SmoothScroll';
 import { CookieNotice } from './analytics';
-import { isStpManagerRole, type SessionUser } from '../../../packages/shared/partner';
+import { isStpManagerRole, roleSeesProjectMoney, type SessionUser } from '../../../packages/shared/partner';
 import { isCabinetCalcMessage, type CabinetCalcMessage } from './partner/cabinetCalc';
 import { CalcSaveToProject } from './partner/CalcSaveToProject';
 import { canSaveToProject } from './partner/toolSave';
@@ -273,7 +273,7 @@ function PartnerShell() {
       objectId: calcObjectId,
       clientName: calcClientName,
       areaM2: calcRequest?.objectId === calcObjectId ? calcRequest?.areaM2 : null,
-      hidePrices: user.role === 'crew',
+      hidePrices: !roleSeesProjectMoney(user.role),
       saveToProject: canSaveToProject(user.role),
     });
   }, [

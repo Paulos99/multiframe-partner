@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { type JobObject } from '../../../../packages/shared/partner';
+import { roleSeesProjectMoney, type JobObject } from '../../../../packages/shared/partner';
 import { renderAcousticProfilePdf } from '../state/reportPdf';
 import { useSession } from '../state/SessionContext';
 import { buildClientSummary } from '../state/session';
@@ -163,7 +163,7 @@ export function SaveObjectCard() {
       );
       const { blob } = await renderAcousticProfilePdf(session, {
         compact: true,
-        hidePrices: user?.role === 'crew',
+        hidePrices: !roleSeesProjectMoney(user?.role),
         shareUrl,
       });
       const saved = await attachProfile(obj, await blobToBase64(blob));

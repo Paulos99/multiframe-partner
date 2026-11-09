@@ -34,12 +34,12 @@ test('PDF проблемомера и калькулятора лежит в к�
   assert.equal('sentAt' in estimate, false);
 });
 
-test('монтажник открывает документы без цен, менеджер — с ценами', () => {
-  assert.equal(shouldHideDocumentPrices('crew'), true);
+test('все роли открывают документы с ценами, монтажник тоже', () => {
+  assert.equal(shouldHideDocumentPrices('crew'), false);
   assert.equal(shouldHideDocumentPrices('sales'), false);
   assert.equal(shouldHideDocumentPrices('owner'), false);
   assert.equal(shouldHideDocumentPrices('measurer'), false);
-  assert.equal(documentOpenPolicy('crew'), 'without-prices');
+  assert.equal(documentOpenPolicy('crew'), 'priced-file');
   assert.equal(documentOpenPolicy('sales'), 'priced-file');
   assert.equal(documentOpenPolicy('owner'), 'priced-file');
 });

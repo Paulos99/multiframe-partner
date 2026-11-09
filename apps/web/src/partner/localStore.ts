@@ -1008,7 +1008,7 @@ function objectVisible(user: SessionUser, obj: JobObject): boolean {
   return false;
 }
 
-/** Бригада видит количества без цен. Остальные роли — полный расчёт. */
+/** Расчёт для роли: цены видят все роли (estimateForRole). */
 function presentObject(obj: JobObject, role: UserRole): JobObject {
   return {
     ...obj,
