@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,9 +11,7 @@ const OUT =
 test.describe('compact funnel screenshots', () => {
   test('owner: company collapsed + expanded; personal collapsed + expanded', async ({ page }) => {
     fs.mkdirSync(OUT, { recursive: true });
-    await page.goto('/?demo=1');
-    await page.getByRole('button', { name: /Владелец/ }).first().click();
-    await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible({ timeout: 30000 });
+    await demoSignIn(page, 'owner');
 
     await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
     const funnel = page.locator('[data-journey-funnel][data-funnel-compact]').first();

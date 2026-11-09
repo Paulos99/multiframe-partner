@@ -4,7 +4,6 @@ import { apiProfile, hasRemoteApi } from '../partner/apiClient';
 import { ProfilePanel } from '../partner/ProfilePanel';
 import { usePartner } from '../partner/PartnerContext';
 import { AnimatePresence } from '../partner/motionBits';
-import { DemoSwitcherFab } from '../partner/DemoSwitcher';
 import { Button } from '../ui/Button';
 import { canSendFeedback } from '../../../../packages/shared/feedback.js';
 import { FeedbackDialog } from '../partner/feedback/FeedbackDialog';
@@ -99,7 +98,6 @@ export function MobileProfileScreen({
           <p className={styles.hint}>Сообщить об ошибке или предложить улучшение команде StP. Можно приложить фото.</p>
         </div>
       ) : null}
-      <DemoSwitcherFab menu />
       <button type="button" className={styles.logout} onClick={onLogout}>
         Выйти
       </button>

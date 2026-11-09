@@ -1,0 +1,113 @@
+# Ручная выкладка рабочего сервиса (не стенда).
+# Не запускается от push/merge. Нужны GitHub Secrets: PROD_DEPLOY_HOST, PROD_DEPLOY_USER,
+# PROD_DEPLOY_SSH_KEY, PROD_DEPLOY_KNOWN_HOSTS, и для резервной копии бакетов —
+# PROD_S3_ACCESS_KEY_ID, PROD_S3_SECRET_ACCESS_KEY, PROD_PARTNERS_BUCKET, PROD_MATERIALS_BUCKET.
+name: Deploy production
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Метка выпуска, например v1.1.0 (для отката — предыдущая)'
+        required: true
+      confirm:
+        description: 'Введите deploy-prod для подтверждения'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Проверка подтверждения
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRM" == "deploy-prod" ]] || { echo "Нужно confirm=deploy-prod"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$ ]] || { echo "Неверная метка"; exit 1; }
+
+      - name: SSH-ключ
+        env:
+          SSH_KEY: ${{ secrets.PROD_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PROD_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Резервная копия бакетов
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.PROD_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.PROD_S3_SECRET_ACCESS_KEY }}
+          PARTNERS_BUCKET: ${{ secrets.PROD_PARTNERS_BUCKET }}
+          MATERIALS_BUCKET: ${{ secrets.PROD_MATERIALS_BUCKET }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          DEST="s3://${PARTNERS_BUCKET}/_backups/${STAMP}-${TAG}"
+          echo "Backup prefix: ${DEST} (keys not printed)"
+          aws --endpoint-url https://storage.yandexcloud.net s3 sync \
+            "s3://${PARTNERS_BUCKET}" "${DEST}/partners" \
+            --exclude '_backups/*' --only-show-errors
+          aws --endpoint-url https://storage.yandexcloud.net s3 sync \
+            "s3://${MATERIALS_BUCKET}" "${DEST}/materials" \
+            --only-show-errors
+          echo "BACKUP_OK ${STAMP}"
+
+      - name: Установка выпуска по SSH
+        id: release
+        env:
+          TAG: ${{ inputs.tag }}
+          TARGET: ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" \
+            "cd /opt/multiframe-cabinet && FORCE=1 ./deploy/release.sh '$TAG'"
+
+      - name: Проверка здоровья
+        id: health
+        env:
+          TARGET: ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # Проверяем с самой ВМ (локальный nginx web и через Caddy)
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" bash -s <<'REMOTE'
+          set -euo pipefail
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            VER=$(curl -fsS http://127.0.0.1:8081/cabinet/version.json || true)
+            HEALTH=$(curl -fsS http://127.0.0.1:8081/cabinet-api/health || true)
+            echo "try $i ver=$VER health=$HEALTH"
+            echo "$VER" | grep -q "\"id\":\"$TAG\"" || { sleep 3; continue; }
+            echo "$HEALTH" | grep -q '"ok":true' || { sleep 3; continue; }
+            curl -fsS https://partner.stp-multiframe.ru/cabinet-api/health | grep -q '"ok":true'
+            echo HEALTH_OK
+            exit 0
+          done
+          echo HEALTH_FAIL
+          exit 1
+          REMOTE
+
+      - name: Откат при неудаче
+        if: failure() && (steps.release.outcome == 'failure' || steps.health.outcome == 'failure')
+        env:
+          TARGET: ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          echo "Attempting rollback via ./deploy/rollback.sh"
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" \
+            "cd /opt/multiframe-cabinet && ./deploy/rollback.sh" || true
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" \
+            "curl -fsS http://127.0.0.1:8081/cabinet-api/health || true"

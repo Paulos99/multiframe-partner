@@ -101,9 +101,8 @@ function houseLabel(a: RoomAnswers | null): string {
   return label.replace(/\s*\(.*\)$/, '');
 }
 
-export function kpNumber(project: Pick<Project, 'id'>, demo: boolean, date: Date): string {
-  if (demo) return 'ДЕМО-001';
-  const tail = project.id.replace(/[^a-z0-9]/gi, '').slice(-4).toUpperCase();
+export function kpNumber(project: Pick<Project, 'id'>, _demo: boolean, date: Date): string {
+  const tail = project.id.replace(/[^a-z0-9]/gi, '').slice(-4).toUpperCase() || '0001';
   const d = `${String(date.getDate()).padStart(2, '0')}${String(date.getMonth() + 1).padStart(2, '0')}`;
   return `${d}-${tail}`;
 }

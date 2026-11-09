@@ -112,3 +112,31 @@ export function defaultStart(now = new Date()): string {
   d.setHours(10, 0, 0, 0);
   return d.toISOString();
 }
+
+/** Ключ дня для группировки и id зоны сброса. */
+export function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** Перенос выезда на другой день: часы и минуты сохраняются. */
+export function moveStartsAtToDate(startsAt: string, targetDay: Date): string {
+  const src = new Date(startsAt);
+  const next = new Date(
+    targetDay.getFullYear(),
+    targetDay.getMonth(),
+    targetDay.getDate(),
+    src.getHours(),
+    src.getMinutes(),
+    src.getSeconds(),
+    src.getMilliseconds(),
+  );
+  return next.toISOString();
+}
+
+/** Новый выезд на выбранный день (по умолчанию в 10:00 по местному времени). */
+export function startAtDay(day: Date, hours = 10, minutes = 0): string {
+  const d = startOfDay(day);
+  d.setHours(hours, minutes, 0, 0);
+  return d.toISOString();
+}
+

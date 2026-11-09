@@ -1,11 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 import fs from 'node:fs';
 
 const OUT = process.env.KP_SHOT_DIR || 'test-results/kp-shots';
 
 async function openChernovDocs(page: Page) {
-  await page.goto('/?demo=1');
-  await page.getByRole('region', { name: 'Потолки Столицы', exact: true }).getByRole('button', { name: /Прайс и команда/ }).click();
+  await demoSignIn(page, 'owner');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.getByRole('region', { name: 'Список проектов' }).getByRole('button', { name: /Чернов/ }).first().click();
   await page.getByRole('tab', { name: 'Документы' }).click();
@@ -27,7 +27,7 @@ test('КП проекта: в «Документах», открывается, 
   const download = page.waitForEvent('download', { timeout: 60_000 });
   await row.getByRole('button', { name: 'Скачать', exact: true }).click();
   const file = await download;
-  expect(file.suggestedFilename()).toMatch(/^Коммерческое предложение — Чернов А\. — ДЕМО-001\.pdf$/);
+  expect(file.suggestedFilename()).toMatch(/^Коммерческое предложение — Чернов А\. — \d{4}-[A-Z0-9]+\.pdf$/);
   await file.saveAs(`${OUT}/kp-demo-stand.pdf`);
   expect(fs.readFileSync(`${OUT}/kp-demo-stand.pdf`).subarray(0, 4).toString()).toBe('%PDF');
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { durationLabel, fromLocalInputs, rangeTitle, shiftCursor, startOfWeek, toLocalInputs, visibleDays } from './calendarView';
+import { dayKey, durationLabel, fromLocalInputs, moveStartsAtToDate, rangeTitle, shiftCursor, startAtDay, startOfWeek, toLocalInputs, visibleDays } from './calendarView';
 
 describe('calendarView', () => {
   it('неделя начинается с понедельника', () => {
@@ -25,5 +25,15 @@ describe('calendarView', () => {
     const iso = fromLocalInputs('2026-11-10', '10:30')!;
     expect(toLocalInputs(iso)).toEqual({ date: '2026-11-10', time: '10:30' });
     expect(fromLocalInputs('10.11.2026', '10:30')).toBeNull();
+  });
+  it('переносит выезд на другой день, время сохраняется', () => {
+    const src = fromLocalInputs('2026-11-10', '14:30')!;
+    const moved = moveStartsAtToDate(src, new Date(2026, 10, 12));
+    expect(toLocalInputs(moved)).toEqual({ date: '2026-11-12', time: '14:30' });
+    expect(dayKey(new Date(2026, 10, 12))).toBe('2026-10-12');
+  });
+  it('новый выезд на день — в 10:00', () => {
+    const iso = startAtDay(new Date(2026, 10, 15));
+    expect(toLocalInputs(iso)).toEqual({ date: '2026-11-15', time: '10:00' });
   });
 });

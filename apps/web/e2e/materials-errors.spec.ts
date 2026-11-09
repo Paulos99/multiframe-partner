@@ -59,7 +59,6 @@ test('материалы, обрыв сети: просьба проверить
 for (const url of ['/', '/?demo=1']) {
   test(`вход: отказ сервера по паролю не впускает по демо-паролю из сборки (${url})`, async ({ page }) => {
     await page.goto(url);
-    if (url.includes('demo')) await page.getByRole('button', { name: 'Войти по логину' }).click();
     await page.getByLabel('Логин', { exact: true }).fill('admin');
     await page.getByLabel('Пароль', { exact: true }).fill('admin1234');
     await page.getByRole('button', { name: 'Войти', exact: true }).click();

@@ -3,7 +3,7 @@
  * Один запрос на всех; обновление раз в 2 минуты, при возврате на вкладку и после любой правки.
  */
 import { useEffect, useSyncExternalStore } from 'react';
-import type { ReminderAck } from '../../../../../packages/shared/calendar.js';
+import type { ReminderAck, Visit } from '../../../../../packages/shared/calendar.js';
 import type { CalendarData, CalendarPartner } from './calendarClient';
 import { fetchCalendar } from './calendarClient';
 
@@ -96,6 +96,11 @@ export function refreshCalendar(opts?: { force?: boolean }): Promise<void> {
 /** Мгновенно подставить отметки «готово»/«отложить», пока сервер ещё отвечает. */
 export function patchCalendarAcks(acks: ReminderAck[]) {
   emit({ ...state, acks });
+}
+
+/** Мгновенно обновить выезды (перенос по календарю), пока сервер отвечает. */
+export function patchCalendarVisits(visits: Visit[]) {
+  emit({ ...state, visits });
 }
 
 /** Фильтр партнёра для админа StP. Запоминается на время сессии вкладки. */

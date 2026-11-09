@@ -1,14 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn, type DemoRole } from './demo-login';
 import { mkdirSync } from 'node:fs';
 
 const shots = '/opt/cursor/artifacts/project-desk-demo';
 mkdirSync(shots, { recursive: true });
 
 async function enterCapital(page: Page, role: 'Владелец' | 'Монтажник') {
-  await page.goto('/?demo=1');
-  const capital = page.getByRole('region', { name: 'Потолки Столицы', exact: true });
-  const hint = role === 'Владелец' ? /Прайс и команда/ : /Задания на монтаж/;
-  await capital.getByRole('button', { name: hint }).click();
+  await demoSignIn(page, role === 'Владелец' ? 'owner' : 'crew');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
 }
