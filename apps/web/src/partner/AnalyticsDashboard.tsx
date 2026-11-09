@@ -55,6 +55,7 @@ import { JourneyFunnel, KpiPctCard } from './JourneyFunnel';
 import { StaffPersonalAnalytics } from './StaffPersonalAnalytics';
 import { listStaffForOrg } from './localStore';
 import { PartnerComparisonTable, PeriodSummaryBlock, usePeriodSummary } from './PeriodSummary';
+import { analyticsFiltersKey, shouldFlashAnalyticsReload } from './analyticsReload';
 import styles from './partner.module.css';
 
 const HOUSE_LABELS = Object.fromEntries(
@@ -373,7 +374,7 @@ function KpiRow({ children }: { children: ReactNode }) {
   // Карточки показателей выезжают со ступенькой; после «Загрузка…» (смена периода и фильтров) ряд монтируется заново.
   useStaggerIn(ref, ':scope > *', 'enter', { y: 16, stagger: 0.05, duration: 0.5 });
   return (
-    <div className={styles.kpiRow} ref={ref} data-motion-own>
+    <div className={styles.kpiRow} ref={ref} data-motion-own data-analytics-kpi-row>
       {children}
     </div>
   );
@@ -518,10 +519,29 @@ export function AnalyticsDashboard({
   const sectionTabBar = <SectionTabs tabs={sectionTabs} section={section} onOpen={openSection} />;
 
   const staffKey = api.partnerListStaff().map((member) => member.id).join('|');
+  const filtersKey = analyticsFiltersKey({
+    mode,
+    fromYmd: fromYmd || '',
+    toYmd: toYmd || '',
+    focusOrg: focusOrg || '',
+    orgId: user.orgId || '',
+    login: user.login,
+    section,
+  });
+  const loadedOnceRef = useRef(false);
+  const prevFiltersKeyRef = useRef(filtersKey);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // Фоновый опрос объектов/проектов (~45 с) меняет api.objects/api.projects.
+    // Скелет и анимация появления — только при первом открытии и смене периода/вкладки/фильтра.
+    const hard = shouldFlashAnalyticsReload({
+      loadedOnce: loadedOnceRef.current,
+      prevFiltersKey: prevFiltersKeyRef.current,
+      nextFiltersKey: filtersKey,
+    });
+    prevFiltersKeyRef.current = filtersKey;
+    if (hard) setLoading(true);
     const { from, to } = rangeFromYmd(fromYmd, toYmd);
     const orgId = mode === 'partner' ? user.orgId : focusOrg || null;
     const objects = roomsForCabinet(api.objects as unknown as Array<Record<string, unknown>>, orgId);
@@ -555,13 +575,14 @@ export function AnalyticsDashboard({
       const next = applyDashboardProbe(local, probe, { preferLocal, orgId, mode });
       if (!cancelled) {
         setModel(next);
+        loadedOnceRef.current = true;
         setLoading(false);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section, api.objects, api.projects, staffKey]);
+  }, [filtersKey, mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section, api.objects, api.projects, staffKey]);
 
   useEffect(() => {
     if (!panelPeriod || !model) {
@@ -659,7 +680,7 @@ export function AnalyticsDashboard({
 
   if (loading && !data) {
     return (
-      <div className={`${styles.card} ${styles.dashCard}`} aria-busy="true">
+      <div className={`${styles.card} ${styles.dashCard}`} aria-busy="true" data-analytics-busy="1">
         <h2>{mode === 'admin' ? 'Аналитика' : 'Аналитика команды'}</h2>
         <Skeleton kind="rows" count={1} label="Загрузка фильтров аналитики"/>
         <div className={styles.kpiRow}>{Array.from({length:mode==='admin'?9:8},(_,i)=><Skeleton key={i} kind="cards" count={1} label="Загрузка показателя"/>)}</div>
@@ -731,7 +752,7 @@ export function AnalyticsDashboard({
 
 
   return (
-    <div className={`${styles.card} ${styles.dashCard}`}>
+    <div className={`${styles.card} ${styles.dashCard}`} data-analytics-busy={loading ? '1' : '0'} aria-busy={loading || undefined}>
       <div className={styles.dashHead}>
         <div>
           <h2>{mode === 'admin' ? 'Аналитика' : 'Аналитика команды'}</h2>
