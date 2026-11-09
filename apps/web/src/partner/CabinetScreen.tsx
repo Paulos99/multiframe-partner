@@ -43,6 +43,10 @@ import {
   parseStaffHash,
 } from './projectRoute';
 import { consumeReturnToTools } from './toolsReturn';
+import { CalendarPanel } from './calendar/CalendarPanel';
+import { resetCalendar } from './calendar/calendarStore';
+import { ReminderBell } from './calendar/ReminderBell';
+import { SchedulePrompt } from './calendar/SchedulePrompt';
 import styles from './partner.module.css';
 import addStyles from './AdminPartners.module.css';
 
@@ -139,11 +143,29 @@ function profileOf(user: SessionUser, onLogout: () => void) {
     name: personName(user.displayName),
     role: ROLE_LABELS[user.role],
     company: user.org?.companyName,
-    onLogout,
+    onLogout: () => {
+      resetCalendar();
+      onLogout();
+    },
   };
 }
 
-type AdminTab = 'today' | 'partners' | 'tools' | 'analytics' | 'help' | 'feedback';
+type CalendarTarget = { projectId: string | null; objectId?: string | null };
+
+/** Выезд или напоминание ведёт в комнату, если она видна, иначе на страницу проекта. */
+function useOpenCalendarTarget(showProjects: () => void) {
+  const api = usePartner();
+  return (target: CalendarTarget) => {
+    const room = target.objectId ? api.objects.find((item) => item.id === target.objectId) : undefined;
+    const projectId = room?.projectId || target.projectId;
+    if (!projectId) return;
+    if (room) navigateProject({ kind: 'room', projectId, roomId: room.id });
+    else navigateProject({ kind: 'project', projectId, tab: 'overview' });
+    showProjects();
+  };
+}
+
+type AdminTab = 'today' | 'partners' | 'calendar' | 'tools' | 'analytics' | 'help' | 'feedback';
 
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
@@ -237,6 +259,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const adminNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'partners', label: 'Партнёры', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
+    { id: 'calendar', label: 'Календарь', active: tab === 'calendar', onSelect: () => { leaveProjectHash(); setTab('calendar'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
@@ -256,6 +279,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
       extra={
         <>
           <SyncBadge />
+          <ReminderBell onOpen={() => { leaveProjectHash(); setTab('calendar'); }} />
           <InstallAppButton />
         </>
       }
@@ -498,6 +522,11 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         </TabPanel>
       ) : null}
 
+      {tab === 'calendar' ? (
+        <TabPanel>
+          <CalendarPanel />
+        </TabPanel>
+      ) : null}
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="admin" />
@@ -514,7 +543,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   );
 }
 
-type OwnerTab = 'today' | 'projects' | 'tools' | 'company' | 'analytics' | 'help';
+type OwnerTab = 'today' | 'projects' | 'calendar' | 'tools' | 'company' | 'analytics' | 'help';
 
 function OwnerCabinet({
   onNavigate,
@@ -535,6 +564,7 @@ function OwnerCabinet({
   const showCompany = useMemo(() => () => setTab('company'), []);
   useFollowProjectHash(showProjects);
   useFollowCompanyHash(showCompany);
+  const openTarget = useOpenCalendarTarget(showProjects);
   const [createToken, setCreateToken] = useState(0);
   const [companyName, setCompanyName] = useState(user.org?.companyName || '');
   const [city, setCity] = useState(user.org?.city || '');
@@ -582,6 +612,7 @@ function OwnerCabinet({
   const ownerNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
+    { id: 'calendar', label: 'Календарь', active: tab === 'calendar', onSelect: () => { leaveProjectHash(); setTab('calendar'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { navigateCompany('about', 'replace'); setTab('company'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
@@ -703,6 +734,8 @@ function OwnerCabinet({
       extra={
         <>
           <SyncBadge />
+          <ReminderBell onOpen={openTarget} />
+          <SchedulePrompt />
           <InstallAppButton />
         </>
       }
@@ -767,6 +800,11 @@ function OwnerCabinet({
         </TabPanel>
       ) : null}
 
+      {tab === 'calendar' ? (
+        <TabPanel>
+          <CalendarPanel onOpenVisit={openTarget} />
+        </TabPanel>
+      ) : null}
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="owner" />
@@ -787,7 +825,7 @@ function SalesCabinet({
   const api = usePartner();
   const user = api.user!;
   const [createToken, setCreateToken] = useState(0);
-  type SalesTab = 'today' | 'projects' | 'tools' | 'company' | 'analytics' | 'help';
+  type SalesTab = 'today' | 'projects' | 'calendar' | 'tools' | 'company' | 'analytics' | 'help';
   const [tab, setTab] = useCabinetSection<SalesTab>('analytics', () => {
     if (consumeReturnToTools()) return 'tools';
     if (typeof window !== 'undefined' && companyHashOpen(window.location.hash)) return 'company';
@@ -798,10 +836,12 @@ function SalesCabinet({
   const showCompany = useMemo(() => () => setTab('company'), []);
   useFollowProjectHash(showProjects);
   useFollowCompanyHash(showCompany);
+  const openTarget = useOpenCalendarTarget(showProjects);
 
   const salesNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
+    { id: 'calendar', label: 'Календарь', active: tab === 'calendar', onSelect: () => { leaveProjectHash(); setTab('calendar'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { navigateCompany('staff', 'replace'); setTab('company'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
@@ -816,6 +856,8 @@ function SalesCabinet({
       extra={
         <>
           <SyncBadge />
+          <ReminderBell onOpen={openTarget} />
+          <SchedulePrompt />
           <InstallAppButton />
         </>
       }
@@ -888,6 +930,11 @@ function SalesCabinet({
           />
         </TabPanel>
       ) : null}
+      {tab === 'calendar' ? (
+        <TabPanel>
+          <CalendarPanel onOpenVisit={openTarget} />
+        </TabPanel>
+      ) : null}
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="sales" />
@@ -909,13 +956,14 @@ function FieldCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [view, setView] = useState<'today' | 'projects' | 'tools' | 'help'>(() => {
+  const [view, setView] = useState<'today' | 'projects' | 'calendar' | 'tools' | 'help'>(() => {
     if (consumeReturnToTools()) return 'tools';
     if (trainerHashOpen()) return 'help';
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setView('projects'), []);
   useFollowProjectHash(showProjects);
+  const openTarget = useOpenCalendarTarget(showProjects);
 
   return (
     <CabinetChrome
@@ -924,19 +972,23 @@ function FieldCabinet({
       items={[
         { id: 'today', label: 'Сегодня', active: view === 'today', onSelect: () => { leaveProjectHash(); setView('today'); } },
         { id: 'projects', label: 'Проекты', active: view === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setView('projects'); } },
+        { id: 'calendar', label: 'Календарь', active: view === 'calendar', onSelect: () => { leaveProjectHash(); setView('calendar'); } },
         { id: 'tools', label: 'Инструменты', active: view === 'tools', onSelect: () => { leaveProjectHash(); setView('tools'); } },
         { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => { leaveProjectHash(); setView('help'); } },
       ]}
       extra={
         <>
           <SyncBadge />
+          <ReminderBell onOpen={openTarget} />
           <InstallAppButton />
         </>
       }
       profile={profileOf(user, api.logout)}
     >
       <FrameBody>
-        {view === 'tools' ? (
+        {view === 'calendar' ? (
+          <CalendarPanel onOpenVisit={openTarget} />
+        ) : view === 'tools' ? (
           <ToolsPanel onProblemomer={() => onNavigate('problemomer')} onCalculator={onOpenCalc} />
         ) : view === 'help' ? (
           <HelpTrainingPanel role={role} />

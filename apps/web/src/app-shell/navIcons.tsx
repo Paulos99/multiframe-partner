@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react';
 import {
   BarChartIcon,
   BuildingIcon,
+  CalendarIcon,
   ChecklistIcon,
   FolderIcon,
   GraduationCapIcon,
@@ -28,6 +29,7 @@ const ICONS: Record<string, ComponentType<Omit<SVGProps<SVGSVGElement>, 'ref'> &
   add: PlusIcon,
   help: GraduationCapIcon,
   tools: WrenchIcon,
+  calendar: CalendarIcon,
   feedback: SendIcon,
 };
 

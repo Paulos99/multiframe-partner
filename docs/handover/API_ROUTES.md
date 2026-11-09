@@ -48,6 +48,7 @@
 | Путь | Назначение |
 |---|---|
 | `/projects`, `/projects/{projectId}` | проекты: список, создание, правка, архив |
+| `/calendar`, `/calendar/{visitId}`, `/calendar/reminders` | календарь замеров и монтажей: выезды по ролям, создание и правка (владелец, менеджер), «выполнено» у своего выезда (замерщик, монтажник), отметки напоминаний «готово» и «отложить» |
 | `/objects`, `/objects/{objectId}` | комнаты: список, создание, правка, статус, назначение, отказ |
 | `/objects/{objectId}/documents`, `/objects/{objectId}/documents/{docId}` | PDF комнаты |
 | `/objects/{objectId}/photos`, `/objects/{objectId}/photos/{photoId}` | фото и подписи; показ клиенту |

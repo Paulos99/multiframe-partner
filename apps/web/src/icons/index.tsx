@@ -9,6 +9,8 @@ import type { Icon as PhosphorIcon, IconProps as PhosphorProps } from '@phosphor
 import {
   ArrowRight,
   ArrowSquareOut,
+  Bell,
+  CalendarBlank,
   CaretLeft,
   CaretRight,
   CheckCircle,
@@ -42,6 +44,8 @@ export const ArrowRightIcon = filled(ArrowRight, 'ArrowRightIcon');
 export const ExternalIcon = filled(ArrowSquareOut, 'ExternalIcon', 'bold');
 export const ChevronLeftIcon = filled(CaretLeft, 'ChevronLeftIcon');
 export const ChevronRightIcon = filled(CaretRight, 'ChevronRightIcon');
+export const CalendarIcon = filled(CalendarBlank, 'CalendarIcon');
+export const BellIcon = filled(Bell, 'BellIcon');
 export const CheckCircleIcon = filled(CheckCircle, 'CheckCircleIcon');
 // У «…» в весе fill точки вырезаны из плашки — в bold это те же сплошные точки.
 export const MoreIcon = filled(DotsThree, 'MoreIcon', 'bold');

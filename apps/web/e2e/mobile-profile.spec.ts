@@ -106,12 +106,13 @@ for (const [role, width] of [['owner', 360], ['owner', 390], ['admin', 360], ['a
     await enter(page, role);
     const el = strip(page);
     const tabs = nav(page).getByRole('tab');
-    // у админа сети нет «Отчётов» (фотоотчёты в «Аналитика → Фото отчёты»), зато есть «Обратная связь»
-    await expect(tabs).toHaveCount(7);
+    // у админа: Сегодня, Партнёры, Календарь, Инструменты, Аналитика, Обучение, Обратная связь, Профиль
+    // у владельца: Сегодня, Проекты, Календарь, Инструменты, Компания, Аналитика, Обучение, Профиль
+    await expect(tabs).toHaveCount(8);
     await expect(tabs.last()).toHaveAttribute('data-nav-id', 'profile');
     await expect(nav(page).getByRole('tab', { name: 'Обучение', exact: true })).toHaveCount(1);
 
-    // Семь вкладок не влезают: лента со snap, без полосы, «Профиль» докручивается.
+    // Восемь вкладок не влезают: лента со snap, без полосы, «Профиль» докручивается.
     const style = await el.evaluate((e) => {
       const cs = getComputedStyle(e);
       return { overflowX: cs.overflowX, snap: cs.scrollSnapType, bar: cs.scrollbarWidth, overflow: e.scrollWidth - e.clientWidth };
@@ -119,7 +120,7 @@ for (const [role, width] of [['owner', 360], ['owner', 390], ['admin', 360], ['a
     expect(style.overflowX).toBe('auto');
     expect(style.snap).toContain('x');
     expect(style.bar).toBe('none');
-    // Семь вкладок — лента прокручивается.
+    // Восемь вкладок — лента прокручивается.
     expect(style.overflow).toBeGreaterThan(1);
 
     await scrollStrip(page, 'start');
