@@ -23,10 +23,10 @@ export type RoleVideo = {
  * после замены обновите здесь `duration` и поднимите `version`.
  */
 const VIDEOS: Partial<Record<UserRole, RoleVideo>> = {
-  owner: { file: 'role-owner', title: 'Владелец компании', duration: '2:13', description: 'Что это за сервис и как им пользоваться владельцу.', version: '3' },
+  owner: { file: 'role-owner', title: 'Владелец компании', duration: '2:13', description: 'Что это за сервис и как им пользоваться владельцу.', version: '4' },
   sales: { file: 'role-sales', title: 'Менеджер по продажам', duration: '2:32', description: 'Как вести клиентов, считать потолок и собирать предложение.', version: '3' },
-  measurer: { file: 'role-measurer', title: 'Замерщик', duration: '2:22', description: 'Калькулятор со схемой потолка, раскладка панелей для монтажника и Проблемомер на объекте.', version: '3' },
-  crew: { file: 'role-crew', title: 'Монтажник', duration: '1:35', description: 'Обучение, схема монтажа по комнате и фотоотчёт до, во время и после монтажа.', version: '3' },
+  measurer: { file: 'role-measurer', title: 'Замерщик', duration: '2:22', description: 'Калькулятор со схемой потолка, раскладка панелей для монтажника и Проблемомер на объекте.', version: '4' },
+  crew: { file: 'role-crew', title: 'Монтажник', duration: '1:35', description: 'Обучение, схема монтажа по комнате и фотоотчёт до, во время и после монтажа.', version: '4' },
 };
 
 /** Встроенный ролик по ключу (owner, sales, measurer, crew). */
