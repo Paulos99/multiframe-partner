@@ -3358,6 +3358,65 @@
   margin-top: 14px;
 }
 
+
+.todayLesson {
+  background: var(--cab-card);
+  border: 1px solid var(--cab-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.todayLessonDone {
+  background: color-mix(in srgb, var(--cab-card) 92%, #d7ebe0);
+  border-color: color-mix(in srgb, var(--cab-border) 70%, #8fbfa4);
+}
+
+.todayLessonRemind {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.todayLessonBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.todayLessonBody strong {
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.todayLessonBody span {
+  color: var(--cab-muted);
+  font-size: 0.82rem;
+}
+
+.todayLessonRemind .primary,
+.todayLessonRemind .ghost {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .todayLessonRemind {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .todayLessonRemind .primary,
+  .todayLessonRemind .ghost {
+    width: 100%;
+  }
+}
+
+
 .modalBackdrop {
   position: fixed;
   inset: 0;
