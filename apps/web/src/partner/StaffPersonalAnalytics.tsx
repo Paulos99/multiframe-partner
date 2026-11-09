@@ -73,6 +73,11 @@ export function StaffPersonalAnalytics({
     return computeClientJourney({ rooms, events, users, from, to, userId: person.id });
   }, [role, rooms, events, users, from, to, person.id]);
 
+  const refusalReasons =
+    journey && 'refusalReasons' in journey && Array.isArray(journey.refusalReasons)
+      ? journey.refusalReasons
+      : [];
+
   const monthly = useMemo(
     () => buildStaffMonthlySeries({ rooms, userId: person.id, from, to }),
     [rooms, person.id, from, to],
@@ -127,7 +132,8 @@ export function StaffPersonalAnalytics({
       <JourneyFunnel
         title={funnelTitle}
         steps={journey.steps}
-        hint="Для менеджера — шесть этапов пути клиента. Процент от предыдущего. «Отказ» — от закрытых."
+        hint="Считаем, сколько дошло до каждого этапа за период. Процент — от предыдущего и от начала. «Не дошли…» — сколько выбыло между этапами."
+        refusalReasons={refusalReasons}
       />
 
       {showSalesBlocks ? (
