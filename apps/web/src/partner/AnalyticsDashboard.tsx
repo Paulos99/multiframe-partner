@@ -858,7 +858,7 @@ export function AnalyticsDashboard({
         ) : null}
       </div>
 
-      {mode === 'admin' ? (
+      {mode === 'admin' && showPeriodFilters ? (
         <label className={styles.field}>
           Партнёр
           <select value={focusOrg} onChange={(e) => setAnalyticsFocusOrg(e.target.value)}>
