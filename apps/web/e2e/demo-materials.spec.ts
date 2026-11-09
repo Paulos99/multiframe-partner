@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { demoSignIn, type DemoRole } from './demo-login';
 
 const SHOTS = process.env.DEMO_SHOTS_DIR || '';
 
@@ -6,10 +7,8 @@ test.beforeEach(async ({ request }) => {
   await request.post('http://127.0.0.1:4181/__reset');
 });
 
-async function enterDemo(page: Page, group: 'StP' | 'Потолки Столицы', role: RegExp) {
-  await page.goto('/?demo=1');
-  await page.getByRole('region', { name: group, exact: true }).getByRole('button', { name: role }).click();
-  await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible();
+async function enterDemo(page: Page, role: DemoRole) {
+  await demoSignIn(page, role);
   const entry = page
     .getByRole('tab', { name: 'Обучение', exact: true })
     .or(page.getByRole('button', { name: 'Обучение', exact: true }));
@@ -32,7 +31,7 @@ async function expectDemoMaterials(page: Page) {
 
 test('демо, Менеджер StP: «Материалы» открываются без сервера, плашки «войдите заново» нет', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await enterDemo(page, 'StP', /Обучение и инструменты/);
+  await enterDemo(page, 'stp_manager');
   await expectDemoMaterials(page);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/demo-stp-manager-materials-390.png` });
   await page.getByRole('tab', { name: 'Тренажёр', exact: true }).click();
@@ -44,9 +43,9 @@ test('демо, Менеджер StP: «Материалы» открывают�
 });
 
 test('демо, Админ StP и роли «Потолков Столицы»: материалы без плашки', async ({ page }) => {
-  await enterDemo(page, 'StP', /Сеть и компании/);
+  await enterDemo(page, 'admin');
   await expectDemoMaterials(page);
   await page.evaluate(() => localStorage.clear());
-  await enterDemo(page, 'Потолки Столицы', /Прайс и команда/);
+  await enterDemo(page, 'owner');
   await expectDemoMaterials(page);
 });

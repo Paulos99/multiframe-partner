@@ -1,11 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 import fs from 'node:fs';
 
 const OUT = process.env.KP_SHOT_DIR || 'test-results/kp-shots';
 
 async function openChernovDocs(page: Page) {
-  await page.goto('/?demo=1');
-  await page.getByRole('region', { name: 'Потолки Столицы', exact: true }).getByRole('button', { name: /Прайс и команда/ }).click();
+  await demoSignIn(page, 'owner');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.getByRole('region', { name: 'Список проектов' }).getByRole('button', { name: /Чернов/ }).first().click();
   await page.getByRole('tab', { name: 'Документы' }).click();

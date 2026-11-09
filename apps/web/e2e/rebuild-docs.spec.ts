@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 
 /** Демо «Потолки Столицы»: у комнаты Чернова «Кабинет» (22 м²) — профиль и смета под старую площадь 18 м². */
 async function openChernovWithStaleDocs(page: Page) {
-  await page.goto('/?demo=1');
-  await page.getByRole('region', { name: 'Потолки Столицы', exact: true }).getByRole('button', { name: /Прайс и команда/ }).click();
+  await demoSignIn(page, 'owner');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Список проектов' })).toBeVisible();
   await page.evaluate(() => {
