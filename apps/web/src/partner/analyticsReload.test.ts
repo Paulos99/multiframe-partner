@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { analyticsFiltersKey, shouldFlashAnalyticsReload } from './analyticsReload.ts';
+import {
+  analyticsFiltersKey,
+  analyticsSectionTitle,
+  shouldFlashAnalyticsReload,
+} from './analyticsReload.ts';
 
 const base = {
   mode: 'partner',
@@ -9,7 +13,6 @@ const base = {
   focusOrg: '',
   orgId: 'org1',
   login: 'owner',
-  section: 'overview',
 };
 
 test('первый заход — жёсткая перезагрузка со скелетом', () => {
@@ -20,16 +23,11 @@ test('первый заход — жёсткая перезагрузка со �
   );
 });
 
-test('смена периода или вкладки — снова со скелетом и анимацией', () => {
+test('смена периода — снова со скелетом и анимацией', () => {
   const prev = analyticsFiltersKey(base);
   const next = analyticsFiltersKey({ ...base, fromYmd: '2026-02-01', toYmd: '2026-02-28' });
   assert.equal(
     shouldFlashAnalyticsReload({ loadedOnce: true, prevFiltersKey: prev, nextFiltersKey: next }),
-    true,
-  );
-  const tab = analyticsFiltersKey({ ...base, section: 'team' });
-  assert.equal(
-    shouldFlashAnalyticsReload({ loadedOnce: true, prevFiltersKey: prev, nextFiltersKey: tab }),
     true,
   );
 });
@@ -42,6 +40,18 @@ test('фоновый опрос при тех же фильтрах — тихо
   );
 });
 
-test('ключ фильтров стабилен при том же наборе', () => {
-  assert.equal(analyticsFiltersKey(base), analyticsFiltersKey({ ...base }));
+test('ключ фильтров не зависит от раздела: Обзор → Журнал не вспыхивает скелетом', () => {
+  const key = analyticsFiltersKey(base);
+  assert.equal(analyticsFiltersKey({ ...base }), key);
+  assert.equal(
+    shouldFlashAnalyticsReload({ loadedOnce: true, prevFiltersKey: key, nextFiltersKey: key }),
+    false,
+  );
+});
+
+test('заголовки разделов на русском', () => {
+  assert.equal(analyticsSectionTitle('photos', 'admin'), 'Фото отчёты');
+  assert.equal(analyticsSectionTitle('objects', 'admin'), 'Журнал');
+  assert.equal(analyticsSectionTitle('overview', 'partner'), 'Аналитика команды');
+  assert.equal(analyticsSectionTitle('overview', 'admin'), 'Аналитика');
 });

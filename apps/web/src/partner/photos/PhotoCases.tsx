@@ -30,9 +30,9 @@ function useCasesRoute(): CasesRoute {
 }
 
 /** «Аналитика → Фото отчёты» у админа (фотоотчёты партнёров, база кейсов): комнаты с фото всех партнёров. Список — обзор, кейс — отдельная страница. */
-export function PhotoCases() {
+export function PhotoCases({ embedded = false }: { embedded?: boolean } = {}) {
   const route = useCasesRoute();
-  return route.kind === 'case' ? <CasePage objectId={route.objectId} /> : <CasesList />;
+  return route.kind === 'case' ? <CasePage objectId={route.objectId} /> : <CasesList embedded={embedded} />;
 }
 
 function plural(n: number, one: string, few: string, many: string): string {
@@ -56,7 +56,7 @@ function CountChips({ counts }: { counts: Record<PhotoStage, number> }) {
   );
 }
 
-function CasesList() {
+function CasesList({ embedded = false }: { embedded?: boolean }) {
   const [filters, setFilters] = useState<PhotoCaseFilters>({ orgId: '', stage: '', from: '', to: '' });
   const [onlyComplete, setOnlyComplete] = useState(false);
   const [data, setData] = useState<{ cases: PhotoCase[]; partners: Array<{ id: string; name: string }> } | null>(null);
@@ -98,13 +98,19 @@ function CasesList() {
   const filtered = Boolean(filters.orgId || filters.stage || filters.from || filters.to || onlyComplete);
 
   return (
-    <section className={styles.page} data-testid="photo-cases">
-      <header className={styles.head}>
-        <h1>Фото отчёты</h1>
+    <section className={styles.page} data-testid="photo-cases" data-embedded={embedded ? '1' : undefined}>
+      {embedded ? (
         <p className={styles.lead}>
           Комнаты, где партнёры приложили фото до, во время и после монтажа. База для примеров и разбора работ.
         </p>
-      </header>
+      ) : (
+        <header className={styles.head}>
+          <h1>Фото отчёты</h1>
+          <p className={styles.lead}>
+            Комнаты, где партнёры приложили фото до, во время и после монтажа. База для примеров и разбора работ.
+          </p>
+        </header>
+      )}
 
       <div className={styles.kpis}>
         <div className={styles.kpi}>

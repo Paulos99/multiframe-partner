@@ -1,5 +1,5 @@
 import { Skeleton } from './Skeleton';
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type {
   AnalyticsBreakdownItem,
   AnalyticsDashboard as DashData,
@@ -55,7 +55,8 @@ import { JourneyFunnel, KpiPctCard } from './JourneyFunnel';
 import { StaffPersonalAnalytics } from './StaffPersonalAnalytics';
 import { listStaffForOrg } from './localStore';
 import { PartnerComparisonTable, PeriodSummaryBlock, usePeriodSummary } from './PeriodSummary';
-import { analyticsFiltersKey, shouldFlashAnalyticsReload } from './analyticsReload';
+import { analyticsFiltersKey, analyticsSectionTitle, shouldFlashAnalyticsReload } from './analyticsReload';
+import { AnimatePresence, m, usePrefersReducedMotion } from './motionBits';
 import styles from './partner.module.css';
 
 const HOUSE_LABELS = Object.fromEntries(
@@ -369,6 +370,27 @@ function BreakdownList({
 
 type AnalyticsTab = 'overview' | 'portrait' | 'companies' | 'team' | 'training' | 'photos' | 'objects';
 
+/** Плавная смена заголовка раздела; без анимации при prefers-reduced-motion. */
+function AnimatedDashTitle({ title }: { title: string }) {
+  const reduce = usePrefersReducedMotion();
+  return (
+    <div className={styles.dashTitleWrap} data-analytics-title>
+      <AnimatePresence mode="wait" initial={false}>
+        <m.h2
+          key={title}
+          className={styles.dashTitle}
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduce ? undefined : { opacity: 0, y: -6 }}
+          transition={reduce ? { duration: 0 } : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {title}
+        </m.h2>
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function KpiRow({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   // Карточки показателей выезжают со ступенькой; после «Загрузка…» (смена периода и фильтров) ряд монтируется заново.
@@ -526,10 +548,15 @@ export function AnalyticsDashboard({
     focusOrg: focusOrg || '',
     orgId: user.orgId || '',
     login: user.login,
-    section,
   });
   const loadedOnceRef = useRef(false);
   const prevFiltersKeyRef = useRef(filtersKey);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const minHeightRef = useRef(0);
+  const [minHeightPx, setMinHeightPx] = useState(0);
+  const prevSectionRef = useRef(section);
+  const pageTitle = analyticsSectionTitle(section, mode);
+  const showPeriodFilters = section !== 'photos' && section !== 'training';
 
   useEffect(() => {
     let cancelled = false;
@@ -582,7 +609,32 @@ export function AnalyticsDashboard({
     return () => {
       cancelled = true;
     };
-  }, [filtersKey, mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, section, api.objects, api.projects, staffKey]);
+  }, [filtersKey, mode, fromYmd, toYmd, focusOrg, user.orgId, user.login, api.objects, api.projects, staffKey]);
+
+  // Резерв высоты: короткий раздел (журнал/фото) не схлопывает карточку и не дёргает скроллбар.
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const apply = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h > minHeightRef.current) {
+        minHeightRef.current = h;
+        setMinHeightPx(h);
+      }
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [section, loading, data, pageTitle]);
+
+  // Сохраняем позицию прокрутки окна при смене раздела аналитики.
+  useLayoutEffect(() => {
+    if (prevSectionRef.current === section) return;
+    const y = typeof window !== 'undefined' ? window.scrollY : 0;
+    prevSectionRef.current = section;
+    if (typeof window !== 'undefined') window.scrollTo(0, y);
+  }, [section]);
 
   useEffect(() => {
     if (!panelPeriod || !model) {
@@ -666,26 +718,44 @@ export function AnalyticsDashboard({
   if (onPhotoPage && route.page === 'photo-case') {
     return <PhotoCases />;
   }
-  if (onPhotoPage) {
-    return (
-      <div className={`${styles.card} ${styles.dashCard}`}>
-        <div className={styles.dashHead}>
-          <h2>Аналитика</h2>
-        </div>
-        {sectionTabBar}
-        <PhotoCases />
-      </div>
-    );
-  }
 
-  if (loading && !data) {
+  // Фото отчёты в общем каркасе: early return прыгал по высоте и сбрасывал скролл.
+  if (loading && !data && section !== 'photos') {
     return (
-      <div className={`${styles.card} ${styles.dashCard}`} aria-busy="true" data-analytics-busy="1">
-        <h2>{mode === 'admin' ? 'Аналитика' : 'Аналитика команды'}</h2>
+      <div
+        className={`${styles.card} ${styles.dashCard}`}
+        aria-busy="true"
+        data-analytics-busy="1"
+        ref={rootRef}
+        style={minHeightPx ? { minHeight: minHeightPx } : undefined}
+      >
+        <AnimatedDashTitle title={pageTitle} />
         <Skeleton kind="rows" count={1} label="Загрузка фильтров аналитики"/>
         <div className={styles.kpiRow}>{Array.from({length:mode==='admin'?9:8},(_,i)=><Skeleton key={i} kind="cards" count={1} label="Загрузка показателя"/>)}</div>
         <div className={styles.funnelGrid}><Skeleton kind="chart" count={1}/><Skeleton kind="chart" count={1}/></div>
         <Skeleton kind="chart" count={1} label="Загрузка графика"/>
+      </div>
+    );
+  }
+
+  if (!data && section === 'photos') {
+    return (
+      <div
+        className={`${styles.card} ${styles.dashCard}`}
+        data-analytics-busy="0"
+        data-analytics-root
+        ref={rootRef}
+        style={minHeightPx ? { minHeight: minHeightPx } : undefined}
+      >
+        <div className={styles.dashHead}>
+          <div>
+            <AnimatedDashTitle title={pageTitle} />
+          </div>
+        </div>
+        {sectionTabBar}
+        <div className={styles.dashPane} data-analytics-pane="photos">
+          <PhotoCases embedded />
+        </div>
       </div>
     );
   }
@@ -752,28 +822,40 @@ export function AnalyticsDashboard({
 
 
   return (
-    <div className={`${styles.card} ${styles.dashCard}`} data-analytics-busy={loading ? '1' : '0'} aria-busy={loading || undefined}>
+    <div
+      className={`${styles.card} ${styles.dashCard}`}
+      data-analytics-busy={loading ? '1' : '0'}
+      data-analytics-root
+      data-analytics-section={section}
+      aria-busy={loading || undefined}
+      ref={rootRef}
+      style={minHeightPx ? { minHeight: minHeightPx } : undefined}
+    >
       <div className={styles.dashHead}>
         <div>
-          <h2>{mode === 'admin' ? 'Аналитика' : 'Аналитика команды'}</h2>
-          <p className={styles.lead}>
-            {dash.source === 'api'
-              ? 'Данные с сервера'
-              : user.orgId === 'org_demo' || user.orgId === 'org_demo_spb' || focusOrg === 'org_demo' || focusOrg === 'org_demo_spb'
-                ? 'Сохранённая история'
-                : 'Только этот браузер, сервер недоступен'}
-            {` · ${formatPeriodLabel(fromYmd, toYmd)}`}
-          </p>
+          <AnimatedDashTitle title={pageTitle} />
+          {showPeriodFilters ? (
+            <p className={styles.lead}>
+              {dash.source === 'api'
+                ? 'Данные с сервера'
+                : user.orgId === 'org_demo' || user.orgId === 'org_demo_spb' || focusOrg === 'org_demo' || focusOrg === 'org_demo_spb'
+                  ? 'Сохранённая история'
+                  : 'Только этот браузер, сервер недоступен'}
+              {` · ${formatPeriodLabel(fromYmd, toYmd)}`}
+            </p>
+          ) : null}
         </div>
         {/* Единственный выбор периода: общий для всей аналитики (и админа, и партнёра). */}
-        <div className={styles.dashFilters} role="group" aria-label="Период аналитики">
-          <PeriodCalendar
-            fromYmd={fromYmd}
-            toYmd={toYmd}
-            onChange={(from, to) => setAnalyticsPeriod(from, to)}
-            triggerClassName={styles.dashPeriodTrigger}
-          />
-        </div>
+        {showPeriodFilters ? (
+          <div className={styles.dashFilters} role="group" aria-label="Период аналитики">
+            <PeriodCalendar
+              fromYmd={fromYmd}
+              toYmd={toYmd}
+              onChange={(from, to) => setAnalyticsPeriod(from, to)}
+              triggerClassName={styles.dashPeriodTrigger}
+            />
+          </div>
+        ) : null}
       </div>
 
       {mode === 'admin' ? (
@@ -840,7 +922,7 @@ export function AnalyticsDashboard({
         </StaffDrillDrawer>
       ) : null}
 
-      {route.page === 'overview' || route.page === 'team' || route.page === 'team-user' ? (
+      {route.page === 'overview' || route.page === 'team' || route.page === 'team-user' || route.page === 'photos' ? (
       <>
       {sectionTabBar}
 
@@ -1115,7 +1197,16 @@ export function AnalyticsDashboard({
 
       {section === 'training' && canTraining ? <TrainingTab mode={mode} /> : null}
 
+      {section === 'photos' && mode === 'admin' ? (
+        <div className={styles.dashPane} data-analytics-pane="photos">
+          <DashSection>
+            <PhotoCases embedded />
+          </DashSection>
+        </div>
+      ) : null}
+
       {section === 'objects' ? (
+        <div className={styles.dashPane} data-analytics-pane="objects">
         <DashSection>
           <JournalDownload
             mode={mode}
@@ -1174,6 +1265,7 @@ export function AnalyticsDashboard({
             <p className={styles.lead}>Нет записей за выбранный фильтр</p>
           )}
         </DashSection>
+        </div>
       ) : null}
       </>
       ) : null}
