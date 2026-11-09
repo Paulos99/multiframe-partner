@@ -113,6 +113,12 @@ export function createSchemas(z) {
     displayName: textOf(value.displayName || value.login).trim() || value.login,
   }));
 
+  /** POST /admin/stp-admins: ещё один администратор StP. */
+  const stpAdminCreate = credentials({ checkLength: false }).transform((value) => ({
+    ...value,
+    displayName: textOf(value.displayName || value.login).trim() || value.login,
+  }));
+
   /** POST /org/staff: роль раньше логина. Логин необязателен — сотрудник задаст его по ссылке. */
   const staffCreate = body().transform((raw, ctx) => {
     const requested = String(raw.role ?? '').trim();
@@ -246,6 +252,7 @@ export function createSchemas(z) {
     loginRequest,
     partnerCreate,
     stpManagerCreate,
+    stpAdminCreate,
     staffCreate,
     staffUpdate,
     partnerCityUpdate,

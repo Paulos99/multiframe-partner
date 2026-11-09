@@ -34,8 +34,8 @@ test('admin keeps one shared period control inside the analytics card', async ({
   await page.getByRole('button', { name: 'Всё время', exact: true }).click();
   await updated;
   await expect(calendar).toHaveText('Всё время');
-  await page.getByRole('tab', { name: 'Партнёры', exact: true }).click();
-  await expect(page.getByRole('heading', { name: /Партнёры/ })).toBeVisible();
+  await page.getByRole('tab', { name: 'Кабинеты', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /Кабинеты/ })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Период аналитики' })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'Добавить', exact: true })).toHaveCount(0);
   const add = page.getByRole('button', { name: 'Добавить', exact: true });

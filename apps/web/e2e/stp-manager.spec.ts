@@ -28,7 +28,7 @@ test('менеджер StP: в меню только «Обучение» и «�
   await expect(page.getByRole('heading', { level: 2, name: 'Обучение' })).toBeVisible();
   await expect(page.getByRole('tablist', { name: 'Разделы обучения' }).getByRole('tab')).toHaveText(['Материалы', 'Тренажёр']);
   await expect(page.getByText('Инструкции и презентации по продукту.')).toBeVisible();
-  for (const absent of ['Сегодня', 'Проекты', 'Компания', 'Команда', 'Аналитика', 'Партнёры', 'Прайс']) {
+  for (const absent of ['Сегодня', 'Проекты', 'Компания', 'Команда', 'Аналитика', 'Кабинеты', 'Прайс']) {
     await expect(page.getByRole('tab', { name: absent, exact: true })).toHaveCount(0);
   }
   await expect(page.getByText('Менеджер StP').first()).toBeVisible();
@@ -121,7 +121,7 @@ test('менеджер StP: сервер закрывает чужие разд�
 
 test('администратор StP создаёт менеджера, тот входит, потом администратор его удаляет', async ({ page }) => {
   await enter(page, 'ui.admin');
-  await nav(page).getByRole('tab', { name: 'Партнёры', exact: true }).click();
+  await nav(page).getByRole('tab', { name: 'Кабинеты', exact: true }).click();
   const block = page.locator('[data-section="stp-managers"]');
   await expect(block.getByRole('heading', { name: 'Менеджеры StP' })).toBeVisible();
   await block.getByRole('button', { name: 'Добавить менеджера', exact: true }).click();
@@ -140,7 +140,7 @@ test('администратор StP создаёт менеджера, тот �
 
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await enter(page, 'ui.admin');
-  await nav(page).getByRole('tab', { name: 'Партнёры', exact: true }).click();
+  await nav(page).getByRole('tab', { name: 'Кабинеты', exact: true }).click();
   page.once('dialog', (dialog) => void dialog.accept());
   await page.locator('[data-stp-manager="ui.new.manager"]').getByRole('button', { name: 'Удалить', exact: true }).click();
   await expect(page.locator('[data-stp-manager="ui.new.manager"]')).toHaveCount(0);

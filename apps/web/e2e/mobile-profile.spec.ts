@@ -106,7 +106,7 @@ for (const [role, width] of [['owner', 360], ['owner', 390], ['admin', 360], ['a
     await enter(page, role);
     const el = strip(page);
     const tabs = nav(page).getByRole('tab');
-    // у админа: Сегодня, Партнёры, Календарь, Инструменты, Аналитика, Обучение, Обратная связь, Профиль
+    // у админа: Сегодня, Кабинеты, Календарь, Инструменты, Аналитика, Обучение, Обратная связь, Профиль
     // у владельца: Сегодня, Проекты, Календарь, Инструменты, Компания, Аналитика, Обучение, Профиль
     await expect(tabs).toHaveCount(8);
     await expect(tabs.last()).toHaveAttribute('data-nav-id', 'profile');
@@ -183,7 +183,7 @@ test('phone: вкладка «Профиль» открывает профиль
   await expect(dialog).toHaveCount(0);
 
   // Другая вкладка закрывает профиль.
-  await nav(page).getByRole('tab', { name: 'Партнёры', exact: true }).click();
+  await nav(page).getByRole('tab', { name: 'Кабинеты', exact: true }).click();
   await expect(screen).toHaveCount(0);
   await expect(profileTab).toHaveAttribute('aria-selected', 'false');
 

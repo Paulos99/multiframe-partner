@@ -120,7 +120,7 @@ export function TodayHome({
 
       <div className={styles.todayGrid}>
         <div className={styles.todayCard}>
-          <h3>{role === 'admin' ? 'Партнёры' : 'Ближайшие комнаты'}</h3>
+          <h3>{role === 'admin' ? 'Кабинеты' : 'Ближайшие комнаты'}</h3>
           {api.objectsLoading && role !== 'admin' && !api.objects.length ? (
             <p className={styles.lead}>Загружаем комнаты…</p>
           ) : role === 'admin' ? (
@@ -137,7 +137,7 @@ export function TodayHome({
               </ul>
             ) : (
               <div className={styles.emptyState}>
-                <p className={styles.lead}>{api.partnersLoading ? 'Загружаем партнёров…' : empty}</p>
+                <p className={styles.lead}>{api.partnersLoading ? 'Загружаем кабинеты…' : empty}</p>
               </div>
             )
           ) : usesStageGroups(role) && hasRooms ? (
