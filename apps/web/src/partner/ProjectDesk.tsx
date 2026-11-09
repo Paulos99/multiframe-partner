@@ -65,6 +65,7 @@ import { useSlidingPill } from '../ui/useSlidingPill';
 import { AnimatedNumber, useFlipReflow, useLift, useStaggerIn } from '../ui/gsapMotion';
 import { CityField } from './CityField';
 import { loadCities, resolveCity } from './cityCatalog';
+import { ProjectVisits } from './calendar/ProjectVisits';
 
 type Person = { id: string; role: UserRole; displayName: string };
 
@@ -997,6 +998,7 @@ function ProjectPage({
             onSettings={() => onTab('settings')}
           />
         ) : null}
+        {tab === 'overview' ? <ProjectVisits project={project} rooms={rooms} /> : null}
         {tab === 'work' ? (
           <Work
             rooms={rooms}

@@ -106,8 +106,8 @@ for (const [role, width] of [['owner', 360], ['owner', 390], ['admin', 360], ['a
     await enter(page, role);
     const el = strip(page);
     const tabs = nav(page).getByRole('tab');
-    // у админа сети отдельной вкладки «Отчёты» нет: фотоотчёты в «Аналитика → Фото отчёты»
-    await expect(tabs).toHaveCount(role === 'admin' ? 6 : 7);
+    // у админа сети отдельной вкладки «Отчёты» нет: фотоотчёты в «Аналитика → Фото отчёты»; «Календарь» есть у обоих
+    await expect(tabs).toHaveCount(role === 'admin' ? 7 : 8);
     await expect(tabs.last()).toHaveAttribute('data-nav-id', 'profile');
     await expect(nav(page).getByRole('tab', { name: 'Обучение', exact: true })).toHaveCount(1);
 
