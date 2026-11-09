@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 
 const password = 'ui-fixture-password-only';
 const roles = ['admin', 'owner', 'sales', 'measurer', 'crew'] as const;
@@ -41,8 +42,7 @@ for (const role of roles) {
 }
 
 test('демо: в «Обучении» нет раздела «Кабинет»', async ({ page }) => {
-  await page.goto('/?demo=1');
-  await page.getByRole('region', { name: 'Потолки Столицы', exact: true }).getByRole('button', { name: /Прайс и команда/ }).click();
+  await demoSignIn(page, 'owner');
   await openTraining(page);
   await expectNoCabinetSection(page);
 });

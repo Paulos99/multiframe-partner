@@ -734,3 +734,102 @@
     width: auto;
   }
 }
+
+
+/* Перетаскивание выездов и клик по дню. */
+.dayHeadRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 28px;
+}
+.dayAdd {
+  appearance: none;
+  flex-shrink: 0;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 2px 8px;
+  border: 1px dashed var(--cab-border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cab-accent-text);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dayAdd:hover,
+.dayAdd:focus-visible {
+  border-style: solid;
+  border-color: var(--cab-accent);
+  background: var(--cab-accent-softer);
+  outline: none;
+}
+.dayHit {
+  appearance: none;
+  flex: 1;
+  min-height: 48px;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed transparent;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+.dayHit:hover,
+.dayHit:focus-visible {
+  border-color: var(--cab-border-strong);
+  background: var(--cab-subtle);
+  outline: none;
+}
+.dayCol[data-drop],
+.monthCell[data-drop] {
+  border-color: var(--cab-accent);
+  background: var(--cab-accent-softer);
+  box-shadow: inset 0 0 0 2px var(--cab-accent);
+  transition: background 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+.event[data-dragging] {
+  opacity: 0.35;
+}
+.eventMain[aria-roledescription] {
+  touch-action: none;
+  cursor: grab;
+}
+.eventMain[aria-roledescription]:active {
+  cursor: grabbing;
+}
+.dragOverlay {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(220px, 70vw);
+  padding: 8px 10px;
+  border-radius: 10px;
+  border-left: 4px solid var(--cab-accent);
+  background: var(--cab-card);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.22);
+  color: var(--cab-ink);
+  pointer-events: none;
+}
+.dragOverlay[data-kind='install'] {
+  border-left-color: var(--cab-info);
+}
+@media (max-width: 640px) {
+  .dayAdd {
+    min-height: 32px;
+    min-width: 32px;
+    padding: 4px 8px;
+  }
+  .monthCell .dayAdd {
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dayCol[data-drop],
+  .monthCell[data-drop] {
+    transition: none;
+  }
+}
