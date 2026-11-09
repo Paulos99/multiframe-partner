@@ -4,6 +4,9 @@ import { groupJourneySteps } from '../../../../packages/shared/clientJourney';
 import { useGrow, useStaggerIn } from '../ui/gsapMotion';
 import styles from './partner.module.css';
 
+const DEFAULT_HINT =
+  'Считаем, сколько дошло до каждого этапа за период. Процент — от предыдущего этапа и от начала. «Не дошли…» — сколько выбыло между этапами. Нажмите этап, чтобы увидеть шаги.';
+
 function formatCount(count: number | null): string {
   if (count == null) return 'нет данных';
   return String(count);
@@ -16,31 +19,30 @@ function pctLabel(raw: string | undefined | null): string | null {
   return raw;
 }
 
-function stageWidthPct(count: number | null, base: number): number {
-  if (base <= 0) return 100;
-  if (count == null) return 36;
-  const ratio = Math.max(0, Math.min(1, count / base));
-  // 0 → 34%, первый этап → 100%: ступени читаются и визуально сужаются.
-  return Math.round(34 + ratio * 66);
+/** Доля для полоски: 0…1 от базы этапа/начала. */
+function fillRatio(count: number | null, base: number): number {
+  if (base <= 0) return 0;
+  if (count == null) return 0;
+  return Math.max(0, Math.min(1, count / base));
 }
 
-function dropBetween(prev: number | null, curr: number | null): string | null {
+function dropLabel(prev: number | null, curr: number | null): string | null {
   if (prev == null || curr == null) return null;
   const lost = prev - curr;
   if (lost <= 0) return null;
-  return `−${lost}`;
+  return `Не дошли до следующего этапа: ${lost}`;
 }
 
 const NestedStep = memo(function NestedStep({
   step,
-  base,
+  entry,
 }: {
   step: JourneyStep;
-  base: number;
+  entry: number;
 }) {
-  const width = stageWidthPct(step.count, base);
   const pct = pctLabel(step.fromPrevPct);
   const empty = step.count == null || step.count <= 0;
+  const ratio = fillRatio(step.count, entry > 0 ? entry : 1);
   return (
     <li className={styles.funnelNestedItem} data-funnel-nested={step.id}>
       <div className={styles.funnelNestedHead}>
@@ -52,7 +54,7 @@ const NestedStep = memo(function NestedStep({
       </div>
       <span
         className={empty ? `${styles.funnelTrack} ${styles.funnelTrackEmpty}` : styles.funnelTrack}
-        style={{ '--funnel-w': `${width}%` } as CSSProperties}
+        style={{ '--funnel-fill': `${Math.round(ratio * 100)}%` } as CSSProperties}
         aria-hidden="true"
       >
         <span className={styles.funnelTrackFill} />
@@ -67,7 +69,8 @@ const FunnelStage = memo(function FunnelStage({
   label,
   count,
   fromPrevPct,
-  widthPct,
+  fromStartPct,
+  fillPct,
   expandable,
   expanded,
   onToggle,
@@ -79,15 +82,26 @@ const FunnelStage = memo(function FunnelStage({
   label: string;
   count: number | null;
   fromPrevPct: string;
-  widthPct: number;
+  fromStartPct?: string;
+  fillPct: number;
   expandable: boolean;
   expanded: boolean;
   onToggle: (id: string) => void;
   children?: ReactNode;
   dropAfter: string | null;
 }) {
-  const pct = pctLabel(fromPrevPct);
+  const prev = pctLabel(fromPrevPct);
+  const start = pctLabel(fromStartPct);
   const empty = count == null || count <= 0;
+  const conv =
+    index === 0
+      ? start
+        ? `от начала ${start}`
+        : null
+      : [prev ? `от предыдущего ${prev}` : null, start ? `от начала ${start}` : null]
+          .filter(Boolean)
+          .join(' · ') || null;
+
   const head = (
     <>
       <span className={styles.funnelStageMeta}>
@@ -99,11 +113,12 @@ const FunnelStage = memo(function FunnelStage({
         </span>
         <span className={styles.funnelStageNums}>
           <strong className={styles.funnelCountStrong}>{formatCount(count)}</strong>
-          {pct ? <span className={styles.funnelPctTiny}>{pct}</span> : null}
         </span>
       </span>
+      {conv ? <span className={styles.funnelConv}>{conv}</span> : null}
       <span
         className={empty ? `${styles.funnelTrack} ${styles.funnelTrackEmpty}` : styles.funnelTrack}
+        style={{ '--funnel-fill': `${fillPct}%` } as CSSProperties}
         aria-hidden="true"
       >
         <span className={styles.funnelTrackFill} />
@@ -133,7 +148,6 @@ const FunnelStage = memo(function FunnelStage({
       data-funnel-row=""
       data-expanded={expanded ? '1' : '0'}
       data-empty={empty ? '1' : '0'}
-      style={{ '--funnel-w': `${widthPct}%` } as CSSProperties}
     >
       {expandable ? (
         <button
@@ -164,7 +178,7 @@ const FunnelStage = memo(function FunnelStage({
         </div>
       ) : null}
       {dropAfter ? (
-        <div className={styles.funnelDrop} aria-hidden="true">
+        <div className={styles.funnelDrop} role="note">
           <span className={styles.funnelDropVal}>{dropAfter}</span>
         </div>
       ) : null}
@@ -172,22 +186,25 @@ const FunnelStage = memo(function FunnelStage({
   );
 });
 
+export type RefusalReason = { key: string; title: string; count: number };
+
 /** Сжатая воронка клиента: 6 групп (клик раскрывает шаги) + отказ. Ролевые — плоский список. */
 export function JourneyFunnel({
   title,
   steps,
-  hint,
+  hint = DEFAULT_HINT,
+  refusalReasons = [],
 }: {
   title: string;
   steps: JourneyStep[];
   hint?: string;
+  refusalReasons?: RefusalReason[];
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const { groups, refusal } = useMemo(() => groupJourneySteps(steps), [steps]);
   const compact = groups.some((g) => g.steps.length > 0);
   const [openId, setOpenId] = useState<string | null>(null);
 
-  // Ключ только от данных: раскрытие не перезапускает появление и рост полос.
   const dataKey = useMemo(
     () => steps.map((step) => `${step.id}:${step.count}`).join('|') + (compact ? '|c' : '|f'),
     [steps, compact],
@@ -204,9 +221,14 @@ export function JourneyFunnel({
     setOpenId((prev) => (prev === id ? null : id));
   }, []);
 
+  const startBase = useMemo(() => {
+    const first = groups.find((g) => typeof g.count === 'number' && g.count > 0);
+    return first && typeof first.count === 'number' ? first.count : 0;
+  }, [groups]);
+
   if (!compact) {
     const numeric = steps.map((step) => (typeof step.count === 'number' ? step.count : 0));
-    const base = Math.max(1, ...numeric);
+    const base = Math.max(1, ...numeric, 1);
     return (
       <div className={styles.funnelBlock} ref={ref} data-journey-funnel>
         <h4 className={styles.funnelTitle}>{title}</h4>
@@ -215,11 +237,12 @@ export function JourneyFunnel({
           {steps.map((step, index) => {
             const next = steps[index + 1];
             const drop = next
-              ? dropBetween(
+              ? dropLabel(
                   typeof step.count === 'number' ? step.count : null,
                   typeof next.count === 'number' ? next.count : null,
                 )
               : null;
+            const fill = Math.round(fillRatio(step.count, base) * 100);
             return (
               <FunnelStage
                 key={step.id}
@@ -228,7 +251,8 @@ export function JourneyFunnel({
                 label={step.label}
                 count={step.count}
                 fromPrevPct={step.fromPrevPct}
-                widthPct={stageWidthPct(step.count, base)}
+                fromStartPct={step.fromStartPct}
+                fillPct={fill}
                 expandable={false}
                 expanded={false}
                 onToggle={onToggle}
@@ -241,23 +265,25 @@ export function JourneyFunnel({
     );
   }
 
-  const firstNumeric = groups.find((g) => typeof g.count === 'number' && g.count > 0);
-  const base = firstNumeric && typeof firstNumeric.count === 'number' ? Math.max(1, firstNumeric.count) : 1;
+  const emptyJourney = groups.every((g) => g.count == null || g.count === 0);
 
   return (
     <div className={styles.funnelBlock} ref={ref} data-journey-funnel data-funnel-compact>
       <h4 className={styles.funnelTitle}>{title}</h4>
       {hint ? <p className={styles.hint}>{hint}</p> : null}
+      {emptyJourney ? <p className={styles.funnelEmpty}>За период комнат пока нет</p> : null}
       <ol className={styles.funnelLadder}>
         {groups.map((group, gi) => {
           const expanded = openId === group.id;
           const next = groups[gi + 1];
           const drop = next
-            ? dropBetween(
+            ? dropLabel(
                 typeof group.count === 'number' ? group.count : null,
                 typeof next.count === 'number' ? next.count : null,
               )
             : null;
+          const entry = typeof group.count === 'number' && group.count > 0 ? group.count : 0;
+          const fill = Math.round(fillRatio(group.count, startBase > 0 ? startBase : 1) * 100);
           return (
             <FunnelStage
               key={group.id}
@@ -266,14 +292,15 @@ export function JourneyFunnel({
               label={group.label}
               count={group.count}
               fromPrevPct={group.fromPrevPct}
-              widthPct={stageWidthPct(group.count, base)}
+              fromStartPct={group.fromStartPct}
+              fillPct={fill}
               expandable={group.steps.length > 0}
               expanded={expanded}
               onToggle={onToggle}
               dropAfter={drop}
             >
               {group.steps.map((step) => (
-                <NestedStep key={step.id} step={step} base={base} />
+                <NestedStep key={step.id} step={step} entry={entry || startBase || 1} />
               ))}
             </FunnelStage>
           );
@@ -286,9 +313,20 @@ export function JourneyFunnel({
             <strong className={styles.funnelCountStrong}>{formatCount(refusal.count)}</strong>
           </div>
           {pctLabel(refusal.fromPrevPct) ? (
-            <span className={styles.funnelRefusalPct}>{pctLabel(refusal.fromPrevPct)}</span>
+            <span className={styles.funnelRefusalPct}>{pctLabel(refusal.fromPrevPct)} от всех закрытых за период</span>
+          ) : (
+            <span className={styles.hint}>доля от всех закрытых за период</span>
+          )}
+          {refusalReasons.length ? (
+            <ul className={styles.funnelRefusalReasons}>
+              {refusalReasons.map((reason) => (
+                <li key={reason.key}>
+                  <span>{reason.title}</span>
+                  <span>{reason.count}</span>
+                </li>
+              ))}
+            </ul>
           ) : null}
-          <span className={styles.hint}>доля от всех закрытых за период</span>
         </div>
       ) : null}
     </div>

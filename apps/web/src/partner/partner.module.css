@@ -3766,14 +3766,22 @@ div.drillPerson {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
+  width: min(100%, 340px);
+  max-width: 100%;
+}
+
+.funnelEmpty {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  color: var(--cab-muted, #5b6b62);
 }
 
 .funnelStage {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  width: var(--funnel-w, 100%);
+  width: 100%;
   max-width: 100%;
   margin: 0;
 }
@@ -3782,8 +3790,8 @@ div.drillPerson {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  gap: 6px 10px;
+  grid-auto-rows: auto;
+  gap: 4px 10px;
   align-items: center;
   width: 100%;
   margin: 0;
@@ -3824,7 +3832,6 @@ div.drillPerson {
 
 .funnelStageMeta {
   grid-column: 1;
-  grid-row: 1;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -3867,6 +3874,15 @@ div.drillPerson {
   flex: 0 0 auto;
 }
 
+.funnelConv {
+  grid-column: 1;
+  font-size: 0.72rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--cab-muted, #5b6b62);
+  line-height: 1.35;
+}
+
 .funnelCountStrong {
   font-size: 1.05rem;
   font-weight: 800;
@@ -3884,7 +3900,6 @@ div.drillPerson {
 
 .funnelTrack {
   grid-column: 1;
-  grid-row: 2;
   display: block;
   width: 100%;
   height: 10px;
@@ -3899,7 +3914,8 @@ div.drillPerson {
 
 .funnelTrackFill {
   display: block;
-  width: 100%;
+  width: var(--funnel-fill, 100%);
+  max-width: 100%;
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(
@@ -3907,15 +3923,17 @@ div.drillPerson {
     color-mix(in srgb, var(--cab-accent, #1f8a5b) 82%, #0d3d2a),
     var(--cab-accent, #1f8a5b)
   );
+  transform-origin: left center;
 }
 
 .funnelTrackEmpty .funnelTrackFill {
+  width: 8%;
   background: color-mix(in srgb, var(--cab-muted, #5b6b62) 35%, transparent);
 }
 
 .funnelChevron {
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 1 / -1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3997,31 +4015,30 @@ div.drillPerson {
 
 .funnelNested .funnelTrack {
   height: 6px;
-  width: var(--funnel-w, 100%);
+  width: 100%;
   max-width: 100%;
+  grid-row: auto;
+  grid-column: auto;
 }
 
 .funnelDrop {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
-  min-height: 18px;
-  padding: 2px 0 2px 18px;
+  min-height: 0;
+  padding: 8px 4px 8px 14px;
 }
 
 .funnelDropVal {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.6rem;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--cab-subtle, #eef3f0) 80%, var(--cab-border, #d8dee6));
-  font-size: 0.68rem;
-  font-weight: 750;
+  display: inline;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
   color: var(--cab-muted, #5b6b62);
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .funnelRefusal {
@@ -4034,6 +4051,8 @@ div.drillPerson {
   border-radius: 12px;
   border: 1px dashed color-mix(in srgb, var(--cab-danger, #c0392b) 45%, var(--cab-border, #d8dee6));
   background: color-mix(in srgb, var(--cab-danger, #c0392b) 7%, var(--cab-card, #fff));
+  width: min(100%, 340px);
+  max-width: 100%;
 }
 
 .funnelRefusalMain {
@@ -4041,7 +4060,7 @@ div.drillPerson {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  grid-column: 1;
+  grid-column: 1 / -1;
 }
 
 .funnelRefusalLabel {
@@ -4051,10 +4070,9 @@ div.drillPerson {
 }
 
 .funnelRefusalPct {
-  grid-column: 2;
-  grid-row: 1;
+  grid-column: 1 / -1;
   font-size: 0.78rem;
-  font-weight: 750;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--cab-danger, #b42318);
 }
@@ -4064,8 +4082,28 @@ div.drillPerson {
   margin: 0;
 }
 
+.funnelRefusalReasons {
+  grid-column: 1 / -1;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8rem;
+  color: var(--cab-muted, #5b6b62);
+}
+
+.funnelRefusalReasons li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 520px) {
-  .funnelStage {
+  .funnelLadder,
+  .funnelRefusal {
     width: 100%;
   }
 

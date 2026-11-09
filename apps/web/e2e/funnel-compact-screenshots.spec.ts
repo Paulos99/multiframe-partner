@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const OUT =
   process.env.FUNNEL_SHOT_DIR ||
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../handover/screenshots-funnel');
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../handover/screenshots-funnel-compact');
 
 async function shot(page: import('@playwright/test').Page, name: string) {
   await page.waitForTimeout(350);
@@ -31,6 +31,11 @@ test.describe('compact funnel screenshots', () => {
     await expect(funnel.getByRole('button', { name: /5\.\s*Замер и КП/ })).toBeVisible();
     await expect(funnel.getByRole('button', { name: /6\.\s*Монтаж/ })).toBeVisible();
     await expect(funnel.locator('[data-funnel-refusal]')).toContainText('Отказ');
+    // Потери словами, не «−N»
+    const drop = funnel.locator('.funnelDropVal').first();
+    if (await drop.count()) {
+      await expect(drop).toContainText(/Не дошли до следующего этапа/);
+    }
 
     await funnel.scrollIntoViewIfNeeded();
     await shot(page, 'funnel-desktop-collapsed.png');
