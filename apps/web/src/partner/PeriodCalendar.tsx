@@ -138,6 +138,17 @@ export function PeriodCalendar({ fromYmd, toYmd, onChange, triggerClassName }: P
             >
               Прошлый месяц
             </button>
+            <button
+              type="button"
+              className={styles.ghost}
+              onClick={() => {
+                const now = new Date();
+                const start = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate() + 1);
+                apply(ymdLocal(start), today, true);
+              }}
+            >
+              Квартал
+            </button>
             <button type="button" className={styles.ghost} onClick={() => apply(null, null, true)}>
               Всё время
             </button>

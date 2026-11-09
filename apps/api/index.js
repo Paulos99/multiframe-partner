@@ -50,6 +50,7 @@ import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } f
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { parseBody, schemas } from './validation.js';
 import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
+import { buildPartnerComparison, buildPeriodSummary } from '../../packages/shared/periodSummary.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { estimateForRole } from '../../packages/shared/projectAccess.js';
 import { cleanClientPhone, phoneRoomStatusAllowed, roleSeesClientPhone } from '../../packages/shared/clientPhone.js';
@@ -1253,6 +1254,42 @@ export function aggregateAnalyticsDashboard(allEvents, opts) {
       .slice(0, opts.journalAll ? 5000 : 40),
     events: events.slice(0, opts.journalAll ? 5000 : 200),
   };
+}
+
+/**
+ * «Сводка за период» с выводами по правилам. Права уже проверены вызывающим кодом:
+ * сюда приходит orgId компании (владелец, менеджер) или null у админа StP (вся сеть).
+ * Админ сети и его организация в выводы не попадают, как и в остальной аналитике.
+ */
+export function buildAnalyticsSummary(platform, allEvents, { orgId = null, from = null, to = null, now = Date.now(), withPartners = false } = {}) {
+  const scope = networkAdminScope(platform);
+  const adminOrgs = new Set(scope.adminOrgIds);
+  const events = filterAnalyticsEvents(allEvents || [], { orgId, ...scope });
+  const rooms = (platform?.objects || []).filter(
+    (room) => room && room.orgId && !adminOrgs.has(room.orgId) && (!orgId || room.orgId === orgId),
+  );
+  const users = (platform?.users || [])
+    .filter((u) => u && u.role !== 'admin' && (!orgId || u.orgId === orgId))
+    .map((u) => ({ id: u.id, login: u.login, displayName: u.displayName || u.login, role: normalizeRole(u.role) }));
+  const summary = buildPeriodSummary({ rooms, events, users, from, to, now });
+  const result = {
+    from,
+    to,
+    previousRange: summary.previousRange,
+    conclusions: summary.conclusions,
+    enoughData: summary.enoughData,
+    partners: null,
+  };
+  if (withPartners) {
+    const ownerOrgIds = new Set(
+      (platform?.users || []).filter((u) => normalizeRole(u.role) === 'owner' && u.orgId).map((u) => u.orgId),
+    );
+    const orgs = (platform?.orgs || [])
+      .filter((org) => org && ownerOrgIds.has(org.id) && !adminOrgs.has(org.id) && (!orgId || org.id === orgId))
+      .map((org) => ({ id: org.id, name: org.settings?.companyName || org.id, city: org.settings?.city || '' }));
+    result.partners = buildPartnerComparison({ orgs, rooms, events, from, to, now });
+  }
+  return result;
 }
 
 /* —— Списки с проверкой версии и постраничной выдачей ——
@@ -2617,6 +2654,28 @@ async function handleRequest(event = {}) {
         demoFill: demoOrg && focusDemo,
       });
       return json(200, drill);
+    }
+
+    if (method === 'GET' && path.endsWith('/analytics/summary')) {
+      // Только вход по токену. Владелец и менеджер видят свою компанию, админ StP — всю сеть или выбранного партнёра.
+      const auth = await requireAuth(event);
+      const role = normalizeRole(auth.user.role);
+      if (!['admin', 'owner', 'sales'].includes(role)) {
+        return json(403, { message: 'Аналитика недоступна' });
+      }
+      const query = getQuery(event);
+      const orgId = role === 'admin' ? query.orgId || null : auth.user.orgId;
+      if (role !== 'admin' && !orgId) return json(403, { message: 'Аналитика недоступна' });
+      const events = await eventsForAnalytics();
+      return json(
+        200,
+        buildAnalyticsSummary(auth.platform, events, {
+          orgId,
+          from: query.from || null,
+          to: query.to || null,
+          withPartners: role === 'admin',
+        }),
+      );
     }
 
     if (method === 'GET' && path.endsWith('/analytics/dashboard')) {
