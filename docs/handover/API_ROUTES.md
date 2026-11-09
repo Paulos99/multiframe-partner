@@ -89,6 +89,14 @@
 | `/materials/files/upload-url`, `/materials/files/multipart*` | загрузка больших файлов (только admin) |
 | `/materials/{materialId}`, `…/content`, `…/preview`, `…/thumbnail` | чтение и просмотр |
 
+Роли видимости. У папки, файла и обучающего видео есть поле `roles`: `null` — все роли (внутри папки — как у папки), список из `owner`, `sales`, `measurer`, `crew`, `stp_manager` — только эти роли. Админ StP видит всё.
+
+- `POST /materials/folders`, `POST /materials/files`, `POST /materials/files/multipart/complete` принимают `roles` (по умолчанию все роли) и `section: "video"` для обучающего видео (только видеофайл, вне папок).
+- `PATCH /materials/{materialId}` с `{ roles }` меняет, кто видит (только admin). Материал внутри папки не может быть виден шире папки: ответ 400.
+- `GET /materials` отдаёт роли только видимое ей; скрытое не попадает в ответ. `…/content`, `…/preview`, `…/thumbnail` скрытого — 404. Админу в каждом узле приходят `roles` и `effectiveRoles` (с учётом папок).
+
+Новых путей нет, `GATEWAY_PATHS` не менялся.
+
 ## Как проверить маршрут
 
 ```bash

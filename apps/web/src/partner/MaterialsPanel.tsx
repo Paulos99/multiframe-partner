@@ -14,8 +14,12 @@ import {
   openMaterialPdfCopy,
   renameMaterialItem,
   replaceMaterialFile,
+  setMaterialItemRoles,
   uploadMaterialFile,
 } from './materialsClient';
+import { MaterialRolesDialog } from './MaterialRolesDialog';
+import { folderLimit, rolesLabel, type MaterialRoles } from './materialRoles';
+import { TrainingVideos } from './RoleVideoCard';
 import styles from './MaterialsPanel.module.css';
 import { ContextMenu, DeleteFolderDialog, folderContents } from './MaterialsContextMenu';
 import { openFilePreview, type PreviewItem, type PreviewSource } from '../ui/filePreview/previewStore';
@@ -85,7 +89,10 @@ function FolderIcon() {
   );
 }
 
-export function MaterialsPanel({ canManage: canManageOnline }: { canManage: boolean }) {
+/** Что сейчас настраивается в окне «Кто видит». */
+type RolesTarget = { kind: 'new' } | { kind: 'item'; item: PublicMaterial } | { kind: 'video-new' };
+
+export function MaterialsPanel({ canManage: canManageOnline, role }: { canManage: boolean; role?: string }) {
   const reduce=usePrefersReducedMotion();
   // Перерисовка, когда меняется набор офлайн-копий (значок «Офлайн» у файлов).
   useSyncExternalStore(subscribeOffline, getOfflineState, getOfflineState);
@@ -109,7 +116,12 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
   const replaceId = useRef<string | null>(null);
+  /** Кто увидит новые папки и файлы в текущей папке. null — все роли (в папке — как у папки). */
+  const [newRoles, setNewRoles] = useState<MaterialRoles>(null);
+  const [rolesTarget, setRolesTarget] = useState<RolesTarget | null>(null);
+  const videoRoles = useRef<MaterialRoles>(null);
   // Правый клик — только мышью: долгое нажатие на телефоне/планшете остаётся системным.
   const lastPointer = useRef<string>('mouse');
   const [menu, setMenu] = useState<{ x: number; y: number; folder: PublicMaterial | null } | null>(null);
@@ -123,7 +135,7 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
     try {
       // Без сети не ждём таймаута запроса — сразу сохранённый список.
       if (typeof navigator !== 'undefined' && navigator.onLine === false && offlineEnabled()) throw new Error('Нет сети');
-      const list = await listMaterials();
+      const list = await listMaterials(role);
       setItems(list);
       setServerList(list);
       setOfflineView(null);
@@ -170,15 +182,20 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
     return chain.reverse();
   }, [folderId, items]);
 
+  // Обучающие видео идут отдельным разделом над папками, в дерево не попадают.
+  const videos = useMemo(() => items.filter((item) => item.section === 'video'), [items]);
   const visible = useMemo(() => {
     return items
-      .filter((item) => (item.parentId ?? null) === folderId)
+      .filter((item) => item.section !== 'video' && (item.parentId ?? null) === folderId)
       .slice()
       .sort((a, b) => {
         if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
         return a.name.localeCompare(b.name, 'ru');
       });
   }, [items, folderId]);
+
+  useEffect(() => setNewRoles(null), [folderId]);
+  const limit = folderLimit(items, folderId);
 
   const folders = visible.filter((item) => item.kind === 'folder');
   const files = visible.filter((item) => item.kind !== 'folder');
@@ -224,10 +241,15 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
     const ok = await run(async () => {
       saved = target
         ? await replaceMaterialFile(target, file)
-        : await uploadMaterialFile(file, parentId, (loaded, total) => {
-            const percent = total ? Math.floor((loaded / total) * 100) : 0;
-            setStatus(`Загрузка «${file.name}»: ${percent}%`);
-          });
+        : await uploadMaterialFile(
+            file,
+            parentId,
+            (loaded, total) => {
+              const percent = total ? Math.floor((loaded / total) * 100) : 0;
+              setStatus(`Загрузка «${file.name}»: ${percent}%`);
+            },
+            { roles: newRoles },
+          );
       return saved;
     });
     // Миниатюра из локального файла (картинка, кадр видео, 1-я страница PDF) — в фоне, без ожидания.
@@ -236,6 +258,33 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
         if (next) setItems(next);
       });
     }
+  }
+
+  async function onVideoPick(file: File | undefined) {
+    if (!file) return;
+    let saved: PublicMaterial[] | null = null;
+    const ok = await run(async () => {
+      saved = await uploadMaterialFile(
+        file,
+        null,
+        (loaded, total) => {
+          const percent = total ? Math.floor((loaded / total) * 100) : 0;
+          setStatus(`Загрузка видео «${file.name}»: ${percent}%`);
+        },
+        { roles: videoRoles.current, section: 'video' },
+      );
+      return saved;
+    });
+    if (ok && saved && materialsUseApi()) {
+      void thumbnailAfterUpload(file, saved, { parentId: null }).then((next) => {
+        if (next) setItems(next);
+      });
+    }
+  }
+
+  function deleteVideo(item: PublicMaterial) {
+    if (!confirm(`Удалить видео «${item.name}»? Сотрудники перестанут его видеть. Вернуть видео можно, только загрузив его заново.`)) return;
+    void run(() => deleteMaterialItem(item.id));
   }
 
   /**
@@ -282,6 +331,17 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
         lastPointer.current = event.pointerType || 'mouse';
       }}
     >
+      {!loading ? (
+        <TrainingVideos
+          items={videos}
+          canManage={canManage}
+          busy={busy}
+          previewItem={materialPreviewItem}
+          onAdd={() => setRolesTarget({ kind: 'video-new' })}
+          onRoles={(item) => setRolesTarget({ kind: 'item', item })}
+          onDelete={deleteVideo}
+        />
+      ) : null}
       <p className={styles.lead}>Инструкции и презентации по продукту.</p>
       {offlineView ? (
         <div
@@ -335,7 +395,7 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
                 event.preventDefault();
                 const name = folderDraft.trim();
                 if (!name) return;
-                void run(() => createMaterialFolder(name, folderId)).then((ok) => {
+                void run(() => createMaterialFolder(name, folderId, newRoles)).then((ok) => {
                   if (!ok) return;
                   setFolderDraft('');
                   setMakingFolder(false);
@@ -364,6 +424,15 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
               </button>
               <button
                 type="button"
+                className={styles.ghost}
+                onClick={() => setRolesTarget({ kind: 'new' })}
+                aria-label={`Кто увидит новые папки и файлы: ${newRoles === null && limit ? 'как у папки' : rolesLabel(newRoles)}`}
+                data-testid="new-material-roles"
+              >
+                Видят новое: {newRoles === null && limit ? 'как у папки' : rolesLabel(newRoles)}
+              </button>
+              <button
+                type="button"
                 className={styles.primary}
                 disabled={busy}
                 onClick={() => {
@@ -383,6 +452,19 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
               const file = event.target.files?.[0];
               event.target.value = '';
               void onFilePick(file);
+            }}
+          />
+          <input
+            ref={videoRef}
+            className={styles.filePick}
+            type="file"
+            accept="video/*"
+            aria-label="Видеофайл"
+            data-testid="training-video-input"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              void onVideoPick(file);
             }}
           />
         </div>
@@ -438,6 +520,7 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
                         <span className={styles.meta}>
                           {folderCountLabel(items.filter((child) => child.parentId === item.id).length)}
                         </span>
+                        <RolesBadge item={item} />
                       </span>
                       <span className={styles.chevron} aria-hidden="true">
                         ›
@@ -454,6 +537,7 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
                         setRenameDraft(item.name);
                       }}
                       onSave={() => saveRename(item)}
+                      onRoles={() => setRolesTarget({ kind: 'item', item })}
                       onDelete={() => setDoomed(item)}
                     />
                   ) : null}
@@ -486,6 +570,7 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
                         <span className={styles.copy}>
                           <span className={styles.kind}>{materialKindLabel(item)}</span>
                           <span className={styles.name}>{item.name}</span>
+                          <RolesBadge item={item} />
                           {isAvailableOffline(item.id) ? (
                             <span className={styles.offlineBadge} data-testid="offline-badge">
                               Офлайн
@@ -509,6 +594,7 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
                           setRenameDraft(item.name);
                         }}
                         onSave={() => saveRename(item)}
+                        onRoles={() => setRolesTarget({ kind: 'item', item })}
                         onReplace={() => {
                           replaceId.current = item.id;
                           fileRef.current?.click();
@@ -554,6 +640,40 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
           }
         />
       ) : null}
+      {rolesTarget ? (
+        <MaterialRolesDialog
+          title={
+            rolesTarget.kind === 'item'
+              ? `Кто видит «${rolesTarget.item.name}»`
+              : rolesTarget.kind === 'video-new'
+                ? 'Новое обучающее видео'
+                : 'Кто увидит новые папки и файлы'
+          }
+          initial={rolesTarget.kind === 'item' ? (rolesTarget.item.roles ?? null) : rolesTarget.kind === 'new' ? newRoles : null}
+          limit={
+            rolesTarget.kind === 'item'
+              ? folderLimit(items, rolesTarget.item.parentId)
+              : rolesTarget.kind === 'new'
+                ? limit
+                : null
+          }
+          isFolder={rolesTarget.kind === 'item' && rolesTarget.item.kind === 'folder'}
+          confirmLabel={rolesTarget.kind === 'video-new' ? 'Выбрать видеофайл' : 'Сохранить'}
+          onConfirm={(roles) => {
+            if (rolesTarget.kind === 'new') {
+              setNewRoles(roles);
+              return true;
+            }
+            if (rolesTarget.kind === 'video-new') {
+              videoRoles.current = roles;
+              videoRef.current?.click();
+              return true;
+            }
+            return run(() => setMaterialItemRoles(rolesTarget.item.id, roles));
+          }}
+          onClose={() => setRolesTarget(null)}
+        />
+      ) : null}
       {doomed ? (
         <DeleteFolderDialog
           folder={doomed}
@@ -567,12 +687,24 @@ export function MaterialsPanel({ canManage: canManageOnline }: { canManage: bool
   );
 }
 
+/** Отметка ролей у папки и файла. Роли приходят только админу StP, остальным отметка не нужна. */
+function RolesBadge({ item }: { item: PublicMaterial }) {
+  if (item.effectiveRoles === undefined) return null;
+  const restricted = item.effectiveRoles !== null;
+  return (
+    <span className={restricted ? styles.rolesBadge : styles.rolesAll} data-testid="material-roles">
+      Видят: {rolesLabel(item.effectiveRoles)}
+    </span>
+  );
+}
+
 function ItemActions({
   item,
   busy,
   renaming,
   onRename,
   onSave,
+  onRoles,
   onReplace,
   onDelete,
 }: {
@@ -581,6 +713,7 @@ function ItemActions({
   renaming: boolean;
   onRename: () => void;
   onSave: () => void;
+  onRoles: () => void;
   onReplace?: () => void;
   onDelete: () => void;
 }) {
@@ -595,6 +728,9 @@ function ItemActions({
           Переименовать
         </button>
       )}
+      <button type="button" className={styles.ghost} disabled={busy} onClick={onRoles} aria-label={`Кто видит: ${item.name}`}>
+        Кто видит
+      </button>
       {item.kind === 'file' && onReplace ? (
         <button type="button" className={styles.ghost} disabled={busy} onClick={onReplace}>
           Заменить

@@ -5,6 +5,8 @@ import { HelpTrainingPanel } from './HelpTrainingPanel.tsx';
 import { folderCountLabel, materialNote } from './MaterialsPanel.tsx';
 import { MaterialStubView, PREPARING_LABEL } from './MaterialStubView.tsx';
 import { ObjectHistory, recordsLabel } from './ObjectHistory.tsx';
+import { TrainingVideos } from './RoleVideoCard.tsx';
+import { ensureMaterialVideos, publicMaterialsFor, type MaterialNode } from '../../../../packages/shared/materialsLib.js';
 
 function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -102,36 +104,45 @@ for (const role of ['admin', 'owner', 'sales', 'measurer', 'crew'] as const) {
   }
 }
 
-// Каждая рабочая роль видит в «Обучении» своё видео; у менеджера StP видео нет; админ StP видит все четыре.
+// Обучающие видео: кто что видит, решает админ StP (роли видимости). Сначала каждый встроенный ролик виден своей роли,
+// у менеджера StP видео нет, админ StP видит все четыре с отметкой ролей, кнопками «Кто видит» и «Удалить».
 const VIDEO_ROLES = [['owner', 'Владелец компании'], ['sales', 'Менеджер по продажам'], ['measurer', 'Замерщик'], ['crew', 'Монтажник']] as const;
+const seededVideos = (role: string) => {
+  const platform = ensureMaterialVideos({ materials: [] as MaterialNode[] });
+  return publicMaterialsFor(platform.materials, role).filter((item) => item.section === 'video');
+};
+const videosHtml = (role: string) =>
+  renderToStaticMarkup(
+    <TrainingVideos
+      items={seededVideos(role)}
+      canManage={role === 'admin'}
+      busy={false}
+      previewItem={(item) => ({ id: item.id, name: item.name, mime: item.mime, load: async () => ({ url: '', mime: 'video/mp4' }) })}
+      onAdd={() => undefined}
+      onRoles={() => undefined}
+      onDelete={() => undefined}
+    />,
+  );
 for (const [role, title] of VIDEO_ROLES) {
-  const html = renderToStaticMarkup(<HelpTrainingPanel role={role} />);
+  const html = videosHtml(role);
   if (!html.includes('Обучающее видео') || !html.includes(`«${title}»`) || !html.includes(`/videos/role-${role}.jpg`)) {
     throw new Error(`В обучении роли ${role} нет своего видео`);
   }
+  if ((html.match(/Смотреть:/g) || []).length !== 1) throw new Error(`Роль ${role} должна видеть только своё видео`);
   if (html.includes('<video')) throw new Error(`У роли ${role} видео не должно играть в карточке — только кнопка «Смотреть»`);
-  if (!html.includes('Смотреть') || !html.includes(`role-${role}.jpg`)) {
-    throw new Error(`Видео роли ${role}: нет кнопки «Смотреть» или афиши`);
-  }
-  // Первым пунктом: раньше папок материалов.
-  if (html.indexOf('Обучающее видео') > html.indexOf('Папки') && html.includes('Папки')) {
-    throw new Error(`Видео роли ${role} должно идти раньше папок`);
-  }
+  if (/Удалить|Кто видит|Добавить видео/.test(html)) throw new Error(`У роли ${role} не должно быть управления видео`);
 }
-if (renderToStaticMarkup(<HelpTrainingPanel role={'stp_manager'} />).includes('Обучающее видео')) {
-  throw new Error('У менеджера StP не должно быть обучающего видео');
-}
+if (videosHtml('stp_manager') !== '') throw new Error('У менеджера StP не должно быть обучающего видео');
 {
-  const html = renderToStaticMarkup(<HelpTrainingPanel role="admin" />);
+  const html = videosHtml('admin');
   if (html.includes('<video')) throw new Error('Админ StP: видео не должны быть встроены в карточку');
-  if ((html.match(/Смотреть/g) || []).length < 4) throw new Error('Админ StP должен видеть все четыре кнопки «Смотреть»');
+  if ((html.match(/Смотреть:/g) || []).length !== 4) throw new Error('Админ StP должен видеть все четыре видео');
   for (const [role, title] of VIDEO_ROLES) {
     if (!html.includes(`«${title}»`) || !html.includes(`/videos/role-${role}.jpg`)) throw new Error(`Админ StP не видит видео роли ${role}`);
   }
   if (html.includes('role-stp')) throw new Error('Видео менеджера StP убрано');
-  // Только просмотр: рядом с роликами нет кнопок удаления.
-  const videoPart = html.slice(html.indexOf('Обучающее видео'), html.indexOf('Папки') > 0 ? html.indexOf('Папки') : undefined);
-  if (/Удалить|Заменить|Загрузить/.test(videoPart)) throw new Error('Рядом с видео ролей не должно быть удаления и замены');
+  if ((html.match(/Удалить видео:/g) || []).length !== 4) throw new Error('Админ StP должен уметь удалить каждое видео');
+  if (!html.includes('Видят: Владелец') || !html.includes('Добавить видео')) throw new Error('Админ StP: нет отметки ролей или кнопки «Добавить видео»');
 }
 
 console.log('Present surfaces: checks passed');

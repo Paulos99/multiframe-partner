@@ -80,3 +80,66 @@
 .open:focus-visible .play {
   background: rgba(8, 28, 22, 0.95);
 }
+
+.section {
+  margin-bottom: 4px;
+}
+
+.roles {
+  margin: 8px 0 0;
+  color: var(--accent-color);
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ghost,
+.danger,
+.addBtn {
+  appearance: none;
+  min-height: var(--touch-min);
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.ghost,
+.addBtn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--accent-color);
+}
+
+.danger {
+  border: 1px solid transparent;
+  background: var(--danger-soft);
+  color: var(--cab-danger);
+}
+
+.ghost:disabled,
+.danger:disabled,
+.addBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.addNote {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
