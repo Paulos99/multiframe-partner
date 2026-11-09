@@ -218,12 +218,14 @@ export function buildReminders(input) {
     const what = VISIT_KIND_LABELS[visit.kind] || 'Выезд';
     const base = { visitId: visit.id, projectId: visit.projectId, objectId: visit.objectId || null, at: visit.startsAt };
     if (!visit.doneAt && (mine(visit) || manager) && start > now) {
+      // Один ключ на выезд: «сегодня» → «скоро» не сбрасывает «Готово»/«Отложить».
+      const visitKey = `visit:${visit.id}:${visit.startsAt}`;
       if (start - now <= SOON_MS && (mine(visit) || role === 'owner')) {
-        out.push({ ...base, key: `soon:${visit.id}:${visit.startsAt}`, type: 'visit_soon', tone: 'urgent', title: `Скоро ${what.toLowerCase()}`, detail: label });
+        out.push({ ...base, key: visitKey, type: 'visit_soon', tone: 'urgent', title: `Скоро ${what.toLowerCase()}`, detail: label });
       } else if (dayKey(start, tz) === tomorrow && mine(visit)) {
-        out.push({ ...base, key: `tomorrow:${visit.id}:${visit.startsAt}`, type: 'visit_tomorrow', tone: 'info', title: `Завтра ${what.toLowerCase()}`, detail: label });
+        out.push({ ...base, key: visitKey, type: 'visit_tomorrow', tone: 'info', title: `Завтра ${what.toLowerCase()}`, detail: label });
       } else if (dayKey(start, tz) === today && mine(visit)) {
-        out.push({ ...base, key: `today:${visit.id}:${visit.startsAt}`, type: 'visit_today', tone: 'info', title: `Сегодня ${what.toLowerCase()}`, detail: label });
+        out.push({ ...base, key: visitKey, type: 'visit_today', tone: 'info', title: `Сегодня ${what.toLowerCase()}`, detail: label });
       }
     }
     if (end != null && end < now) {
