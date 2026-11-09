@@ -78,6 +78,9 @@ describe('Коммерческое предложение', () => {
     expect(html).toContain('+7 900 123-45-67');
     expect(html).toContain('Елена Крылова');
     expect(html).toContain('не инженерный расчёт');
+    expect(html).not.toMatch(/Демо|ДЕМО|демо-образец/);
+    expect(model.number).toBe('0611-RNOV');
+    expect(html).toContain('КП № 0611-RNOV');
   });
 
   it('отпечаток меняется вместе с площадью или ответами комнаты', () => {

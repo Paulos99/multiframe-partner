@@ -27,7 +27,7 @@ test('КП проекта: в «Документах», открывается, 
   const download = page.waitForEvent('download', { timeout: 60_000 });
   await row.getByRole('button', { name: 'Скачать', exact: true }).click();
   const file = await download;
-  expect(file.suggestedFilename()).toMatch(/^Коммерческое предложение — Чернов А\. — ДЕМО-001\.pdf$/);
+  expect(file.suggestedFilename()).toMatch(/^Коммерческое предложение — Чернов А\. — \d{4}-[A-Z0-9]+\.pdf$/);
   await file.saveAs(`${OUT}/kp-demo-stand.pdf`);
   expect(fs.readFileSync(`${OUT}/kp-demo-stand.pdf`).subarray(0, 4).toString()).toBe('%PDF');
 
