@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Метка выпуска, например v1.2.0 (для отката — предыдущая)'
+        description: 'Метка выпуска, например v1.1.0 (для отката — предыдущая)'
         required: true
       confirm:
         description: 'Введите deploy-prod для подтверждения'
@@ -83,8 +83,11 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          # Проверяем с самой ВМ (локальный nginx web и через Caddy)
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" bash -s <<'REMOTE'
+          # Проверяем с самой ВМ (локальный nginx web и через Caddy).
+          # TAG передаём в окружение удалённого bash: heredoc в кавычках 'REMOTE'
+          # не подставляет переменные раннера, иначе на ВМ получается unbound TAG.
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" \
+            env TAG="$TAG" bash -s <<'REMOTE'
           set -euo pipefail
           for i in 1 2 3 4 5 6 7 8 9 10; do
             VER=$(curl -fsS http://127.0.0.1:8081/cabinet/version.json || true)
