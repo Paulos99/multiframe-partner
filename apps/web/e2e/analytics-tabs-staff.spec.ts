@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn, type DemoRole } from './demo-login';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,10 +8,8 @@ const OUT =
   process.env.ANALYTICS_TABS_SHOT_DIR ||
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../handover/screenshots-analytics-tabs');
 
-async function openAnalytics(page: Page, role: RegExp) {
-  await page.goto('/?demo=1');
-  await page.getByRole('button', { name: role }).first().click();
-  await expect(page.getByRole('complementary', { name: 'Разделы кабинета' })).toBeVisible({ timeout: 30000 });
+async function openAnalytics(page: Page, role: DemoRole) {
+  await demoSignIn(page, role);
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
 }
 
@@ -18,7 +17,7 @@ test.describe('analytics overview panes + team navigation + staff blocks', () =>
   test('owner: Показатели/Сводка; сотрудник: график, топ-7, возврат', async ({ page }) => {
     fs.mkdirSync(OUT, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 900 });
-    await openAnalytics(page, /Владелец/);
+    await openAnalytics(page, 'owner');
 
     const panes = page.locator('[data-overview-panes]');
     await expect(panes).toBeVisible({ timeout: 30000 });
@@ -70,7 +69,7 @@ test.describe('analytics overview panes + team navigation + staff blocks', () =>
 
   test('admin StP: возврат из сотрудников сети в общую аналитику', async ({ page }) => {
     fs.mkdirSync(OUT, { recursive: true });
-    await openAnalytics(page, /^Админ StP/);
+    await openAnalytics(page, 'admin');
     await expect(page.locator('[data-overview-panes]')).toBeVisible({ timeout: 30000 });
     await page.getByRole('tab', { name: 'Сотрудники сети', exact: true }).click();
     await expect(page.getByRole('button', { name: '← Общая аналитика' })).toBeVisible({ timeout: 20000 });
