@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PHOTO_CAPTION_MAX,
+  PHOTO_LIMIT_PER_ROOM,
   PHOTO_STAGES,
   PHOTO_STAGE_LABELS,
   canDeletePhoto,
+  photoStagesRoleAdds,
+  photoStagesRoleSees,
   type PhotoStage,
 } from '../../../../../packages/shared/roomPhotos.js';
 import {
+  ApiError,
   apiDeleteRoomPhoto,
   apiListRoomPhotos,
   apiSetPhotoReportVisible,
   apiUpdateRoomPhoto,
-  apiUploadRoomPhoto,
   type RoomPhoto,
   type RoomPhotoList,
 } from '../apiClient';
@@ -19,7 +22,9 @@ import { usePartner } from '../PartnerContext';
 import { PhotoViewer } from './PhotoViewer';
 import { PhotoReportActions } from './PhotoReportActions';
 import { formatPhotoDate, groupByStage } from './photoFormat';
-import { PhotoPrepError, prepareImage } from './imagePrep';
+import { PhotoPrepError, prepareImageBlobs } from './imagePrep';
+import { PHOTO_SENT_EVENT, dropQueueItem, enqueuePhoto, photoQueueRoom } from '../fieldQueue';
+import type { FieldQueueItem, PhotoPayload } from '../offlineQueue';
 import styles from './RoomPhotoReport.module.css';
 
 const STAGE_HINT: Record<PhotoStage, string> = {
@@ -28,22 +33,40 @@ const STAGE_HINT: Record<PhotoStage, string> = {
   after: 'Готовый результат.',
 };
 
+/** Фото, которое ещё сжимается на телефоне (до постановки в очередь) или не сжалось. */
 type QueueItem = {
   key: string;
   stage: PhotoStage;
   name: string;
-  status: 'prep' | 'up' | 'error';
-  progress: number;
+  status: 'prep' | 'error';
   message: string;
   file: File;
   caption: string;
 };
 
+/** Миниатюры фото из очереди: ссылки на Blob живут, пока элемент на экране. */
+function useQueuedThumbs(items: FieldQueueItem[]): Map<string, string> {
+  const [urls, setUrls] = useState<Map<string, string>>(new Map());
+  const key = items.map((item) => item.id).join('|');
+  useEffect(() => {
+    const next = new Map<string, string>();
+    for (const item of items) {
+      const thumb = (item.payload as PhotoPayload).thumb;
+      if (thumb instanceof Blob) next.set(item.id, URL.createObjectURL(thumb));
+    }
+    setUrls(next);
+    return () => {
+      for (const url of next.values()) URL.revokeObjectURL(url);
+    };
+  }, [key]);
+  return urls;
+}
+
 const REFRESH_MS = 4 * 60_000;
 
 /** Фотоотчёт комнаты: этапы «До», «В процессе», «После», съёмка и загрузка, просмотр на весь экран. */
 export function RoomPhotoReport({ objectId }: { objectId: string }) {
-  const { user, remote, objects } = usePartner();
+  const { user, remote, objects, fieldQueue, online, flushObjectQueue } = usePartner();
   const room = objects.find((item) => item.id === objectId);
   const [data, setData] = useState<RoomPhotoList | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -52,6 +75,8 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
   const [captions, setCaptions] = useState<Record<PhotoStage, string>>({ before: '', progress: '', after: '' });
   const [shareBusy, setShareBusy] = useState(false);
   const [shareError, setShareError] = useState('');
+  const [limitError, setLimitError] = useState('');
+  const role = user?.role;
   const working = useRef(false);
   const pending = useRef<QueueItem[]>([]);
   const alive = useRef(true);
@@ -72,10 +97,26 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
         setLoadError('');
       } catch (e) {
         if ((e as Error)?.name === 'AbortError' || !alive.current) return;
+        // Нет связи: снимать можно и так, фото лягут в очередь на телефоне.
+        if (e instanceof ApiError && e.status === 0 && role) {
+          setData(
+            (current) =>
+              current ?? {
+                photos: [],
+                canAdd: photoStagesRoleAdds(role) as PhotoStage[],
+                stages: photoStagesRoleSees(role) as PhotoStage[],
+                limit: PHOTO_LIMIT_PER_ROOM,
+                clientVisible: true,
+                canShareWithClient: false,
+              },
+          );
+          setLoadError('');
+          return;
+        }
         setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить фото');
       }
     },
-    [objectId],
+    [objectId, role],
   );
 
   useEffect(() => {
@@ -98,36 +139,52 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
     setQueue((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   }, []);
 
+  // Фото сжимаются по одному и ложатся в очередь на телефоне (Blob). Отправляет очередь общая выгрузка.
   const drain = useCallback(async () => {
-    if (working.current) return;
+    if (working.current || !user) return;
     working.current = true;
     try {
       while (pending.current.length) {
         const item = pending.current.shift()!;
-        patchItem(item.key, { status: 'prep', progress: 0, message: '' });
+        patchItem(item.key, { status: 'prep', message: '' });
         try {
-          const prepared = await prepareImage(item.file);
-          patchItem(item.key, { status: 'up' });
-          const photo = await apiUploadRoomPhoto(
-            objectId,
-            { stage: item.stage, caption: item.caption, image: prepared.image, thumb: prepared.thumb },
-            (fraction) => patchItem(item.key, { progress: fraction }),
-          );
+          const blocked = await photoQueueRoom(user.id, 1);
+          if (blocked) throw new PhotoPrepError(blocked);
+          const prepared = await prepareImageBlobs(item.file);
+          await enqueuePhoto(user, objectId, item.stage, item.caption, prepared);
           if (!alive.current) return;
           setQueue((rows) => rows.filter((row) => row.key !== item.key));
-          setData((current) =>
-            current ? { ...current, photos: [...current.photos.filter((p) => p.id !== photo.id), photo] } : current,
-          );
         } catch (e) {
           const message =
-            e instanceof PhotoPrepError || e instanceof Error ? e.message : 'Не удалось загрузить фото';
+            e instanceof PhotoPrepError || e instanceof Error ? e.message : 'Не удалось подготовить фото';
           if (alive.current) patchItem(item.key, { status: 'error', message });
         }
       }
     } finally {
       working.current = false;
     }
-  }, [objectId, patchItem]);
+    if (typeof navigator === 'undefined' || navigator.onLine) void flushObjectQueue();
+  }, [objectId, patchItem, user, flushObjectQueue]);
+
+  // Фото из очереди дошло до сервера: показываем его как обычное.
+  useEffect(() => {
+    const onSent = (event: Event) => {
+      const detail = (event as CustomEvent<{ objectId: string; photo: RoomPhoto }>).detail;
+      if (!detail || detail.objectId !== objectId) return;
+      setData((current) =>
+        current
+          ? { ...current, photos: [...current.photos.filter((p) => p.id !== detail.photo.id), detail.photo] }
+          : current,
+      );
+    };
+    window.addEventListener(PHOTO_SENT_EVENT, onSent);
+    return () => window.removeEventListener(PHOTO_SENT_EVENT, onSent);
+  }, [objectId]);
+
+  // Связь вернулась: список фото с сервера заново (ссылки на снимки короткоживущие).
+  useEffect(() => {
+    if (online && remote) void load();
+  }, [online, remote, load]);
 
   const addFiles = useCallback(
     (stage: PhotoStage, files: FileList | null) => {
@@ -138,11 +195,16 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
         stage,
         name: file.name || 'Фото',
         status: 'prep',
-        progress: 0,
         message: '',
         file,
         caption,
       }));
+      setLimitError('');
+      if (user) {
+        void photoQueueRoom(user.id, items.length).then((blocked) => {
+          if (blocked && alive.current) setLimitError(blocked);
+        });
+      }
       setQueue((rows) => [...rows, ...items]);
       pending.current.push(...items);
       setCaptions((value) => ({ ...value, [stage]: '' }));
@@ -152,7 +214,7 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
   );
 
   const retry = (item: QueueItem) => {
-    patchItem(item.key, { status: 'prep', message: '', progress: 0 });
+    patchItem(item.key, { status: 'prep', message: '' });
     pending.current.push(item);
     void drain();
   };
@@ -163,6 +225,11 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
   };
 
   const photos = data?.photos ?? [];
+  const sentClientIds = new Set(photos.map((photo) => photo.clientId).filter(Boolean));
+  const waiting = fieldQueue.filter(
+    (item) => item.kind === 'photo' && item.objectId === objectId && !sentClientIds.has(item.id),
+  );
+  const thumbs = useQueuedThumbs(waiting);
   const groups = useMemo(() => groupByStage(photos), [photos]);
   const flat = useMemo(() => PHOTO_STAGES.flatMap((stage) => groups[stage]), [groups]);
   const canAdd = data?.canAdd ?? [];
@@ -230,6 +297,12 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
         />
       ) : null}
 
+      {limitError ? (
+        <p className={styles.error} role="alert" data-testid="photo-limit">
+          {limitError}
+        </p>
+      ) : null}
+
       {loadError ? (
         <p className={styles.error} role="alert">
           {loadError}{' '}
@@ -242,6 +315,7 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
       {visibleStages.map((stage) => {
         const items = groups[stage];
         const rows = queue.filter((row) => row.stage === stage);
+        const waitingHere = waiting.filter((item) => (item.payload as PhotoPayload).stage === stage);
         const mayAdd = canAdd.includes(stage);
         return (
           <div key={stage} className={styles.stage} data-testid={`photo-stage-${stage}`}>
@@ -252,7 +326,7 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
               <p className={styles.hint}>{STAGE_HINT[stage]}</p>
             </div>
 
-            {items.length || rows.length ? (
+            {items.length || rows.length || waitingHere.length ? (
               <ul className={styles.grid}>
                 {items.map((photo) => (
                   <li key={photo.id}>
@@ -266,6 +340,28 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
                       <img src={photo.thumbUrl} alt="" loading="lazy" draggable={false} />
                       {photo.caption ? <span className={styles.tileCap}>{photo.caption}</span> : null}
                     </button>
+                  </li>
+                ))}
+                {waitingHere.map((item) => (
+                  <li key={item.id} className={styles.upload} data-status={item.failed ? 'error' : 'queued'} data-testid="photo-queued">
+                    {thumbs.get(item.id) ? <img className={styles.queuedThumb} src={thumbs.get(item.id)} alt="" /> : null}
+                    <span className={styles.uploadMsg} role={item.failed ? 'alert' : undefined}>
+                      {item.failed
+                        ? `Не отправлено: ${item.lastError || 'ошибка'}`
+                        : online
+                          ? 'Отправляется…'
+                          : 'На телефоне, ждёт отправки'}
+                    </span>
+                    {item.failed ? (
+                      <span className={styles.uploadBtns}>
+                        <button type="button" className={styles.linkBtn} onClick={() => void flushObjectQueue({ force: true })}>
+                          Повторить
+                        </button>
+                        <button type="button" className={styles.linkBtn} onClick={() => void dropQueueItem(item.id)}>
+                          Убрать
+                        </button>
+                      </span>
+                    ) : null}
                   </li>
                 ))}
                 {rows.map((row) => (
@@ -287,15 +383,8 @@ export function RoomPhotoReport({ objectId }: { objectId: string }) {
                       </>
                     ) : (
                       <>
-                        <span className={styles.uploadMsg}>
-                          {row.status === 'prep' ? 'Готовим фото…' : `Загрузка ${Math.round(row.progress * 100)}%`}
-                        </span>
-                        <progress
-                          className={styles.bar}
-                          max={100}
-                          value={row.status === 'prep' ? undefined : Math.round(row.progress * 100)}
-                          aria-label="Загрузка фото"
-                        />
+                        <span className={styles.uploadMsg}>Сжимаем фото…</span>
+                        <progress className={styles.bar} aria-label="Сжимаем фото" />
                       </>
                     )}
                   </li>

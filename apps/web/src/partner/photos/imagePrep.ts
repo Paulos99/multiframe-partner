@@ -72,7 +72,7 @@ function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   });
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
+export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new PhotoPrepError('Не удалось прочитать фото'));
@@ -98,8 +98,25 @@ function draw(src: Source, size: { width: number; height: number }): HTMLCanvasE
   return canvas;
 }
 
+export type PreparedBlobs = { image: Blob; thumb: Blob; width: number; height: number; bytes: number };
+
 /** Файл с камеры или из галереи → основной снимок (до 1600 px) и миниатюра (до 480 px), оба JPEG в base64. */
 export async function prepareImage(file: File): Promise<PreparedImage> {
+  const blobs = await prepareImageBlobs(file);
+  return {
+    image: await blobToBase64(blobs.image),
+    thumb: await blobToBase64(blobs.thumb),
+    width: blobs.width,
+    height: blobs.height,
+    bytes: blobs.image.size,
+  };
+}
+
+/**
+ * То же сжатие, но результат — Blob: так фото лежит в очереди на телефоне. Base64 занимал бы на треть
+ * больше места.
+ */
+export async function prepareImageBlobs(file: File): Promise<PreparedBlobs> {
   if (file.type && !file.type.startsWith('image/')) {
     throw new PhotoPrepError('Это не фото. Выберите снимок.');
   }
@@ -117,13 +134,7 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
     }
     const thumbSize = fitWithin(src.width, src.height, THUMB_MAX_SIDE);
     const thumbBlob = await toBlob(draw(src, thumbSize), THUMB_QUALITY);
-    return {
-      image: await blobToBase64(blob),
-      thumb: await blobToBase64(thumbBlob),
-      width: size.width,
-      height: size.height,
-      bytes: blob.size,
-    };
+    return { image: blob, thumb: thumbBlob, width: size.width, height: size.height, bytes: blob.size + thumbBlob.size };
   } finally {
     src.release();
   }

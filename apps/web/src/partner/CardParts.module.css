@@ -439,3 +439,17 @@ details.section > summary {
 details.section[open] > summary {
   margin-bottom: 4px;
 }
+
+/* Замерщик: кнопка «Замер сделан» под шкалой этапов. */
+.measurerStage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.measurerStage p {
+  margin: 0;
+}
+
