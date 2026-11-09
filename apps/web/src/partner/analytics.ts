@@ -7,6 +7,7 @@ import type {
   UserRole,
 } from '../../../../packages/shared/partner';
 import { aggregateAnalyticsDashboard, isStaffRole, isStpManagerRole, networkAdminScope } from '../../../../packages/shared/partner';
+import type { PartnerComparisonRow, SummaryConclusion } from '../../../../packages/shared/periodSummary';
 import { buildStaffDrill, type DrillPeriod, type StaffDrillResult } from '../../../../packages/shared/staffDrill.js';
 import { getAnalyticsSessionId } from '../analytics/sessionId';
 import { cacheAnalyticsEvents, loadCachedAnalyticsEvents, rememberCalculation } from './offlineDb';
@@ -415,6 +416,54 @@ export async function probeAnalyticsDashboard(opts: {
     return { kind: 'http', status: res.status, body };
   } catch {
     return { kind: 'network' };
+  }
+}
+
+export type ServerPeriodSummary = {
+  conclusions: SummaryConclusion[];
+  enoughData: boolean;
+  previousRange: { from: string; to: string } | null;
+  partners: { rows: PartnerComparisonRow[]; conclusions: SummaryConclusion[] } | null;
+};
+
+/**
+ * «Сводка за период» с сервера (права проверяет сервер). null — сервера нет, ошибка или старый API:
+ * тогда интерфейс считает сводку сам по тем же правилам из packages/shared/periodSummary.js.
+ */
+export async function fetchPeriodSummary(opts: {
+  from: string | null;
+  to: string | null;
+  orgId?: string | null;
+}): Promise<ServerPeriodSummary | null> {
+  if (!API_BASE) return null;
+  try {
+    const q = new URLSearchParams();
+    if (opts.from) q.set('from', opts.from);
+    if (opts.to) q.set('to', opts.to);
+    if (opts.orgId) q.set('orgId', opts.orgId);
+    const token = (() => {
+      try {
+        return localStorage.getItem('mf_partner_token_v1');
+      } catch {
+        return null;
+      }
+    })();
+    if (!token) return null;
+    const res = await fetch(`${API_BASE}/analytics/summary?${q.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as Partial<ServerPeriodSummary>;
+    if (!Array.isArray(body.conclusions)) return null;
+    return {
+      conclusions: body.conclusions,
+      enoughData: Boolean(body.enoughData),
+      previousRange: body.previousRange ?? null,
+      partners: body.partners ?? null,
+    };
+  } catch {
+    return null;
   }
 }
 

@@ -3816,6 +3816,104 @@ div.drillPerson {
   margin: 0;
 }
 
+/* —— Сводка за период —— */
+.summaryBlock {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--cab-radius-lg);
+  background: var(--cab-subtle);
+  border: 1px solid var(--cab-border);
+}
+
+.summaryHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.summaryTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--cab-ink);
+}
+
+.summaryList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.summaryItem {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-card);
+  border: 1px solid var(--cab-border);
+  border-left: 4px solid var(--cab-border-strong);
+}
+
+.summaryItem[data-tone='bad'] {
+  border-left-color: var(--cab-danger);
+}
+
+.summaryItem[data-tone='good'] {
+  border-left-color: var(--cab-ok);
+}
+
+.summaryItem[data-tone='info'] {
+  border-left-color: var(--cab-info);
+}
+
+.summaryTone {
+  justify-self: start;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--cab-muted);
+  background: var(--cab-subtle);
+}
+
+.summaryTone[data-tone='bad'] {
+  color: var(--cab-danger);
+  background: var(--cab-danger-soft);
+}
+
+.summaryTone[data-tone='good'] {
+  color: var(--cab-ok);
+  background: var(--cab-ok-soft);
+}
+
+.summaryTone[data-tone='info'] {
+  color: var(--cab-info);
+  background: var(--cab-info-soft);
+}
+
+.summaryText {
+  margin: 0;
+  color: var(--cab-ink);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.summaryAction {
+  margin: 0;
+  color: var(--cab-muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.summaryLinkBtn {
+  justify-self: start;
+}
+
 /* Документы в карточке комнаты: строки на мягком фоне внутри раздела, кнопки компактные. */
 .docBlock .docRow {
   align-items: center;
