@@ -1,7 +1,9 @@
 /**
  * Календарь замеров и монтажей и отметки напоминаний.
  *
- * GET    /calendar                 выезды, которые видит роль, люди компании и свои отметки напоминаний
+ * GET    /calendar                 выезды, которые видит роль, люди компании и свои отметки напоминаний.
+ *                                  Для admin (и stp_manager, если есть доступ): ?orgId= / ?partner= — только эта компания;
+ *                                  в ответе partners — список компаний для фильтра.
  * POST   /calendar                 новый выезд (владелец, менеджер)
  * PATCH  /calendar/{visitId}       правка выезда (владелец, менеджер); замерщик и монтажник — только «выполнено» у своего
  * DELETE /calendar/{visitId}       удалить выезд (владелец, менеджер)
@@ -64,12 +66,33 @@ function publicVisit(visit, platform, now) {
   };
 }
 
-function peopleFor(user, platform) {
-  if (!canPlan(user) && user.role !== 'admin') return [];
+/** Кто может фильтровать календарь по компании партнёра. */
+function canFilterByPartner(user) {
+  return user.role === 'admin' || user.role === 'stp_manager';
+}
+
+function peopleFor(user, platform, orgFilter = null) {
+  if (!canPlan(user) && user.role !== 'admin' && user.role !== 'stp_manager') return [];
   return (platform.users || [])
-    .filter((u) => (user.role === 'admin' ? Boolean(u.orgId) : u.orgId === user.orgId))
+    .filter((u) => {
+      if (!u.orgId) return false;
+      if (orgFilter) return u.orgId === orgFilter;
+      if (user.role === 'admin' || user.role === 'stp_manager') return true;
+      return u.orgId === user.orgId;
+    })
     .filter((u) => ['owner', 'sales', 'measurer', 'crew'].includes(canonicalRole(u.role)) && !u.disabled)
     .map((u) => ({ id: u.id, name: personName(u), role: canonicalRole(u.role), orgId: u.orgId }));
+}
+
+/** Компании партнёров для селектора у админа StP (внутреннюю StP не показываем). */
+function partnersFor(platform) {
+  return (platform.orgs || [])
+    .filter((o) => o && o.id && !o.internal)
+    .map((o) => ({
+      id: o.id,
+      name: String(o.settings?.companyName || '').trim() || o.id,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 }
 
 function validateRefs(value, platform, orgId) {
@@ -127,14 +150,31 @@ export async function handleCalendar(ctx) {
   const nowIso = new Date(now).toISOString();
 
   if (listRoute && method === 'GET') {
-    if (user.role !== 'admin' && !user.orgId) return ctx.json(400, { message: 'Нет организации' });
+    if (user.role !== 'admin' && user.role !== 'stp_manager' && !user.orgId) {
+      return ctx.json(400, { message: 'Нет организации' });
+    }
     if (ensureDemoVisits(platform, ctx.demoSeedEnabled?.())) await ctx.savePlatform(platform);
+    const query = (typeof ctx.getQuery === 'function' ? ctx.getQuery() : null) || {};
+    const requestedOrg = String(query.orgId || query.partner || '').trim() || null;
+    let orgFilter = null;
+    if (canFilterByPartner(user) && requestedOrg) {
+      const org = (platform.orgs || []).find((o) => o.id === requestedOrg && !o.internal);
+      if (!org) return ctx.json(404, { message: 'Партнёр не найден' });
+      orgFilter = requestedOrg;
+    }
     const visits = visitsOf(platform)
       .filter((v) => !v.cancelledAt && visitVisibleTo(user, v))
+      .filter((v) => !orgFilter || v.orgId === orgFilter)
       .map((v) => publicVisit(v, platform, now))
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     const acks = (Array.isArray(platform.reminderAcks) ? platform.reminderAcks : []).filter((a) => a.userId === user.id);
-    return ctx.json(200, { visits, people: peopleFor(user, platform), acks, canPlan: canPlan(user) });
+    return ctx.json(200, {
+      visits,
+      people: peopleFor(user, platform, orgFilter),
+      acks,
+      canPlan: canPlan(user),
+      partners: canFilterByPartner(user) ? partnersFor(platform) : [],
+    });
   }
 
   if (ackRoute && method === 'POST') {
