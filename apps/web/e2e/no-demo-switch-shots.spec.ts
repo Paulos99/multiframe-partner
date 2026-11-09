@@ -1,8 +1,12 @@
 import { expect, test } from '@playwright/test';
 import { demoSignIn } from './demo-login';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const OUT = '/workspace/handover/screenshots-no-demo-switch';
+const OUT =
+  process.env.NO_DEMO_SHOT_DIR ||
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../handover/screenshots-no-demo-switch');
 
 test.beforeEach(async ({ request }) => {
   await request.post('http://127.0.0.1:4181/__reset').catch(() => undefined);
@@ -32,6 +36,7 @@ test('экран входа без сетки ролей и без кнопки 
 });
 
 test('демо-вход по логину открывает кабинет владельца', async ({ page }) => {
+  fs.mkdirSync(OUT, { recursive: true });
   await demoSignIn(page, 'owner');
   await expect(page.getByRole('button', { name: 'Демо', exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${OUT}/cabinet-demo-owner.png`, fullPage: true });
