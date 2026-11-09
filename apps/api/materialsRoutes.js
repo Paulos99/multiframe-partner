@@ -1,6 +1,7 @@
 /**
  * HTTP для методических материалов.
- * Чтение — любая роль кабинета. Изменения — только admin.
+ * Чтение — любая роль кабинета, но только то, что админ открыл её роли (roles у узла и папок над ним).
+ * Скрытое для роли не попадает в список, а прямой запрос к нему — 404. Изменения — только admin.
  * Новые файлы пишутся только в MATERIALS_BUCKET, метаданные — в platform.materials.
  * Старый узел без поля bucket читается из PARTNERS_BUCKET и оттуда не удаляется.
  * Пока админ ничего не менял, отдаём демо-набор и не пишем его в бакет.
@@ -15,8 +16,10 @@ import {
   deleteMaterial,
   findMaterial,
   materialBase,
+  materialVisibleTo,
   renameMaterial,
   replaceFile,
+  setMaterialRoles,
 } from '../../packages/shared/materialsLib.js';
 import { parseBody, schemas } from './validation.js';
 import {
@@ -107,7 +110,8 @@ function mimeFromStored(contentType, filename) {
   return mimeOf(contentType, filename);
 }
 
-async function registerUploadedMaterial(ctx, platform, body) {
+async function registerUploadedMaterial(ctx, platform, rawBody, user) {
+  const body = parseBody(schemas.materialAccess, rawBody);
   let head;
   try {
     head = await statMaterialObject(body.storageKey);
@@ -136,12 +140,19 @@ async function registerUploadedMaterial(ctx, platform, body) {
     size: head.contentLength,
     storageKey: key,
     bucket: MATERIAL_BUCKET_MARKER,
+    roles: body.roles,
+    section: body.section,
     now: new Date().toISOString(),
   });
   if (!result.ok) return ctx.json(400, { message: result.message });
   platform.materials = result.nodes;
   await ctx.savePlatform(platform);
-  return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
+  return listFor(ctx, platform, user);
+}
+
+/** Ответ со списком, собранным для роли того, кто спрашивает. */
+async function listFor(ctx, platform, user) {
+  return ctx.json(200, { materials: await signedPublicMaterials(platform.materials, { role: user.role }) });
 }
 
 async function signedContent(ctx, node) {
@@ -183,24 +194,25 @@ export async function handleMaterials(ctx) {
   if (method === 'GET' && (path === '/materials' || path.endsWith('/materials'))) {
     const { platform, user } = await ctx.requireAuth();
     ctx.assertRole(user, READ_ROLES);
-    return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
+    return listFor(ctx, platform, user);
   }
 
   if (method === 'POST' && /\/materials\/folders$/.test(path)) {
     const { platform, user } = await ctx.requireAuth();
     ctx.assertRole(user, ['admin']);
-    const body = ctx.getBody();
+    const body = parseBody(schemas.materialAccess, ctx.getBody());
     const now = new Date().toISOString();
     const result = createFolder(platform.materials, {
       name: body.name,
       parentId: body.parentId || null,
       id: ctx.uid('mat'),
+      roles: body.roles,
       now,
     });
     if (!result.ok) return ctx.json(400, { message: result.message });
     platform.materials = result.nodes;
     await ctx.savePlatform(platform);
-    return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
+    return listFor(ctx, platform, user);
   }
 
   if (method === 'POST' && /\/materials\/files\/upload-url$/.test(path)) {
@@ -267,7 +279,7 @@ export async function handleMaterials(ctx) {
       return ctx.json(409, { message: 'Загружены не все части', uploaded: parts.map((p) => p.partNumber) });
     }
     await completeMaterialMultipart(key, uploadId, parts);
-    return registerUploadedMaterial(ctx, platform, { ...body, storageKey: key });
+    return registerUploadedMaterial(ctx, platform, { ...body, storageKey: key }, user);
   }
 
   if (method === 'POST' && /\/materials\/files$/.test(path)) {
@@ -279,7 +291,8 @@ export async function handleMaterials(ctx) {
     if (body.storageKey && body.contentBase64) {
       return ctx.json(400, { message: 'Передайте либо файл, либо уже загруженный ключ' });
     }
-    if (body.storageKey) return registerUploadedMaterial(ctx, platform, body);
+    if (body.storageKey) return registerUploadedMaterial(ctx, platform, body, user);
+    const access = parseBody(schemas.materialAccess, body);
     const decoded = decodeFile(body);
     if (decoded.error) return ctx.json(400, { message: decoded.error });
     const id = ctx.uid('mat');
@@ -294,6 +307,8 @@ export async function handleMaterials(ctx) {
       size: decoded.buf.length,
       storageKey: key,
       bucket: MATERIAL_BUCKET_MARKER,
+      roles: access.roles,
+      section: access.section,
       now,
     });
     if (!result.ok) {
@@ -302,7 +317,7 @@ export async function handleMaterials(ctx) {
     }
     platform.materials = result.nodes;
     await ctx.savePlatform(platform);
-    return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
+    return listFor(ctx, platform, user);
   }
 
   const contentMatch = path.match(/\/materials\/([^/]+)\/content$/);
@@ -313,7 +328,9 @@ export async function handleMaterials(ctx) {
       const { platform, user } = await ctx.requireAuth();
       ctx.assertRole(user, READ_ROLES);
       const node = findMaterial(platform.materials, id);
-      if (!node || node.kind !== 'file') return ctx.json(404, { message: 'Файл не найден' });
+      if (!node || node.kind !== 'file' || !materialVisibleTo(materialBase(platform.materials), node, user.role)) {
+        return ctx.json(404, { message: 'Файл не найден' });
+      }
       if (node.storageKey) return signedContent(ctx, node);
       if (node.contentBase64) {
         return ctx.json(200, {
@@ -358,7 +375,7 @@ export async function handleMaterials(ctx) {
       ) {
         await deleteMaterialBytes(result.previousKey);
       }
-      return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
+      return listFor(ctx, platform, user);
     }
   }
 
@@ -369,16 +386,24 @@ export async function handleMaterials(ctx) {
     if (method === 'PATCH') {
       const { platform, user } = await ctx.requireAuth();
       ctx.assertRole(user, ['admin']);
-      const body = ctx.getBody();
-      const result = renameMaterial(platform.materials, {
-        id,
-        name: body.name,
-        now: new Date().toISOString(),
-      });
-      if (!result.ok) return ctx.json(400, { message: result.message });
+      // Тело: { name } — переименовать, { roles } — кто видит (null — все роли). Можно и то и другое.
+      const body = parseBody(schemas.materialAccess, ctx.getBody());
+      const now = new Date().toISOString();
+      let nodes = platform.materials;
+      if (body.roles !== undefined) {
+        const access = setMaterialRoles(nodes, { id, roles: body.roles, now });
+        if (!access.ok) return ctx.json(400, { message: access.message });
+        nodes = access.nodes;
+      }
+      if (body.name !== undefined || body.roles === undefined) {
+        const renamed = renameMaterial(nodes, { id, name: body.name, now });
+        if (!renamed.ok) return ctx.json(400, { message: renamed.message });
+        nodes = renamed.nodes;
+      }
+      const result = { nodes };
       platform.materials = result.nodes;
       await ctx.savePlatform(platform);
-      return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
+      return listFor(ctx, platform, user);
     }
     if (method === 'DELETE') {
       const { platform, user } = await ctx.requireAuth();
@@ -397,7 +422,7 @@ export async function handleMaterials(ctx) {
       for (const item of doomed) {
         await deleteMaterialBytes(item.key);
       }
-      return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
+      return listFor(ctx, platform, user);
     }
   }
 

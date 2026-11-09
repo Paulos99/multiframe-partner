@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { EASE, m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { markReturnToTools } from './toolsReturn';
 import styles from './ToolsPanel.module.css';
-import { canCreateObjects, type UserRole } from '../../../../packages/shared/partner';
+import { canCreateObjects, roleSeesProjectMoney, type UserRole } from '../../../../packages/shared/partner';
 import { usePartner } from './PartnerContext';
 import { ArrowRightIcon, CalculatorIcon as CalculatorGlyph, GaugeIcon } from '../icons';
 
@@ -16,11 +16,11 @@ export type ToolCopy = {
 };
 
 /**
- * Тексты карточек. Монтажник цен не видит: про сумму и смету ему не пишем.
+ * Тексты карточек. Про сумму и смету пишем ролям, которые видят цены (сейчас всем).
  * Сохранить результат в комнату можно только там, где роль создаёт комнаты.
  */
 export function toolCards(role: UserRole = 'owner'): ToolCopy[] {
-  const prices = role !== 'crew';
+  const prices = roleSeesProjectMoney(role);
   const saves = canCreateObjects(role);
   return [
     {

@@ -13,7 +13,7 @@
  *   DELETE /materials/:id/thumbnail — только admin: убрать миниатюру
  */
 
-import { findMaterial, materialBase, toPublicMaterial } from '../../packages/shared/materialsLib.js';
+import { findMaterial, materialBase, materialVisibleTo, toPublicMaterial } from '../../packages/shared/materialsLib.js';
 import {
   deleteMaterialBytes,
   materialsConfigError,
@@ -64,7 +64,8 @@ async function saveThumb(ctx, platform, id, fields) {
   nodes[idx] = { ...nodes[idx], ...fields };
   platform.materials = nodes;
   await ctx.savePlatform(platform);
-  return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
+  // Пишет только админ StP: ему список целиком, с ролями.
+  return ctx.json(200, { materials: await signedPublicMaterials(platform.materials, { role: 'admin' }) });
 }
 
 /**
@@ -81,7 +82,10 @@ export async function handleMaterialThumbnail(ctx) {
     const { platform, user } = await ctx.requireAuth();
     ctx.assertRole(user, READ_ROLES);
     const node = findMaterial(platform.materials, id);
-    if (!node || node.kind !== 'file') return ctx.json(404, { message: 'Файл не найден' });
+    // Скрытый от роли файл для неё не существует.
+    if (!node || node.kind !== 'file' || !materialVisibleTo(materialBase(platform.materials), node, user.role)) {
+      return ctx.json(404, { message: 'Файл не найден' });
+    }
     if (!node.thumbKey) return ctx.json(404, { message: 'У файла нет миниатюры' });
     try {
       const url = await signedThumbnailUrl(node);

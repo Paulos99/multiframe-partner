@@ -114,7 +114,10 @@ test('админ: правый клик по папке → «Удалить» �
   await expect(folderCard(page, 'Старые инструкции')).toHaveCount(0);
   // На сервере не осталось ни папки, ни вложенных записей.
   const res = await request.get(`${API}/materials`, { headers: { Authorization: `Bearer ${await token(request, 'ui.admin')}` } });
-  const names = ((await res.json()).materials as Node[]).map((n) => n.name);
+  // Обучающие видео — отдельный раздел, в дереве папок их нет.
+  const names = ((await res.json()).materials as (Node & { section?: string | null })[])
+    .filter((n) => n.section !== 'video')
+    .map((n) => n.name);
   expect(names).toEqual(['Оставить']);
 });
 

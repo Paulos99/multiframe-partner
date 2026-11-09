@@ -41,7 +41,7 @@ async function uploadAsOwner(request: import('@playwright/test').APIRequestConte
   return obj as { documents: Array<{ kind: string; id: string }>; estimate: { totalCost: number | null } };
 }
 
-test('API: бригада не получает суммы, документы остаются, старая спецификация в паре скрыта', async ({ request }) => {
+test('API: бригада получает суммы, документы остаются, старая спецификация в паре скрыта', async ({ request }) => {
   const owner = await uploadAsOwner(request);
   expect(owner.documents.map((d) => d.kind)).toEqual(['profile', 'estimate', 'spec']);
   const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.crew', password } });
@@ -49,8 +49,7 @@ test('API: бригада не получает суммы, документы �
   expect(user.org.panelPriceRub).toBe(2396);
   const list = await request.get(`${API}/objects`, { headers: { Authorization: `Bearer ${token}` } });
   const room = (await list.json()).objects.find((o: { id: string }) => o.id === 'ui_crew_room');
-  expect(room.estimate.totalCost).toBeUndefined();
-  expect(room.estimate.panelsCost).toBeUndefined();
+  expect(typeof room.estimate.totalCost).toBe('number');
   expect(room.estimate.panels).toBe(16);
   expect(room.documents.map((d: { id: string }) => d.id)).toEqual([
     owner.documents[0].id,
@@ -64,7 +63,7 @@ test('API: бригада не получает суммы, документы �
   expect((await file.json()).kind).toBe('profile');
 });
 
-test('монтажник: PDF в комнате без цен, предпросмотр открывается по нажатию', async ({ page, request }) => {
+test('монтажник: PDF в комнате с ценами, предпросмотр открывается по нажатию', async ({ page, request }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await uploadAsOwner(request);
@@ -81,7 +80,7 @@ test('монтажник: PDF в комнате без цен, предпрос�
   await expect(page.locator('[data-doc-kind="profile"]')).toHaveCount(1);
   await expect(page.locator('[data-doc-kind="estimate"]')).toHaveCount(2);
   await expect(page.getByText('Спецификация', { exact: false })).toHaveCount(0);
-  await expect(page.getByText('Итого комнаты')).toHaveCount(0);
+  await expect(page.getByText('Итого комнаты')).toBeVisible();
   await expect(page.getByText('Панели', { exact: true })).toBeVisible();
 
   await expect(page.getByRole('button', { name: 'Клиенту', exact: true }).first()).toBeVisible();

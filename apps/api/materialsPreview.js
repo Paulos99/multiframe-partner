@@ -14,7 +14,7 @@
  *   DELETE /materials/:id/preview  — только admin: убрать копию
  */
 
-import { MATERIAL_BUCKET_MARKER, findMaterial, materialBase } from '../../packages/shared/materialsLib.js';
+import { MATERIAL_BUCKET_MARKER, findMaterial, materialBase, materialVisibleTo } from '../../packages/shared/materialsLib.js';
 import {
   deleteMaterialBytes,
   materialsConfigError,
@@ -60,7 +60,8 @@ async function savePreview(ctx, platform, id, fields) {
   nodes[idx] = { ...nodes[idx], ...fields };
   platform.materials = nodes;
   await ctx.savePlatform(platform);
-  return ctx.json(200, { materials: await signedPublicMaterials(platform.materials) });
+  // Пишет только админ StP: ему список целиком, с ролями.
+  return ctx.json(200, { materials: await signedPublicMaterials(platform.materials, { role: 'admin' }) });
 }
 
 /**
@@ -77,7 +78,10 @@ export async function handleMaterialPreview(ctx) {
     const { platform, user } = await ctx.requireAuth();
     ctx.assertRole(user, READ_ROLES);
     const node = findMaterial(platform.materials, id);
-    if (!node || node.kind !== 'file') return ctx.json(404, { message: 'Файл не найден' });
+    // Скрытый от роли файл для неё не существует.
+    if (!node || node.kind !== 'file' || !materialVisibleTo(materialBase(platform.materials), node, user.role)) {
+      return ctx.json(404, { message: 'Файл не найден' });
+    }
     if (!node.previewKey) return ctx.json(404, { message: 'У файла нет PDF-копии для просмотра' });
     try {
       const name = pdfName(node.name);

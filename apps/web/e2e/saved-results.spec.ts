@@ -100,7 +100,7 @@ test('менеджер: у каждого расчёта «Открыть рез
   expect(errors).toEqual([]);
 });
 
-test('монтажник: результаты расчётов без цен', async ({ page, request }) => {
+test('монтажник: результаты расчётов с ценами', async ({ page, request }) => {
   await uploadProfile(request);
   await enter(page, 'crew');
   await openDocuments(page);
@@ -108,9 +108,8 @@ test('монтажник: результаты расчётов без цен', 
   await page.locator('[data-doc-kind="estimate"]').first().getByTestId('doc-open-results').click();
   const view = page.getByTestId('saved-result-page');
   await expect(view.getByText('16 шт.')).toBeVisible();
-  await expect(view.getByText('Итого комнаты')).toHaveCount(0);
-  await expect(view).not.toContainText('₽');
-  await expect(view).not.toContainText(/93\s*444|24\s*000|119\s*694|2\s*396/);
+  await expect(view.getByText('Итого комнаты')).toBeVisible();
+  await expect(view).toContainText('₽');
 
   await page.getByTestId('saved-result-page').getByRole('button', { name: 'К комнате', exact: true }).click();
   // Блок «Документы» всегда раскрыт.
@@ -119,5 +118,4 @@ test('монтажник: результаты расчётов без цен', 
   await page.locator('[data-doc-kind="profile"]').first().getByTestId('doc-open-results').click();
   const profile = page.getByTestId('saved-result-page');
   await expect(profile.getByRole('heading', { name: 'Результаты Проблемомера' })).toBeVisible();
-  await expect(profile).not.toContainText('₽');
 });

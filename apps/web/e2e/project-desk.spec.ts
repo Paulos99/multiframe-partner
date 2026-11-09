@@ -84,7 +84,7 @@ test('список и канбан запоминаются, карточка о
   await expect(page.getByRole('navigation', { name: 'Путь' })).toBeHidden();
 });
 
-test('замерщик читает описание, бригада не видит сумму', async ({ page }) => {
+test('замерщик читает описание, бригада видит сумму', async ({ page }) => {
   await enter(page);
   await page.getByRole('button', { name: 'Тестовая квартира', exact: true }).click();
   const card = page.getByRole('region', { name: 'Проект' });
@@ -135,9 +135,8 @@ test('замерщик читает описание, бригада не вид
   await expect(living).toContainText('16 панелей');
   await expect(living).toContainText('Монтаж');
   await expect(desk.getByRole('button', { name: 'Спальня' })).toContainText('Черновик');
-  await expect(desk).not.toContainText('₽');
-  await expect(desk.getByText('Сумма', { exact: true })).toHaveCount(0);
-  await expect(desk.getByText('75261')).toHaveCount(0);
+  // Цены видят все роли, монтажник тоже.
+  await expect(living).toContainText('₽');
   await expect(desk.getByText(/^Готовые/)).toHaveCount(0);
   await living.click();
   const room = page.getByRole('region', { name: 'Комната' });
@@ -145,8 +144,8 @@ test('замерщик читает описание, бригада не вид
   await expect(page.getByRole('dialog', { name: 'Комната' })).toHaveCount(0);
   await expect(room.getByRole('heading', { level: 1, name: 'Гостиная' })).toBeVisible();
   await expect(room.getByText('Панели', { exact: true })).toBeVisible();
-  await expect(room.getByText('Итого комнаты')).toHaveCount(0);
-  await expect(room).not.toContainText('₽');
+  await expect(room.getByText('Итого комнаты')).toBeVisible();
+  await expect(room).toContainText('₽');
 });
 
 test('менеджер открывает проект страницей и видит настройки', async ({ page }) => {

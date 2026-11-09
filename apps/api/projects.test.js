@@ -352,15 +352,13 @@ describe('projects', { concurrency: false }, () => {
       assert.equal(measurerRooms[0].estimate.totalCost, 72000);
 
       const crewProjects = await api('GET', '/projects', { token: crew });
-      assert.equal(JSON.stringify(crewProjects.data).includes('totalCost'), false);
+      // Цены видят все роли, монтажник тоже.
       assert.ok(crewProjects.data.projects.some((item) => item.id === project.id));
       const crewRooms = (await api('GET', '/objects', { token: crew })).data.objects.filter(
         (obj) => obj.projectId === project.id,
       );
       assert.deepEqual(crewRooms.map((obj) => obj.roomName), ['Спальня']);
-      assert.equal(JSON.stringify(crewRooms).includes('totalCost'), false);
-      assert.equal(JSON.stringify(crewRooms).includes('panelsCost'), false);
-      assert.equal(crewRooms[0].estimate.totalCost, undefined);
+      assert.equal(typeof crewRooms[0].estimate.totalCost, 'number');
       assert.equal(crewRooms[0].estimate.panels, 16);
       const hidden = await api('GET', `/objects/${saved[0].id}`, { token: crew });
       assert.equal(hidden.status, 404);
