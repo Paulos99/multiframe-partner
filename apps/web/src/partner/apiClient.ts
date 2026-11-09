@@ -11,6 +11,12 @@ import type {
   UserRole,
 } from '../../../../packages/shared/partner';
 import type { PhotoStage } from '../../../../packages/shared/roomPhotos.js';
+import type {
+  FeedbackContext,
+  FeedbackItem,
+  FeedbackStatus,
+  FeedbackType,
+} from '../../../../packages/shared/feedback.js';
 import { loadToken, saveToken } from './localStore';
 import type {
   TrainingCompanyRow,
@@ -924,3 +930,86 @@ export async function apiGetPhotoCase(
 
 /** Фото клиентской страницы: этап и ссылки, без подписей и авторов. */
 export type PublicRoomPhoto = Pick<RoomPhoto, 'id' | 'stage' | 'createdAt' | 'width' | 'height' | 'url' | 'thumbUrl' | 'pdfUrl'>;
+
+/* ——— Обратная связь партнёров админам StP ——— */
+
+export type FeedbackListFilter = { status?: string; type?: string; orgId?: string };
+export type FeedbackList = {
+  items: FeedbackItem[];
+  newCount?: number;
+  partners?: { id: string; name: string }[];
+};
+
+function feedbackWithUrls(item: FeedbackItem): FeedbackItem {
+  return { ...item, photos: (item.photos || []).map(withUrls) };
+}
+
+export async function apiListFeedback(filter: FeedbackListFilter = {}, signal?: AbortSignal): Promise<FeedbackList> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filter)) if (value) params.set(key, value);
+  const qs = params.toString();
+  const data = await request<FeedbackList>(`/feedback${qs ? `?${qs}` : ''}`, { signal });
+  return { ...data, items: data.items.map(feedbackWithUrls) };
+}
+
+export async function apiFeedbackSummary(signal?: AbortSignal): Promise<{ newCount: number }> {
+  return request<{ newCount: number }>('/feedback/summary', { signal });
+}
+
+export async function apiCreateFeedback(input: {
+  type: FeedbackType;
+  text: string;
+  context: FeedbackContext;
+}): Promise<FeedbackItem> {
+  const data = await request<{ item: FeedbackItem }>('/feedback', { method: 'POST', body: JSON.stringify(input) });
+  return feedbackWithUrls(data.item);
+}
+
+export async function apiUpdateFeedback(
+  id: string,
+  patch: { status?: FeedbackStatus; reply?: string },
+): Promise<FeedbackItem> {
+  const data = await request<{ item: FeedbackItem }>(`/feedback/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return feedbackWithUrls(data.item);
+}
+
+/** Одно фото к обращению; по одному, чтобы не упереться в предел размера запроса. */
+export function apiUploadFeedbackPhoto(
+  id: string,
+  input: { image: string; thumb: string },
+  onProgress?: (fraction: number) => void,
+): Promise<FeedbackItem> {
+  const base = apiBase();
+  if (!base) return Promise.reject(new Error('Сервер не настроен'));
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${base}/feedback/${encodeURIComponent(id)}/photos`);
+    xhr.timeout = 90_000;
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    const token = loadToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
+    };
+    xhr.onerror = () => reject(new ApiError(0, NETWORK_ERROR_MESSAGE));
+    xhr.ontimeout = () => reject(new ApiError(0, NETWORK_ERROR_MESSAGE));
+    xhr.onload = () => {
+      let data: { item?: FeedbackItem; message?: string } = {};
+      try {
+        data = JSON.parse(xhr.responseText || '{}');
+      } catch {
+        /* пустой ответ */
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && data.item) {
+        onProgress?.(1);
+        resolve(feedbackWithUrls(data.item));
+      } else {
+        reject(new ApiError(xhr.status, data.message || `Ошибка ${xhr.status}`));
+      }
+    };
+    xhr.send(JSON.stringify(input));
+  });
+}
