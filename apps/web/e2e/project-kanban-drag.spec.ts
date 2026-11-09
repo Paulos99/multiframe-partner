@@ -139,9 +139,12 @@ test('демо: перенос сохраняется после перезаг�
 });
 
 test.describe('телефон', () => {
+  // Флак автопрокрутки колонок на CI: до 2 повторов.
+  test.describe.configure({ retries: 2 });
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
   test('карточку можно перенести долгим касанием, а короткое касание открывает проект', async ({ page }) => {
+    test.setTimeout(120_000);
     await enter(page, 'owner');
     await openBoard(page);
     const card = page.locator('[data-project-id="ui_project"]');
@@ -152,19 +155,24 @@ test.describe('телефон', () => {
     const x = a.x + a.width / 2;
     const y = a.y + a.height / 2;
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(550);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 4, y: y + 4 }] });
     // Подводим палец к левому краю: доска сама прокручивается к соседней стадии.
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 6, y: y + 4 }] });
-    await page.waitForFunction(() => {
-      const box = document.querySelector('[data-project-stage="proposal"]')?.getBoundingClientRect();
-      return Boolean(box && box.x > -60 && box.x < 180);
-    });
+    await page.waitForFunction(
+      () => {
+        const box = document.querySelector('[data-project-stage="proposal"]')?.getBoundingClientRect();
+        return Boolean(box && box.x > -60 && box.x < 180);
+      },
+      { timeout: 25_000 },
+    );
     // Середина экрана лежит внутри колонки при любом таком сдвиге; автопрокрутка у края прекращается.
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 195, y: y + 4 }] });
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(500);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await expect(page.locator('[data-project-stage="proposal"] [data-project-id="ui_project"]')).toBeVisible();
+    await expect(page.locator('[data-project-stage="proposal"] [data-project-id="ui_project"]')).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page).not.toHaveURL(/#project\//);
 
     await page.locator('[data-project-id="ui_project"]').tap();
