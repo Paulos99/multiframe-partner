@@ -339,7 +339,7 @@ export function ProjectDesk({
 
   if (field) {
     return (
-      <section className={styles.desk} aria-label="Проекты">
+      <section className={styles.desk} aria-label="Список проектов">
         <div className={styles.bar}>
           {fieldView === 'calendar' ? (
             <span className={styles.lead} aria-hidden="true" />
@@ -364,7 +364,7 @@ export function ProjectDesk({
   }
 
   return (
-    <section className={styles.desk} aria-label="Проекты">
+    <section className={styles.desk} aria-label="Список проектов">
       <div className={styles.bar}>
         {view === 'calendar' ? (
           <span className={styles.lead} aria-hidden="true" />
