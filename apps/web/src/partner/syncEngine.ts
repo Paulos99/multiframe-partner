@@ -19,7 +19,7 @@ import {
   stripObjectDocuments,
 } from './apiClient';
 import { isDemoModeEnabled } from './demoMode';
-import { writeLastSync } from './offlineQueue';
+import { afterFailure, isFinalHttpStatus, isRegenerableDocumentKind, writeLastSync } from './offlineQueue';
 import { canChangeRoomStage } from '../../../../packages/shared/roomStage.js';
 import {
   appendLocalObjectDocuments,
@@ -33,6 +33,7 @@ import {
   listLocalObjects,
   loadToken,
   markProjectsApiReady,
+  patchQueuedObjectDocuments,
   peekObjectDocumentQueue,
   presentCachedObject,
   projectsApiReady,
@@ -407,24 +408,56 @@ export async function resolveStageConflict(objectId: string, choice: 'mine' | 's
   await putObject({ ...payload, pendingSync: true });
 }
 
-/** Upload calculator PDFs after the object itself is on the server. */
-export async function flushDocumentQueue(): Promise<void> {
-  if (!navigator.onLine || !loadToken()) return;
+export type DocFlushFailure = {
+  objectId: string;
+  versionId: string;
+  filename: string;
+  roomName: string;
+  message: string;
+  /** Окончательная: файл снят или ждёт «Убрать из очереди». */
+  final: boolean;
+};
+
+export type DocFlushResult = {
+  sent: number;
+  failed: DocFlushFailure[];
+  auth: boolean;
+  offline: boolean;
+};
+
+/**
+ * Отправка PDF из очереди. Окончательная ошибка (нет прав, нет комнаты, плохой или слишком
+ * большой файл) снимает запись: PDF сметы, профиля и КП можно собрать заново. Сбой связи
+ * оставляет запись для повтора. force — «Отправить сейчас»: пробуем и помеченные ошибкой.
+ */
+export async function flushDocumentQueue(opts: { force?: boolean } = {}): Promise<DocFlushResult> {
+  const empty: DocFlushResult = { sent: 0, failed: [], auth: false, offline: false };
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return { ...empty, offline: true };
+  if (!loadToken()) return { ...empty, auth: true };
   const waiting = new Set(
     (await listOutbox()).filter((op) => op.op !== 'delete').map((op) => op.id),
   );
-  const docs = peekObjectDocumentQueue().filter((doc) => !waiting.has(doc.objectId));
-  const groups = new Map<string, typeof docs>();
-  for (const doc of docs) {
+  const queued = peekObjectDocumentQueue().filter((doc) => {
+    if (waiting.has(doc.objectId)) return false;
+    if (opts.force) return true;
+    return !doc.failed;
+  });
+  if (!queued.length) return empty;
+  const groups = new Map<string, typeof queued>();
+  for (const doc of queued) {
     const key = `${doc.objectId}::${doc.versionId}`;
     const list = groups.get(key) || [];
     list.push(doc);
     groups.set(key, list);
   }
+  let sent = 0;
+  const failed: DocFlushFailure[] = [];
   for (const [key, list] of groups) {
     const splitAt = key.indexOf('::');
     const objectId = key.slice(0, splitAt);
     const versionId = key.slice(splitAt + 2);
+    const names = list.map((doc) => doc.filename).filter(Boolean).join(', ') || 'PDF';
+    const roomName = list.find((doc) => doc.roomName)?.roomName || objectId;
     try {
       const updated = await apiUploadObjectDocuments(
         objectId,
@@ -435,16 +468,60 @@ export async function flushDocumentQueue(): Promise<void> {
           hasScheme: doc.hasScheme,
           panels: doc.panels,
           areaM2: doc.areaM2,
+          ...(doc.stamp ? { stamp: doc.stamp } : {}),
         })),
         versionId,
       );
       removeQueuedObjectDocuments(objectId, versionId);
       await putObject(withoutDocBytes({ ...updated, pendingSync: false }));
+      sent += list.length;
     } catch (err) {
-      if (isApiError(err) && err.status === 401) return;
-      break;
+      if (isApiError(err) && err.status === 401) {
+        return { sent, failed, auth: true, offline: false };
+      }
+      const status = isApiError(err) ? err.status : 0;
+      const message = err instanceof Error ? err.message : 'Не удалось отправить PDF';
+      if (isFinalHttpStatus(status)) {
+        // Собираемые заново PDF снимаем сразу; иначе помечаем для «Убрать из очереди».
+        const regenerable = list.every((doc) => isRegenerableDocumentKind(doc.kind));
+        if (regenerable) {
+          removeQueuedObjectDocuments(objectId, versionId);
+          failed.push({ objectId, versionId, filename: names, roomName, message, final: true });
+        } else {
+          patchQueuedObjectDocuments(objectId, versionId, {
+            failed: true,
+            attempts: (list[0]?.attempts || 0) + 1,
+            lastError: message,
+            roomName,
+          });
+          failed.push({ objectId, versionId, filename: names, roomName, message, final: true });
+        }
+        continue;
+      }
+      // Сбой связи: пауза и повтор, остальные группы не трогаем в этом проходе.
+      const bumped = afterFailure(
+        { attempts: list[0]?.attempts || 0, nextAt: 0, failed: list[0]?.failed, lastError: list[0]?.lastError },
+        Date.now(),
+        message,
+      );
+      patchQueuedObjectDocuments(objectId, versionId, {
+        attempts: bumped.attempts,
+        failed: bumped.failed,
+        lastError: bumped.lastError,
+        roomName,
+      });
+      failed.push({
+        objectId,
+        versionId,
+        filename: names,
+        roomName,
+        message,
+        final: Boolean(bumped.failed),
+      });
+      return { sent, failed, auth: false, offline: status === 0 };
     }
   }
+  return { sent, failed, auth: false, offline: false };
 }
 
 /** Keep PDF names on the offline object. Bytes stay in the document queue, not in the API body. */

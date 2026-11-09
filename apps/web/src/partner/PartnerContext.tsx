@@ -100,6 +100,7 @@ import {
   localLogin,
   localLogout,
   peekObjectDocumentQueue,
+  removeQueuedObjectDocuments,
   peekObjectQueue,
   resetPartnerPassword,
   resetStaffPassword,
@@ -124,6 +125,8 @@ import {
 import { QUEUE_EVENT, enqueueNote, flushFieldQueue, listMyQueue, withSyncLock } from './fieldQueue';
 import {
   AUTO_SYNC_INTERVAL_MS,
+  isFinalHttpStatus,
+  isRegenerableDocumentKind,
   pendingTotal,
   readLastSync,
   type FieldQueueItem,
@@ -136,6 +139,7 @@ import {
   resolveStageConflict,
   type StageConflict,
   flushDocumentQueue,
+  type DocFlushFailure,
   flushOutbox,
   loadVisibleObjects,
   rememberObjectDocuments,
@@ -174,6 +178,13 @@ function asStaff(member: StaffMember | StoredUser): StaffMember {
 
 const NO_PENDING: PendingCounts = { rooms: 0, projects: 0, notes: 0, photos: 0, documents: 0 };
 
+export type SyncNowResult = {
+  pendingLeft: number;
+  docSent: number;
+  docFailed: DocFlushFailure[];
+  message: string;
+};
+
 type PartnerApi = {
   user: SessionUser | null;
   partner: PartnerProfile | null;
@@ -199,7 +210,11 @@ type PartnerApi = {
   /** Заметка к комнате. Без связи ложится в очередь и уходит сама. */
   addRoomNote: (objectId: string, text: string) => Promise<void>;
   /** «Отправить сейчас»: очередь целиком, без пауз между повторами. */
-  syncNow: () => Promise<void>;
+  syncNow: () => Promise<SyncNowResult>;
+  /** PDF с окончательной ошибкой: убрать из очереди отправки. */
+  dismissQueuedDocuments: (objectId: string, versionId: string) => void;
+  /** Последний итог ручной отправки (для полосы). */
+  lastSyncResult: string | null;
   online: boolean;
   syncStatus: SyncStatus;
   calculations: CachedCalculation[];
@@ -264,7 +279,7 @@ type PartnerApi = {
   saveObject: (input: Partial<JobObject> & { id?: string }) => Promise<JobObject>;
   deleteObject: (id: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
-  flushObjectQueue: (opts?: { force?: boolean }) => Promise<void>;
+  flushObjectQueue: (opts?: { force?: boolean }) => Promise<SyncNowResult>;
   /** Открыть калькулятор на комнате. Без objectId площадь никуда не пишется. */
   requestCalculator: (objectId: string | null) => void;
   calcRequest: { objectId: string | null; nonce: number; areaM2?: number | null } | null;
@@ -325,6 +340,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [cabinetLeaveNonce, setCabinetLeaveNonce] = useState(0);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [pendingCounts, setPendingCounts] = useState<PendingCounts>(NO_PENDING);
+  const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
   const [fieldQueue, setFieldQueue] = useState<FieldQueueItem[]>([]);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [stageConflicts, setStageConflicts] = useState<StageConflict[]>([]);
@@ -450,9 +466,13 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
    * online, при возврате на вкладку и раз в минуту, пока что-то ждёт отправки.
    */
   const flushObjectQueue = useCallback(
-    async (opts?: { force?: boolean }) => {
+    async (opts?: { force?: boolean }): Promise<SyncNowResult> => {
       const session = loadSession();
-      if (!session || isStpManagerRole(session.role)) return;
+      let docSent = 0;
+      let docFailed: DocFlushFailure[] = [];
+      if (!session || isStpManagerRole(session.role)) {
+        return { pendingLeft: 0, docSent: 0, docFailed: [], message: '' };
+      }
       await withSyncLock(async () => {
         const result = await flushOutbox(session, remote);
         const projectsResult = await flushProjectOutbox(session, remote);
@@ -463,17 +483,41 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
             const fieldResult = await flushFieldQueue(session, { force: opts?.force });
             if (fieldResult === 'auth') setAuthHold(true);
           }
-          await flushDocumentQueue();
+          const docs = await flushDocumentQueue({ force: opts?.force });
+          docSent = docs.sent;
+          docFailed = docs.failed;
+          if (docs.auth) setAuthHold(true);
         }
       });
       await refreshObjects();
       await refreshProjects();
       await refreshPending();
+      const left = pendingRef.current;
+      let message = '';
+      if (left === 0 && docFailed.length === 0) {
+        message = docSent > 0 ? 'Всё отправлено.' : 'Очередь пуста.';
+      } else if (docFailed.some((item) => item.final)) {
+        const names = docFailed.filter((item) => item.final).map((item) => item.filename).join(', ');
+        message = `Не удалось отправить: ${names}. Соберите PDF заново через «Пересобрать» или уберите из очереди.`;
+      } else if (left > 0) {
+        message = `Ещё ждут отправки: ${left}. Повторим сами.`;
+      }
+      if (opts?.force) setLastSyncResult(left > 0 ? message || null : null);
+      return { pendingLeft: left, docSent, docFailed, message };
     },
     [remote, refreshObjects, refreshProjects, refreshPending],
   );
 
   const syncNow = useCallback(() => flushObjectQueue({ force: true }), [flushObjectQueue]);
+
+  const dismissQueuedDocuments = useCallback(
+    (objectId: string, versionId: string) => {
+      removeQueuedObjectDocuments(objectId, versionId);
+      setLastSyncResult(null);
+      void refreshPending();
+    },
+    [refreshPending],
+  );
 
   const addRoomNote = useCallback(
     async (objectId: string, text: string) => {
@@ -1152,23 +1196,34 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     setCalcRequest({ objectId, nonce: Date.now(), areaM2 });
   }, [objects]);
 
-  /** Прикладывает PDF к объекту: сразу в облако или в очередь, если сети нет. */
+  /**
+   * Прикладывает PDF к объекту.
+   * Смета, профиль и КП собираются из данных заново: без связи только локальная копия,
+   * в очередь отправки их не кладём. В облако — сразу при связи; при окончательной ошибке
+   * не копим очередь, при сбое связи — краткий повтор через очередь.
+   */
   const attachDocuments = useCallback(
     async (saved: JobObject, files: AttachFile[]): Promise<JobObject> => {
       if (!user) throw new Error('Нет сессии');
       const ready = files.filter((d) => d.pdfBase64.length > 32);
       if (!ready.length) return saved;
       const versionId = `ver_${Date.now().toString(36)}`;
+      const regenerable = ready.every((d) => isRegenerableDocumentKind(d.kind));
       if (remote && loadToken() && navigator.onLine) {
         try {
           const updated = await apiUploadObjectDocuments(saved.id, ready, versionId);
           await refreshObjects();
           return updated;
-        } catch {
-          /* очередь, если облако не приняло файл */
+        } catch (err) {
+          // Смета, профиль и КП: локальная копия ниже, в очередь отправки не кладём.
+          if (!regenerable && isApiError(err) && isFinalHttpStatus(err.status)) {
+            throw err;
+          }
+          /* regenerable или сбой связи у прочих файлов — ниже */
         }
       }
       const now = new Date().toISOString();
+      const roomName = saved.roomName || saved.clientName || saved.address || 'Комната';
       const localDocs: JobObjectDocument[] = ready.map((d) => ({
         id: `doc_${Math.random().toString(36).slice(2, 10)}`,
         versionId,
@@ -1182,25 +1237,30 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         dataBase64: d.pdfBase64,
         ...(d.kind === 'offer' ? { stamp: d.stamp || null, projectId: saved.projectId || null } : {}),
       }));
-      enqueueObjectDocuments(
-        saved.id,
-        ready.map((d) => ({
-          objectId: saved.id,
-          versionId,
-          kind: d.kind,
-          filename: d.filename,
-          pdfBase64: d.pdfBase64,
-          hasScheme: d.hasScheme,
-          panels: d.panels,
-          areaM2: d.areaM2,
-          ...(d.stamp ? { stamp: d.stamp } : {}),
-        })),
-      );
+      // Собираемые PDF (смета, профиль, КП) в очередь отправки не кладём — только локальная копия.
+      if (!regenerable) {
+        enqueueObjectDocuments(
+          saved.id,
+          ready.map((d) => ({
+            objectId: saved.id,
+            versionId,
+            kind: d.kind,
+            filename: d.filename,
+            pdfBase64: d.pdfBase64,
+            hasScheme: d.hasScheme,
+            panels: d.panels,
+            areaM2: d.areaM2,
+            roomName,
+            ...(d.stamp ? { stamp: d.stamp } : {}),
+          })),
+        );
+      }
       const withDocs = await rememberObjectDocuments(saved, localDocs, user);
       await refreshObjects();
+      await refreshPending();
       return withDocs;
     },
-    [user, remote, refreshObjects],
+    [user, remote, refreshObjects, refreshPending],
   );
 
   const attachCalculation = useCallback(
@@ -1323,6 +1383,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       resolveStageConflict: resolveConflict,
       addRoomNote,
       syncNow,
+      dismissQueuedDocuments,
+      lastSyncResult,
       online,
       syncStatus: (!online ? 'offline' : pendingSyncCount > 0 ? 'pending' : 'synced') as SyncStatus,
       calculations,
@@ -1414,6 +1476,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       resolveConflict,
       addRoomNote,
       syncNow,
+      dismissQueuedDocuments,
+      lastSyncResult,
       online,
       calculations,
       authHold,

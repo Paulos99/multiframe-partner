@@ -153,26 +153,61 @@ export function syncLabel(state: SyncState, pending: number): string {
  */
 export function syncBanner(input: {
   pending: number;
+  /** Сколько из pending уже с окончательной ошибкой и ждут «Убрать из очереди». */
+  failed?: number;
   lastSyncAt: string | null;
   now: number;
   online: boolean;
 }): { tone: 'warn'; text: string } | null {
+  const failed = input.failed ?? 0;
+  const waiting = Math.max(0, input.pending - failed);
   const last = input.lastSyncAt ? Date.parse(input.lastSyncAt) : NaN;
   const stale = Number.isFinite(last) && input.now - last > STALE_SYNC_MS;
-  if (input.pending < 2 && !stale) return null;
-  if (input.pending > 0) {
-    const what = `${input.pending} ${plural(input.pending, 'объект', 'объекта', 'объектов')}`;
+  // Полоса: 2+ ждут отправки, есть окончательные ошибки, или больше суток без связи.
+  if (input.pending < 2 && failed === 0 && !stale) return null;
+  if (failed > 0 && waiting === 0) {
     return {
       tone: 'warn',
-      text: input.online
-        ? `Данные ещё не отправлены: ждут отправки ${what}. Повторим сами, можно нажать «Отправить сейчас».`
-        : `Подключитесь к интернету, чтобы отправить данные: ждут отправки ${what}.`,
+      text: `Не удалось отправить ${failed} ${plural(failed, 'файл', 'файла', 'файлов')}. Уберите их из очереди или соберите PDF заново.`,
+    };
+  }
+  if (input.pending > 0) {
+    const what = `${input.pending} ${plural(input.pending, 'объект', 'объекта', 'объектов')}`;
+    if (!input.online) {
+      return { tone: 'warn', text: `Подключитесь к интернету, чтобы отправить данные: ждут отправки ${what}.` };
+    }
+    if (failed > 0) {
+      return {
+        tone: 'warn',
+        text: `Ждут отправки ${what}, из них ${failed} с ошибкой. Нажмите «Отправить сейчас» или уберите лишнее.`,
+      };
+    }
+    return {
+      tone: 'warn',
+      text: `Данные ещё не отправлены: ждут отправки ${what}. Повторим сами, можно нажать «Отправить сейчас».`,
     };
   }
   return {
     tone: 'warn',
     text: 'Вы больше суток не были на связи. Подключитесь к интернету, чтобы получить свежие данные по комнатам.',
   };
+}
+
+/** Окончательная ошибка сервера: повторять бесполезно (нет прав, нет комнаты, плохой файл, слишком большой). */
+export function isFinalHttpStatus(status: number): boolean {
+  if (status === 0 || status === 401 || status === 408 || status === 429) return false;
+  if (status >= 500) return false;
+  return status >= 400;
+}
+
+/** PDF, которые приложение само собирает из данных комнаты или проекта: можно собрать заново. */
+export function isRegenerableDocumentKind(kind: string): boolean {
+  return kind === 'estimate' || kind === 'profile' || kind === 'offer';
+}
+
+/** Где сейчас открыт кабинет: телефон или компьютер. */
+export function devicePlace(ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''): string {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ? 'На телефоне' : 'На этом компьютере';
 }
 
 const LAST_SYNC_KEY = 'mf_partner_last_sync_v1';

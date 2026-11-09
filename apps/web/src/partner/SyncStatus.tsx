@@ -3,19 +3,28 @@ import { createPortal } from 'react-dom';
 import { JOB_OBJECT_STATUS_LABELS, type JobObjectStatus } from '../../../../packages/shared/partner';
 import { usePartner } from './PartnerContext';
 import { canChangeRoomStage } from '../../../../packages/shared/roomStage.js';
-import { lastSyncLine, pendingSummary, syncBanner, syncLabel, syncState, type SyncState } from './offlineQueue';
+import { peekObjectDocumentQueue } from './localStore';
+import {
+  devicePlace,
+  lastSyncLine,
+  pendingSummary,
+  syncBanner,
+  syncLabel,
+  syncState,
+  type SyncState,
+} from './offlineQueue';
 import styles from './partner.module.css';
 import sync from './SyncStatus.module.css';
 
-function hintFor(state: SyncState, authHold: boolean, summary: string): string {
-  if (authHold) return 'Вход истёк. Всё снятое сохранено на телефоне и уйдёт на сервер после входа.';
+function hintFor(state: SyncState, authHold: boolean, summary: string, place: string): string {
+  if (authHold) return `Вход истёк. Всё снятое сохранено ${place.toLowerCase()} и уйдёт на сервер после входа.`;
   if (state === 'offline') {
     return summary
-      ? `На телефоне: ${summary}. Уйдёт само, когда появится связь.`
-      : 'Можно работать дальше: замеры, заметки и фото сохраняются на телефоне.';
+      ? `${place}: ${summary}. Уйдёт само, когда появится связь.`
+      : `Можно работать дальше: замеры, заметки и фото сохраняются ${place === 'На телефоне' ? 'на телефоне' : 'на этом компьютере'}.`;
   }
   if (state === 'pending') return `Отправляем: ${summary}. Если связь слабая, повторим сами.`;
-  return 'Всё, что снято на телефоне, уже на сервере.';
+  return `Всё, что снято ${place === 'На телефоне' ? 'на телефоне' : 'на этом компьютере'}, уже на сервере.`;
 }
 
 const dotClass: Record<SyncState, string> = {
@@ -38,7 +47,8 @@ export function SyncStatus({ compact = false }: { compact?: boolean }) {
   const state = syncState(api.online, pending);
   const label = syncLabel(state, pending);
   const summary = pendingSummary(api.pendingCounts);
-  const hint = hintFor(state, api.authHold, summary);
+  const place = devicePlace();
+  const hint = hintFor(state, api.authHold, summary, place);
   const sendNow = async () => {
     setBusy(true);
     try {
@@ -85,39 +95,85 @@ export function SyncStatus({ compact = false }: { compact?: boolean }) {
 
 /**
  * Полоса-напоминание над содержимым кабинета: ждут отправки 2 и больше объектов или больше суток не
- * было связи с сервером.
+ * было связи с сервером. При окончательной ошибке PDF — список и «Убрать из очереди».
  */
 export function SyncBanner() {
   const api = usePartner();
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
+  const [failedDocs, setFailedDocs] = useState(() => peekObjectDocumentQueue().filter((doc) => doc.failed));
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  useEffect(() => {
+    setFailedDocs(peekObjectDocumentQueue().filter((doc) => doc.failed));
+  }, [api.pendingCounts.documents, api.lastSyncResult, api.pendingSyncCount]);
   if (!api.user || !api.remote || api.user.role === 'admin') return null;
+  const failedCount = failedDocs.length || peekObjectDocumentQueue().filter((doc) => doc.failed).length;
   const banner = syncBanner({
     pending: api.pendingSyncCount,
+    failed: failedCount,
     lastSyncAt: api.lastSyncAt,
     now: Math.max(now, Date.now()),
     online: api.online,
   });
   if (!banner) return null;
   const summary = pendingSummary(api.pendingCounts);
+  const place = devicePlace();
+  const groups = new Map<string, (typeof failedDocs)[number]>();
+  for (const doc of failedDocs) {
+    const key = `${doc.objectId}::${doc.versionId}`;
+    if (!groups.has(key)) groups.set(key, doc);
+  }
   return (
     <div className={sync.banner} role="alert" data-testid="sync-banner">
-      <p>
-        <strong>{banner.text}</strong>
-        {summary ? <span> На телефоне: {summary}.</span> : null}
-      </p>
+      <div className={sync.bannerBody}>
+        {banner ? (
+          <p>
+            <strong>{banner.text}</strong>
+            {summary ? (
+              <span>
+                {' '}
+                {place}: {summary}.
+              </span>
+            ) : null}
+          </p>
+        ) : null}
+        {api.lastSyncResult ? <p className={sync.result} data-testid="sync-result">{api.lastSyncResult}</p> : null}
+        {groups.size > 0 ? (
+          <ul className={sync.failList} data-testid="sync-failed-docs">
+            {[...groups.values()].map((doc) => (
+              <li key={`${doc.objectId}::${doc.versionId}`}>
+                <span>
+                  {doc.filename}
+                  {doc.roomName ? ` · ${doc.roomName}` : ''}
+                  {doc.lastError ? ` — ${doc.lastError}` : ''}
+                </span>
+                <button
+                  type="button"
+                  className={sync.dismissBtn}
+                  onClick={() => api.dismissQueuedDocuments(doc.objectId, doc.versionId)}
+                >
+                  Убрать из очереди
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
       {api.online && api.pendingSyncCount > 0 ? (
         <button
           type="button"
           className={styles.ghost}
           disabled={busy}
+          data-testid="sync-send-now"
           onClick={() => {
             setBusy(true);
-            void api.syncNow().finally(() => setBusy(false));
+            void api.syncNow().finally(() => {
+              setBusy(false);
+              setFailedDocs(peekObjectDocumentQueue().filter((doc) => doc.failed));
+            });
           }}
         >
           {busy ? 'Отправляем…' : 'Отправить сейчас'}

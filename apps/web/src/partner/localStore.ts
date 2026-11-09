@@ -1533,6 +1533,12 @@ export type QueuedObjectDocument = {
   panels?: number | null;
   areaM2?: number | null;
   stamp?: string | null;
+  /** Имя комнаты для подсказки, если отправка не удалась. */
+  roomName?: string | null;
+  attempts?: number;
+  /** Окончательная ошибка: ждёт «Убрать из очереди». */
+  failed?: boolean;
+  lastError?: string;
 };
 
 const memoryDocBytes = new Map<string, string>();
@@ -1585,6 +1591,23 @@ export function removeQueuedObjectDocuments(objectId: string, versionId: string)
     (d) => !(d.objectId === objectId && d.versionId === versionId),
   );
   localStorage.setItem(DOC_QUEUE_KEY, JSON.stringify(next));
+}
+
+/** Обновить записи одной версии (попытки, ошибка) или заменить группу. */
+export function patchQueuedObjectDocuments(
+  objectId: string,
+  versionId: string,
+  patch: Partial<Pick<QueuedObjectDocument, 'attempts' | 'failed' | 'lastError' | 'roomName'>>,
+): void {
+  const next = peekObjectDocumentQueue().map((doc) =>
+    doc.objectId === objectId && doc.versionId === versionId ? { ...doc, ...patch } : doc,
+  );
+  localStorage.setItem(DOC_QUEUE_KEY, JSON.stringify(next));
+}
+
+/** Убрать все PDF из очереди отправки (после окончательных ошибок или по кнопке). */
+export function clearObjectDocumentQueue(): void {
+  localStorage.setItem(DOC_QUEUE_KEY, JSON.stringify([]));
 }
 
 export function appendLocalObjectDocuments(

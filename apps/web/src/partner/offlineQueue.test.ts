@@ -4,8 +4,11 @@ import {
   MAX_ATTEMPTS,
   QUEUE_PHOTO_LIMIT,
   afterFailure,
+  devicePlace,
   dueItems,
   evictForLimit,
+  isFinalHttpStatus,
+  isRegenerableDocumentKind,
   lastSyncLine,
   newClientId,
   orderQueue,
@@ -126,4 +129,44 @@ test('кэш документов: при превышении 50 МБ уход�
   ]);
   assert.deepEqual(drop, ['old']);
   assert.deepEqual(evictForLimit([{ key: 'x', bytes: MB, at: 1 }]), []);
+});
+
+test('окончательная ошибка HTTP: 400/403/404/413, не 401 и не 5xx', () => {
+  assert.equal(isFinalHttpStatus(400), true);
+  assert.equal(isFinalHttpStatus(403), true);
+  assert.equal(isFinalHttpStatus(404), true);
+  assert.equal(isFinalHttpStatus(413), true);
+  assert.equal(isFinalHttpStatus(401), false);
+  assert.equal(isFinalHttpStatus(0), false);
+  assert.equal(isFinalHttpStatus(408), false);
+  assert.equal(isFinalHttpStatus(429), false);
+  assert.equal(isFinalHttpStatus(500), false);
+  assert.equal(isFinalHttpStatus(503), false);
+});
+
+test('смета, профиль и КП собираются заново', () => {
+  assert.equal(isRegenerableDocumentKind('estimate'), true);
+  assert.equal(isRegenerableDocumentKind('profile'), true);
+  assert.equal(isRegenerableDocumentKind('offer'), true);
+  assert.equal(isRegenerableDocumentKind('spec'), false);
+});
+
+test('подпись устройства: телефон или компьютер', () => {
+  assert.equal(devicePlace('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'), 'На телефоне');
+  assert.equal(devicePlace('Mozilla/5.0 (Linux; Android 14)'), 'На телефоне');
+  assert.equal(devicePlace('Mozilla/5.0 (Windows NT 10.0; Win64; x64)'), 'На этом компьютере');
+  assert.equal(devicePlace('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)'), 'На этом компьютере');
+});
+
+test('полоса: окончательные ошибки без «повторим сами»', () => {
+  const fresh = new Date(NOW - HOUR).toISOString();
+  assert.match(
+    syncBanner({ pending: 5, failed: 5, lastSyncAt: fresh, now: NOW, online: true })!.text,
+    /Не удалось отправить 5 файлов/,
+  );
+  assert.match(
+    syncBanner({ pending: 5, failed: 2, lastSyncAt: fresh, now: NOW, online: true })!.text,
+    /из них 2 с ошибкой/,
+  );
+  assert.equal(syncBanner({ pending: 1, failed: 0, lastSyncAt: fresh, now: NOW, online: true }), null);
 });
