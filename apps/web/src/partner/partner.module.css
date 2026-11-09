@@ -757,6 +757,33 @@
 .dashCard {
   width: 100% !important;
   max-width: none;
+  /* Резерв под скроллбар: появление полосы не сдвигает вёрстку при смене раздела. */
+  scrollbar-gutter: stable;
+}
+
+.dashTitleWrap {
+  display: grid;
+  align-items: start;
+  min-height: 1.35em;
+  min-width: 0;
+}
+
+.dashTitleWrap > h2,
+.dashTitle {
+  grid-area: 1 / 1;
+  margin: 0;
+  font-size: inherit;
+  font-weight: 800;
+  letter-spacing: var(--cab-track);
+  line-height: 1.25;
+  color: var(--cab-ink);
+}
+
+.dashPane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .dashSection {
