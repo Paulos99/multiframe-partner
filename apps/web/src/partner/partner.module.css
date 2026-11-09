@@ -3790,7 +3790,7 @@ div.drillPerson {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto auto;
+  grid-auto-rows: auto;
   gap: 4px 10px;
   align-items: center;
   width: 100%;
@@ -3832,7 +3832,6 @@ div.drillPerson {
 
 .funnelStageMeta {
   grid-column: 1;
-  grid-row: 1;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -3877,7 +3876,6 @@ div.drillPerson {
 
 .funnelConv {
   grid-column: 1;
-  grid-row: 2;
   font-size: 0.72rem;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -3902,7 +3900,6 @@ div.drillPerson {
 
 .funnelTrack {
   grid-column: 1;
-  grid-row: 3;
   display: block;
   width: 100%;
   height: 10px;
@@ -3936,7 +3933,7 @@ div.drillPerson {
 
 .funnelChevron {
   grid-column: 2;
-  grid-row: 1 / span 3;
+  grid-row: 1 / -1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
