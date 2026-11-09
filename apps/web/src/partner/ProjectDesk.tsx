@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/core';
 import {
   PROJECT_STATUSES,
+  PROJECT_STATUS_LABELS,
   canCreateObjects,
   documentLabel,
   roleSeesProjectMoney,
@@ -60,6 +61,8 @@ import { PHONE_EXAMPLE, phoneStageAllowed } from '../../../../packages/shared/cl
 import { PROJECT_LIMITS } from '../../../../packages/shared/schemas.js';
 import { ProjectPhotoReports } from './photos/ProjectPhotoReports';
 import styles from './ProjectDesk.module.css';
+import { CardSection, FactGrid, NextStep, StageTrack, cardStyles as card, type Fact } from './CardParts';
+import { PROJECT_STAGES, stageStates } from './cardView';
 import pill from '../ui/SlidingPill.module.css';
 import { useSlidingPill } from '../ui/useSlidingPill';
 import { AnimatedNumber, useFlipReflow, useLift, useStaggerIn } from '../ui/gsapMotion';
@@ -941,10 +944,6 @@ function ProjectPage({
   const area = areaSum(rooms);
   const money = preliminaryRoomTotal(rooms);
   const steps = nextSteps(rooms);
-  const subtitle =
-    [project.clientName, [project.address, project.city].filter(Boolean).join(', '), projectStageLabel(project, status)]
-      .filter(Boolean)
-      .join(' · ') || 'Контакт и адрес пока не заполнены';
 
   return (
     <section className={styles.page} aria-label="Проект">
@@ -955,16 +954,67 @@ function ProjectPage({
         <span aria-hidden="true">/</span>
         <span>{project.name}</span>
       </nav>
-      <header className={styles.pageHead}>
-        <div>
-          <p className={styles.eyebrow}>Проекты</p>
-          <h1>{project.name}</h1>
-          <p className={styles.lead}>{subtitle}</p>
+      <header className={card.hero} data-project-hero>
+        <div className={card.heroTop}>
+          <div>
+            <p className={card.heroEyebrow}>Проект</p>
+            <h1 className={card.heroTitle}>
+              {project.name}
+              <span
+                className={card.stageBadge}
+                data-outcome={status === 'done' ? (project.refusal ? 'refused' : 'completed') : undefined}
+                data-tone={status === 'done' && project.refusal ? 'refused' : undefined}
+              >
+                {projectStageLabel(project, status)}
+              </span>
+            </h1>
+            <ul className={card.heroMeta}>
+              {project.clientName ? <li>Клиент: {project.clientName}</li> : null}
+              <ClientPhoneLink project={project} status={status} />
+              <li>{[project.address, project.city].filter(Boolean).join(', ') || 'Адрес не заполнен'}</li>
+            </ul>
+          </div>
+          {canEdit ? (
+            <div className={card.heroActions}>
+              <button type="button" className={styles.ghost} aria-pressed={tab === 'settings'} onClick={() => onTab('settings')}>
+                Настройки проекта
+              </button>
+            </div>
+          ) : null}
         </div>
-        {canEdit ? (
-          <button type="button" className={styles.ghost} aria-pressed={tab === 'settings'} onClick={() => onTab('settings')}>
-            Настройки проекта
-          </button>
+        {tab === 'overview' ? (
+          <>
+            {steps.length ? (
+              <NextStep text={steps.length > 1 ? `${steps[0]!.text}. Ещё шагов: ${steps.length - 1}.` : `${steps[0]!.text}.`}>
+                <button
+                  type="button"
+                  className={styles.primary}
+                  data-next-action="room"
+                  onClick={() => {
+                    const room = rooms.find((item) => item.id === steps[0]!.roomId);
+                    if (room) onOpenRoom(room);
+                  }}
+                >
+                  Открыть комнату
+                </button>
+              </NextStep>
+            ) : !rooms.length && canEdit && onAddRoom ? (
+              <NextStep text="В проекте пока нет комнат. Добавьте первую, чтобы пройти Проблемомер и посчитать смету.">
+                <button type="button" className={styles.primary} onClick={() => onTab('work')}>
+                  Перейти к комнатам
+                </button>
+              </NextStep>
+            ) : null}
+            <StageTrack
+              stages={PROJECT_STAGES.map((key, index) => ({
+                key,
+                label: key === 'done' && status === 'done' ? projectStageLabel(project, status) : PROJECT_STATUS_LABELS[key],
+                state: stageStates(PROJECT_STAGES, status)[index]!,
+              }))}
+              groupLabel="Этапы проекта"
+              refused={status === 'done' && Boolean(project.refusal)}
+            />
+          </>
         ) : null}
       </header>
       <div className={styles.tabs} role="tablist" aria-label="Разделы проекта" ref={tabsRef}>
@@ -993,6 +1043,7 @@ function ProjectPage({
             seesMoney={seesMoney}
             steps={steps}
             canEdit={canEdit}
+            staff={people}
             onOpenRoom={onOpenRoom}
             onSettings={() => onTab('settings')}
           />
@@ -1026,6 +1077,7 @@ function Overview({
   seesMoney,
   steps,
   canEdit,
+  staff,
   onOpenRoom,
   onSettings,
 }: {
@@ -1037,61 +1089,49 @@ function Overview({
   seesMoney: boolean;
   steps: ReturnType<typeof nextSteps>;
   canEdit: boolean;
+  staff: Person[];
   onOpenRoom: (room: JobObject) => void;
   onSettings: () => void;
 }) {
+  const facts: Fact[] = [
+    { key: 'rooms', label: 'Комнаты', value: rooms.length },
+    { key: 'area', label: 'Площадь', value: area.known ? formatArea(area.total) : 'Не указана' },
+    ...(seesMoney ? [{ key: 'sum', label: 'Сумма', value: money.calculated ? formatRub(money.total) : 'Нет расчёта' }] : []),
+    { key: 'due', label: 'Срок', value: formatProjectDay(project.dueAt) },
+    { key: 'manager', label: 'Менеджер', value: personName(staff, projectAssigneeId(project, rooms, staff, 'manager')) },
+  ];
   return (
     <div className={styles.stack}>
-      <span className={`${styles.badge} ${project.refusal && status === 'done' ? styles.badgeRefused : ''}`} data-outcome={status === 'done' ? (project.refusal ? 'refused' : 'completed') : undefined}>{projectStageLabel(project, status)}</span>
       {status === 'done' && project.refusal ? <p className={styles.refusalNote}>{refusalLine(project)}</p> : null}
-      <dl className={styles.facts}>
-        <div>
-          <dt>Клиент</dt>
-          <dd>{project.clientName || 'Не указан'}</dd>
-        </div>
-        <ClientPhoneFact project={project} status={status} />
-        <div>
-          <dt>Адрес</dt>
-          <dd>{[project.address, project.city].filter(Boolean).join(', ') || 'Не указан'}</dd>
-        </div>
-        <div>
-          <dt>Комнаты</dt>
-          <dd>{rooms.length}</dd>
-        </div>
-        <div>
-          <dt>Площадь</dt>
-          <dd>{area.known ? formatArea(area.total) : 'Не указана'}</dd>
-        </div>
-        {seesMoney ? (
-          <div>
-            <dt>Сумма</dt>
-            <dd>{money.calculated ? formatRub(money.total) : 'Нет расчёта'}</dd>
-          </div>
-        ) : null}
-        <div>
-          <dt>Срок</dt>
-          <dd>{formatProjectDay(project.dueAt)}</dd>
-        </div>
-      </dl>
+      <FactGrid label="Главное о проекте" facts={facts} />
       {seesMoney && money.calculated && money.calculated < money.rooms ? (
         <p className={styles.lead}>Рассчитано {money.calculated} из {money.rooms}. Сумма неполная и меняется вместе с комнатами.</p>
       ) : null}
-      <div className={styles.note}>
-        <strong>Описание</strong>
-        {project.description?.trim() ? (
-          <p className={styles.prose}>{project.description}</p>
-        ) : (
-          <p className={styles.lead}>Описания пока нет.</p>
-        )}
-        {!project.description?.trim() && canEdit ? (
-          <button type="button" className={styles.ghost} onClick={onSettings}>
-            Заполнить в настройках
-          </button>
-        ) : null}
-      </div>
-      <div>
-        <h4>Ближайшие шаги</h4>
-        {steps.length ? (
+      {/* Место для ближайших дат замера и монтажа по проекту (календарь). */}
+      {rooms.length ? (
+        <CardSection title="Комнаты">
+          <div className={styles.rooms} data-overview-rooms>
+            {rooms.map((room) => (
+              <button key={room.id} type="button" className={styles.roomBtn} onClick={() => onOpenRoom(room)}>
+                <span>
+                  <strong>{roomTitle(room)}</strong>
+                  <span>
+                    {room.room?.areaM2 != null ? formatArea(room.room.areaM2) : 'Площадь не указана'}
+                    {seesMoney && typeof room.estimate?.totalCost === 'number' ? ` · ${formatRub(room.estimate.totalCost)}` : ''}
+                    {' · '}
+                    {problemomerLine(room)}
+                  </span>
+                </span>
+                <span className={card.stageBadge} data-tone={room.status === 'closed' && room.refusal ? 'refused' : undefined}>
+                  {roomStageLabel(room)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </CardSection>
+      ) : null}
+      {steps.length > 1 ? (
+        <CardSection title="Ближайшие шаги">
           <div className={styles.steps}>
             {steps.map((step) => (
               <button key={step.roomId + step.text} type="button" className={styles.step} onClick={() => {
@@ -1102,10 +1142,26 @@ function Overview({
               </button>
             ))}
           </div>
+        </CardSection>
+      ) : !rooms.length ? (
+        <p className={styles.lead}>В проекте пока нет доступных комнат.</p>
+      ) : null}
+      <CardSection
+        title="Описание"
+        aside={
+          !project.description?.trim() && canEdit ? (
+            <button type="button" className={styles.ghost} onClick={onSettings}>
+              Заполнить в настройках
+            </button>
+          ) : null
+        }
+      >
+        {project.description?.trim() ? (
+          <p className={styles.prose}>{project.description}</p>
         ) : (
-          <p className={styles.lead}>{rooms.length ? 'Открытых шагов нет.' : 'В проекте пока нет доступных комнат.'}</p>
+          <p className={styles.lead}>Описания пока нет.</p>
         )}
-      </div>
+      </CardSection>
     </div>
   );
 }
@@ -1459,17 +1515,14 @@ function Documents({
   );
 }
 
-/** Телефон клиента: показывается только с этапа «Замер» и только когда он указан. */
-function ClientPhoneFact({ project, status }: { project: Project; status: ProjectStatus }) {
+/** Телефон клиента в шапке проекта: только с этапа «Замер» и только когда он указан. */
+function ClientPhoneLink({ project, status }: { project: Project; status: ProjectStatus }) {
   const phone = (project.clientPhone || '').trim();
   if (!phone || !phoneStageAllowed(project.status || status)) return null;
   return (
-    <div data-client-phone>
-      <dt>Телефон клиента</dt>
-      <dd>
-        <a href={`tel:${phone.replace(/[^\d+]/g, '')}`}>{phone}</a>
-      </dd>
-    </div>
+    <li data-client-phone>
+      <a href={`tel:${phone.replace(/[^\d+]/g, '')}`}>{phone}</a>
+    </li>
   );
 }
 
@@ -1522,7 +1575,6 @@ function Settings({
             <dt>Клиент</dt>
             <dd>{project.clientName || 'Не указан'}</dd>
           </div>
-          <ClientPhoneFact project={project} status={status} />
           <div>
             <dt>Адрес</dt>
             <dd>{[project.address, project.city].filter(Boolean).join(', ') || 'Не указан'}</dd>
