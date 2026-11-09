@@ -9,6 +9,7 @@ import {
   KanbanIcon,
   PartnersIcon,
   PlusIcon,
+  SendIcon,
   TeamIcon,
   WrenchIcon,
 } from '../icons';
@@ -27,6 +28,7 @@ const ICONS: Record<string, ComponentType<Omit<SVGProps<SVGSVGElement>, 'ref'> &
   add: PlusIcon,
   help: GraduationCapIcon,
   tools: WrenchIcon,
+  feedback: SendIcon,
 };
 
 export function NavIcon({ id, label }: { id: string; label: string }) {

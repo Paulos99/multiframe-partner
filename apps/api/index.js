@@ -28,6 +28,7 @@ import {
   buildDemoAnalyticsEvents,
   buildDemoPlatform,
   ensureDemoStpManager,
+  ensureDemoFeedback,
   extendDemoAnalyticsHistory,
 } from './demoSeed.js';
 import { findVisibleDocument, incomingDocumentKind, visibleDocuments } from './documentAccess.js';
@@ -46,6 +47,7 @@ import {
 import { handleRoomShare } from './roomShare.js';
 import { handleTraining } from './training.js';
 import { handleRoomPhotos, photoCountsForObject, removePhotoFiles, clientReport } from './roomPhotos.js';
+import { handleFeedback } from './feedback.js';
 import { applyObjectProjectFields, ensureProjectForNewObject, handleProjects } from './projects.js';
 import { computeAnalyticsFunnel } from '../../packages/shared/funnel.js';
 import { parseBody, schemas } from './validation.js';
@@ -405,8 +407,9 @@ async function loadPlatform() {
   const names = Boolean(platform?.users && applyDemoPersonalNames(platform.users));
   const grouped = groupOrphanRooms(platform);
   const stpDemo = Boolean(platform?.users && ensureDemoStpManager(platform));
+  const feedbackDemo = Boolean(platform?.users && ensureDemoFeedback(platform));
   // Первый запуск: пустое хранилище. Стартовый документ записывается сразу, чтобы все экземпляры видели одни и те же записи.
-  if (names || grouped || stpDemo || isUnsavedDocument(platform)) {
+  if (names || grouped || stpDemo || feedbackDemo || isUnsavedDocument(platform)) {
     try {
       await savePlatform(platform);
     } catch (error) {
@@ -1581,6 +1584,20 @@ async function handleRequest(event = {}) {
       uid,
     });
     if (roomPhotosResponse) return roomPhotosResponse;
+
+    const feedbackResponse = await handleFeedback({
+      ...storageCtx,
+      path,
+      method,
+      requireAuth: () => requireAuth(event),
+      loadPlatform,
+      getBody: () => getBody(event),
+      getQuery: () => getQuery(event),
+      savePlatform,
+      pushActivity,
+      uid,
+    });
+    if (feedbackResponse) return feedbackResponse;
 
     /* —— Auth —— */
     if (method === 'POST' && path.endsWith('/auth/login')) {

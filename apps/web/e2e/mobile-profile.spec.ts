@@ -106,8 +106,8 @@ for (const [role, width] of [['owner', 360], ['owner', 390], ['admin', 360], ['a
     await enter(page, role);
     const el = strip(page);
     const tabs = nav(page).getByRole('tab');
-    // у админа сети отдельной вкладки «Отчёты» нет: фотоотчёты в «Аналитика → Фото отчёты»
-    await expect(tabs).toHaveCount(role === 'admin' ? 6 : 7);
+    // у админа сети нет «Отчётов» (фотоотчёты в «Аналитика → Фото отчёты»), зато есть «Обратная связь»
+    await expect(tabs).toHaveCount(7);
     await expect(tabs.last()).toHaveAttribute('data-nav-id', 'profile');
     await expect(nav(page).getByRole('tab', { name: 'Обучение', exact: true })).toHaveCount(1);
 
@@ -119,8 +119,8 @@ for (const [role, width] of [['owner', 360], ['owner', 390], ['admin', 360], ['a
     expect(style.overflowX).toBe('auto');
     expect(style.snap).toContain('x');
     expect(style.bar).toBe('none');
-    // У админа шесть вкладок и лента может уместиться целиком; у остальных семь — лента прокручивается.
-    if (role !== 'admin') expect(style.overflow).toBeGreaterThan(1);
+    // Семь вкладок — лента прокручивается.
+    expect(style.overflow).toBeGreaterThan(1);
 
     await scrollStrip(page, 'start');
     await expect(tabs.first()).toBeInViewport({ ratio: 1 });
