@@ -19,6 +19,8 @@ import {
   stripObjectDocuments,
 } from './apiClient';
 import { isDemoModeEnabled } from './demoMode';
+import { writeLastSync } from './offlineQueue';
+import { canChangeRoomStage } from '../../../../packages/shared/roomStage.js';
 import {
   appendLocalObjectDocuments,
   cacheObjects,
@@ -44,6 +46,8 @@ import {
 import {
   deleteStoredObject,
   enqueueOutbox,
+  getOutboxOp,
+  getStoredObject,
   enqueueProjectOutbox,
   listOutbox,
   listProjectOutbox,
@@ -78,6 +82,8 @@ export async function loadVisibleObjects(user: SessionUser, remote: boolean): Pr
     try {
       const loaded = await apiListObjectsChecked();
       base = loaded.objects;
+      // Связь с сервером есть: запоминаем время для полосы «больше суток без связи».
+      writeLastSync(user.id, new Date().toISOString());
       // Версия на сервере не изменилась: локальная копия уже совпадает, пересохранять её не нужно.
       if (!loaded.notModified) {
         await replaceServerObjects(base, user.orgId, user.role === 'admin');
@@ -105,7 +111,8 @@ export async function loadVisibleObjects(user: SessionUser, remote: boolean): Pr
     }
   }
   base = fillDemoCompanyRooms(base, user.orgId);
-  if (isDemoModeEnabled()) {
+  // Демо без очереди: всё на устройстве. Демо-аккаунт на сервере тоже копит очередь без связи.
+  if (isDemoModeEnabled() && !outbox.length) {
     return base
       .map((obj) => presentCachedObject(user, obj))
       .filter((obj): obj is JobObject => obj != null)
@@ -161,7 +168,23 @@ function withQueuedDocuments(objects: JobObject[]): JobObject[] {
 }
 
 async function queueUpsert(user: SessionUser, draft: Partial<JobObject> & { id: string; updatedAt: string }) {
-  const obj = upsertLocalObject(withoutDocBytes({ ...draft, pendingSync: true } as JobObject), user);
+  // Этап, с которого человек начал правку без связи: из первой записи очереди или из копии сервера.
+  const earlier = await getOutboxOp(draft.id).catch(() => null);
+  const serverCopy = earlier ? null : await getStoredObject(draft.id).catch(() => null);
+  const baseStatus = earlier?.op === 'upsert' ? earlier.baseStatus : serverCopy?.status;
+  // Комната с сервера: правка поверх её копии на телефоне. Локальная база демо-кабинета (localStorage)
+  // таких комнат не знает и отказала бы замерщику «Недостаточно прав».
+  const current = earlier?.op === 'upsert' ? earlier.payload : serverCopy;
+  let obj: JobObject;
+  if (current) {
+    if (user.role === 'crew') throw new Error('Бригада не меняет проект и комнату');
+    if (draft.status && draft.status !== current.status && !canChangeRoomStage(user.role, current.status, draft.status)) {
+      throw new Error('Статус меняет менеджер или владелец');
+    }
+    obj = { ...current, ...draft, pendingSync: true } as JobObject;
+  } else {
+    obj = upsertLocalObject(withoutDocBytes({ ...draft, pendingSync: true } as JobObject), user);
+  }
   const payload: JobObject = withoutDocBytes({ ...obj, pendingSync: true });
   const op: OutboxOp = {
     id: obj.id,
@@ -170,6 +193,8 @@ async function queueUpsert(user: SessionUser, draft: Partial<JobObject> & { id: 
     userId: user.id,
     orgId: obj.orgId,
     payload,
+    ...(baseStatus ? { baseStatus } : {}),
+    conflict: earlier?.conflict ?? null,
   };
   await enqueueOutbox(op);
   await putObject(payload);
@@ -213,7 +238,7 @@ export async function saveObjectSynced(
       }
     }
   }
-  if (isDemoModeEnabled()) return upsertLocalObject({ ...draft, pendingSync: false }, user);
+  if (isDemoModeEnabled() && !loadToken()) return upsertLocalObject({ ...draft, pendingSync: false }, user);
   return queueUpsert(user, draft);
 }
 
@@ -287,7 +312,8 @@ export async function flushOutbox(user: SessionUser, remote: boolean): Promise<'
   if (!navigator.onLine) return 'offline';
   const token = loadToken();
   if (!token) return 'auth';
-  const mine = (await listOutbox()).filter((op) => op.userId === user.id);
+  // Запись с конфликтом этапа ждёт решения человека (resolveStageConflict).
+  const mine = (await listOutbox()).filter((op) => op.userId === user.id && !op.conflict);
   if (!mine.length) return 'ok';
   for (const item of mine) {
     try {
@@ -298,7 +324,7 @@ export async function flushOutbox(user: SessionUser, remote: boolean): Promise<'
         await removeOutbox(item.id);
         continue;
       }
-      const wire = stripObjectDocuments(item.payload);
+      const wire = withBaseStatus(stripObjectDocuments(item.payload), item);
       let obj: JobObject;
       try {
         obj = await apiPatchObject(item.id, wire);
@@ -314,11 +340,71 @@ export async function flushOutbox(user: SessionUser, remote: boolean): Promise<'
         await rememberSession({ token: null, apiBase: apiBase(), userId: user.id });
         return 'auth';
       }
+      if (err instanceof ApiError && err.status === 409 && err.data?.code === 'stage_conflict') {
+        const server = err.data.object as JobObject | undefined;
+        if (server) await putObject({ ...server, pendingSync: true });
+        await enqueueOutbox({
+          ...item,
+          conflict: { serverStatus: server?.status || '', message: err.message, at: new Date().toISOString() },
+        });
+        continue;
+      }
       if (err instanceof ApiError && err.status === 403) continue;
       return 'offline';
     }
   }
   return 'ok';
+}
+
+/** Этап меняли без связи: сервер сравнит baseStatus со своим этапом. */
+function withBaseStatus<T extends Partial<JobObject>>(wire: T, op: OutboxOp): T & { baseStatus?: string } {
+  if (op.op !== 'upsert' || !op.baseStatus || !wire.status || wire.status === op.baseStatus) return wire;
+  return { ...wire, baseStatus: op.baseStatus };
+}
+
+export type StageConflict = {
+  objectId: string;
+  roomName: string;
+  myStatus: string;
+  serverStatus: string;
+  message: string;
+};
+
+export async function listStageConflicts(userId: string): Promise<StageConflict[]> {
+  const rows = await listOutbox().catch(() => [] as OutboxOp[]);
+  return rows
+    .filter((op) => op.userId === userId && op.op === 'upsert' && op.conflict)
+    .map((op) => ({
+      objectId: op.id,
+      roomName: op.payload.roomName || op.payload.clientName || 'Комната',
+      myStatus: op.payload.status,
+      serverStatus: op.conflict!.serverStatus,
+      message: op.conflict!.message,
+    }));
+}
+
+/**
+ * Выбор человека при конфликте этапа.
+ *  • mine — оставить свой этап: повтор уже от этапа сервера, остальные правки идут как были;
+ *  • server — оставить этап сервера: этап из правки убирается, остальные правки (площадь, ответы) уходят.
+ */
+export async function resolveStageConflict(objectId: string, choice: 'mine' | 'server'): Promise<void> {
+  const op = await getOutboxOp(objectId);
+  if (!op || op.op !== 'upsert' || !op.conflict) return;
+  const updatedAt = new Date().toISOString();
+  const serverStatus = op.conflict.serverStatus as JobObject['status'];
+  const payload: JobObject =
+    choice === 'mine'
+      ? { ...op.payload, updatedAt }
+      : { ...op.payload, status: serverStatus || op.payload.status, updatedAt };
+  await enqueueOutbox({
+    ...op,
+    updatedAt,
+    payload,
+    baseStatus: serverStatus || op.baseStatus,
+    conflict: null,
+  });
+  await putObject({ ...payload, pendingSync: true });
 }
 
 /** Upload calculator PDFs after the object itself is on the server. */
