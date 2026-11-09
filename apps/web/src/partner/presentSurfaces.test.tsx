@@ -1,6 +1,4 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DEMO_ACCOUNTS } from './demoSeed.ts';
-import { demoGroups, demoRoleHint, demoRoleLabel } from './DemoSwitcher.tsx';
 import { HelpTrainingPanel } from './HelpTrainingPanel.tsx';
 import { folderCountLabel, materialNote } from './MaterialsPanel.tsx';
 import { MaterialStubView, PREPARING_LABEL } from './MaterialStubView.tsx';
@@ -13,27 +11,6 @@ function equal(actual: unknown, expected: unknown) {
     throw new Error(`Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
   }
 }
-
-const groups = demoGroups();
-equal(groups.map((group) => group.title), ['StP', 'Потолки Столицы']);
-equal(groups.map((group) => group.place), ['Сеть', 'Москва']);
-equal(groups[0]?.accounts.map((account) => account.login), ['admin', 'stpmgr1']);
-equal(groups[1]?.accounts.map((account) => account.login), ['partner1', 'sales1', 'exec1', 'crew1', 'crew1b']);
-equal(
-  groups.flatMap((group) => group.accounts).map((account) => account.login).sort(),
-  DEMO_ACCOUNTS.map((account) => account.login).sort(),
-);
-
-for (const account of DEMO_ACCOUNTS) {
-  const label = `${demoRoleLabel(account)} ${demoRoleHint(account)}`;
-  if (label.includes(account.password)) throw new Error('Подпись роли содержит пароль');
-}
-const demoByLogin = (login: string) => DEMO_ACCOUNTS.find((account) => account.login === login)!;
-equal(demoRoleLabel(demoByLogin('partner1')), 'Владелец');
-equal(demoRoleHint(demoByLogin('crew1b')), 'Вторая бригада');
-equal(demoRoleHint(demoByLogin('crew1')), 'Задания на монтаж');
-equal(demoRoleLabel(demoByLogin('stpmgr1')), 'Менеджер StP');
-equal(demoRoleHint(demoByLogin('stpmgr1')), 'Обучение и инструменты');
 
 equal(folderCountLabel(0), 'Пока пусто');
 equal(folderCountLabel(1), '1 материал');

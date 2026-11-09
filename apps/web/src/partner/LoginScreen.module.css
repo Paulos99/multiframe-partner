@@ -134,23 +134,7 @@
   line-height: 1.35;
 }
 
-.manual {
-  appearance: none;
-  width: 100%;
-  min-height: var(--touch-min);
-  padding: 10px 14px;
-  border: 1px solid var(--cab-border);
-  border-radius: var(--cab-radius-md);
-  background: transparent;
-  color: var(--cab-accent-text);
-  font: inherit;
-  font-weight: 750;
-  cursor: pointer;
-}
 
-.manual:hover {
-  background: var(--cab-accent-soft);
-}
 
 .notice {
   margin: 0;

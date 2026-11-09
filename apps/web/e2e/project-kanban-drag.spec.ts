@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 
 const password = 'ui-fixture-password-only';
 
@@ -120,9 +121,7 @@ test('у замерщика доски нет, проект не перенос�
 });
 
 test('демо: перенос сохраняется после перезагрузки', async ({ page }) => {
-  await page.goto('/?demo=1');
-  const capital = page.getByRole('region', { name: 'Потолки Столицы', exact: true });
-  await capital.getByRole('button', { name: /Прайс и команда/ }).click();
+  await demoSignIn(page, 'owner');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await openBoard(page);
   const first = page.locator('[data-project-stage="new"] [data-project-id]').first();

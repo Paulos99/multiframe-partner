@@ -21,7 +21,7 @@
 
 ## Режим «боевой»
 - [ ] `DEMO_SEED` и `ALLOW_DEMO_RESET` **не заданы**; `NODE_ENV=production`.
-- [ ] Сборка интерфейса с `VITE_DISABLE_DEMO=1` (по умолчанию в `deploy/`). Проверка: `https://stp-multiframe.ru/cabinet/?demo=1` не показывает переключатель ролей.
+- [ ] Сборка интерфейса с `VITE_DISABLE_DEMO=1` (по умолчанию в `deploy/`). Проверка: `https://stp-multiframe.ru/cabinet/?demo=1` не включает локальный демо-режим.
 - [ ] Демо-логины (`admin`, `partner1`, `sales1`, `exec1`, `crew1` и т. п.) **не входят** в систему ни с какими паролями из разработки: проверить вручную. Пароли в репозиторий не записывать.
 - [ ] Менеджер StP (`stp_manager`) видит только обучение и инструменты: на `/cabinet-api/admin/stp-managers` отвечает 403, без входа — 401 (не 404: путь опубликован в шлюзе, [API_ROUTES.md](API_ROUTES.md)).
 - [ ] `ADMIN_BOOTSTRAP_*` удалены после создания администратора ([ADMIN_BOOTSTRAP.md](ADMIN_BOOTSTRAP.md)), пароль администратора сменён.

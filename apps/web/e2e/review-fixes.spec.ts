@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 import { mkdirSync } from 'node:fs';
 
 const shots = process.env.REVIEW_SHOTS_DIR;
@@ -12,9 +13,7 @@ async function shot(page: Page, name: string, fullPage = false) {
 type Role = 'manager' | 'owner';
 
 async function enter(page: Page, role: Role = 'manager') {
-  await page.goto('/?demo=1');
-  const capital = page.getByRole('region', { name: 'Потолки Столицы', exact: true });
-  await capital.getByRole('button', { name: role === 'manager' ? /Проекты и КП/ : /Прайс и команда/ }).click();
+  await demoSignIn(page, role === 'manager' ? 'sales' : 'owner');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Проекты', exact: true })).toBeVisible();
 }

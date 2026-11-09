@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { demoSignIn } from './demo-login';
 
 const password = 'ui-fixture-password-only';
 
@@ -113,8 +114,7 @@ test('у замерщика доски и удаления проекта нет
 });
 
 test('демо: удаление с доски сохраняется после перезагрузки', async ({ page }) => {
-  await page.goto('/?demo=1');
-  await page.getByRole('region', { name: 'Потолки Столицы', exact: true }).getByRole('button', { name: /Прайс и команда/ }).click();
+  await demoSignIn(page, 'owner');
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await page.getByRole('button', { name: 'Канбан', exact: true }).click();
   const card = page.locator('[data-project-stage="new"] [data-project-id]', { hasText: 'Чернов А.' });
