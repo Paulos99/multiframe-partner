@@ -1,0 +1,54 @@
+.when {
+  color: var(--cab-muted, #5b6b66);
+  font-size: 0.78rem;
+}
+
+.sendBtn {
+  appearance: none;
+  margin-top: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--cab-border);
+  border-radius: 10px;
+  background: var(--cab-card);
+  color: var(--cab-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 0 0 14px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(196, 132, 29, 0.45);
+  background: var(--cab-warn-soft, #fdf3e2);
+  color: var(--cab-ink);
+  line-height: 1.4;
+}
+
+.banner p {
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.banner strong {
+  color: var(--cab-warn, #8a5a10);
+}
+
+.conflictText {
+  margin: 8px 0 16px;
+  line-height: 1.45;
+}
+
+.conflictBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

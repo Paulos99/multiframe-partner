@@ -112,10 +112,29 @@ import {
   type StoredOrg,
   type StoredUser,
 } from './localStore';
-import { enqueueOutbox, loadCalculationsFor, putObject, rememberSession, type CachedCalculation } from './offlineDb';
 import {
-  countMyOutbox,
+  enqueueOutbox,
+  listOutbox,
+  listProjectOutbox,
+  loadCalculationsFor,
+  putObject,
+  rememberSession,
+  type CachedCalculation,
+} from './offlineDb';
+import { QUEUE_EVENT, enqueueNote, flushFieldQueue, listMyQueue, withSyncLock } from './fieldQueue';
+import {
+  AUTO_SYNC_INTERVAL_MS,
+  pendingTotal,
+  readLastSync,
+  type FieldQueueItem,
+  type PendingCounts,
+} from './offlineQueue';
+import { precacheRoomDocuments } from './docCache';
+import {
   deleteObjectSynced,
+  listStageConflicts,
+  resolveStageConflict,
+  type StageConflict,
   flushDocumentQueue,
   flushOutbox,
   loadVisibleObjects,
@@ -153,6 +172,8 @@ function asStaff(member: StaffMember | StoredUser): StaffMember {
   };
 }
 
+const NO_PENDING: PendingCounts = { rooms: 0, projects: 0, notes: 0, photos: 0, documents: 0 };
+
 type PartnerApi = {
   user: SessionUser | null;
   partner: PartnerProfile | null;
@@ -166,6 +187,19 @@ type PartnerApi = {
   staffLoading: boolean;
   partnersLoading: boolean;
   pendingSyncCount: number;
+  /** Что ждёт отправки, по видам: комнаты, проекты, заметки, фото, PDF. */
+  pendingCounts: PendingCounts;
+  /** Заметки и фото этого человека в очереди на телефоне. */
+  fieldQueue: FieldQueueItem[];
+  /** Последняя удачная загрузка с сервера (ISO) или null. */
+  lastSyncAt: string | null;
+  /** Конфликты этапа: ждут выбора человека. */
+  stageConflicts: StageConflict[];
+  resolveStageConflict: (objectId: string, choice: 'mine' | 'server') => Promise<void>;
+  /** Заметка к комнате. Без связи ложится в очередь и уходит сама. */
+  addRoomNote: (objectId: string, text: string) => Promise<void>;
+  /** «Отправить сейчас»: очередь целиком, без пауз между повторами. */
+  syncNow: () => Promise<void>;
   online: boolean;
   syncStatus: SyncStatus;
   calculations: CachedCalculation[];
@@ -230,7 +264,7 @@ type PartnerApi = {
   saveObject: (input: Partial<JobObject> & { id?: string }) => Promise<JobObject>;
   deleteObject: (id: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
-  flushObjectQueue: () => Promise<void>;
+  flushObjectQueue: (opts?: { force?: boolean }) => Promise<void>;
   /** Открыть калькулятор на комнате. Без objectId площадь никуда не пишется. */
   requestCalculator: (objectId: string | null) => void;
   calcRequest: { objectId: string | null; nonce: number; areaM2?: number | null } | null;
@@ -290,6 +324,11 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [openedObjectId, setOpenedObjectId] = useState<string | null>(null);
   const [cabinetLeaveNonce, setCabinetLeaveNonce] = useState(0);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [pendingCounts, setPendingCounts] = useState<PendingCounts>(NO_PENDING);
+  const [fieldQueue, setFieldQueue] = useState<FieldQueueItem[]>([]);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [stageConflicts, setStageConflicts] = useState<StageConflict[]>([]);
+  const pendingRef = useRef(0);
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const [calculations, setCalculations] = useState<CachedCalculation[]>([]);
   const [authHold, setAuthHold] = useState(false);
@@ -310,6 +349,39 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const projectsEpoch = useRef(0);
   const groupedPosts = useRef(new Set<string>());
 
+  /** Пересчёт очередей на телефоне: индикатор, полоса-напоминание, конфликты этапа. */
+  const refreshPending = useCallback(async () => {
+    const session = loadSession();
+    if (!session || isStpManagerRole(session.role) || !remote || (isDemoModeEnabled() && !loadToken())) {
+      pendingRef.current = 0;
+      setPendingCounts(NO_PENDING);
+      setPendingSyncCount(0);
+      setFieldQueue([]);
+      setStageConflicts([]);
+      setLastSyncAt(session ? readLastSync(session.id) : null);
+      return;
+    }
+    const [outbox, projectOutbox, queue, conflicts] = await Promise.all([
+      listOutbox().catch(() => []),
+      listProjectOutbox().catch(() => []),
+      listMyQueue(session.id),
+      listStageConflicts(session.id),
+    ]);
+    const counts: PendingCounts = {
+      rooms: outbox.length ? outbox.filter((op) => op.userId === session.id).length : peekObjectQueue().length,
+      projects: projectOutbox.filter((op) => op.userId === session.id).length,
+      notes: queue.filter((item) => item.kind === 'note').length,
+      photos: queue.filter((item) => item.kind === 'photo').length,
+      documents: peekObjectDocumentQueue().length,
+    };
+    pendingRef.current = pendingTotal(counts);
+    setPendingCounts(counts);
+    setPendingSyncCount(pendingTotal(counts));
+    setFieldQueue(queue);
+    setStageConflicts(conflicts);
+    setLastSyncAt(readLastSync(session.id));
+  }, [remote]);
+
   const refreshObjects = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = Boolean(opts?.silent);
     const session = loadSession();
@@ -329,20 +401,17 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       if (stamp !== objectsEpoch.current) return;
       setObjects(list);
       cacheObjects(list);
-      if (isDemoModeEnabled()) {
-        setPendingSyncCount(0);
-      } else {
-        const queuedDocs = peekObjectDocumentQueue().length;
-        setPendingSyncCount(
-          (await countMyOutbox(session.id).catch(() => peekObjectQueue().length)) + queuedDocs,
-        );
+      await refreshPending();
+      // Предзагрузка «на сегодня»: PDF назначенных комнат на телефон, пока есть связь.
+      if (!silent && remote && loadToken() && navigator.onLine) {
+        void precacheRoomDocuments(list, session).catch(() => undefined);
       }
     } catch {
       if (!silent && stamp === objectsEpoch.current) setObjects(loadCachedObjects());
     } finally {
       if (!silent && stamp === objectsEpoch.current) setObjectsLoading(false);
     }
-  }, [remote]);
+  }, [remote, refreshPending]);
 
   const refreshProjects = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = Boolean(opts?.silent);
@@ -375,19 +444,80 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     }
   }, [remote]);
 
-  const flushObjectQueue = useCallback(async () => {
-    const session = loadSession();
-    if (!session || isStpManagerRole(session.role)) return;
-    const result = await flushOutbox(session, remote);
-    const projectsResult = await flushProjectOutbox(session, remote);
-    if (result === 'auth' || projectsResult === 'auth') setAuthHold(true);
-    else if (result === 'ok' || result === 'idle') {
-      setAuthHold(false);
-      await flushDocumentQueue();
-    }
-    await refreshObjects();
-    await refreshProjects();
-  }, [remote, refreshObjects, refreshProjects]);
+  /**
+   * Выгрузка всего, что ждёт на телефоне, по порядку: комнаты (с этапами), проекты, заметки, фото, PDF.
+   * Одна выгрузка на все вкладки (navigator.locks). Запускается при открытии приложения, по событию
+   * online, при возврате на вкладку и раз в минуту, пока что-то ждёт отправки.
+   */
+  const flushObjectQueue = useCallback(
+    async (opts?: { force?: boolean }) => {
+      const session = loadSession();
+      if (!session || isStpManagerRole(session.role)) return;
+      await withSyncLock(async () => {
+        const result = await flushOutbox(session, remote);
+        const projectsResult = await flushProjectOutbox(session, remote);
+        if (result === 'auth' || projectsResult === 'auth') setAuthHold(true);
+        else if (result === 'ok' || result === 'idle') {
+          setAuthHold(false);
+          if (remote && loadToken()) {
+            const fieldResult = await flushFieldQueue(session, { force: opts?.force });
+            if (fieldResult === 'auth') setAuthHold(true);
+          }
+          await flushDocumentQueue();
+        }
+      });
+      await refreshObjects();
+      await refreshProjects();
+      await refreshPending();
+    },
+    [remote, refreshObjects, refreshProjects, refreshPending],
+  );
+
+  const syncNow = useCallback(() => flushObjectQueue({ force: true }), [flushObjectQueue]);
+
+  const addRoomNote = useCallback(
+    async (objectId: string, text: string) => {
+      const session = loadSession();
+      if (!session) throw new Error('Нужно войти');
+      const clean = text.trim();
+      if (!clean) throw new Error('Напишите текст заметки');
+      await enqueueNote(session, objectId, clean);
+      await refreshPending();
+      if (navigator.onLine) void flushObjectQueue();
+    },
+    [refreshPending, flushObjectQueue],
+  );
+
+  const resolveConflict = useCallback(
+    async (objectId: string, choice: 'mine' | 'server') => {
+      await resolveStageConflict(objectId, choice);
+      await refreshPending();
+      if (navigator.onLine) await flushObjectQueue();
+      else await refreshObjects();
+    },
+    [refreshPending, flushObjectQueue, refreshObjects],
+  );
+
+  // Пока что-то ждёт отправки: повтор раз в минуту и при возврате на вкладку. Очередь фото и заметок
+  // сообщает об изменениях событием — индикатор и полоса пересчитываются сразу.
+  useEffect(() => {
+    if (!user || !remote) return;
+    const retry = () => {
+      if (navigator.onLine && pendingRef.current > 0) void flushObjectQueue();
+    };
+    const timer = window.setInterval(retry, AUTO_SYNC_INTERVAL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') retry();
+    };
+    const onQueue = () => void refreshPending();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener(QUEUE_EVENT, onQueue);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(QUEUE_EVENT, onQueue);
+    };
+  }, [user?.id, remote, flushObjectQueue, refreshPending]);
 
   const refresh = useCallback(() => {
     setUser(loadSession());
@@ -1186,6 +1316,13 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       staffLoading,
       partnersLoading,
       pendingSyncCount,
+      pendingCounts,
+      fieldQueue,
+      lastSyncAt,
+      stageConflicts,
+      resolveStageConflict: resolveConflict,
+      addRoomNote,
+      syncNow,
       online,
       syncStatus: (!online ? 'offline' : pendingSyncCount > 0 ? 'pending' : 'synced') as SyncStatus,
       calculations,
@@ -1270,6 +1407,13 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       staffLoading,
       partnersLoading,
       pendingSyncCount,
+      pendingCounts,
+      fieldQueue,
+      lastSyncAt,
+      stageConflicts,
+      resolveConflict,
+      addRoomNote,
+      syncNow,
       online,
       calculations,
       authHold,

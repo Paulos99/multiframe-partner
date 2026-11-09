@@ -11,6 +11,7 @@ import {
   estimateForRole,
   roleSeesProjectMoney,
 } from './projectAccess.js';
+import type { RoomNote } from './roomNotes.js';
 
 export type UserRole = 'admin' | 'owner' | 'sales' | 'measurer' | 'crew' | 'stp_manager';
 
@@ -333,6 +334,8 @@ export type JobObject = {
   projectId?: string | null;
   /** Название комнаты внутри проекта. У старых объектов поля нет. */
   roomName?: string | null;
+  /** Заметки к комнате: только добавление, через POST /objects/:id/notes. */
+  notes?: RoomNote[];
   /** Когда комнату перевели на «КП отправлено». Ставит сервер. */
   quoteSentAt?: string | null;
   /** Local-only pending sync flag. */
