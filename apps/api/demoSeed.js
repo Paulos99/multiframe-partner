@@ -775,3 +775,90 @@ export function ensureDemoStpManager(platform, now = new Date().toISOString()) {
   });
   return true;
 }
+
+/**
+ * Пара примеров обратной связи для демо-сети: админ StP сразу видит раздел не пустым.
+ * Добавляется один раз, пока в документе нет списка feedback. На боевом (без org_demo) не срабатывает.
+ */
+export function ensureDemoFeedback(platform, now = Date.now()) {
+  if (!platform?.orgs || !platform?.users) return false;
+  if (Array.isArray(platform.feedback)) return false;
+  const org = platform.orgs.find((item) => item.id === 'org_demo');
+  if (!org) return false;
+  const company = org.settings?.companyName || 'Потолки Столицы';
+  const person = (id) => platform.users.find((user) => user.id === id) || null;
+  const at = (hoursAgo) => new Date(now - hoursAgo * 60 * 60 * 1000).toISOString();
+  const item = (id, userId, type, status, text, hoursAgo, extra = {}) => {
+    const u = person(userId);
+    return {
+      id,
+      type,
+      status,
+      text,
+      createdAt: at(hoursAgo),
+      updatedAt: at(extra.repliedHoursAgo ?? hoursAgo),
+      orgId: 'org_demo',
+      companyName: company,
+      userId,
+      authorName: u?.displayName || u?.login || 'Сотрудник',
+      authorLogin: u?.login || '',
+      authorRole: u?.role || 'sales',
+      context: {
+        page: extra.page || '/cabinet/#projects',
+        pageTitle: extra.pageTitle || 'Проекты',
+        device: extra.device || 'Телефон · Android · Chrome',
+        screen: extra.screen || '412×915',
+        appVersion: 'v1.1.0',
+        online: true,
+      },
+      photos: [],
+      reply: extra.reply || '',
+      repliedAt: extra.reply ? at(extra.repliedHoursAgo ?? 1) : null,
+      repliedBy: extra.reply ? 'u_admin' : null,
+      replyAuthorName: extra.reply ? person('u_admin')?.displayName || 'Администратор StP' : '',
+    };
+  };
+  platform.feedback = [
+    item(
+      'fb_demo_1',
+      'u_crew1',
+      'bug',
+      'new',
+      'На телефоне в карточке комнаты кнопка «Добавить фото» уезжает под нижнее меню, приходится прокручивать.',
+      3,
+      { page: '/cabinet/#projects/room', pageTitle: 'Карточка комнаты' },
+    ),
+    item(
+      'fb_demo_2',
+      'u_sales1',
+      'idea',
+      'in_progress',
+      'Хорошо бы в КП добавить строку со сроком монтажа, клиенты часто спрашивают.',
+      30,
+      {
+        page: '/cabinet/#projects',
+        device: 'Компьютер · Windows · Edge',
+        screen: '1920×1080',
+        reply: 'Спасибо, взяли в работу: добавим срок монтажа в следующий выпуск.',
+        repliedHoursAgo: 20,
+      },
+    ),
+    item(
+      'fb_demo_3',
+      'u_partner1',
+      'question',
+      'fixed',
+      'Где посмотреть, кто из сотрудников прошёл обучение?',
+      72,
+      {
+        page: '/cabinet/#help',
+        pageTitle: 'Обучение',
+        device: 'Компьютер · macOS · Safari',
+        screen: '1440×900',
+        reply: 'Аналитика → вкладка «Обучение»: там таблица по каждому сотруднику.',
+        repliedHoursAgo: 70,
+      },
+    ),
+  ];
+  return true;
+}
