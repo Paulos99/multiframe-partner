@@ -167,3 +167,102 @@ test('перевод комнаты на «Замер» предлагает н�
   await openCalendar(page);
   await expect(page.getByRole('button', { name: 'Напоминания: 1' })).toBeVisible();
 });
+
+test('Готово убирает напоминание после перезагрузки', async ({ page }) => {
+  await enter(page, 'owner');
+  const panel = await openCalendar(page);
+  await planVisit(page, { time: '11:00', room: 'Спальня', person: 'UI measurer' });
+  const bell = page.getByRole('button', { name: /Напоминания: \d+/ });
+  await expect(bell).toBeVisible();
+  await bell.click();
+  const list = page.getByRole('dialog', { name: 'Напоминания' });
+  await expect(list.getByText('Завтра замер')).toBeVisible();
+  const before = await bell.getAttribute('aria-label');
+  const acked = page.waitForResponse((res) => res.request().method() === 'POST' && /\/calendar\/reminders$/.test(res.url()) && res.ok());
+  await list.getByRole('button', { name: 'Готово' }).first().click();
+  await acked;
+  await expect(list.getByText('Завтра замер')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Напоминания|Напоминаний нет/ }).click();
+  const again = page.getByRole('dialog', { name: 'Напоминания' });
+  await expect(again.getByText('Завтра замер')).toHaveCount(0);
+  await expect(again.getByText('Всё сделано. Новые напоминания появятся здесь.')).toBeVisible();
+  expect(before).toMatch(/Напоминания: \d+/);
+});
+
+test('Отложить на час убирает напоминание после перезагрузки', async ({ page }) => {
+  await enter(page, 'owner');
+  await openCalendar(page);
+  await planVisit(page, { time: '14:00', room: 'Кухня', person: 'UI measurer' });
+  const bell = page.getByRole('button', { name: /Напоминания: \d+/ });
+  await expect(bell).toBeVisible();
+  await bell.click();
+  const list = page.getByRole('dialog', { name: 'Напоминания' });
+  await expect(list.getByText('Завтра замер')).toBeVisible();
+  const snoozed = page.waitForResponse((res) => res.request().method() === 'POST' && /\/calendar\/reminders$/.test(res.url()) && res.ok());
+  await list.getByRole('button', { name: 'Через час' }).first().click();
+  await snoozed;
+  await expect(list.getByText('Завтра замер')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Напоминания|Напоминаний нет/ }).click();
+  const again = page.getByRole('dialog', { name: 'Напоминания' });
+  await expect(again.getByText('Завтра замер')).toHaveCount(0);
+});
+
+
+test('админ фильтрует календарь по партнёру', async ({ page, request }) => {
+  const tomorrow = new Date(Date.now() + 24 * 3600_000);
+  tomorrow.setHours(11, 0, 0, 0);
+  const startsAt = tomorrow.toISOString();
+
+  const ownerA = await request.post('http://127.0.0.1:4181/auth/login', { data: { login: 'ui.owner', password } });
+  const tokenA = ((await ownerA.json()) as { token: string }).token;
+  const createA = await request.post('http://127.0.0.1:4181/calendar', {
+    headers: { Authorization: `Bearer ${tokenA}` },
+    data: { kind: 'measure', projectId: 'ui_project', objectId: 'ui_room', userId: 'ui_measurer', startsAt, durationMin: 60 },
+  });
+  expect(createA.ok()).toBeTruthy();
+
+  const ownerB = await request.post('http://127.0.0.1:4181/auth/login', { data: { login: 'ui.owner_b', password } });
+  const tokenB = ((await ownerB.json()) as { token: string }).token;
+  const created = await request.post('http://127.0.0.1:4181/projects', {
+    headers: { Authorization: `Bearer ${tokenB}` },
+    data: { name: 'Квартира B', clientName: 'Клиент B', address: 'Адрес B', city: 'Москва' },
+  });
+  expect(created.ok()).toBeTruthy();
+  const projectB = ((await created.json()) as { project: { id: string } }).project.id;
+  const createB = await request.post('http://127.0.0.1:4181/calendar', {
+    headers: { Authorization: `Bearer ${tokenB}` },
+    data: { kind: 'measure', projectId: projectB, userId: 'ui_owner_b', startsAt, durationMin: 60 },
+  });
+  expect(createB.ok()).toBeTruthy();
+
+  await page.goto('/');
+  await page.getByLabel('Логин', { exact: true }).fill('ui.admin');
+  await page.getByLabel('Пароль', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await page.getByRole('tab', { name: 'Календарь', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Календарь' });
+  await expect(panel.getByRole('heading', { name: 'Календарь', exact: true })).toBeVisible();
+  const partner = panel.getByLabel('Партнёр');
+  await expect(partner).toBeVisible();
+  await expect(partner.locator('option')).toHaveCount(3); // Все + две компании (без внутренней StP)
+
+  await panel.getByRole('group', { name: 'Вид календаря' }).getByRole('button', { name: 'День', exact: true }).click();
+  await panel.getByRole('button', { name: 'Вперёд', exact: true }).click();
+  await expect(panel.getByRole('button', { name: /^Замер 11:00/ })).toHaveCount(2);
+
+  const filtered = page.waitForResponse((res) => res.request().method() === 'GET' && /\/calendar\?orgId=/.test(res.url()) && res.ok());
+  await partner.selectOption({ label: 'UI test company' });
+  await filtered;
+  await expect(panel.getByRole('button', { name: /^Замер 11:00/ })).toHaveCount(1);
+
+  await page.getByRole('tab', { name: 'Партнёры', exact: true }).click();
+  await page.getByRole('tab', { name: 'Календарь', exact: true }).click();
+  await expect(panel.getByLabel('Партнёр')).toHaveValue('ui_org');
+  await expect(panel.getByRole('button', { name: /^Замер 11:00/ })).toHaveCount(1);
+
+  await shot(page, '09-admin-partner-filter');
+});

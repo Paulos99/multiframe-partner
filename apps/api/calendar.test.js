@@ -25,9 +25,14 @@ const { handler } = await import('./index.js');
 after(() => rmSync(dir, { recursive: true, force: true }));
 
 function call(method, urlPath, { token, body } = {}) {
+  const q = urlPath.indexOf('?');
+  const pathOnly = q >= 0 ? urlPath.slice(0, q) : urlPath;
+  const queryStringParameters =
+    q >= 0 ? Object.fromEntries(new URLSearchParams(urlPath.slice(q + 1))) : undefined;
   return handler({
     httpMethod: method,
-    path: urlPath,
+    path: pathOnly,
+    queryStringParameters,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -111,6 +116,29 @@ describe('общие правила календаря', () => {
     ];
     assert.equal(buildReminders({ visits, rooms, projects, user, now: NOW, acks }).length, 3);
     assert.equal(buildReminders({ visits, rooms, projects, user, now: NOW + 2 * H, acks }).some((r) => r.key === tomKey), true);
+    // Ключ выезда один: отметка «готово» на «завтра» держится, когда то же событие становится «скоро».
+    assert.equal(soonKey, `visit:soon:${visits[0].startsAt}`);
+    assert.match(tomKey, /^visit:tom:/);
+    const sameVisit = { id: 'flip', kind: 'measure', projectId: 'p1', userId: 'u_owner', startsAt: new Date(NOW + 90 * 60 * 1000).toISOString(), durationMin: 60 };
+    const asSoon = buildReminders({
+      visits: [sameVisit],
+      rooms: [{ id: 'r1', projectId: 'p1', status: 'draft' }],
+      projects: [{ id: 'p1', name: 'Один' }],
+      user,
+      now: NOW,
+    });
+    assert.equal(asSoon[0]?.key, `visit:flip:${sameVisit.startsAt}`);
+    assert.equal(
+      buildReminders({
+        visits: [sameVisit],
+        rooms: [{ id: 'r1', projectId: 'p1', status: 'draft' }],
+        projects: [{ id: 'p1', name: 'Один' }],
+        user,
+        now: NOW,
+        acks: [{ userId: 'u_owner', key: asSoon[0].key, doneAt: 'x' }],
+      }).length,
+      0,
+    );
     // Замерщик не видит КП и сроки проектов.
     const measurer = buildReminders({ visits, rooms, projects, user: { id: 'u_m', role: 'measurer' }, now: NOW });
     assert.deepEqual(measurer.map((r) => r.type), ['measure_no_result']);
@@ -216,6 +244,95 @@ describe('маршруты /calendar', { concurrency: false }, () => {
     assert.deepEqual(sales.acks.map((a) => a.key), ['k1']);
     assert.equal((await call('POST', '/calendar/reminders', { token: t.sales, body: { key: 'k1', action: 'reset' } })).statusCode, 200);
     assert.deepEqual(read(await call('GET', '/calendar', { token: t.sales })).acks, []);
+  });
+
+  test('готово и отложить сохраняются и скрывают напоминание после повторного чтения', async () => {
+    const ownerCal = read(await call('GET', '/calendar', { token: t.owner }));
+    const platform = stored();
+    const ownerUser = (platform.users || []).find((u) => u.login === 'partner1');
+    assert.ok(ownerUser, 'владелец partner1 есть в демо');
+    const rooms = (platform.objects || []).filter((o) => o.orgId === 'org_demo');
+    const projects = (platform.projects || []).filter((p) => p.orgId === 'org_demo');
+    const list = buildReminders({
+      visits: ownerCal.visits,
+      rooms,
+      projects,
+      user: { id: ownerUser.id, role: 'owner' },
+      acks: ownerCal.acks,
+      now: Date.now(),
+      tzOffsetMin: -180,
+    });
+    assert.ok(list.length >= 1, 'на стенде есть хотя бы одно напоминание');
+    const target = list[0];
+    const done = await call('POST', '/calendar/reminders', { token: t.owner, body: { key: target.key, action: 'done' } });
+    assert.equal(done.statusCode, 200, done.body);
+    assert.ok(read(done).ack?.doneAt);
+    const afterDone = read(await call('GET', '/calendar', { token: t.owner }));
+    assert.ok(afterDone.acks.some((a) => a.key === target.key && a.doneAt));
+    const hidden = buildReminders({
+      visits: afterDone.visits,
+      rooms,
+      projects,
+      user: { id: ownerUser.id, role: 'owner' },
+      acks: afterDone.acks,
+      now: Date.now(),
+      tzOffsetMin: -180,
+    });
+    assert.ok(!hidden.some((r) => r.key === target.key), 'после «Готово» напоминание скрыто');
+
+    const other = list.find((r) => r.key !== target.key) || {
+      key: `probe-snooze:${Date.now()}`,
+    };
+    const until = new Date(Date.now() + 2 * H).toISOString();
+    const snoozed = await call('POST', '/calendar/reminders', {
+      token: t.owner,
+      body: { key: other.key, action: 'snooze', until },
+    });
+    assert.equal(snoozed.statusCode, 200, snoozed.body);
+    const afterSnooze = read(await call('GET', '/calendar', { token: t.owner }));
+    const snoozeAck = afterSnooze.acks.find((a) => a.key === other.key);
+    assert.ok(snoozeAck?.snoozeUntil);
+    assert.equal(snoozeAck.doneAt, null);
+    if (list.some((r) => r.key === other.key)) {
+      const stillHidden = buildReminders({
+        visits: afterSnooze.visits,
+        rooms,
+        projects,
+        user: { id: ownerUser.id, role: 'owner' },
+        acks: afterSnooze.acks,
+        now: Date.now(),
+        tzOffsetMin: -180,
+      });
+      assert.ok(!stillHidden.some((r) => r.key === other.key), 'пока срок «отложить» не вышел — скрыто');
+      const back = buildReminders({
+        visits: afterSnooze.visits,
+        rooms,
+        projects,
+        user: { id: ownerUser.id, role: 'owner' },
+        acks: afterSnooze.acks,
+        now: Date.parse(until) + 1000,
+        tzOffsetMin: -180,
+      });
+      assert.ok(back.some((r) => r.key === other.key), 'после срока снова видно');
+    }
+  });
+
+  test('админ фильтрует календарь по партнёру', async () => {
+    const all = read(await call('GET', '/calendar', { token: t.admin }));
+    assert.ok(Array.isArray(all.partners) && all.partners.length >= 2, 'список партнёров для фильтра');
+    assert.ok(all.partners.every((p) => p.id && p.name));
+    assert.ok(all.visits.some((v) => v.orgId === 'org_demo') && all.visits.some((v) => v.orgId === 'org_demo_spb'));
+    const one = read(await call('GET', '/calendar?orgId=org_demo', { token: t.admin }));
+    assert.ok(one.visits.length > 0);
+    assert.ok(one.visits.every((v) => v.orgId === 'org_demo'));
+    assert.ok(one.people.every((p) => p.orgId === 'org_demo'));
+    const byPartner = read(await call('GET', '/calendar?partner=org_demo_spb', { token: t.admin }));
+    assert.ok(byPartner.visits.every((v) => v.orgId === 'org_demo_spb'));
+    assert.equal((await call('GET', '/calendar?orgId=нет-такой', { token: t.admin })).statusCode, 404);
+    // Обычный партнёр параметр игнорирует — свои выезды без расширения прав.
+    const owner = read(await call('GET', '/calendar?orgId=org_demo_spb', { token: t.owner }));
+    assert.ok(owner.visits.every((v) => v.orgId === 'org_demo'));
+    assert.deepEqual(owner.partners || [], []);
   });
 
   test('КП: время отправки ставит сервер при переходе на «КП отправлено»', async () => {

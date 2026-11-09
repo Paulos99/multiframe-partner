@@ -3,7 +3,7 @@ import { VISIT_KIND_LABELS, conflictIds, visitStartMs, type Visit, type VisitKin
 import { ChevronLeftIcon, ChevronRightIcon, MoreIcon } from '../../icons';
 import { usePartner } from '../PartnerContext';
 import { markVisitDone } from './calendarClient';
-import { refreshCalendar, useCalendar } from './calendarStore';
+import { refreshCalendar, setCalendarOrgFilter, useCalendar } from './calendarStore';
 import {
   type CalendarMode,
   durationLabel,
@@ -27,7 +27,7 @@ const MODES: Array<[CalendarMode, string]> = [
 /**
  * Раздел «Календарь»: замеры и монтажи по дням, неделям и месяцу.
  * Замерщик и монтажник видят свои выезды, владелец и менеджер — всю компанию, StP — все компании.
- * Это решает сервер; здесь только фильтры по типу и сотруднику.
+ * Это решает сервер; здесь фильтры по партнёру (для админа StP), типу и сотруднику.
  */
 export function CalendarPanel({ onOpenVisit }: { onOpenVisit?: (visit: Visit) => void }) {
   const api = usePartner();
@@ -42,6 +42,8 @@ export function CalendarPanel({ onOpenVisit }: { onOpenVisit?: (visit: Visit) =>
   const days = useMemo(() => visibleDays(mode, cursor), [mode, cursor]);
   const clashes = useMemo(() => conflictIds(calendar.visits), [calendar.visits]);
   const showOrg = role === 'admin';
+  const partners = calendar.partners || [];
+  const showPartnerFilter = role === 'admin' && partners.length > 0;
 
   const people = useMemo(() => {
     const map = new Map<string, string>();
@@ -134,6 +136,26 @@ export function CalendarPanel({ onOpenVisit }: { onOpenVisit?: (visit: Visit) =>
           ))}
         </div>
         <div className={styles.filters}>
+          {showPartnerFilter ? (
+            <label className={styles.partnerFilter}>
+              <span className={styles.filterLabel}>Партнёр</span>
+              <select
+                aria-label="Партнёр"
+                value={calendar.orgFilter || ''}
+                onChange={(e) => {
+                  setPerson('');
+                  setCalendarOrgFilter(e.target.value || null);
+                }}
+              >
+                <option value="">Все партнёры</option>
+                {partners.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
             <span className={styles.srOnly}>Тип выезда</span>
             <select aria-label="Тип выезда" value={kind} onChange={(e) => setKind(e.target.value as '' | VisitKind)}>

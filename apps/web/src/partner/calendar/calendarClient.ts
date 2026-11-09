@@ -8,7 +8,14 @@ import { hasRemoteApi, request } from '../apiClient';
 import { listStaffForOrg, loadSession } from '../localStore';
 
 export type CalendarPerson = { id: string; name: string; role: string; orgId: string | null };
-export type CalendarData = { visits: Visit[]; people: CalendarPerson[]; acks: ReminderAck[]; canPlan: boolean };
+export type CalendarPartner = { id: string; name: string };
+export type CalendarData = {
+  visits: Visit[];
+  people: CalendarPerson[];
+  acks: ReminderAck[];
+  canPlan: boolean;
+  partners?: CalendarPartner[];
+};
 export type VisitInput = {
   kind: 'measure' | 'install';
   projectId: string;
@@ -51,8 +58,11 @@ function localCanPlan(): boolean {
   return role === 'owner' || role === 'sales';
 }
 
-export async function fetchCalendar(): Promise<CalendarData> {
-  if (hasRemoteApi()) return request<CalendarData>('/calendar');
+export async function fetchCalendar(orgId?: string | null): Promise<CalendarData> {
+  if (hasRemoteApi()) {
+    const q = orgId ? `?orgId=${encodeURIComponent(orgId)}` : '';
+    return request<CalendarData>(`/calendar${q}`);
+  }
   const session = loadSession();
   const state = readLocal();
   const people = localPeople();
@@ -61,7 +71,13 @@ export async function fetchCalendar(): Promise<CalendarData> {
   const visits = state.visits
     .filter((v) => v.orgId === session?.orgId && (role === 'owner' || role === 'sales' || v.userId === session?.id))
     .map((v) => ({ ...v, userName: names.get(v.userId) || 'Сотрудник' }));
-  return { visits, people: localCanPlan() ? people : [], acks: state.acks.filter((a) => a.userId === session?.id), canPlan: localCanPlan() };
+  return {
+    visits,
+    people: localCanPlan() ? people : [],
+    acks: state.acks.filter((a) => a.userId === session?.id),
+    canPlan: localCanPlan(),
+    partners: [],
+  };
 }
 
 export async function saveVisit(input: VisitInput, id?: string | null): Promise<SaveResult> {
@@ -112,19 +128,36 @@ export async function markVisitDone(id: string, done: boolean): Promise<SaveResu
   return { visit: state.visits.find((v) => v.id === id)!, conflicts: [] };
 }
 
-export async function ackReminder(key: string, action: 'done' | 'snooze' | 'reset', until?: string): Promise<void> {
+export async function ackReminder(
+  key: string,
+  action: 'done' | 'snooze' | 'reset',
+  until?: string,
+): Promise<ReminderAck | null> {
   if (hasRemoteApi()) {
-    await request('/calendar/reminders', { method: 'POST', body: JSON.stringify({ key, action, until }) });
-    return;
+    const data = await request<{ ack: ReminderAck | null }>('/calendar/reminders', {
+      method: 'POST',
+      body: JSON.stringify({ key, action, until }),
+    });
+    return data.ack ?? null;
   }
   const session = loadSession();
-  if (!session) return;
+  if (!session) return null;
   const state = readLocal();
   const id = `${session.id}|${key}`;
   const now = new Date().toISOString();
   state.acks = state.acks.filter((a) => a.id !== id);
-  if (action !== 'reset') {
-    state.acks.unshift({ id, userId: session.id, key, doneAt: action === 'done' ? now : null, snoozeUntil: action === 'snooze' ? until || null : null, updatedAt: now });
-  }
+  const ack: ReminderAck | null =
+    action === 'reset'
+      ? null
+      : {
+          id,
+          userId: session.id,
+          key,
+          doneAt: action === 'done' ? now : null,
+          snoozeUntil: action === 'snooze' ? until || null : null,
+          updatedAt: now,
+        };
+  if (ack) state.acks.unshift(ack);
   writeLocal(state);
+  return ack;
 }
