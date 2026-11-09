@@ -106,6 +106,7 @@ function ObjectDocuments({
   onOpen,
   onResults,
   onShare,
+  onRebuild,
 }: {
   obj: JobObject;
   busyId: string | null;
@@ -113,12 +114,13 @@ function ObjectDocuments({
   onOpen: (doc: JobObjectDocument, download: boolean) => void;
   onResults: (doc: JobObjectDocument) => void;
   onShare: (doc: JobObjectDocument) => void;
+  onRebuild: (doc: JobObjectDocument) => void;
 }) {
   // КП собирается на весь проект и живёт во вкладке «Документы» проекта.
   const docs = visibleDocuments(obj.documents).filter((doc) => doc.kind !== 'offer');
   return (
-    <details className={styles.docBlock}>
-      <summary>Документы</summary>
+    <section className={styles.docBlock} aria-label="Документы" data-doc-block>
+      <h4 className={styles.docBlockTitle}>Документы</h4>
       <span className={styles.hint}>
         {docs.length
           ? hidePrices
@@ -156,7 +158,7 @@ function ObjectDocuments({
                 </div>
                 <div className={styles.docActions}>
                   {stale ? (
-                    <button type="button" className={styles.rebuildBtn} data-doc-action="rebuild" onClick={() => onResults(doc)}>
+                    <button type="button" className={styles.rebuildBtn} data-doc-action="rebuild" onClick={() => onRebuild(doc)}>
                       Пересобрать
                     </button>
                   ) : null}
@@ -198,7 +200,7 @@ function ObjectDocuments({
           })}
         </ul>
       ) : null}
-    </details>
+    </section>
   );
 }
 
@@ -440,6 +442,26 @@ export function ObjectsPanel({
     const pdfBase64 = local || (await apiFetchObjectDocument(obj.id, doc.id)).pdfBase64;
     const bin = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
     return new Blob([bin], { type: 'application/pdf' });
+  }
+
+  /**
+   * «Пересобрать»: профиль — Проблемомер заново с первого вопроса, смета — калькулятор, чтобы начертить схему заново.
+   * После сохранения в комнате появляется новая версия документа. КП собирается из комнат проекта.
+   */
+  async function rebuildDocument(obj: JobObject, doc: JobObjectDocument) {
+    setErr(null);
+    setMsg(null);
+    if (doc.kind === 'offer') {
+      const { project, rooms } = kpInput(doc.projectId || obj.projectId);
+      if (!kpRooms(rooms).length) {
+        setErr('Коммерческое предложение не собрать: ни в одной комнате проекта нет расчёта калькулятора.');
+        return;
+      }
+      await buildKp(project, rooms);
+      return;
+    }
+    if (documentDisplayKind(doc.kind) === 'profile') api.requestDiagnosis(obj.id, { fresh: true });
+    else api.requestCalculator(obj.id);
   }
 
   async function openDocument(obj: JobObject, doc: JobObjectDocument, download: boolean) {
@@ -731,18 +753,8 @@ export function ObjectsPanel({
         }
         onBuildKp={canMove ? buildKp : undefined}
         onDocAction={async (room, doc, action) => {
-          if (action === 'rebuild' && doc.kind === 'offer') {
-            const { project, rooms } = kpInput(doc.projectId || room.projectId);
-            await buildKp(project, rooms);
-            return;
-          }
           if (action === 'rebuild') {
-            navigateProject({
-              kind: 'room',
-              projectId: room.projectId || '',
-              roomId: room.id,
-              view: documentDisplayKind(doc.kind) === 'profile' ? 'profile' : 'estimate',
-            });
+            await rebuildDocument(room, doc);
             return;
           }
           if (action === 'share') await shareDocument(room, doc);
@@ -982,6 +994,7 @@ export function ObjectsPanel({
                 })
               }
               onShare={(doc) => void shareDocument(selected, doc)}
+              onRebuild={(doc) => void rebuildDocument(selected, doc)}
             />
 
             <RoomPhotoReport key={selected.id} objectId={selected.id} />

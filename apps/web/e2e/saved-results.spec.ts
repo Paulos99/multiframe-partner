@@ -39,7 +39,9 @@ async function uploadProfile(request: APIRequestContext) {
 async function openDocuments(page: Page) {
   await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
   await openProjectRoom(page, 'Гостиная');
-  await page.locator('summary', { hasText: 'Документы' }).click();
+  // Блок «Документы» всегда раскрыт.
+  await expect(page.locator('[data-doc-block]')).toBeVisible();
+  await expect(page.locator('[data-doc-block] summary')).toHaveCount(0);
 }
 
 test('менеджер: у каждого расчёта «Открыть результаты» и «Открыть PDF», результаты — страница кабинета без панели', async ({
@@ -82,7 +84,9 @@ test('менеджер: у каждого расчёта «Открыть рез
   await expect(page).toHaveURL(/#project\/[^/]+\/room\/ui_crew_room$/);
 
   // Проблемомер: тот же результат, что в кабинете, только чтение.
-  await page.locator('summary', { hasText: 'Документы' }).click();
+  // Блок «Документы» всегда раскрыт.
+  await expect(page.locator('[data-doc-block]')).toBeVisible();
+  await expect(page.locator('[data-doc-block] summary')).toHaveCount(0);
   await page.locator('[data-doc-kind="profile"]').first().getByTestId('doc-open-results').click();
   const profile = page.getByTestId('saved-result-page');
   await expect(profile.getByRole('heading', { name: 'Результаты Проблемомера' })).toBeVisible();
@@ -109,7 +113,9 @@ test('монтажник: результаты расчётов без цен', 
   await expect(view).not.toContainText(/93\s*444|24\s*000|119\s*694|2\s*396/);
 
   await page.getByTestId('saved-result-page').getByRole('button', { name: 'К комнате', exact: true }).click();
-  await page.locator('summary', { hasText: 'Документы' }).click();
+  // Блок «Документы» всегда раскрыт.
+  await expect(page.locator('[data-doc-block]')).toBeVisible();
+  await expect(page.locator('[data-doc-block] summary')).toHaveCount(0);
   await page.locator('[data-doc-kind="profile"]').first().getByTestId('doc-open-results').click();
   const profile = page.getByTestId('saved-result-page');
   await expect(profile.getByRole('heading', { name: 'Результаты Проблемомера' })).toBeVisible();

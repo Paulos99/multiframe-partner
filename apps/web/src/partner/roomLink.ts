@@ -1,6 +1,6 @@
 import type { JobObject, JobObjectRoom, OrgSettings } from '../../../../packages/shared/partner';
 import { createInitialSession } from '../state/session';
-import { ROOM_TYPE_LABELS, type RoomAnswers, type RoomType, type SessionState } from '../state/types';
+import { ROOM_SUBSTEPS, ROOM_TYPE_LABELS, type RoomAnswers, type RoomType, type SessionState } from '../state/types';
 import { objectPatchFromCalc, type CabinetCalcMessage } from './cabinetCalc';
 
 const ROOM_TYPE_BY_LABEL = new Map<string, RoomType>(
@@ -87,6 +87,32 @@ export function sessionFromRoom(obj: {
   const room = { ...base.answers.room, ...stored, plannedCeiling: 'stretch' as const };
   return {
     ...base,
+    answers: { ...base.answers, room },
+    cta: { roomType: room.roomType, ceilingAreaM2: room.ceilingAreaM2 },
+  };
+}
+
+/**
+ * «Пересобрать» профиль: Проблемомер заново с первого вопроса.
+ * Из комнаты берём только тип и площадь, остальные ответы — с чистого листа.
+ */
+export function freshSurveyFromRoom(obj: {
+  room?: JobObjectRoom | null;
+  roomName?: string | null;
+}): SessionState {
+  const base = createInitialSession();
+  const stored = answersFromStoredRoom(obj.room, obj.roomName) || {};
+  const room = {
+    ...base.answers.room,
+    ...(stored.roomType ? { roomType: stored.roomType } : {}),
+    ...(stored.roomTypeCustom ? { roomTypeCustom: stored.roomTypeCustom } : {}),
+    ...(stored.ceilingAreaM2 ? { ceilingAreaM2: stored.ceilingAreaM2 } : {}),
+    plannedCeiling: 'stretch' as const,
+  };
+  return {
+    ...base,
+    step: 'room',
+    roomSubstep: ROOM_SUBSTEPS[0]!,
     answers: { ...base.answers, room },
     cta: { roomType: room.roomType, ceilingAreaM2: room.ceilingAreaM2 },
   };

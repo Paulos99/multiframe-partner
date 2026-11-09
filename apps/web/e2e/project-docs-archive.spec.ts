@@ -156,7 +156,9 @@ test('устаревший документ подсвечен красным и
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/docs-stale-dark.png` });
   await stale.getByRole('button', { name: 'Пересобрать', exact: true }).click();
-  // «Пересобрать» ведёт к результатам этой комнаты.
-  await expect(page.locator('[data-doc-row]')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: /Результаты (Проблемомера|калькулятора)/ })).toBeVisible();
+  // «Пересобрать» открывает инструмент заново: Проблемомер с первого вопроса или калькулятор.
+  await expect(
+    page.getByRole('heading', { name: 'Укажите тип дома' }).or(page.locator('iframe[title*="алькулятор"], iframe[src*="calculator"]')).first(),
+  ).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('button', { name: 'Начать', exact: true })).toHaveCount(0);
 });
