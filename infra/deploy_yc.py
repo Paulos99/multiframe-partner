@@ -76,6 +76,7 @@ GATEWAY_PATHS = (
     "/feedback-file/{photoId}",
     "/analytics/events",
     "/analytics/dashboard",
+    "/analytics/summary",
     "/training/sync",
     "/training/me",
     "/training/org",
