@@ -66,6 +66,7 @@ GATEWAY_PATHS = (
     "/public/rooms/{token}",
     "/objects/{objectId}/photos",
     "/objects/{objectId}/photos/{photoId}",
+    "/objects/{objectId}/notes",
     "/photo-file/{photoId}",
     "/photo-cases",
     "/photo-cases/{objectId}",

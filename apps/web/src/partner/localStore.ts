@@ -1,4 +1,5 @@
 import { cleanStaffPhone } from '../../../../packages/shared/clientPhone.js';
+import { canChangeRoomStage } from '../../../../packages/shared/roomStage.js';
 /**
  * Local-first store for partner portal (offline / no API).
  * Survives reloads and works as PWA cache.
@@ -27,7 +28,6 @@ import {
   canCreateObjects,
   canDeleteObjects,
   canManageStaff,
-  canMoveObjects,
   visibleDocuments,
   cleanProjectDate,
   cleanProjectStatus,
@@ -1287,7 +1287,7 @@ export function upsertLocalObject(
     existing &&
     input.status &&
     input.status !== existing.status &&
-    !canMoveObjects(actor.role)
+    !canChangeRoomStage(actor.role, existing.status, input.status)
   ) {
     throw new Error('Статус меняет менеджер или владелец');
   }

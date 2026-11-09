@@ -5,8 +5,25 @@
  */
 import type { AnalyticsEvent, JobObject, Project } from '../../../../packages/shared/partner';
 
+import type { FieldQueueItem } from './offlineQueue';
+
 const DB_NAME = 'mf-partner-offline';
-const DB_VERSION = 2;
+/**
+ * Версия базы. Та же цифра и тот же набор хранилищ — в public/sw-sync.js (service worker открывает
+ * эту же базу). Проверка: swSync.test.ts.
+ */
+export const DB_VERSION = 3;
+/** Все хранилища базы. Хранилище queue — очередь фото (Blob) и заметок, снятых без связи. */
+export const DB_STORES = [
+  ['objects', 'id'],
+  ['outbox', 'id'],
+  ['calculations', 'id'],
+  ['analytics', 'id'],
+  ['meta', 'key'],
+  ['projects', 'id'],
+  ['projectOutbox', 'id'],
+  ['queue', 'id'],
+] as const;
 
 export type OutboxOp = {
   id: string;
@@ -15,6 +32,13 @@ export type OutboxOp = {
   userId: string;
   orgId: string;
   payload: JobObject;
+  /**
+   * Этап комнаты, с которого человек начал правку без связи. Сервер сравнивает его со своим этапом:
+   * если тот за это время изменился, отвечает 409, и выбирает человек.
+   */
+  baseStatus?: string;
+  /** Конфликт этапа, который ждёт решения человека. Пока он есть, запись не отправляется. */
+  conflict?: { serverStatus: string; message: string; at: string } | null;
 };
 
 export type ProjectOutboxOp = {
@@ -68,21 +92,16 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains('objects')) db.createObjectStore('objects', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('calculations')) {
-        db.createObjectStore('calculations', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('analytics')) {
-        db.createObjectStore('analytics', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
-      if (!db.objectStoreNames.contains('projects')) db.createObjectStore('projects', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('projectOutbox')) {
-        db.createObjectStore('projectOutbox', { keyPath: 'id' });
+      for (const [name, keyPath] of DB_STORES) {
+        if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // Новая версия в другой вкладке или в service worker: закрываемся, чтобы не мешать обновлению.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror = () => reject(req.error ?? new Error('IndexedDB'));
   });
 }
@@ -314,10 +333,37 @@ export async function readSessionMeta(): Promise<OfflineSessionMeta | null> {
   return row?.value ?? null;
 }
 
+/* —— Очередь фото и заметок (Blob, а не base64) —— */
+
+export async function listQueue(): Promise<FieldQueueItem[]> {
+  return getAll<FieldQueueItem>('queue');
+}
+
+export async function putQueueItem(item: FieldQueueItem): Promise<void> {
+  await putRow('queue', item);
+}
+
+export async function removeQueueItem(id: string): Promise<void> {
+  await deleteRow('queue', id);
+}
+
+export async function getOutboxOp(id: string): Promise<OutboxOp | null> {
+  const rows = await getAll<OutboxOp>('outbox');
+  return rows.find((row) => row.id === id) ?? null;
+}
+
+export async function getStoredObject(id: string): Promise<JobObject | null> {
+  const rows = await getAll<JobObject>('objects');
+  return rows.find((row) => row.id === id) ?? null;
+}
+
 export async function registerBackgroundSync(): Promise<void> {
   try {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-    const reg = await navigator.serviceWorker.ready;
+    // Не ждём serviceWorker.ready: без установленного service worker он не наступает никогда, и сохранение
+    // без связи зависало бы.
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return;
     const syncManager = (reg as ServiceWorkerRegistration & { sync?: { register: (tag: string) => Promise<void> } }).sync;
     if (syncManager) await syncManager.register('mf-outbox');
   } catch {

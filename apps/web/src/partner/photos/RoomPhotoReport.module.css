@@ -309,3 +309,16 @@
     gap: 8px;
   }
 }
+
+/* Фото в очереди на телефоне: миниатюра и подпись «ждёт отправки». */
+.queuedThumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+
+.upload[data-status='queued'] {
+  border-style: dashed;
+}

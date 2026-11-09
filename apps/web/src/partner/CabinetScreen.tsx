@@ -22,7 +22,7 @@ import { CompanySection } from './CompanySection';
 import { generatePassword, usePartner } from './PartnerContext';
 import { ActivationLinkButton } from './ActivationLinkButton';
 import { canIssueLinks } from './activation';
-import { SyncStatus } from './SyncStatus';
+import { StageConflictDialog, SyncBanner, SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
 import { ToolsPanel } from './ToolsPanel';
 import { StpManagersAdmin } from './StpManagersAdmin';
@@ -135,7 +135,13 @@ function TabPanel({ children }: { children: ReactNode }) {
 }
 
 function FrameBody({ children }: { children: ReactNode }) {
-  return <div className={`${styles.shellWide} ${styles.framed}`}>{children}</div>;
+  return (
+    <div className={`${styles.shellWide} ${styles.framed}`}>
+      <SyncBanner />
+      <StageConflictDialog />
+      {children}
+    </div>
+  );
 }
 
 function profileOf(user: SessionUser, onLogout: () => void) {

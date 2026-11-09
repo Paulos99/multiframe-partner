@@ -16,6 +16,7 @@
  * а у ссылки на бакет его может не быть, и браузер не даст положить снимок в PDF.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { isClientId } from '../../packages/shared/roomNotes.js';
 import {
   PHOTO_LIMIT_PER_ROOM,
   PHOTO_STAGES,
@@ -119,6 +120,7 @@ async function urlFor(ctx, photo, variant) {
 export async function photoView(ctx, photo, { withUrls = true } = {}) {
   const view = {
     id: photo.id,
+    ...(photo.clientId ? { clientId: photo.clientId } : {}),
     stage: photo.stage,
     caption: photo.caption || '',
     createdAt: photo.createdAt,
@@ -355,6 +357,15 @@ export async function handleRoomPhotos(ctx) {
     if (!user.orgId || !canAddPhoto(role, stage) || obj.orgId !== user.orgId) {
       return ctx.json(403, { message: 'Недостаточно прав' });
     }
+    // Повтор после обрыва связи: тот же clientId возвращает уже сохранённое фото, дубля нет.
+    const clientId = body.clientId == null || body.clientId === '' ? null : body.clientId;
+    if (clientId !== null && !isClientId(clientId)) {
+      return ctx.json(400, { message: 'Некорректный идентификатор фото' });
+    }
+    if (clientId) {
+      const same = photoRows(obj).find((item) => item.clientId === clientId);
+      if (same) return ctx.json(200, { photo: await photoView(ctx, same), duplicate: true });
+    }
     if (photoRows(obj).length >= PHOTO_LIMIT_PER_ROOM) {
       return ctx.json(409, { message: `В комнате уже ${PHOTO_LIMIT_PER_ROOM} фото. Удалите лишние.` });
     }
@@ -369,6 +380,7 @@ export async function handleRoomPhotos(ctx) {
     const now = new Date().toISOString();
     const photo = {
       id: photoId,
+      ...(clientId ? { clientId } : {}),
       stage,
       caption: cleanPhotoCaption(body.caption),
       createdAt: now,

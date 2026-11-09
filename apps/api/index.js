@@ -57,6 +57,8 @@ import { buildStaffDrill } from '../../packages/shared/staffDrill.js';
 import { buildPartnerComparison, buildPeriodSummary } from '../../packages/shared/periodSummary.js';
 import { groupOrphanRooms } from '../../packages/shared/groupProjects.js';
 import { estimateForRole } from '../../packages/shared/projectAccess.js';
+import { ROOM_STAGE_LABELS, canChangeRoomStage, isStageConflict } from '../../packages/shared/roomStage.js';
+import { NOTES_PER_ROOM_MAX, cleanNoteText, isClientId, noteRows } from '../../packages/shared/roomNotes.js';
 import { cleanClientPhone, phoneRoomStatusAllowed, roleSeesClientPhone } from '../../packages/shared/clientPhone.js';
 import { cleanRefusal } from '../../packages/shared/refusal.js';
 import { applyDemoPersonalNames, normalizePersonName } from '../../packages/shared/personName.js';
@@ -912,6 +914,8 @@ function normalizeObjectInput(body, existing, actor, org, platform) {
     // Фото — только через /objects/:id/photos. Обычный PATCH их не затирает.
     ...(Array.isArray(existing?.photos) ? { photos: existing.photos } : {}),
     ...(existing?.photoReport ? { photoReport: existing.photoReport } : {}),
+    // Заметки — только через POST /objects/:id/notes.
+    ...(Array.isArray(existing?.notes) ? { notes: existing.notes } : {}),
     ...(refusal ? { refusal } : {}),
     ...link,
   };
@@ -2538,16 +2542,31 @@ async function handleRequest(event = {}) {
       }
       const org = findOrg(platform, existing.orgId);
       const body = getBody(event);
+      // Этап меняли без связи, а на сервере он за это время стал другим: решает человек, а не сервер.
+      if (isStageConflict(existing, body)) {
+        return json(409, {
+          code: 'stage_conflict',
+          message: `Пока вы были без связи, этап комнаты изменили на «${ROOM_STAGE_LABELS[existing.status] || existing.status}».`,
+          object: publicObject(existing, user.role),
+        });
+      }
       if (!incomingWins(body, existing)) {
         const kept = { ...existing, history: skippedHistory(existing, body, user) };
         platform.objects[idx] = kept;
         await savePlatform(platform);
         return json(200, { object: publicObject(kept, user.role), conflict: 'server-newer' });
       }
-      if (body.status && body.status !== existing.status && !['owner', 'sales'].includes(user.role)) {
-        return json(403, { message: 'Статус меняет менеджер или владелец' });
+      if (body.status && body.status !== existing.status && !canChangeRoomStage(user.role, existing.status, body.status)) {
+        return json(403, {
+          message:
+            user.role === 'measurer'
+              ? 'Замерщик переключает только «Черновик» и «Замер». Остальные этапы меняет менеджер или владелец'
+              : 'Статус меняет менеджер или владелец',
+        });
       }
-      if (body.assignedTo !== undefined && !['owner', 'sales'].includes(user.role)) {
+      // Приложение присылает комнату целиком: тот же исполнитель — это не переназначение.
+      const reassign = body.assignedTo !== undefined && (body.assignedTo || null) !== (existing.assignedTo || null);
+      if (reassign && !['owner', 'sales'].includes(user.role)) {
         return json(403, { message: 'Назначать комнату может владелец или менеджер' });
       }
       const next = normalizeObjectInput(body, existing, user, org, platform);
@@ -2571,6 +2590,39 @@ async function handleRequest(event = {}) {
       platform.objects[idx] = stored;
       await savePlatform(platform);
       return json(200, { object: publicObject(stored, user.role) });
+    }
+
+    // Заметка к комнате: только добавление. Повтор с тем же clientId не создаёт вторую заметку.
+    if (method === 'POST' && /\/objects\/[^/]+\/notes$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      const objectId = decodeURIComponent(path.split('/').slice(-2)[0]);
+      const idx = (platform.objects || []).findIndex((o) => o.id === objectId);
+      const existing = idx >= 0 ? platform.objects[idx] : null;
+      if (!existing || !objectVisibleTo(user, existing)) return json(404, { message: 'Комната не найдена' });
+      if (!user.orgId || existing.orgId !== user.orgId) return json(403, { message: 'Недостаточно прав' });
+      const body = getBody(event) || {};
+      const text = cleanNoteText(body.text);
+      if (!text) return json(400, { message: 'Напишите текст заметки' });
+      const clientId = body.clientId == null || body.clientId === '' ? null : body.clientId;
+      if (clientId !== null && !isClientId(clientId)) return json(400, { message: 'Некорректный идентификатор заметки' });
+      const notes = noteRows(existing);
+      const same = clientId ? notes.find((note) => note.clientId === clientId) : null;
+      if (same) return json(200, { note: same, notes, duplicate: true });
+      if (notes.length >= NOTES_PER_ROOM_MAX) {
+        return json(409, { message: `В комнате уже ${NOTES_PER_ROOM_MAX} заметок. Удалить старые может менеджер.` });
+      }
+      const note = {
+        id: uid('note'),
+        ...(clientId ? { clientId } : {}),
+        text,
+        at: clampClientTime(body.at),
+        by: user.id,
+        authorName: String(user.displayName || user.login || '').slice(0, 80),
+      };
+      const nextNotes = [...notes, note].sort((a, b) => (a.at < b.at ? -1 : 1));
+      platform.objects[idx] = { ...existing, notes: nextNotes };
+      await savePlatform(platform);
+      return json(200, { note, notes: nextNotes });
     }
 
     if (method === 'GET' && /\/objects\/[^/]+$/.test(path) && !path.endsWith('/objects')) {
