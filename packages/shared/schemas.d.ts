@@ -7,6 +7,7 @@ export interface Schemas {
   loginRequest: RequestSchema;
   partnerCreate: RequestSchema;
   stpManagerCreate: RequestSchema;
+  stpAdminCreate: RequestSchema;
   staffCreate: RequestSchema;
   staffUpdate: RequestSchema;
   partnerCityUpdate: RequestSchema;

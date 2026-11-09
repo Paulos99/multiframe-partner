@@ -263,11 +263,11 @@ test('админ СТП: «Фото отчёты» внутри аналитик
   await seed(request, crew, 'ui_room', 'after', AFTER, 'После работ');
   await seed(request, crew, 'ui_crew_room', 'before', PORTRAIT);
 
-  await enter(page, 'ui.admin', 'Партнёры');
+  await enter(page, 'ui.admin', 'Кабинеты');
   // Отдельных вкладок «Кейсы» и «Отчёты» нет: фотоотчёты лежат в «Аналитика → Фото отчёты».
   await expect(page.getByRole('tab', { name: 'Кейсы', exact: true })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'Отчёты', exact: true })).toHaveCount(0);
-  // Сегодня, Партнёры, Календарь, Инструменты, Аналитика, Обучение, Обратная связь.
+  // Сегодня, Кабинеты, Календарь, Инструменты, Аналитика, Обучение, Обратная связь.
   await expect(page.getByRole('tab')).toHaveCount(7);
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   await page.getByRole('tab', { name: 'Фото отчёты', exact: true }).click();
@@ -369,7 +369,7 @@ test('админ СТП на телефоне 390×844: «Фото отчёты�
   const owner = await token(request, 'ui.owner');
   await seed(request, owner, 'ui_room', 'before', BEFORE, 'До работ');
   await seed(request, owner, 'ui_room', 'after', AFTER, 'После работ');
-  await enter(page, 'ui.admin', 'Партнёры');
+  await enter(page, 'ui.admin', 'Кабинеты');
   await expect(page.getByRole('tab', { name: 'Отчёты', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Аналитика', exact: true }).click();
   await shot(page, 'item9-analytics-tabs-phone.png');

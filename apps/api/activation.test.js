@@ -135,7 +135,7 @@ describe('ссылка активации', { concurrency: false }, () => {
     assert.equal(weak.statusCode, 400);
   });
 
-  test('ссылку выдают только по правилам: чужая компания, админ для сотрудника, неизвестный — 404; менеджер своей компании — 200', async () => {
+  test('ссылку выдают только по правилам: чужая компания, админ для сотрудника, неизвестный — 404; менеджер своей компании и админ для админа — 200', async () => {
     tokens.admin = (await login('admin', 'admin1234')).token;
     tokens.owner2 = (await login('partner2', 'demo1234')).token;
     tokens.sales = (await login('sales1', 'exec1234')).token;
@@ -153,13 +153,15 @@ describe('ссылка активации', { concurrency: false }, () => {
       [tokens.admin, staffId],
       [tokens.owner, 'no-such-user'],
       [tokens.owner, 'u_partner1'],
-      [tokens.admin, 'u_admin'],
       [tokens.owner, undefined],
     ]) {
       const response = await call('POST', '/auth/invite', { token, body: { userId } });
       assert.equal(response.statusCode, 404, String(userId));
     }
     assert.equal(userByLogin('newbie').activation, undefined);
+    // Админ StP может выдать ссылку другому администратору (сброс пароля / активация).
+    const adminInvite = await call('POST', '/auth/invite', { token: tokens.admin, body: { userId: 'u_admin' } });
+    assert.equal(adminInvite.statusCode, 200, 'админ выдаёт ссылку администратору');
   });
 
   test('токен: 64 символа, в хранилище только sha256, срок 24 часа, новая ссылка гасит прежнюю', async () => {

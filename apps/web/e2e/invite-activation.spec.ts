@@ -46,7 +46,7 @@ async function activate(browser: Browser, link: string, password: string, loginN
 
 test('админ создаёт менеджера StP без пароля, берёт ссылку, менеджер сам задаёт пароль', async ({ page, browser, request }) => {
   await login(page, 'ui.admin', fixturePassword);
-  await nav(page).getByRole('tab', { name: 'Партнёры', exact: true }).click();
+  await nav(page).getByRole('tab', { name: 'Кабинеты', exact: true }).click();
   await page.getByRole('button', { name: 'Добавить менеджера' }).click();
   await page.getByLabel('Логин', { exact: true }).fill('ui.novichok');
   await page.getByLabel('Имя').fill('Новичок');

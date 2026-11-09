@@ -259,7 +259,7 @@ test('админ фильтрует календарь по партнёру', a
   await filtered;
   await expect(panel.getByRole('button', { name: /^Замер 11:00/ })).toHaveCount(1);
 
-  await page.getByRole('tab', { name: 'Партнёры', exact: true }).click();
+  await page.getByRole('tab', { name: 'Кабинеты', exact: true }).click();
   await page.getByRole('tab', { name: 'Календарь', exact: true }).click();
   await expect(panel.getByLabel('Партнёр')).toHaveValue('ui_org');
   await expect(panel.getByRole('button', { name: /^Замер 11:00/ })).toHaveCount(1);

@@ -61,6 +61,14 @@ test('менеджер StP: длина логина не ограничивае�
   assert.equal(fail(schemas.stpManagerCreate, { password: 'p' }).message, 'Укажите логин');
 });
 
+test('администратор StP: создание — логин обязателен, имя по умолчанию логин, пароль необязателен', () => {
+  const data = pass(schemas.stpAdminCreate, { login: 'a'.repeat(LOGIN_MAX + 10), password: 'p' });
+  assert.equal(data.displayName, data.login);
+  assert.equal(fail(schemas.stpAdminCreate, { password: 'p' }).message, 'Укажите логин');
+  assert.equal(pass(schemas.stpAdminCreate, { login: 'adm2' }).password, '');
+  assert.equal(pass(schemas.stpAdminCreate, { login: 'adm2', displayName: ' Иван ' }).displayName, 'Иван');
+});
+
 test('сотрудник: роль проверяется раньше логина, executor — это замерщик, пустая роль — замерщик', () => {
   assert.equal(fail(schemas.staffCreate, { role: 'owner' }).message, 'Роль: sales, measurer или crew');
   assert.equal(fail(schemas.staffCreate, { role: 'admin', login: 'a', password: 'b' }).message, 'Роль: sales, measurer или crew');

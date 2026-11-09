@@ -25,6 +25,7 @@ import { canIssueLinks } from './activation';
 import { StageConflictDialog, SyncBanner, SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
 import { ToolsPanel } from './ToolsPanel';
+import { StpAdminsAdmin } from './StpAdminsAdmin';
 import { StpManagersAdmin } from './StpManagersAdmin';
 import { FeedbackAdminPanel } from './feedback/FeedbackAdminPanel';
 import { apiFeedbackSummary, hasRemoteApi } from './apiClient';
@@ -264,7 +265,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
 
   const adminNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
-    { id: 'partners', label: 'Партнёры', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
+    { id: 'partners', label: 'Кабинеты', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
     { id: 'calendar', label: 'Календарь', active: tab === 'calendar', onSelect: () => { leaveProjectHash(); setTab('calendar'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
@@ -310,7 +311,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
         <TabPanel>
           <div className={`${styles.card} ${styles.panelCard}`}>
             <div className={addStyles.sectionHead}>
-              <h2>Партнёры сети</h2>
+              <h2>Кабинеты сети</h2>
               <Button
                 variant={addOpen ? 'secondary' : 'primary'}
                 aria-expanded={addOpen}
@@ -380,7 +381,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                 </m.div>
               ) : null}
             </AnimatePresence>
-            {api.partnersLoading && !partners.length ? <Skeleton count={3} label="Загрузка партнёров"/> : null}
+            {api.partnersLoading && !partners.length ? <Skeleton count={3} label="Загрузка кабинетов"/> : null}
             {notice ? (
               <p className={styles.flash} role="status">
                 {notice}
@@ -505,9 +506,10 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                 </div>
                 );
               })}
-              {!partners.length ? <p className={styles.lead}>Пока нет партнёров</p> : null}
+              {!partners.length ? <p className={styles.lead}>Пока нет кабинетов</p> : null}
             </div>
           </div>
+          <StpAdminsAdmin />
           <StpManagersAdmin />
           <InstallHint />
         </TabPanel>

@@ -1743,11 +1743,11 @@ async function handleRequest(event = {}) {
       const idx = platform.users.findIndex((u) => u.id === String(userId || ''));
       const target = idx < 0 ? null : platform.users[idx];
       const targetRole = target ? normalizeRole(target.role) : null;
-      // Админ StP выдаёт ссылки владельцам партнёров и менеджерам StP, владелец — сотрудникам своей компании.
+      // Админ StP выдаёт ссылки владельцам, менеджерам StP и другим администраторам; владелец — сотрудникам своей компании.
       const allowed =
         Boolean(target) &&
         (user.role === 'admin'
-          ? targetRole === 'owner' || targetRole === STP_MANAGER_ROLE
+          ? targetRole === 'owner' || targetRole === STP_MANAGER_ROLE || targetRole === 'admin'
           : STAFF_MANAGER_ROLES.includes(user.role) &&
             Boolean(user.orgId) &&
             target.orgId === user.orgId &&
@@ -2040,6 +2040,186 @@ async function handleRequest(event = {}) {
         userId: user.id,
         login: user.login,
         action: 'delete_stp_manager',
+        detail: target.login,
+      });
+      await savePlatform(platform);
+      return json(200, { ok: true });
+    }
+
+    /* —— Администраторы StP: несколько учёток с полным доступом к сети —— */
+    if (method === 'GET' && path.endsWith('/admin/stp-admins')) {
+      const { platform, user } = await requireAuth(event, { readonly: true });
+      assertRole(user, ['admin']);
+      const logins = await lastLoginIndex(platform);
+      const admins = platform.users
+        .filter((u) => normalizeRole(u.role) === 'admin')
+        .map((u) => {
+          const last = { at: logins.byUser.get(u.id) };
+          return {
+            id: u.id,
+            login: u.login,
+            role: 'admin',
+            displayName: u.displayName,
+            createdAt: u.createdAt,
+            lastLogin: last?.at || null,
+            loginDisabled: u.loginDisabled === true,
+            pendingActivation: awaitsActivation(u),
+            isSelf: u.id === user.id,
+          };
+        });
+      return json(200, { admins });
+    }
+
+    if (method === 'POST' && path.endsWith('/admin/stp-admins')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const { login, password, displayName } = parseBody(schemas.stpAdminCreate, getBody(event));
+      if (findUser(platform, login)) return json(409, { message: 'Такой логин уже есть' });
+      const weakAdmin = password ? passwordProblem(password) : '';
+      if (weakAdmin) return json(400, { message: weakAdmin });
+      const now = new Date().toISOString();
+      const admin = {
+        id: uid('u'),
+        login,
+        ...(password ? { passwordHash: await hashPassword(password) } : {}),
+        role: 'admin',
+        displayName,
+        orgId: null,
+        createdAt: now,
+      };
+      platform.users.push(admin);
+      pushActivity(platform, {
+        orgId: null,
+        userId: user.id,
+        login: user.login,
+        action: 'create_stp_admin',
+        detail: login,
+      });
+      await savePlatform(platform);
+      return json(200, {
+        id: admin.id,
+        login,
+        ...(password ? { password } : { pendingActivation: true }),
+        role: 'admin',
+        displayName,
+      });
+    }
+
+    if (method === 'POST' && path.endsWith('/admin/stp-admins/reset-password')) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const { adminUserId, password } = getBody(event);
+      const idx = platform.users.findIndex(
+        (u) => u.id === adminUserId && normalizeRole(u.role) === 'admin',
+      );
+      if (idx < 0) return json(404, { message: 'Администратор не найден' });
+      if (platform.users[idx].loginDisabled === true) {
+        return json(409, { message: 'Администратор отключён: сначала включите вход' });
+      }
+      const pw = String(password || '').trim();
+      const weak = passwordProblem(pw);
+      if (weak) return json(400, { message: weak });
+      platform.users[idx] = {
+        ...platform.users[idx],
+        passwordHash: await hashPassword(pw),
+        sessionVersion: (Number(platform.users[idx].sessionVersion) || 0) + 1,
+      };
+      delete platform.users[idx].failedLogins;
+      delete platform.users[idx].lockedUntil;
+      delete platform.users[idx].activation;
+      await clearLoginState(platform.users[idx].id);
+      pushActivity(platform, {
+        orgId: null,
+        userId: user.id,
+        login: user.login,
+        action: 'reset_stp_admin_password',
+        detail: platform.users[idx].login,
+      });
+      await savePlatform(platform);
+      return json(200, { password: pw });
+    }
+
+    if (method === 'PATCH' && /\/admin\/stp-admins\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const adminId = decodeURIComponent(path.split('/').pop() || '');
+      const idx = platform.users.findIndex((u) => u.id === adminId && normalizeRole(u.role) === 'admin');
+      if (idx < 0) return json(404, { message: 'Администратор не найден' });
+      const body = getBody(event) || {};
+      const target = platform.users[idx];
+      if (Object.prototype.hasOwnProperty.call(body, 'loginDisabled')) {
+        const nextDisabled = body.loginDisabled === true;
+        if (adminId === user.id) {
+          return json(400, { message: 'Нельзя отключить самого себя' });
+        }
+        if (nextDisabled) {
+          const activeOthers = platform.users.filter(
+            (u) =>
+              normalizeRole(u.role) === 'admin' &&
+              u.id !== adminId &&
+              u.loginDisabled !== true,
+          );
+          if (!activeOthers.length) {
+            return json(400, { message: 'Нельзя отключить последнего администратора' });
+          }
+        }
+        platform.users[idx] = {
+          ...target,
+          loginDisabled: nextDisabled,
+          sessionVersion: nextDisabled
+            ? (Number(target.sessionVersion) || 0) + 1
+            : target.sessionVersion,
+        };
+        if (!nextDisabled) delete platform.users[idx].loginDisabled;
+        pushActivity(platform, {
+          orgId: null,
+          userId: user.id,
+          login: user.login,
+          action: nextDisabled ? 'disable_stp_admin' : 'enable_stp_admin',
+          detail: target.login,
+        });
+      }
+      if (Object.prototype.hasOwnProperty.call(body, 'displayName')) {
+        const name = String(body.displayName || '').trim();
+        if (!name) return json(400, { message: 'Укажите имя' });
+        platform.users[idx] = { ...platform.users[idx], displayName: name };
+        pushActivity(platform, {
+          orgId: null,
+          userId: user.id,
+          login: user.login,
+          action: 'rename_stp_admin',
+          detail: `${target.login} · ${name}`,
+        });
+      }
+      await savePlatform(platform);
+      const saved = platform.users[idx];
+      return json(200, {
+        id: saved.id,
+        login: saved.login,
+        displayName: saved.displayName,
+        loginDisabled: saved.loginDisabled === true,
+      });
+    }
+
+    if (method === 'DELETE' && /\/admin\/stp-admins\/[^/]+$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const adminId = decodeURIComponent(path.split('/').pop() || '');
+      const target = platform.users.find((u) => u.id === adminId && normalizeRole(u.role) === 'admin');
+      if (!target) return json(404, { message: 'Администратор не найден' });
+      if (adminId === user.id) {
+        return json(400, { message: 'Нельзя удалить самого себя' });
+      }
+      const others = platform.users.filter((u) => normalizeRole(u.role) === 'admin' && u.id !== adminId);
+      if (!others.length) {
+        return json(400, { message: 'Нельзя удалить последнего администратора' });
+      }
+      platform.users = platform.users.filter((u) => u.id !== adminId);
+      pushActivity(platform, {
+        orgId: null,
+        userId: user.id,
+        login: user.login,
+        action: 'delete_stp_admin',
         detail: target.login,
       });
       await savePlatform(platform);
