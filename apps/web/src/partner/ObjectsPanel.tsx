@@ -423,23 +423,29 @@ export function ObjectsPanel({
     for (const room of rooms) await api.saveObject({ ...room, status: 'quote_sent', id: room.id });
   }
 
-  async function blobForDocument(obj: JobObject, doc: JobObjectDocument): Promise<Blob> {
+  async function fileForDocument(
+    obj: JobObject,
+    doc: JobObjectDocument,
+  ): Promise<{ blob: Blob; filename: string }> {
     if (doc.kind === 'offer') {
       if (documentOpenPolicy(user.role) === 'without-prices') throw new Error('КП доступно ролям, которые видят цены');
       if (doc.demo) {
         const { project, rooms } = kpInput(doc.projectId || obj.projectId);
-        return (await renderKp(project, rooms, true)).file.blob;
+        const file = (await renderKp(project, rooms, true)).file;
+        return { blob: file.blob, filename: file.filename };
       }
     }
     if (documentOpenPolicy(user.role) === 'without-prices') {
-      if (documentDisplayKind(doc.kind) === 'profile') return plainProfileBlob(obj, doc, user.role);
-      return buildDemoPdfBlob(obj, doc, { hidePrices: true });
+      if (documentDisplayKind(doc.kind) === 'profile') {
+        return { blob: await plainProfileBlob(obj, doc, user.role), filename: doc.filename };
+      }
+      return { blob: await buildDemoPdfBlob(obj, doc, { hidePrices: true }), filename: doc.filename };
     }
-    if (doc.demo) return buildDemoPdfBlob(obj, doc, { hidePrices: false });
+    if (doc.demo) return { blob: await buildDemoPdfBlob(obj, doc, { hidePrices: false }), filename: doc.filename };
     const local = doc.dataBase64 || loadLocalDocBytes(doc.id);
     const pdfBase64 = local || (await fetchDocumentWithCache(obj.id, doc.id)).pdfBase64;
     const bin = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
-    return new Blob([bin], { type: 'application/pdf' });
+    return { blob: new Blob([bin], { type: 'application/pdf' }), filename: doc.filename };
   }
 
   /**
@@ -466,7 +472,8 @@ export function ObjectsPanel({
     setDocBusy(doc.id);
     setErr(null);
     try {
-      openPdfBlob(await blobForDocument(obj, doc), doc.filename, download);
+      const file = await fileForDocument(obj, doc);
+      openPdfBlob(file.blob, file.filename, download);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось открыть PDF');
     } finally {
@@ -478,14 +485,14 @@ export function ObjectsPanel({
     setDocBusy(doc.id);
     setErr(null);
     try {
-      const blob = await blobForDocument(obj, doc);
-      const file = new File([blob], doc.filename || 'документ.pdf', { type: 'application/pdf' });
+      const rendered = await fileForDocument(obj, doc);
+      const file = new File([rendered.blob], rendered.filename || 'документ.pdf', { type: 'application/pdf' });
       if (typeof navigator.share === 'function') {
         const withFile = typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
         await navigator.share(
           withFile
-            ? { files: [file], title: doc.filename }
-            : { title: documentLabel(doc.kind), text: doc.filename },
+            ? { files: [file], title: rendered.filename }
+            : { title: documentLabel(doc.kind), text: rendered.filename },
         );
         setMsg('Окно «Поделиться» открыто. Само по себе ничего не отправлено.');
       } else {
@@ -499,7 +506,7 @@ export function ObjectsPanel({
           await navigator.clipboard.writeText(url);
           setMsg('Ссылка для клиента скопирована.');
         } else {
-          openPdfBlob(blob, doc.filename, true);
+          openPdfBlob(rendered.blob, rendered.filename, true);
           setMsg('Ссылка для клиента недоступна — файл скачан, отправьте его сами.');
         }
       }
