@@ -59,7 +59,14 @@ function parseDayDropId(id: string | number): Date | null {
  * Замерщик и монтажник видят свои выезды, владелец и менеджер — всю компанию, StP — все компании.
  * Владелец и менеджер перетаскивают выезды между днями и создают новые кликом по дате.
  */
-export function CalendarPanel({ onOpenVisit }: { onOpenVisit?: (visit: Visit) => void }) {
+export function CalendarPanel({
+  onOpenVisit,
+  embedded,
+}: {
+  onOpenVisit?: (visit: Visit) => void;
+  /** Внутри вкладки «Проекты»: без своего заголовка, переключатель вида снаружи. */
+  embedded?: boolean;
+}) {
   const api = usePartner();
   const calendar = useCalendar();
   const role = api.user?.role;
@@ -187,27 +194,44 @@ export function CalendarPanel({ onOpenVisit }: { onOpenVisit?: (visit: Visit) =>
     );
   }
 
+  const lead =
+    role === 'measurer' || role === 'crew'
+      ? 'Ваши замеры и монтажи. Время назначает владелец или менеджер.'
+      : role === 'admin'
+        ? 'Замеры и монтажи всех партнёров.'
+        : canPlan
+          ? 'Замеры и монтажи компании. Перетащите выезд на другой день или нажмите на дату, чтобы назначить новый.'
+          : 'Замеры и монтажи компании. Нажмите на выезд, чтобы открыть проект.';
+
   return (
-    <section className={styles.panel} aria-label="Календарь">
-      <header className={styles.head}>
-        <div>
-          <h2>Календарь</h2>
-          <p className={styles.lead}>
-            {role === 'measurer' || role === 'crew'
-              ? 'Ваши замеры и монтажи. Время назначает владелец или менеджер.'
-              : role === 'admin'
-                ? 'Замеры и монтажи всех партнёров.'
-                : canPlan
-                  ? 'Замеры и монтажи компании. Перетащите выезд на другой день или нажмите на дату, чтобы назначить новый.'
-                  : 'Замеры и монтажи компании. Нажмите на выезд, чтобы открыть проект.'}
-          </p>
-        </div>
-        {canPlan ? (
-          <button type="button" className={styles.primary} onClick={() => setDialog({ kind: 'measure' })}>
-            Назначить выезд
-          </button>
-        ) : null}
-      </header>
+    <section className={styles.panel} aria-label="Календарь" data-embedded={embedded ? '' : undefined}>
+      {embedded ? (
+        <>
+          <h2 className={styles.srOnly}>Календарь</h2>
+          {canPlan ? (
+            <header className={styles.head}>
+              <p className={styles.lead}>{lead}</p>
+              <button type="button" className={styles.primary} onClick={() => setDialog({ kind: 'measure' })}>
+                Назначить выезд
+              </button>
+            </header>
+          ) : (
+            <p className={styles.lead}>{lead}</p>
+          )}
+        </>
+      ) : (
+        <header className={styles.head}>
+          <div>
+            <h2>Календарь</h2>
+            <p className={styles.lead}>{lead}</p>
+          </div>
+          {canPlan ? (
+            <button type="button" className={styles.primary} onClick={() => setDialog({ kind: 'measure' })}>
+              Назначить выезд
+            </button>
+          ) : null}
+        </header>
+      )}
 
       <div className={styles.toolbar}>
         <div className={styles.nav}>

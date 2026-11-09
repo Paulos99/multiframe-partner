@@ -105,8 +105,10 @@ test('замерщик читает описание, бригада видит 
 
   await enter(page, 'measurer');
   const list = page.getByRole('region', { name: 'Список проектов' });
-  await expect(page.getByRole('group', { name: 'Вид проектов' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  const view = page.getByRole('group', { name: 'Вид проектов' });
+  await expect(view).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  await view.getByRole('button', { name: 'Список', exact: true }).click();
   await expect(list.getByRole('heading', { name: 'Тестовая квартира', exact: true })).toBeVisible();
   await expect(list.getByRole('button', { name: 'Кухня' })).toContainText('Замер');
   await expect(list.getByRole('table')).toHaveCount(0);
@@ -124,8 +126,10 @@ test('замерщик читает описание, бригада видит 
 
   await enter(page, 'crew');
   const desk = page.getByRole('region', { name: 'Список проектов' });
-  await expect(page.getByRole('group', { name: 'Вид проектов' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  const crewView = page.getByRole('group', { name: 'Вид проектов' });
+  await expect(crewView).toBeVisible();
+  await expect(crewView.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  await crewView.getByRole('button', { name: 'Список', exact: true }).click();
   await expect(page.locator('[data-project-stage]')).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'Карточка проекта' })).toHaveCount(0);
   await expect(desk.getByRole('heading', { name: 'Тестовая квартира', exact: true })).toBeVisible();

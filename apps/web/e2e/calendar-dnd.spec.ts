@@ -12,12 +12,24 @@ async function enter(page: Page, role: string) {
   await page.getByLabel('Логин', { exact: true }).fill(`ui.${role}`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toBeVisible();
+  if (role === 'admin') {
+    await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toBeVisible();
+  } else {
+    await expect(page.getByRole('tab', { name: 'Проекты', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toHaveCount(0);
+  }
 }
 
+/** Календарь: у админа — вкладка, у остальных — вид внутри «Проекты». */
 async function openCalendar(page: Page) {
-  await page.getByRole('tab', { name: 'Календарь', exact: true }).click();
-  const panel = page.getByRole('region', { name: 'Календарь' });
+  const calendarTab = page.getByRole('tab', { name: 'Календарь', exact: true });
+  if (await calendarTab.count()) {
+    await calendarTab.click();
+  } else {
+    await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
+    await page.getByRole('group', { name: 'Вид проектов' }).getByRole('button', { name: 'Календарь', exact: true }).click();
+  }
+  const panel = page.getByRole('region', { name: 'Календарь', exact: true });
   await expect(panel.getByRole('heading', { name: 'Календарь', exact: true })).toBeVisible();
   return panel;
 }
@@ -101,7 +113,7 @@ test('владелец перетаскивает выезд на другой �
 
   await page.reload();
   await openCalendar(page);
-  await page.getByRole('region', { name: 'Календарь' }).getByRole('group', { name: 'Вид календаря' }).getByRole('button', { name: 'Неделя', exact: true }).click();
+  await page.getByRole('region', { name: 'Календарь', exact: true }).getByRole('group', { name: 'Вид календаря' }).getByRole('button', { name: 'Неделя', exact: true }).click();
   await expect(page.locator(`[data-day="${dayAfterTomorrowKey()}"] [data-visit-id="${visit.id}"]`)).toBeVisible();
   await expect(page.locator(`[data-day="${dayAfterTomorrowKey()}"] [data-visit-id="${visit.id}"]`)).toContainText('10:00–11:00');
 });

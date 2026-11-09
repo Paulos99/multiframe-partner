@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   companyHash,
+  isCalendarHash,
   isLegacyStaffList,
   parseCompanyHash,
   parseProjectHash,
@@ -72,4 +73,11 @@ test('адрес сохранённого расчёта комнаты: рез�
   });
   // Лишнее в адресе не ломает комнату: открывается обычная карточка.
   assert.deepEqual(parseProjectHash('#project/p1/room/r1/result/нет'), { kind: 'room', projectId: 'p1', roomId: 'r1' });
+});
+
+test('старый адрес календаря: #calendar', () => {
+  assert.equal(isCalendarHash('#calendar'), true);
+  assert.equal(isCalendarHash('#calendar/'), true);
+  assert.equal(isCalendarHash('#project/p1/overview'), false);
+  assert.equal(isCalendarHash(''), false);
 });

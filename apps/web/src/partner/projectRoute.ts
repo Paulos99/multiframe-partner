@@ -106,6 +106,12 @@ export function isLegacyStaffList(hash: string): boolean {
   return parts[0] === 'staff' && !parts[1];
 }
 
+/** Старый адрес отдельного раздела «Календарь»: #calendar. Ведём во вкладку «Проекты» в виде календаря. */
+export function isCalendarHash(hash: string): boolean {
+  const parts = hashParts(hash);
+  return parts[0] === 'calendar';
+}
+
 export function navigateHash(hash: string, mode: 'push' | 'replace' = 'push') {
   if (typeof window === 'undefined') return;
   const next = `${window.location.pathname}${window.location.search}${hash}`;

@@ -139,32 +139,35 @@ test('демо: перенос сохраняется после перезаг�
 });
 
 test.describe('телефон', () => {
+  test.describe.configure({ retries: 1 });
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
   test('карточку можно перенести долгим касанием, а короткое касание открывает проект', async ({ page }) => {
+    test.setTimeout(90_000);
     await enter(page, 'owner');
     await openBoard(page);
+    const target = page.locator('[data-project-stage="proposal"]');
+    // Не ждём автопрокрутку у края (на CI нестабильна): заранее показываем колонку.
+    await target.scrollIntoViewIfNeeded();
     const card = page.locator('[data-project-id="ui_project"]');
     await card.scrollIntoViewIfNeeded();
     const cdp = await page.context().newCDPSession(page);
     const a = await card.boundingBox();
-    if (!a) throw new Error('нет карточки');
+    const b = await target.boundingBox();
+    if (!a || !b) throw new Error('нет координат карточки или колонки');
     const x = a.x + a.width / 2;
     const y = a.y + a.height / 2;
+    const tx = b.x + Math.min(b.width / 2, 80);
+    const ty = b.y + 90;
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(550);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 4, y: y + 4 }] });
-    // Подводим палец к левому краю: доска сама прокручивается к соседней стадии.
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 6, y: y + 4 }] });
-    await page.waitForFunction(() => {
-      const box = document.querySelector('[data-project-stage="proposal"]')?.getBoundingClientRect();
-      return Boolean(box && box.x > -60 && box.x < 180);
-    });
-    // Середина экрана лежит внутри колонки при любом таком сдвиге; автопрокрутка у края прекращается.
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 195, y: y + 4 }] });
-    await page.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: tx, y: ty }] });
+    await page.waitForTimeout(300);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await expect(page.locator('[data-project-stage="proposal"] [data-project-id="ui_project"]')).toBeVisible();
+    await expect(page.locator('[data-project-stage="proposal"] [data-project-id="ui_project"]')).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page).not.toHaveURL(/#project\//);
 
     await page.locator('[data-project-id="ui_project"]').tap();

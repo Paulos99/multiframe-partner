@@ -30,16 +30,19 @@ async function assignMeasurerToRooms(page: Page, rooms: string[]) {
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
 }
 
-test('проекты замерщика: простой список комнат без вида «список/канбан», цены на месте', async ({ page }) => {
+test('проекты замерщика: список комнат (вид календарь/список, без канбана), цены на месте', async ({ page }) => {
   await assignMeasurerToRooms(page, ['Спальня', 'Кухня']);
   await enter(page, 'measurer');
 
   const desk = page.getByRole('region', { name: 'Список проектов' });
   await expect(desk).toBeVisible();
+  const view = page.getByRole('group', { name: 'Вид проектов' });
+  await expect(view).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Календарь', exact: true })).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Список', exact: true })).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  await view.getByRole('button', { name: 'Список', exact: true }).click();
   await expect(desk.getByText('Комнаты, которые нужно замерить')).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Вид проектов' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Список', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Архив', exact: false })).toHaveCount(0);
   await expect(page.locator('[data-project-stage]')).toHaveCount(0);
   await expect(page.locator('#kanban-help')).toHaveCount(0);

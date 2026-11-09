@@ -86,8 +86,10 @@ test('демо ?demo=1 группирует комнаты и открывает
 test('демо-бригада видит список комнат без канбана, с суммами', async ({ page }) => {
   await enterCapital(page, 'Монтажник');
   const desk = page.getByRole('region', { name: 'Список проектов' });
-  await expect(page.getByRole('group', { name: 'Вид проектов' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  const view = page.getByRole('group', { name: 'Вид проектов' });
+  await expect(view).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Канбан', exact: true })).toHaveCount(0);
+  await view.getByRole('button', { name: 'Список', exact: true }).click();
   await expect(page.locator('[data-project-stage]')).toHaveCount(0);
 
   const open = desk.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Сидорова М.', exact: true }) });
