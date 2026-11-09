@@ -70,14 +70,46 @@ test('переключатель «Список / Канбан» и вкладк
   await expectSettled(tabs);
 });
 
+/**
+ * Рамки подложки и пункта в начале второго кадра после вызова. Предыдущий кадр к этому моменту
+ * отрисован целиком: раскладка пересчитана, ResizeObserver отработал. Мерим то, что видит человек,
+ * а не промежуточное состояние между задачей браузера и отрисовкой.
+ */
+async function pillAndActiveOnPaint(box: Locator) {
+  return box.evaluate(
+    (el) =>
+      new Promise<{ a: number[]; p: number[] }>((done) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const pill = el.querySelector('span[aria-hidden="true"]') as HTMLElement;
+            const active = el.querySelector('[aria-selected="true"],[aria-pressed="true"]') as HTMLElement;
+            const a = active.getBoundingClientRect();
+            const p = pill.getBoundingClientRect();
+            done({ a: [a.left, a.top, a.right, a.bottom], p: [p.left, p.top, p.right, p.bottom] });
+          }),
+        ),
+      ),
+  );
+}
+
 test('«уменьшить движение»: подложка встаёт на место сразу', async ({ browser }) => {
   const ctx = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 } });
   const page = await ctx.newPage();
   await enter(page);
+  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
   const nav = page.getByRole('tablist', { name: 'Разделы', exact: true });
-  await nav.getByRole('tab').nth(2).click();
-  const { a, p } = await pillAndActive(nav);
-  expect(a.every((v, i) => Math.abs(v - p[i]) < 1.5)).toBe(true);
+  // Исходное положение: подложка уже на первом пункте, раскладка после входа устоялась.
+  await expectSettled(nav);
+  const target = nav.getByRole('tab').nth(2);
+  await target.click();
+  await expect(target).toHaveAttribute('aria-selected', 'true');
+  // Первый же кадр после нажатия: подложка на выбранном пункте, без переезда.
+  const first = await pillAndActiveOnPaint(nav);
+  expect(first.a.every((v, i) => Math.abs(v - first.p[i]) < 1.5)).toBe(true);
+  // И остаётся на месте: переезд длится 0,34–0,54 с, через 0,2 с подложка была бы в пути.
+  await page.waitForTimeout(200);
+  const later = await pillAndActiveOnPaint(nav);
+  expect(later.a.every((v, i) => Math.abs(v - later.p[i]) < 1.5)).toBe(true);
   await ctx.close();
 });
 
