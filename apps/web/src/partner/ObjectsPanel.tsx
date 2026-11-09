@@ -41,7 +41,15 @@ import { buildProjectCards, cardMatches, visibleRooms } from './projectGroups';
 import { ProjectDesk } from './ProjectDesk';
 import { CloseDialog } from './CloseDialog';
 import { refusalLine, roomStageLabel } from './closeOutcome';
-import { assigneeCandidates, assigneeRoleLabel, deleteProjectWarning, problemomerLine, roomTitle } from './projectDesk';
+import {
+  assigneeCandidates,
+  assigneeRoleLabel,
+  deleteProjectWarning,
+  problemomerLine,
+  readProjectView,
+  roomTitle,
+  type ProjectDeskView,
+} from './projectDesk';
 import { navigateProject, parseProjectHash, PROJECT_TABS, type ProjectRoute } from './projectRoute';
 import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { RoomPhotoReport } from './photos/RoomPhotoReport';
@@ -246,6 +254,9 @@ export function ObjectsPanel({
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [deskView, setDeskView] = useState<ProjectDeskView>(() =>
+    readProjectView(typeof localStorage === 'undefined' ? null : localStorage),
+  );
   const roomFilter = 'all' as const;
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [closingRoom, setClosingRoom] = useState<JobObject | null>(null);
@@ -670,7 +681,7 @@ export function ObjectsPanel({
           }}
         />
       ) : null}
-      {showDesk ? (
+      {showDesk && deskView !== 'calendar' ? (
       <div className={listStyles.toolbar}>
         <div>
           <h2>Проекты</h2>
@@ -699,7 +710,7 @@ export function ObjectsPanel({
         </p>
       ) : null}
 
-      {showDesk ? (
+      {showDesk && deskView !== 'calendar' ? (
       <label className={styles.searchField}>
         <span className={styles.srOnly}>Поиск проекта</span>
         <input
@@ -766,10 +777,18 @@ export function ObjectsPanel({
           else await openDocument(room, doc, action === 'download');
         }}
         onDeleteProject={canDelete ? (project) => setProjectToDelete({ id: project.id, name: project.name, rooms: api.objects.filter((room) => room.projectId === project.id).length }) : undefined}
+        onOpenVisit={(visit) => {
+          const room = visit.objectId ? api.objects.find((item) => item.id === visit.objectId) : undefined;
+          const projectId = room?.projectId || visit.projectId;
+          if (!projectId) return;
+          if (room) navigateProject({ kind: 'room', projectId, roomId: room.id });
+          else navigateProject({ kind: 'project', projectId, tab: 'overview' });
+        }}
+        onDeskViewChange={setDeskView}
       />
       )}
 
-      {showDesk && !api.objectsLoading && !cards.length ? (
+      {showDesk && deskView !== 'calendar' && !api.objectsLoading && !cards.length ? (
         <div className={styles.emptyState}>
           <p className={styles.lead}>
             {api.objects.length || api.projects.length ? 'Ничего не нашлось. Сбросьте поиск.' : emptyHint}

@@ -50,7 +50,7 @@ const project = {
   createdBy: 'u',
 } satisfies Project;
 
-test('вид списка запоминается и по умолчанию таблица', () => {
+test('вид стола запоминается: канбан, календарь, список', () => {
   const bag = new Map<string, string>();
   const storage = {
     getItem: (key: string) => bag.get(key) ?? null,
@@ -61,9 +61,13 @@ test('вид списка запоминается и по умолчанию т
   assert.equal(readProjectView(storage), 'list');
   writeProjectView(storage, 'kanban');
   assert.equal(readProjectView(storage), 'kanban');
+  writeProjectView(storage, 'calendar');
+  assert.equal(readProjectView(storage), 'calendar');
   writeProjectView(storage, 'list');
   assert.equal(readProjectView(storage), 'list');
   assert.equal(readProjectView(null), 'list');
+  bag.set('mf-project-desk-view', 'weird');
+  assert.equal(readProjectView(storage), 'list');
 });
 
 test('статус проекта: сохранённый важнее комнат, иначе дальняя открытая стадия', () => {

@@ -48,6 +48,7 @@ import {
   readProjectView,
   writeProjectView,
   crewProjectLists,
+  PROJECT_DESK_VIEW_EVENT,
   type CrewProjectGroup,
   type ProjectDeskView,
 } from './projectDesk';
@@ -69,6 +70,8 @@ import { AnimatedNumber, useFlipReflow, useLift, useStaggerIn } from '../ui/gsap
 import { CityField } from './CityField';
 import { loadCities, resolveCity } from './cityCatalog';
 import { ProjectVisits } from './calendar/ProjectVisits';
+import { CalendarPanel } from './calendar/CalendarPanel';
+import type { Visit } from '../../../../packages/shared/calendar.js';
 
 type Person = { id: string; role: UserRole; displayName: string };
 
@@ -210,6 +213,8 @@ export function ProjectDesk({
   onDocAction,
   onArchiveProject,
   onBuildKp,
+  onOpenVisit,
+  onDeskViewChange,
 }: {
   projects: Project[];
   rooms: JobObject[];
@@ -230,6 +235,10 @@ export function ProjectDesk({
   onDocAction?: OnDocAction;
   onArchiveProject?: OnArchiveProject;
   onBuildKp?: OnBuildKp;
+  /** Открыть проект или комнату из выезда в календаре. */
+  onOpenVisit?: (visit: Visit) => void;
+  /** Сообщить родителю о выбранном виде (скрыть поиск над календарём). */
+  onDeskViewChange?: (view: ProjectDeskView) => void;
 }) {
   const [view, setView] = useState<ProjectDeskView>(() =>
     readProjectView(typeof localStorage === 'undefined' ? null : localStorage),
@@ -274,7 +283,24 @@ export function ProjectDesk({
   function choose(next: ProjectDeskView) {
     setView(next);
     writeProjectView(typeof localStorage === 'undefined' ? null : localStorage, next);
+    onDeskViewChange?.(next);
   }
+
+  useEffect(() => {
+    onDeskViewChange?.(view);
+  }, [view, onDeskViewChange]);
+
+  useEffect(() => {
+    const onExternal = (event: Event) => {
+      const detail = (event as CustomEvent<ProjectDeskView>).detail;
+      if (detail === 'kanban' || detail === 'calendar' || detail === 'list') {
+        setView(detail);
+        onDeskViewChange?.(detail);
+      }
+    };
+    window.addEventListener(PROJECT_DESK_VIEW_EVENT, onExternal);
+    return () => window.removeEventListener(PROJECT_DESK_VIEW_EVENT, onExternal);
+  }, [onDeskViewChange]);
 
   if (page) {
     if (!open) {
@@ -307,22 +333,56 @@ export function ProjectDesk({
     );
   }
 
-  if (role === 'crew' || role === 'measurer') {
-    return <AssignedJobs role={role} projects={projects} rooms={rooms} query={query} seesMoney={seesMoney} onOpenRoom={onOpenRoom} />;
+  const field = role === 'crew' || role === 'measurer';
+  const fieldModes: ProjectDeskView[] = ['calendar', 'list'];
+  const fieldView: ProjectDeskView = fieldModes.includes(view) ? view : 'list';
+
+  if (field) {
+    return (
+      <section className={styles.desk} aria-label="Проекты">
+        <div className={styles.bar}>
+          {fieldView === 'calendar' ? (
+            <span className={styles.lead} aria-hidden="true" />
+          ) : (
+            <p className={styles.lead}>
+              {role === 'measurer'
+                ? 'Комнаты, которые нужно замерить: адрес, площадь и статус.'
+                : 'Ваши комнаты: адрес, площадь, панели и статус.'}
+            </p>
+          )}
+          <div className={styles.tools}>
+            <ViewSwitch view={fieldView} onChoose={choose} modes={fieldModes} />
+          </div>
+        </div>
+        {fieldView === 'calendar' ? (
+          <CalendarPanel onOpenVisit={onOpenVisit} embedded />
+        ) : (
+          <AssignedJobs role={role} projects={projects} rooms={rooms} query={query} seesMoney={seesMoney} onOpenRoom={onOpenRoom} bare />
+        )}
+      </section>
+    );
   }
 
   return (
-    <section className={styles.desk} aria-label="Список проектов">
+    <section className={styles.desk} aria-label="Проекты">
       <div className={styles.bar}>
-        <p className={styles.lead}>Клиент, адрес и стадия. Комнаты открываются внутри карточки.</p>
+        {view === 'calendar' ? (
+          <span className={styles.lead} aria-hidden="true" />
+        ) : (
+          <p className={styles.lead}>Клиент, адрес и стадия. Комнаты открываются внутри карточки.</p>
+        )}
         <div className={styles.tools}>
-          <ViewSwitch view={view} onChoose={choose} />
-          <button type="button" className={styles.quiet} aria-pressed={archive} onClick={() => setArchive((value) => !value)}>
-            Архив{archiveCount ? `: ${archiveCount}` : ''}
-          </button>
+          <ViewSwitch view={view} onChoose={choose} modes={['kanban', 'calendar', 'list']} />
+          {view !== 'calendar' ? (
+            <button type="button" className={styles.quiet} aria-pressed={archive} onClick={() => setArchive((value) => !value)}>
+              Архив{archiveCount ? `: ${archiveCount}` : ''}
+            </button>
+          ) : null}
         </div>
       </div>
-      {!rows.length ? (
+      {view === 'calendar' ? (
+        <CalendarPanel onOpenVisit={onOpenVisit} embedded />
+      ) : !rows.length ? (
         <p className={styles.empty}>
           {query ? 'По этому запросу проектов нет.' : archive ? 'В архиве пусто.' : 'Пока нет проектов. Новый проект создаётся вместе с первой комнатой.'}
         </p>
@@ -335,23 +395,37 @@ export function ProjectDesk({
   );
 }
 
-/** Переключатель «Список / Канбан»: выбранный пункт подсвечивает плавно переезжающая подложка. */
-function ViewSwitch({ view, onChoose }: { view: ProjectDeskView; onChoose: (next: ProjectDeskView) => void }) {
-  const { boxRef, pillRef } = useSlidingPill(view);
+const VIEW_LABELS: Record<ProjectDeskView, string> = {
+  kanban: 'Канбан',
+  calendar: 'Календарь',
+  list: 'Список',
+};
+
+/** Переключатель «Канбан / Календарь / Список»: выбранный пункт подсвечивает плавно переезжающая подложка. */
+function ViewSwitch({
+  view,
+  onChoose,
+  modes,
+}: {
+  view: ProjectDeskView;
+  onChoose: (next: ProjectDeskView) => void;
+  modes: ProjectDeskView[];
+}) {
+  const active = modes.includes(view) ? view : modes[0];
+  const { boxRef, pillRef } = useSlidingPill(active, modes.join('|'));
   return (
     <div className={styles.switch} role="group" aria-label="Вид проектов" ref={boxRef}>
       <span ref={pillRef} className={`${pill.pill} ${styles.switchPill}`} aria-hidden="true" />
-      <button type="button" aria-pressed={view === 'list'} onClick={() => onChoose('list')}>
-        Список
-      </button>
-      <button type="button" aria-pressed={view === 'kanban'} onClick={() => onChoose('kanban')}>
-        Канбан
-      </button>
+      {modes.map((mode) => (
+        <button key={mode} type="button" aria-pressed={active === mode} onClick={() => onChoose(mode)}>
+          {VIEW_LABELS[mode]}
+        </button>
+      ))}
     </div>
   );
 }
 
-/** Простой список назначенных комнат для бригады и замерщика: без вида «список/канбан», без перетаскивания и удаления. */
+/** Простой список назначенных комнат для бригады и замерщика: без канбана, без перетаскивания и удаления. */
 function AssignedJobs({
   role,
   projects,
@@ -359,6 +433,7 @@ function AssignedJobs({
   query,
   seesMoney,
   onOpenRoom,
+  bare,
 }: {
   role: 'crew' | 'measurer';
   projects: Project[];
@@ -366,40 +441,44 @@ function AssignedJobs({
   query: string;
   seesMoney: boolean;
   onOpenRoom: (room: JobObject) => void;
+  /** Без своей оболочки: заголовок и переключатель вида снаружи. */
+  bare?: boolean;
 }) {
   const { active, done } = useMemo(() => crewProjectLists(projects, rooms, query, role), [projects, rooms, query, role]);
+  const body = !active.length && !done.length ? (
+    <p className={styles.empty}>
+      {query ? 'По этому запросу проектов нет.' : 'Пока нет назначенных комнат.'}
+    </p>
+  ) : (
+    <>
+      {active.length ? (
+        <div className={styles.crewList}>
+          {active.map((group) => (
+            <CrewProject key={group.project.id} group={group} role={role} seesMoney={seesMoney} onOpenRoom={onOpenRoom} />
+          ))}
+        </div>
+      ) : (
+        <p className={styles.empty}>{role === 'measurer' ? 'Комнат без замера нет.' : 'Незакрытых комнат нет.'}</p>
+      )}
+      {done.length ? (
+        <details className={styles.done}>
+          <summary>Готовые · {done.length}</summary>
+          <div className={styles.crewList}>
+            {done.map((group) => (
+              <CrewProject key={group.project.id} group={group} role={role} seesMoney={seesMoney} onOpenRoom={onOpenRoom} />
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </>
+  );
+  if (bare) return body;
   return (
     <section className={styles.desk} aria-label="Список проектов">
       <p className={styles.lead}>
         {role === 'measurer' ? 'Комнаты, которые нужно замерить: адрес, площадь и статус.' : 'Ваши комнаты: адрес, площадь, панели и статус.'}
       </p>
-      {!active.length && !done.length ? (
-        <p className={styles.empty}>
-          {query ? 'По этому запросу проектов нет.' : 'Пока нет назначенных комнат.'}
-        </p>
-      ) : (
-        <>
-          {active.length ? (
-            <div className={styles.crewList}>
-              {active.map((group) => (
-                <CrewProject key={group.project.id} group={group} role={role} seesMoney={seesMoney} onOpenRoom={onOpenRoom} />
-              ))}
-            </div>
-          ) : (
-            <p className={styles.empty}>{role === 'measurer' ? 'Комнат без замера нет.' : 'Незакрытых комнат нет.'}</p>
-          )}
-          {done.length ? (
-            <details className={styles.done}>
-              <summary>Готовые · {done.length}</summary>
-              <div className={styles.crewList}>
-                {done.map((group) => (
-                  <CrewProject key={group.project.id} group={group} role={role} seesMoney={seesMoney} onOpenRoom={onOpenRoom} />
-                ))}
-              </div>
-            </details>
-          ) : null}
-        </>
-      )}
+      {body}
     </section>
   );
 }

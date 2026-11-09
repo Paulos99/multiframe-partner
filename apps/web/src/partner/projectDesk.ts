@@ -10,7 +10,10 @@ import { comfortTransitionLabel } from '../state/simulation';
 
 const VIEW_KEY = 'mf-project-desk-view';
 
-export type ProjectDeskView = 'list' | 'kanban';
+/** Событие: открыть вид стола проектов (канбан / календарь / список) извне — напоминания, #calendar. */
+export const PROJECT_DESK_VIEW_EVENT = 'mf-project-desk-view';
+
+export type ProjectDeskView = 'kanban' | 'calendar' | 'list';
 
 const ROOM_STAGE: Record<string, ProjectStatus> = {
   draft: 'new',
@@ -20,9 +23,14 @@ const ROOM_STAGE: Record<string, ProjectStatus> = {
   closed: 'done',
 };
 
+function isDeskView(value: string | null | undefined): value is ProjectDeskView {
+  return value === 'kanban' || value === 'calendar' || value === 'list';
+}
+
 export function readProjectView(storage: { getItem(key: string): string | null } | null): ProjectDeskView {
   try {
-    return storage?.getItem(VIEW_KEY) === 'kanban' ? 'kanban' : 'list';
+    const raw = storage?.getItem(VIEW_KEY);
+    return isDeskView(raw) ? raw : 'list';
   } catch {
     return 'list';
   }
@@ -36,6 +44,14 @@ export function writeProjectView(
     storage?.setItem(VIEW_KEY, view);
   } catch {
     /* закрытое хранилище */
+  }
+}
+
+/** Запомнить вид и сразу переключить открытый стол проектов. */
+export function requestProjectDeskView(view: ProjectDeskView) {
+  writeProjectView(typeof localStorage === 'undefined' ? null : localStorage, view);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(PROJECT_DESK_VIEW_EVENT, { detail: view }));
   }
 }
 

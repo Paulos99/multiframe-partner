@@ -107,12 +107,16 @@ for (const [role, width] of [['owner', 360], ['owner', 390], ['admin', 360], ['a
     const el = strip(page);
     const tabs = nav(page).getByRole('tab');
     // у админа: Сегодня, Кабинеты, Календарь, Инструменты, Аналитика, Обучение, Обратная связь, Профиль
-    // у владельца: Сегодня, Проекты, Календарь, Инструменты, Компания, Аналитика, Обучение, Профиль
-    await expect(tabs).toHaveCount(8);
+    // у владельца: Сегодня, Проекты, Инструменты, Компания, Аналитика, Обучение, Профиль (календарь — вид в «Проектах»)
+    const tabCount = role === 'admin' ? 8 : 7;
+    await expect(tabs).toHaveCount(tabCount);
     await expect(tabs.last()).toHaveAttribute('data-nav-id', 'profile');
     await expect(nav(page).getByRole('tab', { name: 'Обучение', exact: true })).toHaveCount(1);
+    if (role === 'owner') {
+      await expect(nav(page).getByRole('tab', { name: 'Календарь', exact: true })).toHaveCount(0);
+    }
 
-    // Восемь вкладок не влезают: лента со snap, без полосы, «Профиль» докручивается.
+    // Лента со snap, без полосы; «Профиль» докручивается, когда вкладок много.
     const style = await el.evaluate((e) => {
       const cs = getComputedStyle(e);
       return { overflowX: cs.overflowX, snap: cs.scrollSnapType, bar: cs.scrollbarWidth, overflow: e.scrollWidth - e.clientWidth };
@@ -120,8 +124,8 @@ for (const [role, width] of [['owner', 360], ['owner', 390], ['admin', 360], ['a
     expect(style.overflowX).toBe('auto');
     expect(style.snap).toContain('x');
     expect(style.bar).toBe('none');
-    // Восемь вкладок — лента прокручивается.
-    expect(style.overflow).toBeGreaterThan(1);
+    // При восьми вкладках лента точно прокручивается; при семи на широкой ширине может влезть.
+    if (tabCount >= 8) expect(style.overflow).toBeGreaterThan(1);
 
     await scrollStrip(page, 'start');
     await expect(tabs.first()).toBeInViewport({ ratio: 1 });

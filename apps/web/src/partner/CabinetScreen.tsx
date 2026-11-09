@@ -34,6 +34,7 @@ import { StpToolsPanel } from './StpToolsPanel';
 import { InstallAppButton } from '../app-shell/InstallAppButton';
 import { CabinetChrome, type SideItem } from '../app-shell/CabinetChrome';
 import {
+  isCalendarHash,
   isLegacyStaffList,
   navigateCompany,
   navigateHash,
@@ -48,6 +49,7 @@ import { CalendarPanel } from './calendar/CalendarPanel';
 import { resetCalendar } from './calendar/calendarStore';
 import { ReminderBell } from './calendar/ReminderBell';
 import { SchedulePrompt } from './calendar/SchedulePrompt';
+import { requestProjectDeskView } from './projectDesk';
 import styles from './partner.module.css';
 import addStyles from './AdminPartners.module.css';
 
@@ -59,6 +61,10 @@ function leaveProjectHash() {
   if (typeof window === 'undefined' || !window.location.hash) return;
   const hash = window.location.hash;
   if (trainerHashOpen(hash)) {
+    navigateHash('', 'replace');
+    return;
+  }
+  if (isCalendarHash(hash)) {
     navigateHash('', 'replace');
     return;
   }
@@ -112,6 +118,25 @@ function useFollowProjectHash(openProjects: () => void) {
       window.removeEventListener('popstate', sync);
     };
   }, [openProjects]);
+}
+
+/** Старый #calendar ведёт во вкладку «Проекты» в виде «Календарь». */
+function useFollowCalendarHash(showProjects: () => void) {
+  useEffect(() => {
+    const sync = () => {
+      if (isCalendarHash(window.location.hash)) {
+        requestProjectDeskView('calendar');
+        showProjects();
+      }
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, [showProjects]);
 }
 
 function roleHeading(role: UserRole, user: SessionUser): string {
@@ -559,7 +584,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   );
 }
 
-type OwnerTab = 'today' | 'projects' | 'calendar' | 'tools' | 'company' | 'analytics' | 'help';
+type OwnerTab = 'today' | 'projects' | 'tools' | 'company' | 'analytics' | 'help';
 
 function OwnerCabinet({
   onNavigate,
@@ -574,11 +599,16 @@ function OwnerCabinet({
     if (consumeReturnToTools()) return 'tools';
     if (typeof window !== 'undefined' && companyHashOpen(window.location.hash)) return 'company';
     if (trainerHashOpen()) return 'help';
+    if (typeof window !== 'undefined' && isCalendarHash(window.location.hash)) {
+      requestProjectDeskView('calendar');
+      return 'projects';
+    }
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setTab('projects'), []);
   const showCompany = useMemo(() => () => setTab('company'), []);
   useFollowProjectHash(showProjects);
+  useFollowCalendarHash(showProjects);
   useFollowCompanyHash(showCompany);
   const openTarget = useOpenCalendarTarget(showProjects);
   const [createToken, setCreateToken] = useState(0);
@@ -628,7 +658,6 @@ function OwnerCabinet({
   const ownerNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
-    { id: 'calendar', label: 'Календарь', active: tab === 'calendar', onSelect: () => { leaveProjectHash(); setTab('calendar'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { navigateCompany('about', 'replace'); setTab('company'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
@@ -818,11 +847,6 @@ function OwnerCabinet({
         </TabPanel>
       ) : null}
 
-      {tab === 'calendar' ? (
-        <TabPanel>
-          <CalendarPanel onOpenVisit={openTarget} />
-        </TabPanel>
-      ) : null}
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="owner" />
@@ -843,23 +867,27 @@ function SalesCabinet({
   const api = usePartner();
   const user = api.user!;
   const [createToken, setCreateToken] = useState(0);
-  type SalesTab = 'today' | 'projects' | 'calendar' | 'tools' | 'company' | 'analytics' | 'help';
+  type SalesTab = 'today' | 'projects' | 'tools' | 'company' | 'analytics' | 'help';
   const [tab, setTab] = useCabinetSection<SalesTab>('analytics', () => {
     if (consumeReturnToTools()) return 'tools';
     if (typeof window !== 'undefined' && companyHashOpen(window.location.hash)) return 'company';
     if (trainerHashOpen()) return 'help';
+    if (typeof window !== 'undefined' && isCalendarHash(window.location.hash)) {
+      requestProjectDeskView('calendar');
+      return 'projects';
+    }
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setTab('projects'), []);
   const showCompany = useMemo(() => () => setTab('company'), []);
   useFollowProjectHash(showProjects);
+  useFollowCalendarHash(showProjects);
   useFollowCompanyHash(showCompany);
   const openTarget = useOpenCalendarTarget(showProjects);
 
   const salesNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
-    { id: 'calendar', label: 'Календарь', active: tab === 'calendar', onSelect: () => { leaveProjectHash(); setTab('calendar'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { navigateCompany('staff', 'replace'); setTab('company'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
@@ -949,11 +977,6 @@ function SalesCabinet({
           />
         </TabPanel>
       ) : null}
-      {tab === 'calendar' ? (
-        <TabPanel>
-          <CalendarPanel onOpenVisit={openTarget} />
-        </TabPanel>
-      ) : null}
       {tab === 'help' ? (
         <TabPanel>
           <HelpTrainingPanel role="sales" />
@@ -975,13 +998,18 @@ function FieldCabinet({
 }) {
   const api = usePartner();
   const user = api.user!;
-  const [view, setView] = useState<'today' | 'projects' | 'calendar' | 'tools' | 'help'>(() => {
+  const [view, setView] = useState<'today' | 'projects' | 'tools' | 'help'>(() => {
     if (consumeReturnToTools()) return 'tools';
     if (trainerHashOpen()) return 'help';
+    if (typeof window !== 'undefined' && isCalendarHash(window.location.hash)) {
+      requestProjectDeskView('calendar');
+      return 'projects';
+    }
     return api.openedObjectId || projectHashOpen() ? 'projects' : 'today';
   });
   const showProjects = useMemo(() => () => setView('projects'), []);
   useFollowProjectHash(showProjects);
+  useFollowCalendarHash(showProjects);
   const openTarget = useOpenCalendarTarget(showProjects);
 
   return (
@@ -991,7 +1019,6 @@ function FieldCabinet({
       items={[
         { id: 'today', label: 'Сегодня', active: view === 'today', onSelect: () => { leaveProjectHash(); setView('today'); } },
         { id: 'projects', label: 'Проекты', active: view === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setView('projects'); } },
-        { id: 'calendar', label: 'Календарь', active: view === 'calendar', onSelect: () => { leaveProjectHash(); setView('calendar'); } },
         { id: 'tools', label: 'Инструменты', active: view === 'tools', onSelect: () => { leaveProjectHash(); setView('tools'); } },
         { id: 'help', label: 'Обучение', active: view === 'help', onSelect: () => { leaveProjectHash(); setView('help'); } },
       ]}
@@ -1005,9 +1032,7 @@ function FieldCabinet({
       profile={profileOf(user, api.logout)}
     >
       <FrameBody>
-        {view === 'calendar' ? (
-          <CalendarPanel onOpenVisit={openTarget} />
-        ) : view === 'tools' ? (
+        {view === 'tools' ? (
           <ToolsPanel onProblemomer={() => onNavigate('problemomer')} onCalculator={onOpenCalc} />
         ) : view === 'help' ? (
           <HelpTrainingPanel role={role} />

@@ -13,12 +13,24 @@ async function enter(page: Page, role: string) {
   await page.getByLabel('Логин', { exact: true }).fill(`ui.${role}`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toBeVisible();
+  if (role === 'admin') {
+    await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toBeVisible();
+  } else {
+    await expect(page.getByRole('tab', { name: 'Проекты', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toHaveCount(0);
+  }
 }
 
+/** Календарь: у админа — вкладка, у остальных — вид внутри «Проекты». */
 async function openCalendar(page: Page) {
-  await page.getByRole('tab', { name: 'Календарь', exact: true }).click();
-  const panel = page.getByRole('region', { name: 'Календарь' });
+  const calendarTab = page.getByRole('tab', { name: 'Календарь', exact: true });
+  if (await calendarTab.count()) {
+    await calendarTab.click();
+  } else {
+    await page.getByRole('tab', { name: 'Проекты', exact: true }).click();
+    await page.getByRole('group', { name: 'Вид проектов' }).getByRole('button', { name: 'Календарь', exact: true }).click();
+  }
+  const panel = page.getByRole('region', { name: 'Календарь', exact: true });
   await expect(panel.getByRole('heading', { name: 'Календарь', exact: true })).toBeVisible();
   return panel;
 }
@@ -32,7 +44,7 @@ async function shot(page: Page, name: string) {
 
 /** Назначает выезд через окно календаря: завтра, время и сотрудник из аргументов. */
 async function planVisit(page: Page, opts: { time: string; room?: string; person: string; expectConflict?: boolean }) {
-  const panel = page.getByRole('region', { name: 'Календарь' });
+  const panel = page.getByRole('region', { name: 'Календарь', exact: true });
   await panel.getByRole('button', { name: 'Назначить выезд', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Назначить: замер' });
   await expect(dialog).toBeVisible();
@@ -183,7 +195,8 @@ test('Готово убирает напоминание после переза
   await acked;
   await expect(list.getByText('Завтра замер')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Проекты', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: /Напоминания|Напоминаний нет/ }).click();
   const again = page.getByRole('dialog', { name: 'Напоминания' });
   await expect(again.getByText('Завтра замер')).toHaveCount(0);
@@ -205,7 +218,8 @@ test('Отложить на час убирает напоминание пос�
   await snoozed;
   await expect(list.getByText('Завтра замер')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Проекты', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Календарь', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: /Напоминания|Напоминаний нет/ }).click();
   const again = page.getByRole('dialog', { name: 'Напоминания' });
   await expect(again.getByText('Завтра замер')).toHaveCount(0);
@@ -244,7 +258,7 @@ test('админ фильтрует календарь по партнёру', a
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await page.getByRole('tab', { name: 'Календарь', exact: true }).click();
-  const panel = page.getByRole('region', { name: 'Календарь' });
+  const panel = page.getByRole('region', { name: 'Календарь', exact: true });
   await expect(panel.getByRole('heading', { name: 'Календарь', exact: true })).toBeVisible();
   const partner = panel.getByLabel('Партнёр');
   await expect(partner).toBeVisible();
