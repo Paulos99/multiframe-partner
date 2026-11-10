@@ -158,6 +158,8 @@ export type SessionUser = {
   /** Set for org roles. */
   orgId: string | null;
   org: OrgSettings | null;
+  /** Только у владельца компании, зарегистрированной самостоятельно: статус заявки в StP. */
+  registration?: { status: 'pending' | 'approved' | 'rejected'; reason?: string } | null;
 };
 
 /** @deprecated links replaced by staff login/password accounts */

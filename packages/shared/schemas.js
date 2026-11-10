@@ -12,6 +12,10 @@
 
 /** Предельная длина логина при создании пользователя. */
 export const LOGIN_MAX = 64;
+/** Пределы полей формы самостоятельной регистрации владельца. */
+export const REGISTER_LIMITS = Object.freeze({ name: 60, company: 120, city: 120, login: 64 });
+/** Имя скрытого поля-ловушки в форме регистрации: человек его не видит и не заполняет. */
+export const REGISTER_TRAP_FIELD = 'website';
 /** Сколько символов логина учитывается при входе. */
 export const LOGIN_LOOKUP_MAX = 200;
 /** Роли сотрудников компании, которых создаёт владелец. */
@@ -105,6 +109,39 @@ export function createSchemas(z) {
   const partnerCreate = credentials({ checkLength: true }).transform((value) => ({
     ...value,
     companyName: textOf(value.companyName).trim() || value.login,
+  }));
+
+  /**
+   * POST /auth/register: владелец сам регистрирует компанию.
+   * Все поля обязательны. Пароль не обрезается: правила пароля проверяет passwordProblem.
+   */
+  const ownerRegister = body().transform((raw, ctx) => {
+    const firstName = textOf(raw.firstName).trim().replace(/\s+/g, ' ');
+    const lastName = textOf(raw.lastName).trim().replace(/\s+/g, ' ');
+    const companyName = textOf(raw.companyName).trim().replace(/\s+/g, ' ');
+    const city = textOf(raw.city).trim();
+    const login = textOf(raw.login).trim();
+    const password = textOf(raw.password);
+    const passwordRepeat = textOf(raw.passwordRepeat);
+    if (!firstName) return issue(ctx, 'Укажите имя'), z.NEVER;
+    if (firstName.length > REGISTER_LIMITS.name) return issue(ctx, 'Имя слишком длинное'), z.NEVER;
+    if (!lastName) return issue(ctx, 'Укажите фамилию'), z.NEVER;
+    if (lastName.length > REGISTER_LIMITS.name) return issue(ctx, 'Фамилия слишком длинная'), z.NEVER;
+    if (!companyName) return issue(ctx, 'Укажите название компании'), z.NEVER;
+    if (companyName.length > REGISTER_LIMITS.company) return issue(ctx, 'Название компании слишком длинное'), z.NEVER;
+    if (!city) return issue(ctx, 'Укажите город'), z.NEVER;
+    if (city.length > REGISTER_LIMITS.city) return issue(ctx, 'Название города слишком длинное'), z.NEVER;
+    if (!login) return issue(ctx, 'Укажите логин'), z.NEVER;
+    if (login.length > REGISTER_LIMITS.login) return issue(ctx, 'Логин слишком длинный'), z.NEVER;
+    if (/\s/.test(login)) return issue(ctx, 'Логин без пробелов'), z.NEVER;
+    if (!password) return issue(ctx, 'Придумайте пароль'), z.NEVER;
+    if (password !== passwordRepeat) return issue(ctx, 'Пароли не совпадают'), z.NEVER;
+    return { firstName, lastName, companyName, city, login, password, trap: textOf(raw[REGISTER_TRAP_FIELD]) };
+  });
+
+  /** POST /admin/partners/{id}/reject: причина необязательна. */
+  const registrationReject = body().transform((raw) => ({
+    reason: textOf(raw.reason).trim().replace(/\s+/g, ' ').slice(0, 300),
   }));
 
   /** POST /admin/stp-managers. */
@@ -251,6 +288,8 @@ export function createSchemas(z) {
   return {
     loginRequest,
     partnerCreate,
+    ownerRegister,
+    registrationReject,
     stpManagerCreate,
     stpAdminCreate,
     staffCreate,

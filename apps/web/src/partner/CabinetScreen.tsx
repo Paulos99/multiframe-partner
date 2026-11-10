@@ -26,6 +26,9 @@ import { StageConflictDialog, SyncBanner, SyncStatus } from './SyncStatus';
 import { TodayHome } from './TodayHome';
 import { ToolsPanel } from './ToolsPanel';
 import { StpAdminsAdmin } from './StpAdminsAdmin';
+import { RegistrationRequests } from './RegistrationRequests';
+import { pendingRegistrations, registrationOf } from './registration';
+import { requestStaffAdd } from './staffAddRequest';
 import { StpManagersAdmin } from './StpManagersAdmin';
 import { FeedbackAdminPanel } from './feedback/FeedbackAdminPanel';
 import { apiFeedbackSummary, hasRemoteApi } from './apiClient';
@@ -209,6 +212,12 @@ type AdminTab = 'today' | 'partners' | 'calendar' | 'tools' | 'analytics' | 'hel
 function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const api = usePartner();
   const partners = useMemo(() => api.adminListPartners(), [api]);
+  const requestCount = pendingRegistrations(partners).length;
+  const openRequests = () => {
+    leaveProjectHash();
+    setTab('partners');
+    window.setTimeout(() => document.getElementById('registrations')?.scrollIntoView({ block: 'start' }), 60);
+  };
   // Вкладки «Отчёты» больше нет: старые ссылки #cases ведут в «Аналитика → Фото отчёты».
   useState(() => redirectLegacyCasesHash());
   const [tab, setTab] = useCabinetSection<AdminTab>('analytics', () => {
@@ -297,7 +306,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
 
   const adminNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
-    { id: 'partners', label: 'Кабинеты', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
+    { id: 'partners', label: requestCount > 0 ? `Кабинеты · ${requestCount}` : 'Кабинеты', active: tab === 'partners', onSelect: () => { leaveProjectHash(); setTab('partners'); } },
     { id: 'calendar', label: 'Календарь', active: tab === 'calendar', onSelect: () => { leaveProjectHash(); setTab('calendar'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
@@ -337,11 +346,13 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
             onCalculator={() => onNavigate('calculator')}
             onTraining={() => setTab('help')}
             onOpenLesson={(route) => openTrainerLesson(() => setTab('help'), route)}
+            onOpenRequests={openRequests}
           />
         </TabPanel>
       ) : null}
       {tab === 'partners' ? (
         <TabPanel>
+          <RegistrationRequests />
           <div className={`${styles.card} ${styles.panelCard}`}>
             <div className={addStyles.sectionHead}>
               <h2>Кабинеты сети</h2>
@@ -445,6 +456,10 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                       )}
                       {cityBad ? <span className={styles.cityBadge}>не из справочника</span> : null}
                       {'pendingActivation' in p.user && p.user.pendingActivation ? ' · ждёт активации' : ''}
+                      {registrationOf(p)?.status === 'pending' ? <span className={styles.statusBadge}>заявка на проверке</span> : null}
+                      {registrationOf(p)?.status === 'rejected' ? (
+                        <span className={`${styles.statusBadge} ${styles.statusBadgeRejected}`}>отклонён</span>
+                      ) : null}
                       {' · '}сотрудников: {p.executorCount}
                       {p.lastLogin
                         ? ` · вход ${new Date(p.lastLogin).toLocaleDateString('ru-RU')}`
@@ -787,6 +802,12 @@ function OwnerCabinet({
       profile={profileOf(user, api.logout)}
     >
       <FrameBody>
+      {user.registration?.status === 'pending' ? (
+        <p className={styles.registrationNote} role="note" data-testid="registration-pending">
+          <strong>Регистрация на проверке у StP.</strong>
+          <span>Кабинет уже работает, подтверждение придёт без вашего участия.</span>
+        </p>
+      ) : null}
       {tab === 'today' ? (
         <TabPanel>
           <TodayHome
@@ -809,6 +830,11 @@ function OwnerCabinet({
             onCalculator={onOpenCalc}
             onTraining={() => setTab('help')}
             onOpenLesson={(route) => openTrainerLesson(() => setTab('help'), route)}
+            onAddManager={() => {
+              requestStaffAdd('sales');
+              navigateCompany('staff');
+              setTab('company');
+            }}
           />
         </TabPanel>
       ) : null}

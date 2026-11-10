@@ -23,6 +23,7 @@
 | Что проверить перед открытием для пользователей | [SECURITY_CHECKLIST.md](SECURITY_CHECKLIST.md) |
 | Стенд и боевой сервер, порядок выпуска изменений | [STAGING_VS_PROD.md](STAGING_VS_PROD.md) |
 | Запуск для разработки на своём компьютере | [LOCAL_DEV.md](LOCAL_DEV.md) |
+| Регистрация владельцев по ссылке и заявки в «Кабинетах» | [OWNER_REGISTRATION.md](OWNER_REGISTRATION.md) |
 | Кому писать | [CONTACTS.md](CONTACTS.md) |
 | Памятка владельца: правка → стенд → метка → установка | [OWNER_WORKFLOW.md](OWNER_WORKFLOW.md) |
 | Результаты проверки безопасности | `SECURITY_AUDIT.md` (в описании запроса на слияние и в репозитории: [../SECURITY_AUDIT.md](../SECURITY_AUDIT.md)) |

@@ -6,6 +6,8 @@ export interface RequestSchema {
 export interface Schemas {
   loginRequest: RequestSchema;
   partnerCreate: RequestSchema;
+  ownerRegister: RequestSchema;
+  registrationReject: RequestSchema;
   stpManagerCreate: RequestSchema;
   stpAdminCreate: RequestSchema;
   staffCreate: RequestSchema;
@@ -20,6 +22,8 @@ export interface Schemas {
 }
 
 export const LOGIN_MAX: number;
+export const REGISTER_LIMITS: Readonly<{ name: number; company: number; city: number; login: number }>;
+export const REGISTER_TRAP_FIELD: string;
 export const LOGIN_LOOKUP_MAX: number;
 export const STAFF_ASSIGNABLE_ROLES: string[];
 export const OBJECT_ID_PATTERN: RegExp;

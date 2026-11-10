@@ -72,6 +72,7 @@ import { groupOrphanRooms } from '../../../../packages/shared/groupProjects.js';
 import { withDemoDocuments } from './demoDocuments';
 import { isDemoModeEnabled } from './demoMode';
 import { allowDeviceLogin } from './loginFallback';
+import { apiDecideRegistration, apiRegister, type OrgRegistration, type RegisterForm } from './registration';
 import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
 import {
   bootstrapHistoryReset,
@@ -235,10 +236,14 @@ type PartnerApi = {
   adminUpdatePartnerCity: (partnerUserId: string, city: string) => Promise<string>;
   adminListPartners: () => Array<{
     user: StoredUser | StaffMember;
-    org: StoredOrg | { id: string; settings: OrgSettings } | undefined;
+    org: StoredOrg | { id: string; settings: OrgSettings; registration?: OrgRegistration | null } | undefined;
     lastLogin: string | null;
     executorCount: number;
   }>;
+  /** Подтвердить или отклонить самостоятельную регистрацию владельца. */
+  adminDecideRegistration: (partnerUserId: string, decision: 'approve' | 'reject', reason?: string) => Promise<void>;
+  /** Регистрация владельца со страницы #/register: кабинет создаётся и сразу открывается. */
+  registerOwner: (form: RegisterForm) => Promise<void>;
   adminActivity: () => ActivityEvent[];
   partnerCreateStaff: (input: {
     login: string;
@@ -355,7 +360,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [partnersCache, setPartnersCache] = useState<
     Array<{
       user: StoredUser | StaffMember;
-      org: StoredOrg | { id: string; settings: OrgSettings } | undefined;
+      org: StoredOrg | { id: string; settings: OrgSettings; registration?: OrgRegistration | null } | undefined;
       lastLogin: string | null;
       executorCount: number;
     }>
@@ -603,6 +608,16 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
           await rememberSession({ token: loadToken(), apiBase: apiBase(), userId: me.id });
         } catch (err) {
           if (cancelled) return;
+          if (isApiError(err) && err.status === 403 && err.data?.code === 'registration_rejected') {
+            // Заявку компании отклонили: сеанс закрываем, на экране входа — причина.
+            saveToken(null);
+            localLogout(session);
+            await rememberSession({ token: null, apiBase: apiBase(), userId: null });
+            setError(err.message);
+            setLoading(false);
+            setReady(true);
+            return;
+          }
           if (isApiError(err) && err.status === 401) {
             saveToken(null);
             setAuthHold(true);
@@ -927,6 +942,39 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         deletePartnerAccount(partnerUserId, user);
       }
       setTick((n) => n + 1);
+    },
+    [user, remote],
+  );
+
+  const adminDecideRegistration = useCallback(
+    async (partnerUserId: string, decision: 'approve' | 'reject', reason = '') => {
+      if (!user) throw new Error('Нет сессии');
+      if (!(remote && loadToken())) throw new Error('Заявки на регистрацию разбираются только на сервере');
+      await apiDecideRegistration(partnerUserId, decision, reason);
+      setTick((n) => n + 1);
+    },
+    [user, remote],
+  );
+
+  const registerOwner = useCallback(
+    async (form: RegisterForm) => {
+      if (!remote) throw new Error('Регистрация работает только на рабочем сервисе');
+      setError(null);
+      // Сеанс другого человека на этом устройстве закрываем: дальше кабинет нового владельца.
+      if (user) {
+        void apiLogout();
+        localLogout(user);
+      }
+      const res = await apiRegister(form);
+      saveSession(res.user);
+      setLocalOnlySession(false);
+      setUser(res.user);
+      setAuthHold(false);
+      setObjects([]);
+      setProjects([]);
+      setStaffCache([]);
+      await rememberSession({ token: loadToken(), apiBase: apiBase(), userId: res.user.id });
+      trackPartnerAnalytics({ tool: 'cabinet', action: 'login' });
     },
     [user, remote],
   );
@@ -1395,6 +1443,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminCreatePartner,
       adminResetPassword,
       adminDeletePartner,
+      adminDecideRegistration,
+      registerOwner,
       adminUpdatePartnerCity,
       adminListPartners: () => (remote ? partnersCache : listPartners()),
       adminActivity: () => listActivity(),
@@ -1491,6 +1541,8 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminCreatePartner,
       adminResetPassword,
       adminDeletePartner,
+      adminDecideRegistration,
+      registerOwner,
       adminUpdatePartnerCity,
       partnerCreateStaff,
       partnerResetStaffPassword,

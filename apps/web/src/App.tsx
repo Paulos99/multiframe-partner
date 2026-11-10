@@ -13,6 +13,8 @@ import { canSaveToProject } from './partner/toolSave';
 import { freshSurveyFromRoom, sessionFromRoom } from './partner/roomLink';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { LoginScreen } from './partner/LoginScreen';
+import { RegisterScreen } from './partner/RegisterScreen';
+import { isRegisterHash } from './partner/registration';
 import { ActivationScreen } from './partner/ActivationScreen';
 import { ACTIVATED_MESSAGE, activationTokenFromSearch } from './partner/activation';
 import { CabinetScreen } from './partner/CabinetScreen';
@@ -175,6 +177,19 @@ function PartnerShell() {
     typeof window === 'undefined' ? null : activationTokenFromSearch(window.location.search),
   );
   const [activated, setActivated] = useState(false);
+  // Страница регистрации по ссылке из письма: …/cabinet/#/register.
+  const [registerOpen, setRegisterOpen] = useState(() =>
+    typeof window === 'undefined' ? false : isRegisterHash(window.location.hash),
+  );
+  useEffect(() => {
+    const sync = () => setRegisterOpen(isRegisterHash(window.location.hash));
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, []);
   // Менеджеру StP открыт только кабинет: страницы Проблемомера и калькулятора партнёров для него закрыты.
   const route: Route = user && isStpManagerRole(user.role) ? 'cabinet' : routeState;
   const [calcObjectId, setCalcObjectId] = useState<string | null>(null);
@@ -287,7 +302,9 @@ function PartnerShell() {
   ]);
 
   let body: ReactNode;
-  if (activationToken) {
+  if (registerOpen && !activationToken) {
+    body = <RegisterScreen />;
+  } else if (activationToken) {
     body = (
       <ActivationScreen
         token={activationToken}
@@ -382,7 +399,7 @@ function PartnerShell() {
     );
   }
 
-  return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${user?.id||'login'}-${route}`} shift={false}>{body}</PageTransition></ShellFrame>;
+  return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${registerOpen ? 'register' : user?.id||'login'}-${route}`} shift={false}>{body}</PageTransition></ShellFrame>;
 }
 
 function useClientLinkToken(): { open: boolean; token: string | null } {
