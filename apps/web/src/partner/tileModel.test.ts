@@ -24,12 +24,10 @@ function http(status: number, body: unknown): DashboardProbe {
   return { kind: 'http', status, body };
 }
 
-test('пустой ответ, 401, 404 и сеть не подменяют локальные плитки', () => {
+test('пустое тело, 401, 404, 500 и сеть не подменяют локальные плитки', () => {
   const probes: DashboardProbe[] = [
     http(200, null),
     http(200, {}),
-    http(200, { events: [], kpi: { panels: 0, areaM2: 0 }, funnel: {}, breakdowns: {}, volume: {}, series: [] }),
-    http(200, { kpi: { panels: 5206, areaM2: 2403 }, events: [] }),
     http(401, { message: 'unauthorized' }),
     http(404, { message: 'missing' }),
     http(500, {}),
@@ -91,4 +89,18 @@ test('непустые события сервера становятся еди
   assert.equal(next.objects, local.objects);
   assert.equal(next.kpi.panels, 4);
   assert.equal(next.kpi.areaM2, 11);
+});
+
+test('обычный ответ сервера без событий — это данные сервера (пустая сеть), а не «сервер недоступен»', () => {
+  const probe = http(200, { source: 'api', events: [], kpi: { partners: 0, panels: 0, areaM2: 0 }, funnel: {}, series: [] });
+  assert.equal(acceptServerEvents(probe, false), true);
+  const next = applyDashboardProbe(local, probe, { preferLocal: false, orgId: null, mode: 'admin' });
+  assert.notEqual(next, local);
+  assert.equal(next.source, 'server');
+  assert.equal(next.dash.source, 'api');
+  assert.deepEqual(next.events, []);
+  // Без поля events сводка тоже серверная.
+  assert.equal(acceptServerEvents(http(200, { kpi: { panels: 0 } }), false), true);
+  // Демо по-прежнему остаётся локальным.
+  assert.equal(acceptServerEvents(probe, true), false);
 });
