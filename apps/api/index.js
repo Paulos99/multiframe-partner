@@ -1,4 +1,4 @@
-import { handleProfile, profileWithAvatar } from './profileRoutes.js';
+import { handleProfile, profileWithAvatar, welcomeVideoPending } from './profileRoutes.js';
 /**
  * Yandex Cloud Function HTTP handler — multi-role partner platform.
  * Storage: Object Storage JSON or in-memory seed.
@@ -194,6 +194,8 @@ function publicUser(user, org) {
     org: settings,
     // Статус самостоятельной регистрации видит только владелец: для плашки «на проверке».
     ...(role === 'owner' && publicRegistration(org) ? { registration: publicRegistration(org) } : {}),
+    // Обучающее видео роли при первом входе: пока человек его не открыл (на любом устройстве).
+    ...(welcomeVideoPending(user, role) ? { welcomeVideoPending: true } : {}),
     avatarUrl: null,
   };
 }

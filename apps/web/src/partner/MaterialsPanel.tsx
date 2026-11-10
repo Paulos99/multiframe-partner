@@ -25,7 +25,7 @@ import { ContextMenu, DeleteFolderDialog, folderContents } from './MaterialsCont
 import { openFilePreview, type PreviewItem, type PreviewSource } from '../ui/filePreview/previewStore';
 import { FolderIcon as FolderGlyph } from '../icons';
 import { MaterialThumb } from './MaterialThumb';
-import { thumbnailAfterUpload } from './materialThumbnails';
+import { backfillMaterialThumbnails, thumbnailAfterUpload } from './materialThumbnails';
 import {
   getOfflineState,
   isAvailableOffline,
@@ -167,6 +167,12 @@ export function MaterialsPanel({ canManage: canManageOnline, role }: { canManage
     return () => window.removeEventListener('online', onOnline);
   }, []);
 
+
+  // Миниатюры файлам, загруженным мимо этого окна (скриптом, через API): админ дорисовывает их в фоне.
+  useEffect(() => {
+    if (!canManage || !serverList || !materialsUseApi()) return;
+    void backfillMaterialThumbnails(serverList, (next) => setItems(next));
+  }, [canManage, serverList]);
 
   const crumbs = useMemo(() => {
     const chain: PublicMaterial[] = [];

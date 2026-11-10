@@ -43,6 +43,7 @@ import {
   apiLogin,
   apiRenameStaff,
   apiUpdateDisplayName,
+  apiWelcomeVideoSeen,
   apiUpdatePhone,
   apiLogout,
   apiMe,
@@ -256,6 +257,8 @@ type PartnerApi = {
   partnerListStaff: () => StaffMember[];
   renameStaff: (staffUserId: string, displayName: string) => Promise<{ id: string; displayName: string }>;
   updateDisplayName: (displayName: string) => Promise<SessionUser>;
+  /** Окно с видео роли закрыто или показано: больше не показывать (на сервере — для всех устройств). */
+  markWelcomeVideoSeen: () => Promise<void>;
   updatePhone: (phone: string) => Promise<SessionUser>;
   profileOpenToken: number;
   requestOpenProfile: () => void;
@@ -1022,6 +1025,24 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     [user, remote],
   );
 
+  const markWelcomeVideoSeen = useCallback(async () => {
+    if (!user) return;
+    if (user.welcomeVideoPending) {
+      const local = { ...user, welcomeVideoPending: false };
+      saveSession(local);
+      setUser(local);
+    }
+    // На сервер — и при показе, и при закрытии (повтор безвреден): если первый запрос не дошёл, дойдёт второй.
+    if (!remote || !loadToken()) return;
+    try {
+      const next = await apiWelcomeVideoSeen();
+      saveSession(next);
+      setUser((current) => (current && current.id === next.id ? { ...current, welcomeVideoPending: next.welcomeVideoPending } : current));
+    } catch {
+      // Нет сети: на этом устройстве окно уже закрыто, сервер отметит при следующем показе.
+    }
+  }, [user, remote]);
+
   const updateDisplayName = useCallback(
     async (displayName: string) => {
       if (!user) throw new Error('Нет сессии');
@@ -1453,6 +1474,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerDeleteStaff,
       renameStaff,
       updateDisplayName,
+      markWelcomeVideoSeen,
       updatePhone,
       profileOpenToken,
       requestOpenProfile,
@@ -1549,6 +1571,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       partnerDeleteStaff,
       renameStaff,
       updateDisplayName,
+      markWelcomeVideoSeen,
       updatePhone,
       profileOpenToken,
       requestOpenProfile,

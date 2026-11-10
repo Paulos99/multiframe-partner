@@ -12,6 +12,9 @@ process.env.MATERIALS_BUCKET = 'e2e-private-materials';
 process.env.CORS_ORIGIN = 'http://127.0.0.1:4180';
 // Регистрации из проверок идут с одного адреса: предел частоты поднят только здесь.
 process.env.REGISTER_IP_LIMIT = '200';
+// Окно с видео роли при первом входе здесь выключено: проверки входят новыми людьми.
+// Само окно проверяет e2e/welcome-video.spec.ts (ответ сервера подменяется в тесте).
+process.env.WELCOME_VIDEO = 'off';
 const now = new Date().toISOString();
 const settings = {
   companyName: 'UI test company',
