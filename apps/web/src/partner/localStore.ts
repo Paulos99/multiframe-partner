@@ -102,6 +102,8 @@ export type StoredOrg = {
   settings: OrgSettings;
   createdAt: string;
   createdBy: string;
+  /** Самостоятельная регистрация владельца (только на сервере). */
+  registration?: import('./registration').OrgRegistration | null;
 };
 
 export type PartnerDb = {

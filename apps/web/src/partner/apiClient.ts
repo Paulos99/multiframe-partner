@@ -255,7 +255,7 @@ export async function apiAdminListPartners(): Promise<
       createdAt: string;
       pendingActivation?: boolean;
     };
-    org?: { id: string; settings: OrgSettings };
+    org?: { id: string; settings: OrgSettings; registration?: import('./registration').OrgRegistration | null };
     lastLogin: string | null;
     executorCount: number;
     staffCount?: number;

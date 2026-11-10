@@ -2,10 +2,11 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '../ui/Button';
 import { FadeRise, ShakeBox } from './motionBits';
 import { usePartner } from './PartnerContext';
+import { openRegister } from './registration';
 import styles from './LoginScreen.module.css';
 
 export function LoginScreen({ notice }: { notice?: string } = {}) {
-  const { login, loading, error } = usePartner();
+  const { login, loading, error, remote } = usePartner();
   const [loginName, setLoginName] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -78,6 +79,14 @@ export function LoginScreen({ notice }: { notice?: string } = {}) {
                 {loading ? 'Входим…' : 'Войти'}
               </Button>
             </form>
+            {remote ? (
+              <div className={styles.divider}>
+                <p className={styles.hint}>Владелец компании и ещё нет кабинета?</p>
+                <button type="button" className={styles.linkButton} onClick={openRegister}>
+                  Зарегистрироваться
+                </button>
+              </div>
+            ) : null}
           </section>
         </ShakeBox>
       </FadeRise>

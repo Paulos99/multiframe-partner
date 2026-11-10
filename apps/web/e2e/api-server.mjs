@@ -10,6 +10,8 @@ process.env.JWT_SECRET = 'ui-e2e-isolated-signing-only';
 process.env.PARTNERS_BUCKET = '';
 process.env.MATERIALS_BUCKET = 'e2e-private-materials';
 process.env.CORS_ORIGIN = 'http://127.0.0.1:4180';
+// Регистрации из проверок идут с одного адреса: предел частоты поднят только здесь.
+process.env.REGISTER_IP_LIMIT = '200';
 const now = new Date().toISOString();
 const settings = {
   companyName: 'UI test company',
@@ -157,6 +159,7 @@ const { handler } = await import('../../api/index.js');
 const { resetStoredDocumentsForTests } =
   await import('../../api/platformStore.js');
 const { seedAnalyticsEventsForTests } = await import('../../api/index.js');
+const { resetRateLimitsForTests } = await import('../../api/security.js');
 const server = createServer(async (req, res) => {
   try {
     // Только для проверок: события кладутся как есть. Через обычный вход сервер подставляет личность сам.
@@ -171,6 +174,7 @@ const server = createServer(async (req, res) => {
     }
     if (req.url === '/__reset' && req.method === 'POST') {
       resetStoredDocumentsForTests();
+      resetRateLimitsForTests();
       writeFileSync(process.env.PLATFORM_FILE, JSON.stringify(base));
       avatars.clear();
       objectTypes.clear();

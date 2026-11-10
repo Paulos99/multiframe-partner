@@ -11,6 +11,7 @@ import { projectStatusLabel, roomProjectStatuses } from './projectDesk';
 import { usePartner } from './PartnerContext';
 import { groupRoomsByProjectStage, nearestFlat, openRoomsForRole } from './todayNearest';
 import { TodayTrainingCard } from './TodayTrainingCard';
+import { pendingRegistrations } from './registration';
 import type { TrainerRoute } from '../trainer/route';
 import styles from './partner.module.css';
 
@@ -38,6 +39,8 @@ export function TodayHome({
   onTraining,
   onOpenLesson,
   onAddPartner,
+  onAddManager,
+  onOpenRequests,
 }: {
   onOpenRoom?: (id: string) => void;
   onProjects?: () => void;
@@ -47,6 +50,10 @@ export function TodayHome({
   onTraining?: () => void;
   onOpenLesson?: (route: TrainerRoute) => void;
   onAddPartner?: () => void;
+  /** Владелец: «Добавить менеджера», пока в команде нет ни одного менеджера. */
+  onAddManager?: () => void;
+  /** Админ StP: перейти к новым заявкам на регистрацию. */
+  onOpenRequests?: () => void;
 }) {
   const api = usePartner();
   const user = api.user!;
@@ -94,6 +101,10 @@ export function TodayHome({
         : 'Пока нет проектов. Создайте проект с первой комнатой — она откроется на странице проекта.';
 
   const partners = role === 'admin' ? api.adminListPartners() : [];
+  const requests = role === 'admin' ? pendingRegistrations(partners) : [];
+  const staff = role === 'owner' ? api.partnerListStaff() : [];
+  const needsManager =
+    role === 'owner' && Boolean(onAddManager) && !(api.staffLoading && !staff.length) && !staff.some((p) => p.role === 'sales');
   const named = Boolean(greetingName(user.displayName));
 
   return (
@@ -121,6 +132,40 @@ export function TodayHome({
           </button>
         ) : null}
       </div>
+
+      {requests.length && onOpenRequests ? (
+        <section className={`${styles.todayLesson} ${styles.todayAttention}`} aria-label="Заявки на регистрацию" data-testid="today-requests">
+          <div className={styles.todayLessonRemind}>
+            <div className={styles.todayLessonBody}>
+              <strong>Новые заявки на регистрацию: {requests.length}</strong>
+              <span>
+                {requests
+                  .slice(0, 3)
+                  .map((row) => row.org?.settings.companyName || row.user.displayName)
+                  .join(', ')}
+                {requests.length > 3 ? ' и другие' : ''}. Компании уже работают, ждут подтверждения.
+              </span>
+            </div>
+            <button type="button" className={styles.primary} onClick={onOpenRequests}>
+              Разобрать заявки
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {needsManager ? (
+        <section className={`${styles.todayLesson} ${styles.todayAttention}`} aria-label="Первый шаг: менеджер" data-testid="today-add-manager">
+          <div className={styles.todayLessonRemind}>
+            <div className={styles.todayLessonBody}>
+              <strong>Добавьте менеджера</strong>
+              <span>Менеджер ведёт клиентов и сам добавит в кабинет замерщиков и монтажников.</span>
+            </div>
+            <button type="button" className={styles.primary} onClick={onAddManager}>
+              Добавить менеджера
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {onOpenLesson ? <TodayTrainingCard onOpenLesson={onOpenLesson} /> : null}
 

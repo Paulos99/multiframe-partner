@@ -21,6 +21,7 @@
 | `/auth/login`, `/auth/me`, `/auth/logout` | вход, текущий пользователь, выход |
 | `POST /auth/invite` | одноразовая ссылка активации для сохранённого пользователя: `{userId}` → `{path: '?activate=<токен>', expiresAt}`. Админ — для владельцев, менеджеров StP и других администраторов; владелец — для сотрудников своей компании. Это же сброс пароля. 20 вызовов за 15 минут на пользователя |
 | `POST /auth/activate` | без входа: `{token, password}`. Токен ищется по хэшу и сроку, пароль сохраняется, все прежние входы закрываются. 10 попыток за 15 минут на адрес. Любая ошибка токена — один ответ «Ссылка недействительна или срок истёк» |
+| `POST /auth/register` | без входа: владелец сам регистрирует компанию `{firstName, lastName, companyName, city, login, password, passwordRepeat, website}` (`website` — скрытое поле-ловушка, должно быть пустым). Создаёт компанию со статусом заявки «на проверке» и владельца, отвечает как вход `{token, user}`. Занятый логин — 409. 5 новых кабинетов в час на адрес (`REGISTER_IP_LIMIT`). Подробнее — [OWNER_REGISTRATION.md](OWNER_REGISTRATION.md) |
 | `/me`, `/me/password`, `/me/avatar` | профиль, смена пароля, аватар |
 
 ## Компания партнёра
@@ -29,13 +30,14 @@
 |---|---|---|
 | `/partner/profile` | карточка компании (правка) | admin, owner |
 | `/org/settings` | настройки и цены (правка) | admin, owner |
-| `/org/staff`, `/org/staff/{staffId}`, `/org/staff/reset-password` | сотрудники: список, создание, правка, удаление, новый пароль | owner |
+| `/org/staff`, `/org/staff/{staffId}`, `/org/staff/reset-password` | сотрудники: список, создание, правка, удаление, новый пароль. Менеджер добавляет менеджеров, замерщиков и монтажников, как владелец | owner, sales |
 
 ## Администратор StP
 
 | Путь | Назначение |
 |---|---|
 | `/admin/partners`, `/admin/partners/{partnerUserId}` | партнёры: список, создание, удаление |
+| `POST /admin/partners/{partnerUserId}/approve`, `POST /admin/partners/{partnerUserId}/reject` | заявка самостоятельной регистрации: подтвердить или отклонить (`{reason}` необязательно). Отклонение закрывает вход всем пользователям компании (403, `code: registration_rejected`); подтверждение открывает снова |
 | `/admin/partners/reset-password` | новый пароль владельца партнёра или менеджера StP |
 | `/admin/stp-managers` | менеджеры StP: `GET` список, `POST` создание |
 | `/admin/stp-managers/{managerId}` | `DELETE` удаление менеджера StP |

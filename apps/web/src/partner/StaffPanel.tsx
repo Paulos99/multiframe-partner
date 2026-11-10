@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import { ActivationLinkButton } from './ActivationLinkButton';
 import { NewPasswordButton } from './NewPasswordButton';
 import { usePartner } from './PartnerContext';
+import { clearStaffAdd, peekStaffAdd } from './staffAddRequest';
 import { navigateCompany, navigateStaff, parseStaffHash, type StaffRoute } from './projectRoute';
 import styles from './partner.module.css';
 
@@ -21,11 +22,14 @@ export function StaffPanel() {
   const user = api.user;
   const isOwner = user?.role === 'owner';
   const [execName, setExecName] = useState('');
-  const [execRole, setExecRole] = useState<UserRole>('measurer');
+  const [execRole, setExecRole] = useState<UserRole>(() => peekStaffAdd() ?? 'measurer');
   const [issued, setIssued] = useState<{ id: string; login: string; displayName: string; password: string; pendingActivation?: boolean } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [savingStaff, setSavingStaff] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(() => peekStaffAdd() != null);
+  useEffect(() => {
+    clearStaffAdd();
+  }, []);
   const [route, setRoute] = useState<StaffRoute>(() =>
     parseStaffHash(typeof window === 'undefined' ? '' : window.location.hash),
   );

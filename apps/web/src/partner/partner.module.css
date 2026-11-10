@@ -4525,3 +4525,150 @@ div.drillPerson {
     align-items: flex-start;
   }
 }
+
+/* Карточки-действия на «Сегодня» (заявки, первый менеджер): та же форма, что у тренажёра, с полосой акцента слева. */
+.todayAttention {
+  border-left: 3px solid var(--cab-accent);
+}
+
+/* Плашка владельцу: регистрация на проверке у StP. Тихая, работе не мешает. */
+.registrationNote {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--cab-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cab-card) 90%, var(--cab-accent-softer, #e3efe9));
+  color: var(--cab-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.registrationNote strong {
+  color: var(--cab-ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .registrationNote {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+/* Заявки на регистрацию в разделе «Кабинеты». */
+.requestCount {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--cab-accent);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 2px;
+}
+
+.requestList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.requestItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  align-items: center;
+  padding: 14px 0;
+  border-top: 1px solid var(--cab-border);
+}
+
+.requestItem:first-child {
+  border-top: 0;
+}
+
+.requestWho {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.requestWho strong {
+  font-size: 1rem;
+}
+
+.requestMeta {
+  color: var(--cab-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.requestReason {
+  color: var(--cab-danger);
+  font-size: 0.85rem;
+}
+
+.requestReject {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--cab-border-strong);
+  border-radius: 10px;
+  background: var(--cab-field, var(--cab-card));
+}
+
+.requestReject textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--cab-border-strong);
+  border-radius: 10px;
+  background: var(--cab-card);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+
+.statusBadge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--cab-border-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--cab-ink);
+  vertical-align: 1px;
+}
+
+.statusBadgeRejected {
+  border-color: color-mix(in srgb, var(--cab-danger) 45%, transparent);
+  color: var(--cab-danger);
+}
+
+@media (max-width: 720px) {
+  .requestItem {
+    grid-template-columns: 1fr;
+  }
+
+  .requestItem .rowActions {
+    justify-content: stretch;
+  }
+
+  .requestItem .rowActions > * {
+    flex: 1 1 0;
+  }
+}

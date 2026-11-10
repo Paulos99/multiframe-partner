@@ -46,6 +46,15 @@ import {
   saveStoredDocument,
 } from './platformStore.js';
 import { handleRoomShare } from './roomShare.js';
+import {
+  decideRegistration,
+  newRegistration,
+  publicRegistration,
+  registerRateLimit,
+  registrationRejected,
+  registrationStatus,
+  rejectionError,
+} from './registration.js';
 import { handleTraining } from './training.js';
 import { handleRoomPhotos, photoCountsForObject, removePhotoFiles, clientReport } from './roomPhotos.js';
 import { handleCalendar } from './calendar.js';
@@ -183,6 +192,8 @@ function publicUser(user, org) {
     phone: user.phone || '',
     orgId: user.orgId || null,
     org: settings,
+    // Статус самостоятельной регистрации видит только владелец: для плашки «на проверке».
+    ...(role === 'owner' && publicRegistration(org) ? { registration: publicRegistration(org) } : {}),
     avatarUrl: null,
   };
 }
@@ -763,6 +774,7 @@ async function requireAuth(event, { readonly = false } = {}) {
   const user = (platform.users || []).find((u) => u.id === payload.sub) || null;
   if (!user || user.loginDisabled || (payload.sessionVersion || 0) !== (user.sessionVersion || 0)) throw Object.assign(new Error('Unauthorized'), { status: 401 });
   const role = normalizeRole(user.role);
+  if (user.orgId && registrationRejected(findOrg(platform, user.orgId))) throw rejectionError(findOrg(platform, user.orgId));
   // Менеджеру StP закрыто всё, чего нет в списке разрешённого (packages/shared/rolePermissions.js).
   if (isStpManager(role) && !stpManagerMayCall(getMethod(event), getPath(event))) {
     throw Object.assign(new Error('Недостаточно прав'), { status: 403 });
@@ -1703,6 +1715,12 @@ async function handleRequest(event = {}) {
         return json(401, { message: 'Неверный логин или пароль' });
       }
       rateReset(ipKey);
+      // Пароль верный, но заявку компании отклонили: вход закрыт с понятной причиной.
+      const userOrg = user.orgId ? findOrg(platform, user.orgId) : null;
+      if (registrationRejected(userOrg)) {
+        const err = rejectionError(userOrg);
+        return json(403, { message: err.message, code: err.code });
+      }
       const token = await signToken(user);
       pushActivity(null, {
         orgId: user.orgId,
@@ -1825,6 +1843,103 @@ async function handleRequest(event = {}) {
       });
       await savePlatform(platform);
       return json(200, { ok: true });
+    }
+
+    /* —— Самостоятельная регистрация владельца: кабинет сразу рабочий, StP подтверждает позже —— */
+    if (method === 'POST' && path.endsWith('/auth/register')) {
+      const ip = clientIp(event) || 'unknown';
+      const limit = registerRateLimit();
+      // Две границы: попытки (с ошибками в форме) и созданные кабинеты с одного адреса.
+      const tries = rateHit(`register-try:${ip}`, { limit: limit.limit * 6, windowMs: limit.windowMs });
+      const check = tries.allowed ? rateCheck(`register-ip:${ip}`, limit) : tries;
+      if (!check.allowed) {
+        return json(
+          429,
+          { message: 'Слишком много регистраций с этого адреса. Повторите через час.' },
+          { 'Retry-After': String(check.retryAfter) },
+        );
+      }
+      const form = parseBody(schemas.ownerRegister, getBody(event));
+      // Скрытое поле заполняют только программы-рассыльщики.
+      if (form.trap) {
+        rateHit(`register-ip:${ip}`, limit);
+        pushActivity(null, { orgId: null, userId: null, login: '', action: 'register_trap', detail: ip });
+        return json(400, { message: 'Не удалось отправить заявку. Обновите страницу и попробуйте ещё раз.' });
+      }
+      const weak = passwordProblem(form.password);
+      if (weak) return json(400, { message: weak });
+      const city = cityOrThrow(form.city, null);
+      if (!city) return json(400, { message: 'Укажите город' });
+      const platform = await loadPlatform();
+      if (loginTaken(platform, form.login)) {
+        return json(409, { message: 'Такой логин уже занят. Придумайте другой.', code: 'login_taken' });
+      }
+      rateHit(`register-ip:${ip}`, limit);
+      const now = new Date().toISOString();
+      const orgId = uid('org');
+      const org = {
+        id: orgId,
+        createdAt: now,
+        createdBy: 'self',
+        registration: newRegistration({ firstName: form.firstName, lastName: form.lastName, at: now }),
+        settings: normalizeOrgSettings({
+          companyName: form.companyName,
+          city,
+          panelPriceRub: OFFICIAL_PANEL,
+          pricePerM2: OFFICIAL_M2,
+          installPricePerM2: DEFAULT_INSTALL,
+          dowelsPerPanel: 2,
+          dowelPriceRub: DEFAULT_DOWEL,
+        }),
+      };
+      const owner = {
+        id: uid('u'),
+        login: form.login,
+        passwordHash: await hashPassword(form.password),
+        role: 'owner',
+        displayName: `${form.firstName} ${form.lastName}`,
+        orgId,
+        createdAt: now,
+      };
+      platform.orgs.push(org);
+      platform.users.push(owner);
+      pushActivity(platform, {
+        orgId,
+        userId: owner.id,
+        login: owner.login,
+        action: 'register_owner',
+        detail: `${owner.login} · ${org.settings.companyName}`,
+      });
+      await savePlatform(platform);
+      const token = await signToken(owner);
+      return json(200, { token, user: await sessionUser(owner, platform) });
+    }
+
+    if (method === 'POST' && /\/admin\/partners\/[^/]+\/(approve|reject)$/.test(path)) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, ['admin']);
+      const parts = path.split('/');
+      const action = parts.pop();
+      const partnerUserId = parts.pop();
+      const partner = platform.users.find((u) => u.id === partnerUserId && normalizeRole(u.role) === 'owner');
+      if (!partner?.orgId) return json(404, { message: 'Кабинет не найден' });
+      const idx = platform.orgs.findIndex((o) => o.id === partner.orgId);
+      if (idx < 0) return json(404, { message: 'Кабинет не найден' });
+      const org = platform.orgs[idx];
+      if (!registrationStatus(org)) return json(409, { message: 'У этого кабинета нет заявки на регистрацию' });
+      const now = new Date().toISOString();
+      const reason = action === 'reject' ? parseBody(schemas.registrationReject, getBody(event)).reason : '';
+      const status = action === 'reject' ? 'rejected' : 'approved';
+      platform.orgs[idx] = { ...org, registration: decideRegistration(org.registration, { status, reason, by: user.id, at: now }) };
+      pushActivity(platform, {
+        orgId: org.id,
+        userId: user.id,
+        login: user.login,
+        action: status === 'rejected' ? 'reject_registration' : 'approve_registration',
+        detail: `${partner.login} · ${org.settings?.companyName || ''}${reason ? ` · ${reason}` : ''}`,
+      });
+      await savePlatform(platform);
+      return json(200, { registration: platform.orgs[idx].registration });
     }
 
     /* —— Org profile —— */
@@ -3032,6 +3147,6 @@ async function handleRequest(event = {}) {
       console.error('api error', method, path, e?.stack || e);
       return json(500, { message: 'Внутренняя ошибка сервера' });
     }
-    return json(status, { message: e.message || 'Ошибка запроса' });
+    return json(status, { message: e.message || 'Ошибка запроса', ...(e.code && typeof e.code === 'string' && status < 500 ? { code: e.code } : {}) });
   }
 }
