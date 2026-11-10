@@ -1,7 +1,7 @@
 {
   "name": "multiframe-partner",
   "private": true,
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Кабинет партнёра MultiFrame: общие команды проверки для apps/api и apps/web",
   "type": "module",
   "engines": {
