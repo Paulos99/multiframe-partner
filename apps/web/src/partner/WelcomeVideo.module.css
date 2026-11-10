@@ -1,0 +1,171 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: grid;
+  place-items: center;
+  padding: max(16px, var(--safe-top, 0px)) 16px max(16px, var(--safe-bottom, 0px));
+  background: rgb(1 31 25 / 0.62);
+  backdrop-filter: blur(3px);
+  overflow-y: auto;
+}
+
+.dialog {
+  width: min(960px, 100%);
+  border-radius: 18px;
+  background: var(--cab-card, #fff);
+  color: var(--cab-ink, #14211c);
+  box-shadow: 0 30px 80px rgb(1 31 25 / 0.45);
+  overflow: hidden;
+}
+
+/* Видео на тёмно-зелёном, как заставка роликов. */
+.stage {
+  position: relative;
+  background: #013d30;
+  aspect-ratio: 16 / 9;
+}
+
+.video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #013d30;
+  object-fit: contain;
+}
+
+.cross {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: var(--touch-min, 44px);
+  height: var(--touch-min, 44px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(1 31 25 / 0.72);
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--duration-fast, 150ms) var(--ease-out, ease-out);
+}
+.cross svg {
+  width: 22px;
+  height: 22px;
+}
+.cross:hover {
+  background: rgb(1 31 25 / 0.92);
+}
+.cross:focus-visible,
+.unmute:focus-visible,
+.done:focus-visible {
+  outline: 3px solid #8be6c6;
+  outline-offset: 2px;
+}
+
+.unmute {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--touch-min, 44px);
+  padding: 10px 20px 10px 16px;
+  border: 2px solid rgb(139 230 198 / 0.85);
+  border-radius: var(--radius-pill, 999px);
+  background: rgb(1 31 25 / 0.88);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.98rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transform: translateX(-50%);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.3);
+}
+.unmute svg {
+  width: 22px;
+  height: 22px;
+}
+.unmute:hover {
+  background: #01644f;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding: 18px 22px 20px;
+}
+
+.text {
+  min-width: 0;
+}
+.text h2 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  font-weight: 750;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+.text p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--cab-muted, #4e5d56);
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+
+.done {
+  flex: none;
+  min-height: var(--touch-min, 44px);
+  padding: 10px 22px;
+  border: 0;
+  border-radius: var(--radius-md, 12px);
+  background: var(--cab-accent, #01644f);
+  color: var(--cab-on-accent, #fff);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--duration-fast, 150ms) var(--ease-out, ease-out);
+}
+.done:hover {
+  background: var(--cab-accent-hover, #014e3e);
+}
+
+@media (max-width: 600px) {
+  .backdrop {
+    padding: max(10px, var(--safe-top, 0px)) 10px max(10px, var(--safe-bottom, 0px));
+  }
+  .dialog {
+    border-radius: 16px;
+  }
+  .cross {
+    top: 8px;
+    right: 8px;
+  }
+  .unmute {
+    bottom: 50%;
+    padding: 8px 16px 8px 12px;
+    font-size: 0.92rem;
+    transform: translate(-50%, 50%);
+  }
+  .foot {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 16px 18px;
+  }
+  .done {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cross,
+  .done {
+    transition: none;
+  }
+}

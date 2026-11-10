@@ -218,6 +218,11 @@ export async function apiLogin(
   return data;
 }
 
+/** Окно с видео роли показано или закрыто: сервер запоминает это для всех устройств человека. */
+export async function apiWelcomeVideoSeen(): Promise<SessionUser> {
+  return (await request<{ user: SessionUser }>('/me/welcome-video', { method: 'POST' })).user;
+}
+
 export async function apiMe(): Promise<SessionUser> {
   const data = await request<{ user: SessionUser; token?: string }>('/auth/me');
   if (data.token) saveToken(data.token);

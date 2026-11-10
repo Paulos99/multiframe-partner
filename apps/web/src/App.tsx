@@ -12,6 +12,7 @@ import { CalcSaveToProject } from './partner/CalcSaveToProject';
 import { canSaveToProject } from './partner/toolSave';
 import { freshSurveyFromRoom, sessionFromRoom } from './partner/roomLink';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
+import { WelcomeVideo } from './partner/WelcomeVideo';
 import { LoginScreen } from './partner/LoginScreen';
 import { RegisterScreen } from './partner/RegisterScreen';
 import { isRegisterHash } from './partner/registration';
@@ -170,6 +171,7 @@ function PartnerShell() {
     applyCalculation,
     openObject,
     cabinetLeaveNonce,
+    markWelcomeVideoSeen,
   } = usePartner();
   const [routeState, setRoute] = useState<Route>('cabinet');
   // Ссылка активации открывает экран пароля при любом состоянии входа. Токен остаётся только здесь.
@@ -399,7 +401,12 @@ function PartnerShell() {
     );
   }
 
-  return <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${registerOpen ? 'register' : user?.id||'login'}-${route}`} shift={false}>{body}</PageTransition></ShellFrame>;
+  return (
+    <>
+      <ShellFrame install={!user || route === 'cabinet'}><PageTransition pageKey={`${registerOpen ? 'register' : user?.id||'login'}-${route}`} shift={false}>{body}</PageTransition></ShellFrame>
+      {ready && !activationToken && !registerOpen ? <WelcomeVideo user={user} onSeen={markWelcomeVideoSeen} /> : null}
+    </>
+  );
 }
 
 function useClientLinkToken(): { open: boolean; token: string | null } {

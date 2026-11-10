@@ -64,9 +64,22 @@ export async function profileWithAvatar(user, platform, ctx) {
   }
   return result;
 }
+/** Роли, у которых есть встроенное обучающее видео (apps/web/src/partner/roleVideos.ts). У StP — нет. */
+export const WELCOME_VIDEO_ROLES = new Set(['owner', 'sales', 'measurer', 'crew']);
+
+/**
+ * Показать ли видео роли при входе: роль с видео и отметки welcomeVideoSeenAt ещё нет.
+ * Отметка хранится у пользователя на сервере, поэтому на другом устройстве окно не повторится.
+ * WELCOME_VIDEO=off выключает показ (изолированный стенд e2e, где почти все проверки входят новыми людьми).
+ */
+export function welcomeVideoPending(user, role = user?.role) {
+  if (String(process.env.WELCOME_VIDEO || '').trim().toLowerCase() === 'off') return false;
+  return Boolean(user) && WELCOME_VIDEO_ROLES.has(role) && !user.welcomeVideoSeenAt;
+}
+
 export async function handleProfile(ctx) {
   const { method, path } = ctx;
-  if (!/^\/me(?:\/(?:password|avatar))?$/.test(path)) return null;
+  if (!/^\/me(?:\/(?:password|avatar|welcome-video))?$/.test(path)) return null;
   const { platform, user } = await ctx.requireAuth();
   const index = platform.users.findIndex((u) => u.id === user.id);
   if (index < 0) return ctx.json(401, { message: 'Нужен вход' });
@@ -122,6 +135,15 @@ export async function handleProfile(ctx) {
     const payload = { user: await profileWithAvatar(next, platform, ctx) };
     if (hasLogin) payload.token = await ctx.signToken(next);
     return ctx.json(200, payload);
+  }
+  // Окно с обучающим видео показано или закрыто: больше не показывать (повтор безвреден).
+  if (method === 'POST' && path === '/me/welcome-video') {
+    const current = platform.users[index];
+    if (current.welcomeVideoSeenAt) return ctx.json(200, { user: await profileWithAvatar(current, platform, ctx) });
+    const next = { ...current, welcomeVideoSeenAt: new Date().toISOString() };
+    platform.users[index] = next;
+    await ctx.savePlatform(platform);
+    return ctx.json(200, { user: await profileWithAvatar(next, platform, ctx) });
   }
   if (method === 'POST' && path === '/me/password') {
     const body = ctx.getBody();

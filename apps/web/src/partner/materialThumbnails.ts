@@ -1,7 +1,7 @@
 import type { PublicMaterial } from '../../../../packages/shared/materialsLib.js';
 import { detectFileKind, type FileKind } from '../ui/filePreview/fileKind';
 import { loadPdfJs, pdfDocumentOptions } from '../ui/filePreview/pdfjsLoader';
-import { apiMaterialThumbnailConfirm, apiMaterialThumbnailTicket } from './apiClient';
+import { apiMaterialContent, apiMaterialPreview, apiMaterialThumbnailConfirm, apiMaterialThumbnailTicket } from './apiClient';
 
 /** Ширина миниатюры. Высота — по пропорциям файла, но не больше THUMB_MAX_HEIGHT (обрезка снизу). */
 export const THUMB_WIDTH = 480;
@@ -95,14 +95,17 @@ export function isFlatFrame(canvas: HTMLCanvasElement): boolean {
   return Math.sqrt(Math.max(0, sq / n - mean * mean)) < 6;
 }
 
-function videoThumb(file: Blob): Promise<HTMLCanvasElement> {
+function videoThumb(file: Blob | string): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
+    // Строка — подписанная ссылка на файл в хранилище: браузер дочитает только нужные куски (Range).
+    const remote = typeof file === 'string';
+    const url = remote ? file : URL.createObjectURL(file);
     const video = document.createElement('video');
+    if (remote) video.crossOrigin = 'anonymous';
     const done = (fn: () => void) => {
       video.removeAttribute('src');
       video.load();
-      URL.revokeObjectURL(url);
+      if (!remote) URL.revokeObjectURL(url);
       fn();
     };
     // Кадр на 1-й секунде, затем дальше, если кадр одноцветный (затемнение в начале ролика).
@@ -207,4 +210,97 @@ export async function thumbnailAfterUpload(
   } catch {
     return null;
   }
+}
+
+/** Самые тяжёлые картинки и PDF, которые качаем целиком ради миниатюры. Видео читается по кускам, без предела. */
+export const BACKFILL_MAX_BYTES = 60 * 1024 * 1024;
+
+export type BackfillPlan = { item: PublicMaterial; from: 'video' | 'image' | 'pdf' | 'pdf-copy' };
+
+/**
+ * Каким файлам админа не хватает миниатюры и из чего её построить.
+ * Файлы, загруженные мимо окна «Обучения» (скриптом, через API, старыми версиями), миниатюры не получали —
+ * их добираем в фоне, когда админ открывает раздел. Встроенные ролики ролей не трогаем: у них своя афиша.
+ */
+export function thumbnailBackfillPlan(items: PublicMaterial[], tried: ReadonlySet<string> = new Set()): BackfillPlan[] {
+  const plan: BackfillPlan[] = [];
+  for (const item of items) {
+    if (item.kind !== 'file' || item.hasThumbnail || item.builtin || !item.hasFile || tried.has(item.id)) continue;
+    const source = thumbnailSource(detectFileKind(item.mime, item.name));
+    const size = item.size ?? 0;
+    if (source === 'video') plan.push({ item, from: 'video' });
+    else if (source && size <= BACKFILL_MAX_BYTES) plan.push({ item, from: source });
+    else if (!source && item.hasPreview) plan.push({ item, from: 'pdf-copy' });
+  }
+  return plan;
+}
+
+async function remoteBlob(url: string, maxBytes = BACKFILL_MAX_BYTES): Promise<Blob> {
+  const response = await fetch(url, { credentials: 'omit' });
+  if (!response.ok) throw new Error(`Хранилище ответило ${response.status}`);
+  const blob = await response.blob();
+  if (blob.size > maxBytes) throw new Error('Слишком большой файл');
+  return blob;
+}
+
+/** Построить миниатюру уже загруженного файла по подписанной ссылке. null — не получилось. */
+export async function thumbnailFromStorage({ item, from }: BackfillPlan): Promise<Blob | null> {
+  try {
+    if (from === 'pdf-copy') {
+      const copy = await apiMaterialPreview(item.id);
+      if (copy.url) return await makeThumbnail(await remoteBlob(copy.url), 'pdf');
+      return null;
+    }
+    const data = await apiMaterialContent(item.id) as { url?: string; base64?: string; mime?: string | null };
+    if (!data.url) return null;
+    if (from === 'video') {
+      const canvas = await withTimeout(videoThumb(data.url), 40_000);
+      return await canvasBlob(canvas);
+    }
+    return await makeThumbnail(await remoteBlob(data.url), from);
+  } catch {
+    return null;
+  }
+}
+
+/** Уже пробовали в этой вкладке — не повторяем при каждом открытии раздела (в том числе неудачные). */
+const backfillTried = new Set<string>();
+let backfillRunning = false;
+
+/**
+ * Дорисовать недостающие миниатюры (только админ, по одной, в фоне).
+ * onList получает свежий список после каждой загруженной миниатюры.
+ */
+export async function backfillMaterialThumbnails(
+  items: PublicMaterial[],
+  onList: (list: PublicMaterial[]) => void,
+  deps: { build?: typeof thumbnailFromStorage; upload?: typeof uploadMaterialThumbnail } = {},
+): Promise<number> {
+  if (backfillRunning) return 0;
+  backfillRunning = true;
+  const build = deps.build ?? thumbnailFromStorage;
+  const upload = deps.upload ?? uploadMaterialThumbnail;
+  let done = 0;
+  try {
+    for (const step of thumbnailBackfillPlan(items, backfillTried)) {
+      backfillTried.add(step.item.id);
+      const blob = await build(step);
+      if (!blob) continue;
+      try {
+        onList(await upload(step.item.id, blob));
+        done += 1;
+      } catch {
+        // Нет прав или хранилище недоступно — значок типа остаётся, пробуем следующий файл.
+      }
+    }
+  } finally {
+    backfillRunning = false;
+  }
+  return done;
+}
+
+/** Для тестов: забыть, какие файлы уже пробовали. */
+export function resetThumbnailBackfill(): void {
+  backfillTried.clear();
+  backfillRunning = false;
 }
