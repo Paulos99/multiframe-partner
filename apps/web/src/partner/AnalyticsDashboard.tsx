@@ -19,6 +19,7 @@ import type { DrillPeriod } from '../../../../packages/shared/staffDrill.js';
 import { goAnalytics, OVERVIEW_LOCATION, useAnalyticsRoute } from './analyticsRoute';
 import {
   applyDashboardProbe,
+  localDemoAllowed,
   composeCabinetAnalytics,
   loadSharedAnalyticsEvents,
   probeAnalyticsDashboard,
@@ -597,7 +598,8 @@ export function AnalyticsDashboard({
         to,
         dash: { ...localComposed.dash, kpi: { ...localComposed.dash.kpi, panels: shown.panels, areaM2: shown.areaM2 } },
       };
-      const preferLocal = isDemoModeEnabled() || orgId === 'org_demo' || orgId === 'org_demo_spb';
+      // Демо-база браузера (нет сервера, демо-режим, демо-вход) остаётся локальной; иначе верим серверу.
+      const preferLocal = localDemoAllowed(orgId);
       const probe = await probeAnalyticsDashboard({ mode, orgId, partnerLogin: user.login });
       const next = applyDashboardProbe(local, probe, { preferLocal, orgId, mode });
       if (!cancelled) {

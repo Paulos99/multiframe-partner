@@ -26,6 +26,9 @@ for (const login of ['ui.admin', 'ui.owner']) {
     await expect(root).toBeVisible({ timeout: 30000 });
     await expect(root).toHaveAttribute('data-analytics-busy', '0', { timeout: 30000 });
     await expect(root).not.toContainText(DEMO_NAMES);
+    // Сервер ответил: подпись честная, даже если событий ещё нет.
+    await expect(root).toContainText('Данные с сервера');
+    await expect(root).not.toContainText('сервер недоступен');
     // Рейтинг «Сотрудники» строится из того же набора, что и плитки.
     await page.evaluate(() => {
       window.location.hash = '#analytics/rating/staff';

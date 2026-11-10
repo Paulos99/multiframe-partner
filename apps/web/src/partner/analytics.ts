@@ -355,11 +355,19 @@ function serverEvents(body: unknown): AnalyticsEvent[] {
   return Array.isArray(events) ? (events as AnalyticsEvent[]) : [];
 }
 
-/** Пустое тело, нулевой kpi без событий, 401, 404 и сеть не становятся входом плиток. */
+/**
+ * Обычный ответ сервера (200 и сводка с kpi) — это данные сервера, даже если событий пока нет:
+ * у пустой сети честные нули с подписью «Данные с сервера», а не «сервер недоступен».
+ * Пустое тело, 401, 404, 500 и сеть не становятся входом плиток. Демо (preferLocal) остаётся локальным.
+ */
 export function acceptServerEvents(probe: DashboardProbe, preferLocal: boolean): boolean {
   if (preferLocal) return false;
   if (probe.kind !== 'http' || probe.status !== 200) return false;
-  return serverEvents(probe.body).length > 0;
+  const body = probe.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  if (serverEvents(body).length > 0) return true;
+  const kpi = (body as { kpi?: unknown }).kpi;
+  return Boolean(kpi && typeof kpi === 'object');
 }
 
 /**
