@@ -1,0 +1,122 @@
+name: Образы для сервера (GHCR)
+# На метку v*.*.* собирает образы api и web и публикует их в GitHub Container Registry:
+#   ghcr.io/<владелец>/multiframe-cabinet-api:vX.Y.Z
+#   ghcr.io/<владелец>/multiframe-cabinet-web:vX.Y.Z
+# Сервер их только скачивает (deploy/release.sh → docker compose pull) и ничего не собирает сам.
+# Повторить для существующей метки: Actions → этот процесс → Run workflow, указать метку.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Метка выпуска, например v1.2.4 (должна лежать на main)'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Имя метки и адрес образов
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$ ]] || { echo "Неверная метка: $TAG"; exit 1; }
+          # В GHCR имена только строчными буквами
+          echo "IMAGE_PREFIX=ghcr.io/${OWNER,,}/multiframe-cabinet" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          fetch-depth: 0
+
+      - name: Метка должна лежать на main
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git merge-base --is-ancestor "$(git rev-parse "refs/tags/$TAG^{commit}")" origin/main
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Сборка api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.api
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE_PREFIX }}-api:${{ env.TAG }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.TAG }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Сборка web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.web
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE_PREFIX }}-web:${{ env.TAG }}
+          # Параметры интерфейса публичные (попадают в браузер). Свои значения — в Settings → Variables → Actions.
+          build-args: |
+            BUILD_ID=${{ env.TAG }}
+            VITE_BASE=${{ vars.CABINET_VITE_BASE || '/cabinet' }}
+            VITE_API_URL=${{ vars.CABINET_VITE_API_URL || '/cabinet-api' }}
+            VITE_DISABLE_DEMO=1
+            VITE_YM_ID=${{ vars.CABINET_VITE_YM_ID }}
+            VITE_ANALYTICS_INGEST_URL=${{ vars.CABINET_VITE_ANALYTICS_INGEST_URL }}
+            VITE_STP_PROBLEMOMER_URL=${{ vars.CABINET_VITE_STP_PROBLEMOMER_URL }}
+            VITE_STP_CALCULATOR_URL=${{ vars.CABINET_VITE_STP_CALCULATOR_URL }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.TAG }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - name: Проверка образов (версия, нет файлов с секретами)
+        run: |
+          set -euo pipefail
+          API="$IMAGE_PREFIX-api:$TAG"; WEB="$IMAGE_PREFIX-web:$TAG"
+          docker run --rm --entrypoint cat "$WEB" /usr/share/nginx/html/cabinet/version.json | grep -q "\"id\":\"$TAG\""
+          for img in "$API" "$WEB"; do
+            found=$(docker run --rm --entrypoint sh "$img" -c \
+              'find / -xdev \( -name ".env" -o -name ".env.*" -o -name "*.pem" -o -name "id_rsa*" -o -name "id_ed25519*" -o -name "*-key.json" \) -not -name "*.example" -not -path "/proc/*" -not -path "/usr/lib/*" -not -path "/etc/ssl/*" -not -path "*/node_modules/*" 2>/dev/null' || true)
+            if [[ -n "$found" ]]; then echo "В образе $img лишние файлы:"; echo "$found"; exit 1; fi
+            env_vars=$(docker image inspect "$img" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -iE 'SECRET|TOKEN|PASSWORD|ACCESS_KEY' || true)
+            if [[ -n "$env_vars" ]]; then echo "В образе $img переменные, похожие на секреты: $(echo "$env_vars" | cut -d= -f1 | tr '\n' ' ')"; exit 1; fi
+          done
+          echo "Образы чистые"
+
+      - name: Публикация в GHCR
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
+          docker push "$IMAGE_PREFIX-api:$TAG"
+          docker push "$IMAGE_PREFIX-web:$TAG"
+          docker logout ghcr.io
+          {
+            echo "### Образы $TAG"
+            echo "- \`$IMAGE_PREFIX-api:$TAG\`"
+            echo "- \`$IMAGE_PREFIX-web:$TAG\`"
+            echo
+            echo "Установка на сервере: \`./deploy/release.sh $TAG\` (скачает эти образы)."
+          } >> "$GITHUB_STEP_SUMMARY"
