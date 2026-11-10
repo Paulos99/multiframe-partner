@@ -1,8 +1,11 @@
-# Запуск: ./deploy/release.sh vX.Y.Z   (или вручную: docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build)
+# Запуск: ./deploy/release.sh vX.Y.Z
+# Обычно образы готовые: их собирает GitHub Actions на метку (.github/workflows/images.yml) и кладёт в GHCR,
+# сервер только скачивает (docker compose pull). Разделы build — запасной вариант (BUILD_ON_VM=1 в release.sh).
 # Секреты берутся из deploy/.env (файл не в репозитории, права 600).
 name: multiframe-cabinet
 services:
   api:
+    image: ${IMAGE_PREFIX:-ghcr.io/paulos99/multiframe-cabinet}-api:${BUILD_ID:-local}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.api
@@ -10,6 +13,8 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
+      # Токен для скачивания образов нужен только скрипту установки, не API
+      GHCR_TOKEN: ""
       # Предел памяти процесса Node (МБ). Один документ платформы при 2000 пользователях занимает до ~0,3 ГБ в памяти.
       # Под нагрузку: 2048 при 3–4 ГБ памяти на контейнер. Значения меняются в deploy/.env (API_HEAP_MB, API_MEM_LIMIT).
       NODE_OPTIONS: --max-old-space-size=${API_HEAP_MB:-1536}
@@ -24,6 +29,7 @@ services:
     cap_drop:
       - ALL
   web:
+    image: ${IMAGE_PREFIX:-ghcr.io/paulos99/multiframe-cabinet}-web:${BUILD_ID:-local}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.web
