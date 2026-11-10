@@ -858,7 +858,13 @@ export function AnalyticsDashboard({
         ) : null}
       </div>
 
-      {mode === 'admin' && showPeriodFilters ? (
+      {mode === 'admin' && showPeriodFilters && !partnersList.length && !isDemoModeEnabled() ? (
+        <p className={styles.hint} role="status" data-testid="analytics-no-partners">
+          Пока нет подключённых кабинетов партнёров. Цифры появятся, когда партнёры начнут работать в кабинете.
+        </p>
+      ) : null}
+
+      {mode === 'admin' && showPeriodFilters && partnersList.length ? (
         <label className={styles.field}>
           Партнёр
           <select value={focusOrg} onChange={(e) => setAnalyticsFocusOrg(e.target.value)}>

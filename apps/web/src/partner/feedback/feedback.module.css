@@ -107,6 +107,14 @@
 .adminReply label { display: grid; gap: 6px; font-size: .84rem; font-weight: 700; min-width: 0; }
 .adminReply textarea { min-height: 44px; resize: vertical; }
 .replyActions { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.deleteBtn {
+  margin-left: auto; min-height: 40px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid transparent; background: transparent; color: var(--cab-danger);
+  font: inherit; font-weight: 650; cursor: pointer;
+}
+.deleteBtn:hover:not(:disabled) { background: var(--cab-danger-soft); }
+.deleteBtn:focus-visible { outline: 2px solid var(--cab-danger); outline-offset: 2px; }
+.deleteBtn:disabled { opacity: .5; cursor: default; }
 @media (max-width: 620px) { .adminReply { grid-template-columns: 1fr; } }
 
 .panel { display: grid; gap: 14px; min-width: 0; }

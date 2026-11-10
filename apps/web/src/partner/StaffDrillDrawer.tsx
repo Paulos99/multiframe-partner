@@ -188,7 +188,7 @@ export function StaffDrillDrawer({
     onOpenRoom(project.roomId);
   }
 
-  function selectPeriod(next: DrillPeriod) {
+  function selectPeriod(next: DrillPeriod | null) {
     goAnalytics(
       {
         page: 'rating',
@@ -250,6 +250,15 @@ export function StaffDrillDrawer({
       ) : null}
 
       <div className={styles.drillPeriods} role="group" aria-label="Период рейтинга">
+        {/* Без выбора здесь действует период из шапки аналитики: эта кнопка и показывает, что он выбран. */}
+        <button
+          type="button"
+          className={styles.ghost}
+          aria-pressed={!period}
+          onClick={() => selectPeriod(null)}
+        >
+          Выбранные даты
+        </button>
         {PERIODS.map((item) => (
           <button
             key={item.id}
@@ -330,14 +339,16 @@ export function StaffDrillDrawer({
                 <strong>
                   {index + 1}. {row.displayName}
                 </strong>
-                <span className={styles.drillValue}>{valueWithUnit(row.value, metric)}</span>
+                {metric === 'staff' ? null : (
+                  <span className={styles.drillValue}>{valueWithUnit(row.value, metric)}</span>
+                )}
               </span>
               <span className={styles.hint}>
                 {roleLabel(row.role)}
                 {metric === 'staff' ? '' : ` · ${title}`}
               </span>
               <span className={styles.drillStats}>{activityLine(row)}</span>
-              {row.value === 0 ? <span className={styles.hint}>{NO_DATA_TEXT}</span> : null}
+              {metric !== 'staff' && row.value === 0 ? <span className={styles.hint}>{NO_DATA_TEXT}</span> : null}
             </button>
           ))}
           {data && !ranking.length ? <p className={styles.lead}>Пока нет активности</p> : null}

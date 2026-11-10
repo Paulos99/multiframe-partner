@@ -9,18 +9,29 @@ import {
   type FeedbackStatus,
 } from '../../../../../packages/shared/feedback.js';
 import { Button } from '../../ui/Button';
-import { apiFeedbackSummary, apiListFeedback, apiUpdateFeedback, hasRemoteApi, type FeedbackListFilter } from '../apiClient';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { apiDeleteFeedback, apiFeedbackSummary, apiListFeedback, apiUpdateFeedback, hasRemoteApi, type FeedbackListFilter } from '../apiClient';
 import { loadToken } from '../localStore';
 import { FeedbackCard } from './FeedbackCard';
 import styles from './feedback.module.css';
 
 /** Ответ админа на одно обращение: статус и комментарий, который увидит отправитель. */
-function AdminReply({ item, onSaved }: { item: FeedbackItem; onSaved: (next: FeedbackItem) => void }) {
+function AdminReply({
+  item,
+  onSaved,
+  onDeleted,
+}: {
+  item: FeedbackItem;
+  onSaved: (next: FeedbackItem) => void;
+  onDeleted: (id: string) => void;
+}) {
   const [status, setStatus] = useState<FeedbackStatus>(item.status);
   const [reply, setReply] = useState(item.reply || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const dirty = status !== item.status || reply.trim() !== (item.reply || '');
 
   async function save() {
@@ -35,6 +46,21 @@ function AdminReply({ item, onSaved }: { item: FeedbackItem; onSaved: (next: Fee
       setError(e instanceof Error ? e.message : 'Не удалось сохранить');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setDeleting(true);
+    setError('');
+    try {
+      await apiDeleteFeedback(item.id);
+      setConfirmDelete(false);
+      onDeleted(item.id);
+    } catch (e) {
+      setConfirmDelete(false);
+      setError(e instanceof Error ? e.message : 'Не удалось удалить');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -70,7 +96,24 @@ function AdminReply({ item, onSaved }: { item: FeedbackItem; onSaved: (next: Fee
             {error}
           </span>
         ) : null}
+        <button
+          type="button"
+          className={styles.deleteBtn}
+          onClick={() => setConfirmDelete(true)}
+          disabled={busy || deleting}
+        >
+          Удалить
+        </button>
       </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Удалить обращение?"
+        message={`Обращение от ${item.authorName || 'сотрудника'} и его фото удалятся без возможности восстановить. Отправитель его тоже больше не увидит.`}
+        confirmLabel="Удалить"
+        busy={deleting}
+        onConfirm={() => void remove()}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }
@@ -174,6 +217,12 @@ export function FeedbackAdminPanel({ onNewCount }: { onNewCount?: (count: number
               item={item}
               onSaved={(next) => {
                 setItems((prev) => prev?.map((x) => (x.id === next.id ? next : x)) || null);
+                void apiFeedbackSummary()
+                  .then((d) => onNewCount?.(d.newCount))
+                  .catch(() => {});
+              }}
+              onDeleted={(id) => {
+                setItems((prev) => prev?.filter((x) => x.id !== id) || null);
                 void apiFeedbackSummary()
                   .then((d) => onNewCount?.(d.newCount))
                   .catch(() => {});

@@ -191,4 +191,33 @@ describe('маршруты /feedback', () => {
     assert.ok(mine.replyAuthorName);
     assert.equal((await call('PATCH', '/feedback/fb_missing', { token: admin, body: { status: 'fixed' } })).statusCode, 404);
   });
+
+  test('удалить обращение может только админ StP; фото пропадают из хранилища', async () => {
+    const crew = await login('crew1', 'exec1234');
+    const item = readJson(await call('POST', '/feedback', { token: crew, body: { type: 'bug', text: 'Тестовое обращение' } })).item;
+    const up = await call('POST', `/feedback/${item.id}/photos`, { token: crew, body: { image: jpeg, thumb: jpeg } });
+    assert.equal(up.statusCode, 200, up.body);
+    const photo = readJson(up).item.photos[0];
+    const thumb = new URL(photo.thumbUrl, 'http://local');
+    const fileQuery = Object.fromEntries(thumb.searchParams);
+    assert.equal((await call('GET', thumb.pathname, { query: fileQuery })).statusCode, 200);
+
+    assert.equal((await call('DELETE', `/feedback/${item.id}`)).statusCode, 401);
+    assert.equal((await call('DELETE', `/feedback/${item.id}`, { token: crew })).statusCode, 403);
+    const owner = await login('partner1', 'demo1234');
+    assert.equal((await call('DELETE', `/feedback/${item.id}`, { token: owner })).statusCode, 403);
+    const stp = await login('stpmgr1', 'exec1234');
+    assert.equal((await call('DELETE', `/feedback/${item.id}`, { token: stp })).statusCode, 403);
+
+    const admin = await login('admin', 'admin1234');
+    const del = await call('DELETE', `/feedback/${item.id}`, { token: admin });
+    assert.equal(del.statusCode, 200, del.body);
+    assert.equal(readJson(del).id, item.id);
+    const list = readJson(await call('GET', '/feedback', { token: admin })).items;
+    assert.equal(list.some((i) => i.id === item.id), false);
+    assert.equal((await call('GET', `/feedback/${item.id}`, { token: crew })).statusCode, 404);
+    // Подписанная ссылка на фото больше ничего не отдаёт.
+    assert.equal((await call('GET', thumb.pathname, { query: fileQuery })).statusCode, 404);
+    assert.equal((await call('DELETE', `/feedback/${item.id}`, { token: admin })).statusCode, 404);
+  });
 });
