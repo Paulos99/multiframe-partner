@@ -157,6 +157,17 @@ export function bootstrapHistoryReset(): void {
 
 const LOCAL_DEMO_ORGS = new Set(['org_demo', 'org_demo_spb']);
 
+/**
+ * Демо-люди, демо-комнаты и демо-события браузера (mf_partner_db_v5) годятся только
+ * для сборки без сервера или явного демо-режима. С сервером аналитика строится только из его данных:
+ * иначе у пустой сети показывались бы Крылова, Лебедев и «Комната» из сида.
+ */
+export function localDemoAllowed(orgId?: string | null): boolean {
+  if (!API_BASE || isDemoModeEnabled()) return true;
+  // Локальный демо-вход (сессия демо-компании браузера) по-прежнему читает свою демо-базу.
+  return readsLocalDemo(orgId) || readsLocalDemo(loadSession()?.orgId ?? null);
+}
+
 function readsLocalDemo(orgId?: string | null): boolean {
   return Boolean(orgId && LOCAL_DEMO_ORGS.has(orgId));
 }
@@ -175,6 +186,7 @@ function dedupeAnalyticsEvents(list: AnalyticsEvent[]): AnalyticsEvent[] {
 /** Те же события, из которых собирается подпись «Сохранённая история». */
 export async function loadSharedAnalyticsEvents(orgId?: string | null): Promise<AnalyticsEvent[]> {
   ensureDemoAnalyticsHistory();
+  if (!localDemoAllowed(orgId)) return dedupeAnalyticsEvents(await cachedEvents());
   const extra = readsLocalDemo(orgId) ? [] : await cachedEvents();
   return dedupeAnalyticsEvents([...extra, ...loadDemoAnalyticsEvents()]);
 }
@@ -198,9 +210,10 @@ export function composeCabinetAnalytics(input: {
   /** Сотрудники кабинета. На сервере это живой список, а не демо-сид. */
   users?: Array<{ id: string; login?: string; displayName?: string; role: string; orgId?: string | null }>;
 }): { dash: AnalyticsDashboard; drill: StaffDrillResult } {
-  const db = loadDb();
   const session = loadSession();
   const orgId = input.mode === 'admin' ? input.orgId || null : session?.orgId || input.orgId || null;
+  const demo = localDemoAllowed(orgId);
+  const db = demo ? loadDb() : { users: [] as ReturnType<typeof loadDb>['users'], projects: [] as ReturnType<typeof loadDb>['projects'] };
   const usersById = new Map(db.users.map((user) => [user.id, user]));
   for (const user of input.users || []) {
     if (!user?.id) continue;
@@ -212,8 +225,9 @@ export function composeCabinetAnalytics(input: {
   const projects = input.projects?.length
     ? input.projects
     : ((db.projects || []) as unknown as Array<Record<string, unknown>>);
-  const executorDirectory = db.users
-    .filter((user) => isStaffRole(user.role))
+  const directoryUsers = demo ? db.users : users;
+  const executorDirectory = directoryUsers
+    .filter((user) => isStaffRole(user.role as UserRole))
     .map((user) => ({
       userId: user.id,
       login: user.login,
@@ -226,12 +240,12 @@ export function composeCabinetAnalytics(input: {
     from: input.from,
     to: input.to,
     orgId,
-    partnerCount: db.users.filter((user) => user.role === 'owner').length,
+    partnerCount: directoryUsers.filter((user) => user.role === 'owner').length,
     executorCount: orgId
       ? executorDirectory.filter((user) => user.orgId === orgId).length
       : executorDirectory.length,
     executorDirectory,
-    ...networkAdminScope(db.users),
+    ...networkAdminScope(directoryUsers as Parameters<typeof networkAdminScope>[0]),
   });
   const drill = buildStaffDrill({
     viewer: {
@@ -315,8 +329,12 @@ export function resolveCompanyRooms(
   passed?: Array<Record<string, unknown>> | null,
   orgId?: string | null,
 ): Array<Record<string, unknown>> {
-  const stored = loadDb().objects as unknown as Array<Record<string, unknown>>;
   const cached = loadCachedObjects() as unknown as Array<Record<string, unknown>>;
+  if (!localDemoAllowed(orgId)) {
+    // С сервером: только комнаты кабинета и его кэш. Ни сида браузера, ни демо-доски.
+    return mergeStoredRooms(passed || [], cached).filter((room) => roomHasIdentity(room) && roomBelongs(room, orgId));
+  }
+  const stored = loadDb().objects as unknown as Array<Record<string, unknown>>;
   const merged = mergeStoredRooms(mergeStoredRooms(passed || [], cached), stored);
   const company = merged.filter((room) => roomHasIdentity(room) && roomBelongs(room, orgId));
   if (company.length) return company;
@@ -501,6 +519,7 @@ export async function fetchAnalyticsDashboard(opts: {
       to: opts.to,
       orgId: opts.mode === 'partner' ? opts.orgId : opts.orgId,
       journalAll: opts.journal,
+      demo: localDemoAllowed(opts.orgId),
     },
     extra,
   );

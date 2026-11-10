@@ -1019,6 +1019,11 @@ export async function apiUpdateFeedback(
   return feedbackWithUrls(data.item);
 }
 
+/** Удалить обращение вместе с фото (только администратор StP, сервер проверяет права). */
+export async function apiDeleteFeedback(id: string): Promise<void> {
+  await request<{ ok: boolean }>(`/feedback/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 /** Одно фото к обращению; по одному, чтобы не упереться в предел размера запроса. */
 export function apiUploadFeedbackPhoto(
   id: string,

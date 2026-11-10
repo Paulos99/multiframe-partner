@@ -338,5 +338,40 @@ export async function handleFeedback(ctx) {
     return ctx.json(200, { item: await view(next) });
   }
 
+  /* —— Удаление обращения (только администратор StP), вместе с фото в хранилище —— */
+  if (oneMatch && method === 'DELETE') {
+    const { platform, user } = await ctx.requireAuth();
+    if (!canManageFeedback(user.role)) return ctx.json(403, { message: 'Недостаточно прав' });
+    const list = rows(platform);
+    const id = decode(oneMatch[1]);
+    const item = list.find((row) => row.id === id);
+    if (!item) return ctx.json(404, { message: 'Обращение не найдено' });
+    platform.feedback = list.filter((row) => row.id !== id);
+    await ctx.savePlatform(platform);
+    // Запись уже удалена: файлы чистим после, сбой одного файла не возвращает обращение.
+    for (const photo of Array.isArray(item.photos) ? item.photos : []) {
+      for (const key of [photo.storageKey, photo.thumbKey]) {
+        if (!key) continue;
+        try {
+          await ctx.storage.del(key);
+        } catch {
+          /* файл уже недоступен */
+        }
+      }
+    }
+    try {
+      ctx.pushActivity?.(platform, {
+        orgId: item.orgId || null,
+        userId: user.id,
+        login: user.login,
+        action: 'feedback_deleted',
+        detail: `Удалено обращение ${id}`,
+      });
+    } catch {
+      /* журнал не обязателен */
+    }
+    return ctx.json(200, { ok: true, id });
+  }
+
   return null;
 }

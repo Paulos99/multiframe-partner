@@ -150,3 +150,41 @@ test('телефон: кнопка «Обратная связь» на экра
   await expect(dialog.getByTestId('feedback-card')).toContainText('Предложение');
   await shot(page, '07-phone-my-feedback.png');
 });
+
+test('телефон: админ StP удаляет обращение с фото после подтверждения', async ({ page, request }) => {
+  const login = await request.post(`${API}/auth/login`, { data: { login: 'ui.crew', password } });
+  const { token } = (await login.json()) as { token: string };
+  const res = await request.post(`${API}/feedback`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { type: 'bug', text: 'Тестовое обращение, удалить' },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await enter(page, 'ui.admin');
+  await page.getByRole('tab', { name: /Обратная связь/ }).click();
+  const panel = page.getByRole('region', { name: 'Обратная связь' });
+  const card = panel.getByTestId('feedback-card');
+  await expect(card).toHaveCount(1);
+  const remove = card.getByRole('button', { name: 'Удалить', exact: true });
+  await expect(remove).toBeVisible();
+  const box = await remove.boundingBox();
+  expect(box && box.x + box.width).toBeLessThanOrEqual(390);
+
+  // Отмена ничего не удаляет.
+  await remove.click();
+  const confirm = page.getByRole('alertdialog', { name: 'Удалить обращение?' });
+  await expect(confirm).toBeVisible();
+  await shot(page, '07-phone-admin-delete-confirm.png');
+  await confirm.getByRole('button', { name: 'Отмена' }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(card).toHaveCount(1);
+
+  await remove.click();
+  await page.getByRole('alertdialog', { name: 'Удалить обращение?' }).getByRole('button', { name: 'Удалить', exact: true }).click();
+  await expect(card).toHaveCount(0);
+  await expect(panel.getByText('Обращений с такими условиями нет.')).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: /Обратная связь/ }).click();
+  await expect(page.getByRole('region', { name: 'Обратная связь' }).getByTestId('feedback-card')).toHaveCount(0);
+});

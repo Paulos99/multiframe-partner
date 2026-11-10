@@ -1494,10 +1494,13 @@ export function buildLocalDashboard(
     to?: string | null;
     orgId?: string | null;
     journalAll?: boolean;
+    /** false — кабинет работает с сервером: демо-сид браузера не подмешивается. */
+    demo?: boolean;
   },
   extra: AnalyticsEvent[] = [],
 ): AnalyticsDashboard {
-  const db = loadDb();
+  const demo = opts.demo !== false;
+  const db = demo ? loadDb() : { users: [] as PartnerDb['users'] };
   const executorDirectory = db.users
     .filter((u) => isStaffRole(u.role))
     .map((u) => ({
@@ -1507,7 +1510,7 @@ export function buildLocalDashboard(
       orgId: u.orgId,
       role: u.role,
     }));
-  return aggregateAnalyticsDashboard(dedupeEvents([...extra, ...loadDemoAnalyticsEvents()]), {
+  return aggregateAnalyticsDashboard(dedupeEvents(demo ? [...extra, ...loadDemoAnalyticsEvents()] : extra), {
     source: 'local',
     from: opts.from,
     to: opts.to,
