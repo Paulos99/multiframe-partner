@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PASSWORD_MIN } from '../../../../packages/shared/passwordPolicy.js';
 import { Button } from '../ui/Button';
 import { passwordProblem } from './activation';
@@ -28,13 +28,23 @@ export function RegisterScreen() {
   const [form, setForm] = useState<RegisterForm>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorTick, setErrorTick] = useState(0);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  // На телефоне ошибка под формой может быть ниже экрана: показываем её.
+  useEffect(() => {
+    if (errorTick) errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [errorTick]);
+  const fail = (message: string) => {
+    setError(message);
+    setErrorTick((n) => n + 1);
+  };
   const set = (key: keyof RegisterForm) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     const problem = registerFormProblem(form, passwordProblem);
     if (problem) {
-      setError(problem);
+      fail(problem);
       return;
     }
     setBusy(true);
@@ -42,8 +52,13 @@ export function RegisterScreen() {
     try {
       await registerOwner({ ...form, login: form.login.trim() });
       leaveRegister();
+      // Кабинет открывается с начала страницы, а не с места, где была кнопка формы.
+      const top = () => window.scrollTo({ top: 0, behavior: 'instant' });
+      top();
+      window.setTimeout(top, 80);
+      window.setTimeout(top, 400);
     } catch (ex) {
-      setError(ex instanceof Error ? ex.message : 'Не удалось зарегистрироваться');
+      fail(ex instanceof Error ? ex.message : 'Не удалось зарегистрироваться');
     } finally {
       setBusy(false);
     }
@@ -158,7 +173,7 @@ export function RegisterScreen() {
               </label>
             </div>
             {error ? (
-              <p className={styles.error} role="alert">
+              <p className={styles.error} role="alert" ref={errorRef}>
                 {error}
               </p>
             ) : null}
