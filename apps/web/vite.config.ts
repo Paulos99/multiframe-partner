@@ -187,7 +187,8 @@ export default defineConfig(({ command }) => ({
         globPatterns: ['**/*.{js,css,ico,png,svg,jpg,jpeg,webp,woff2,mp3}'],
         // pdf.js: воркер и декодеры большие и нужны только при открытии PDF.
         // Обучающие ролики и афиши (videos/) тоже не в предкэше: грузятся при просмотре.
-        globIgnores: ['videos/**', 'pdfjs/**', '**/pdf.worker*.mjs', '**/pdf.worker*.js'],
+        // media/ — ролик и афиша для письма партнёрам (ссылки /cabinet/media/…): тоже не в предкэше.
+        globIgnores: ['videos/**', 'media/**', 'pdfjs/**', '**/pdf.worker*.mjs', '**/pdf.worker*.js'],
         importScripts: ['sw-sync.js'],
         // pdf.js (воркер, шрифты, wasm) не в precache — кладём в кэш при первом использовании,
         // чтобы PDF из офлайн-копий открывались без сети. Только свой сайт: файлы из бакета
@@ -196,8 +197,13 @@ export default defineConfig(({ command }) => ({
           {
             // Переходы по страницам сайта: сеть первой (до 4 с), офлайн — последняя удачная копия.
             // Калькулятор /calculator/ — отдельное приложение, его worker не подменяет.
+            // Файлы (ролик из письма /cabinet/media/onboarding.mp4, ролики videos/) открываются напрямую из сети:
+            // иначе worker положил бы видео в кэш под ключом приложения и мешал запросам Range.
             urlPattern: ({ request, url, sameOrigin }) =>
-              request.mode === 'navigate' && sameOrigin && !/calculator(?:\/|$)/i.test(url.pathname),
+              request.mode === 'navigate' &&
+              sameOrigin &&
+              !/calculator(?:\/|$)/i.test(url.pathname) &&
+              !/\/(?:media|videos)\//.test(url.pathname),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'mf-pages-v1',
