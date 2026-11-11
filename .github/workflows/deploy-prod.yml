@@ -73,8 +73,17 @@ jobs:
           TARGET: ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }}
         run: |
           set -euo pipefail
+          # Сервер скачивает готовые образы из GHCR (их собирает «Образы для сервера (GHCR)» на метку).
+          # Сначала переключаемся на метку, чтобы работал скрипт установки из неё, а не из прошлого выпуска.
           ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" \
-            "cd /opt/multiframe-cabinet && FORCE=1 ./deploy/release.sh '$TAG'"
+            env TAG="$TAG" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /opt/multiframe-cabinet
+          git fetch --tags --force origin "+refs/heads/main:refs/remotes/origin/main"
+          git merge-base --is-ancestor "$TAG^{commit}" origin/main
+          git checkout --quiet --detach "$TAG"
+          FORCE=1 ./deploy/release.sh "$TAG"
+          REMOTE
 
       - name: Проверка здоровья
         id: health
@@ -83,8 +92,11 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          # Проверяем с самой ВМ (локальный nginx web и через Caddy)
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" bash -s <<'REMOTE'
+          # Проверяем с самой ВМ (локальный nginx web и через Caddy).
+          # TAG передаём в окружение удалённого bash: heredoc в кавычках 'REMOTE'
+          # не подставляет переменные раннера, иначе на ВМ «TAG: unbound variable».
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" \
+            env TAG="$TAG" bash -s <<'REMOTE'
           set -euo pipefail
           for i in 1 2 3 4 5 6 7 8 9 10; do
             VER=$(curl -fsS http://127.0.0.1:8081/cabinet/version.json || true)

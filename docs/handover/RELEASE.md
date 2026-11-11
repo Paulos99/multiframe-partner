@@ -13,6 +13,10 @@
 
 Если любая проверка красная, выпуск не публикуется.
 
+Параллельно процесс «Образы для сервера (GHCR)» (`.github/workflows/images.yml`) собирает образы `api` и `web`
+и публикует их в `ghcr.io/paulos99/multiframe-cabinet-{api,web}:vX.Y.Z`. Сервер при установке их только скачивает
+([PREBUILT_IMAGES.md](PREBUILT_IMAGES.md)).
+
 ## Нумерация
 
 | Метка | Когда |

@@ -14,6 +14,7 @@
 | Собрать статику под `/cabinet` | [BUILD.md](BUILD.md) |
 | Как выходит версия (метка `vX.Y.Z`) и что проверять после установки | [RELEASE.md](RELEASE.md) |
 | Поднять сервис на сервере по адресу `/cabinet`, обновить, откатить | [DEPLOY.md](DEPLOY.md) |
+| Готовые образы из GHCR: сервер ничего не собирает, доступ к пакетам, запасная сборка | [PREBUILT_IMAGES.md](PREBUILT_IMAGES.md) |
 | Пути API и API-шлюз, включая `/admin/stp-managers*` | [API_ROUTES.md](API_ROUTES.md) |
 | Все настройки (имена переменных окружения) | [ENV.md](ENV.md) |
 | Создать первого администратора | [ADMIN_BOOTSTRAP.md](ADMIN_BOOTSTRAP.md) |

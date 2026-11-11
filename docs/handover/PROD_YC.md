@@ -29,7 +29,8 @@
 
 ## Включение workflow в GitHub
 
-Файл лежит в `deploy/github-workflows/deploy-prod.yml` (чтобы его можно было закоммитить без права `workflow` у OAuth-токена). Один раз скопируйте в `.github/workflows/deploy-prod.yml` через веб-интерфейс GitHub или токеном со scope `workflow`, создайте Environment `production` с required reviewers и секреты из таблицы ниже.
+Процесс лежит в `.github/workflows/deploy-prod.yml`. Один раз создайте Environment `production` с required reviewers и секреты из таблицы ниже.
+Образы сервер скачивает из GHCR ([PREBUILT_IMAGES.md](PREBUILT_IMAGES.md)): пакеты публичные или в `deploy/.env` задан вход на чтение `GHCR_USER`/`GHCR_TOKEN`.
 
 ## Выкладка новой версии
 
@@ -39,7 +40,7 @@
 2. GitHub → Actions → **Deploy production** → Run workflow:
    - `tag`: например `v1.2.0`
    - `confirm`: ровно `deploy-prod`
-3. Workflow: резервная копия бакетов → `./deploy/release.sh` по SSH → проверка `/cabinet/version.json` и `/cabinet-api/health` → при ошибке `./deploy/rollback.sh`.
+3. Workflow: резервная копия бакетов → переключение на метку и `./deploy/release.sh` по SSH (скачивает готовые образы) → проверка `/cabinet/version.json` и `/cabinet-api/health` → при ошибке `./deploy/rollback.sh`.
 
 Либо с сервера:
 
