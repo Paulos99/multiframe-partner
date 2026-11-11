@@ -1,0 +1,2705 @@
+import { Room } from '../core/room-model.js';
+import { PolygonPanelCalculator, ceilingLayoutCacheKey } from '../calculators/polygon-ceiling-calculator.js';
+import { WallCalculator } from '../calculators/wall-calculator.js';
+import { buildBOM, finalizePartnerBomTotals, renderResultsHtml } from '../calculators/materials-bom.js';
+import {
+  PANEL,
+  PANEL_COVERAGE_AREA,
+  PARTNER_PRICING,
+  RESERVES,
+  getPartnerPricing,
+} from '../core/constants.js';
+import { createRectangleVertices } from '../core/polygon-geometry.js';
+import { buildEdgeDimensionsFromVertices } from '../editor/sketch-constraints.js';
+import { CeilingVisualizer } from '../visualizers/ceiling-visualizer.js';
+import { WallVisualizer } from '../visualizers/wall-visualizer.js';
+import { getCeilingFrameBounds } from '../visualizers/frame-overlay.js';
+import { SketchEditor } from '../editor/sketch-editor.js';
+import { validateRoomForm } from '../editor/opening-tool.js';
+import { buildShareUrl, readShareFromUrl, buildProjectPayload } from '../export/share-link.js';
+import { setupAppOnboarding, dismissAppTourIfActive } from './app-onboarding.js';
+
+const AUTO_RECALC_MS = 400;
+const MOBILE_MQ = '(max-width: 899px)';
+const LAPTOP_MQ = '(min-width: 900px) and (max-width: 1399px)';
+const WIDE_MQ = '(min-width: 1400px)';
+
+/** When true, mode switches from demo cursor must not kill the tour */
+let onboardingDemoActive = false;
+
+const state = {
+  inputMode: null,
+  areaValue: null,
+  areaWalls: [],
+  hasResults: false,
+  /** Phone: смета/результаты только после явного «Готово — к результатам» */
+  mobileResultsUnlocked: false,
+  resultsStale: false,
+  room: Room.createDefault(),
+  ceilingCalc: null,
+  bom: null,
+  ceilingResult: null,
+  wallResult: null,
+  activeView: 'plan',
+  forceAreaBySize: false,
+  options: {
+    calcCeiling: true,
+    calcWalls: true,
+    selectedWallIds: [],
+    ceilingMounting: 'ceiling_frameless',
+    wallMounting: 'wall_framed',
+  },
+};
+
+let sketchEditor;
+let ceilingViz;
+let wallViz;
+let autoRecalcTimer = null;
+let panelPreviewToken = 0;
+let calcGeneration = 0;
+let lastCeilingLayoutKey = null;
+
+function prefersLowEndCalc() {
+  try {
+    if (isMobileLayout()) return true;
+    if (window.matchMedia?.('(pointer: coarse)')?.matches) return true;
+    if (
+      typeof navigator !== 'undefined' &&
+      navigator.hardwareConcurrency > 0 &&
+      navigator.hardwareConcurrency <= 4
+    ) {
+      return true;
+    }
+  } catch (_) {
+    /* ignore */
+  }
+  return false;
+}
+
+function buildCeilingLayoutKey(vertices) {
+  const opts = state.options || {};
+  return ceilingLayoutCacheKey(
+    vertices,
+    `ceil=${!!opts.calcCeiling}|cm=${opts.ceilingMounting || ''}`
+  );
+}
+
+const els = {};
+
+function $(id) {
+  return document.getElementById(id);
+}
+
+function cacheElements() {
+  els.form = {
+    quickLength: $('quickLength'),
+    quickWidth: $('quickWidth'),
+    quickHeight: $('quickHeight'),
+    wallHeight: $('wallHeight'),
+    areaOnlyInput: $('areaOnlyInput'),
+    calcCeiling: $('calcCeiling'),
+    ceilingMounting: $('ceilingMounting'),
+    ceilingMountingGroup: $('ceilingMountingGroup'),
+    wallSurfacesList: $('wallSurfacesList'),
+    wallMounting: $('wallMounting'),
+    wallMountingGroup: $('wallMountingGroup'),
+    selectAllWallsBtn: $('selectAllWallsBtn'),
+    deselectAllWallsBtn: $('deselectAllWallsBtn'),
+  };
+}
+
+function isMobileLayout() {
+  return window.matchMedia(MOBILE_MQ).matches;
+}
+
+/** Смета/цифры на телефоне — только после «Готово — к результатам» */
+function resultsUnlockedForUi() {
+  return !!state.hasResults && (!isMobileLayout() || state.mobileResultsUnlocked);
+}
+
+function isLaptopLayout() {
+  return window.matchMedia(LAPTOP_MQ).matches;
+}
+
+function isWideLayout() {
+  return window.matchMedia(WIDE_MQ).matches;
+}
+
+function fitSketchAfterLayoutChange() {
+  requestAnimationFrame(() => {
+    sketchEditor?.fitToScreen?.();
+  });
+}
+
+function openResultsDrawer() {
+  const aside = $('resultsAside');
+  if (!aside || !state.hasResults) return;
+  aside.hidden = false;
+  // force reflow so transition runs when opening from hidden
+  void aside.offsetHeight;
+  document.body.classList.add('results-sheet-open');
+  document.body.classList.remove('results-drawer-open');
+  const backdrop = $('resultsDrawerBackdrop');
+  if (backdrop) backdrop.hidden = true;
+  const closeBtn = $('resultsDrawerCloseBtn');
+  if (closeBtn) closeBtn.hidden = !isLaptopLayout();
+  syncResultsToggleLabel(true);
+  fitSketchAfterLayoutChange();
+}
+
+function closeResultsDrawer() {
+  document.body.classList.remove('results-sheet-open');
+  document.body.classList.remove('results-drawer-open');
+  const backdrop = $('resultsDrawerBackdrop');
+  if (backdrop) backdrop.hidden = true;
+  const closeBtn = $('resultsDrawerCloseBtn');
+  if (closeBtn) closeBtn.hidden = true;
+  const aside = $('resultsAside');
+  if (aside && isLaptopLayout()) {
+    // keep in DOM for exit animation, then hide after transition if no results
+    const hideAfter = () => {
+      if (!document.body.classList.contains('results-sheet-open') && !state.hasResults) {
+        aside.hidden = true;
+      }
+    };
+    window.setTimeout(hideAfter, 420);
+  }
+  syncResultsToggleLabel(false);
+  fitSketchAfterLayoutChange();
+}
+
+function syncResultsToggleLabel(open) {
+  const openBtn = $('openResultsDrawerBtn');
+  if (!openBtn) return;
+  openBtn.textContent = open ? 'Скрыть' : 'Результаты';
+  openBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function revealResultsAfterCalc() {
+  if (isMobileLayout()) {
+    if (!state.mobileResultsUnlocked) {
+      // Пока не подтвердили параметры — держим блок «что считать / монтаж»
+      openMobileParamsAfterSketch();
+      return;
+    }
+    revealMobileResultsAfterCalc();
+    return;
+  }
+  syncResultsAsideVisibility();
+  if (isLaptopLayout() && state.hasResults) {
+    openResultsDrawer();
+  } else if (isWideLayout()) {
+    fitSketchAfterLayoutChange();
+  }
+}
+
+function syncResultsAsideVisibility() {
+  const aside = $('resultsAside');
+  const openBtn = $('openResultsDrawerBtn');
+  const ready = !!state.hasResults;
+  const laptop = isLaptopLayout();
+  const wide = isWideLayout();
+  const mobile = isMobileLayout();
+  const sheetOpen = document.body.classList.contains('results-sheet-open');
+
+  document.body.classList.toggle('has-results-aside', ready && wide);
+
+  if (openBtn) {
+    openBtn.hidden = !(ready && laptop);
+    if (!(ready && laptop)) syncResultsToggleLabel(false);
+    else syncResultsToggleLabel(sheetOpen);
+  }
+
+  if (!aside) return;
+
+  if (mobile) {
+    closeResultsDrawer();
+    aside.hidden = !resultsUnlockedForUi();
+    return;
+  }
+
+  if (wide) {
+    document.body.classList.remove('results-sheet-open');
+    aside.hidden = !ready;
+    return;
+  }
+
+  if (laptop) {
+    if (!ready) {
+      document.body.classList.remove('results-sheet-open');
+      aside.hidden = true;
+    } else {
+      aside.hidden = false;
+    }
+    const closeBtn = $('resultsDrawerCloseBtn');
+    if (closeBtn) closeBtn.hidden = !document.body.classList.contains('results-sheet-open');
+  }
+}
+
+function getNoModeHint() {
+  return isMobileLayout()
+    ? 'Нажмите «Ввести параметры расчёта» внизу и выберите способ'
+    : 'Выберите способ слева: размеры, схема или площадь';
+}
+
+function isSketchMode(mode = state.inputMode) {
+  return mode === 'dims' || mode === 'draw';
+}
+
+const MODE_LABELS = {
+  dims: 'Ввести размеры',
+  draw: 'Нарисовать схему',
+  area: 'По площади',
+};
+
+let lastPanelsSnapshot = null;
+
+function syncMobileParamsBtn() {
+  const btn = $('mobileParamsBtn');
+  if (!btn) return;
+  btn.textContent = state.hasResults || state.inputMode
+    ? 'Параметры'
+    : 'Ввести параметры';
+  const resultsBtn = $('mobileResultsBtn');
+  if (resultsBtn) {
+    resultsBtn.hidden = !resultsUnlockedForUi();
+    resultsBtn.textContent = 'Результаты';
+  }
+}
+
+function closeMobileSidebar() {
+  document.body.classList.remove('mobile-sidebar-open');
+}
+
+function enterMobileSketchStep({ force = false } = {}) {
+  if (!isMobileLayout() || state.inputMode !== 'draw') return;
+  // Allow forced entry during guided tour; otherwise skip while demo owns UI.
+  if (onboardingDemoActive && !force) return;
+  closeMobileSidebar();
+  const host = $('sketchEditorHost');
+  host?.classList.remove('is-mobile-summary');
+  const stub = $('sketchMobileSummaryStub');
+  if (stub) stub.hidden = true;
+  const editBtn = $('sketchMobileEditBtn');
+  if (editBtn) editBtn.hidden = true;
+  sketchEditor?.setMobileSketchStep?.(true);
+  requestAnimationFrame(() => {
+    sketchEditor?.fitToScreen?.();
+    sketchEditor?.render?.();
+  });
+}
+
+function syncMobileSketchSummary() {
+  const stub = $('sketchMobileSummaryStub');
+  const titleEl = $('sketchMobileSummaryTitle');
+  const statsEl = $('sketchMobileSummaryStats');
+  const bottom = $('sketchBottomStats');
+  const closed = !!(sketchEditor?.closed && (sketchEditor?.vertices?.length || 0) >= 3);
+  const statsText = (bottom?.textContent || '').trim();
+  const hasStats = !!statsText && statsText !== '—';
+  if (titleEl) {
+    titleEl.textContent = closed || hasStats ? 'Схема готова' : 'Схема монтажа';
+  }
+  if (statsEl) {
+    statsEl.textContent = hasStats ? statsText : (closed ? 'Контур замкнут — можно уточнить параметры' : 'Нажмите «Изменить схему», чтобы нарисовать');
+  }
+  if (stub) stub.hidden = false;
+}
+
+function openMobileParamsAfterSketch() {
+  if (!isMobileLayout()) return;
+  document.body.classList.add('mobile-sidebar-open');
+  requestAnimationFrame(() => {
+    const shared = $('sharedReveal');
+    if (shared) {
+      shared.classList.add('is-open');
+      shared.querySelector('.shared-reveal__collapse')?.removeAttribute('inert');
+      $('sharedCalcOptions')?.setAttribute('aria-hidden', 'false');
+    }
+    // После схемы/размеров — сначала стены и тип монтажа, не высота и не смета
+    const target =
+      (state.inputMode !== 'area' && $('sharedCalcOptions'))
+      || $('areaWallsBlock')
+      || $('drawHeight')?.closest('.form-group')
+      || $('drawCalcCard')
+      || document.querySelector('.sidebar-calc-wrap');
+    try {
+      target?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    } catch { /* ignore */ }
+  });
+}
+
+function exitMobileSketchStep({ markSummary = true, openParams = false } = {}) {
+  const host = $('sketchEditorHost');
+  if (markSummary && state.inputMode === 'draw' && isMobileLayout()) {
+    host?.classList.add('is-mobile-summary');
+    const editBtn = $('sketchMobileEditBtn');
+    if (editBtn) editBtn.hidden = false;
+    syncMobileSketchSummary();
+  } else {
+    host?.classList.remove('is-mobile-summary');
+    const editBtn = $('sketchMobileEditBtn');
+    if (editBtn) editBtn.hidden = true;
+    const stub = $('sketchMobileSummaryStub');
+    if (stub) stub.hidden = true;
+  }
+  sketchEditor?.setMobileSketchStep?.(false);
+  requestAnimationFrame(() => {
+    sketchEditor?.fitToScreen?.();
+    sketchEditor?.render?.();
+    if (markSummary) syncMobileSketchSummary();
+    // Second frame: stage is visible again in summary — re-fit preview size
+    if (markSummary) {
+      requestAnimationFrame(() => {
+        sketchEditor?.fitToScreen?.();
+        sketchEditor?.render?.();
+      });
+    }
+  });
+  if (openParams) openMobileParamsAfterSketch();
+}
+
+/** Scroll results into view inside the mobile app-main scroller. */
+function scrollMobileResultsIntoView() {
+  if (!isMobileLayout()) return;
+  const main = document.querySelector('.app-main');
+  const target = $('resultsAside') || document.querySelector('.workspace-stats');
+  if (!main || !target) return;
+  requestAnimationFrame(() => {
+    const mainRect = main.getBoundingClientRect();
+    const tRect = target.getBoundingClientRect();
+    const delta = tRect.top - mainRect.top - 8;
+    if (Math.abs(delta) > 4) {
+      main.scrollBy({ top: delta, behavior: 'smooth' });
+    }
+  });
+}
+
+function revealMobileResultsAfterCalc() {
+  if (!isMobileLayout()) return;
+  closeMobileSidebar();
+  requestAnimationFrame(() => {
+    flashSchemeUpdated();
+    scrollMobileResultsIntoView();
+  });
+}
+
+function flashSchemeUpdated() {
+  const card = document.querySelector('.scheme-card');
+  const statusEl = $('schemeStatus');
+  if (card) {
+    card.classList.remove('is-updated');
+    // force reflow for restart animation
+    void card.offsetWidth;
+    card.classList.add('is-updated');
+    setTimeout(() => card.classList.remove('is-updated'), 1600);
+  }
+  if (statusEl) {
+    statusEl.hidden = false;
+    statusEl.textContent = 'Схема обновлена';
+    statusEl.classList.add('is-computing');
+    setTimeout(() => {
+      statusEl.classList.remove('is-computing');
+      statusEl.hidden = true;
+      statusEl.textContent = '';
+    }, 2200);
+  }
+  sketchEditor?.showToast?.('Схема обновлена');
+  sketchEditor?.fitToScreen?.();
+  card?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+}
+
+function updateMobileSummary() {
+  // Mobile footer no longer shows sum — kept as no-op for callers
+}
+
+const statAnimRafs = {};
+
+function formatStatPanels(n) {
+  return `${Math.round(n).toLocaleString('ru-RU')} шт.`;
+}
+
+function formatStatArea(n) {
+  return `${Number(n).toFixed(2)} м²`;
+}
+
+function formatStatCost(n) {
+  return `${Math.round(n).toLocaleString('ru-RU')} ₽`;
+}
+
+function animateStatValue(el, toValue, formatter, { duration = 520 } = {}) {
+  if (!el) return;
+  const from = parseFloat(el.dataset.raw || '0') || 0;
+  const to = Number(toValue) || 0;
+  el.dataset.raw = String(to);
+
+  const card = el.closest('.stat-card');
+  card?.classList.remove('is-recalculating');
+  card?.classList.add('is-updating');
+  el.classList.remove('is-stale');
+  el.classList.add('is-updating');
+
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  if (reduceMotion || Math.abs(to - from) < 0.005) {
+    el.textContent = formatter(to);
+    requestAnimationFrame(() => {
+      el.classList.remove('is-updating');
+      card?.classList.remove('is-updating');
+    });
+    return;
+  }
+
+  const key = el.id || 'stat';
+  if (statAnimRafs[key]) cancelAnimationFrame(statAnimRafs[key]);
+  const start = performance.now();
+  const ease = (t) => 1 - (1 - t) ** 3;
+
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / duration);
+    const v = from + (to - from) * ease(t);
+    el.textContent = formatter(v);
+    if (t < 1) {
+      statAnimRafs[key] = requestAnimationFrame(tick);
+    } else {
+      el.textContent = formatter(to);
+      el.classList.remove('is-updating');
+      card?.classList.remove('is-updating');
+      delete statAnimRafs[key];
+    }
+  };
+  statAnimRafs[key] = requestAnimationFrame(tick);
+}
+
+function partnerInstallCost(area) {
+  if (!PARTNER_PRICING.enabled || PARTNER_PRICING.installPerM2 == null) return null;
+  return Math.round(Math.max(0, Number(area) || 0) * PARTNER_PRICING.installPerM2);
+}
+
+function partnerDowelCost(bom) {
+  if (!PARTNER_PRICING.enabled || PARTNER_PRICING.dowelPrice == null) return null;
+  const dowels =
+    bom?.total?.dowelsWithReserve ??
+    Math.ceil((bom?.total?.panelsWithReserve ?? 0) * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels));
+  if (!(dowels > 0)) return 0;
+  return Math.round(dowels * PARTNER_PRICING.dowelPrice);
+}
+
+function bomTotalsForPartnerBind(bom) {
+  if (!bom) return null;
+  if (partnerCeilingOnlyHost() && state.options.calcWalls === false && bom.ceiling?.stats) {
+    const stats = bom.ceiling.stats;
+    return {
+      panelsWithReserve: stats.withReserve ?? stats.total ?? 0,
+      panels: stats.panelsToPurchase ?? stats.total ?? 0,
+      totalCost: stats.totalCost ?? 0,
+      dowelsWithReserve: stats.dowels?.withReserve ?? 0,
+    };
+  }
+  return bom.total;
+}
+
+function partnerGrandTotal(bom, area, panelsCost) {
+  if (!PARTNER_PRICING.enabled) return null;
+  if (bom?.total?.grandTotal != null) return bom.total.grandTotal;
+  if (partnerCeilingOnlyHost() && state.options.calcWalls === false && bom?.ceiling?.stats) {
+    if (bom.total?.grandTotal != null) return bom.total.grandTotal;
+    const install = partnerInstallCost(area) ?? 0;
+    const scoped = { total: bomTotalsForPartnerBind(bom) };
+    const dowelCost = partnerDowelCost(scoped) ?? 0;
+    const panels =
+      panelsCost ?? bom.ceiling.stats.totalCost ?? bomTotalsForPartnerBind(bom)?.totalCost ?? 0;
+    return panels + install + dowelCost;
+  }
+  const install = partnerInstallCost(area) ?? 0;
+  const dowelCost = partnerDowelCost(bom) ?? 0;
+  return (panelsCost ?? 0) + install + dowelCost;
+}
+
+function updateStatCards() {
+  const bom = state.bom;
+  if (!resultsUnlockedForUi() || !bom?.total) {
+    animateStatValue($('totalPanels'), 0, formatStatPanels, { duration: 280 });
+    animateStatValue($('coverageArea'), 0, formatStatArea, { duration: 280 });
+    animateStatValue($('totalCost'), 0, formatStatCost, { duration: 280 });
+    animateStatValue($('partnerTotalCost'), 0, formatStatCost, { duration: 280 });
+    updateMobileSummary();
+    return;
+  }
+
+  const scoped = bomTotalsForPartnerBind(bom);
+  const panels = scoped?.panelsWithReserve ?? 0;
+  const area =
+    partnerCeilingOnlyHost() && bom.ceiling?.area > 0
+      ? bom.ceiling.area
+      : (bom.ceiling?.area ?? 0) + (bom.walls?.area ?? 0);
+  const cost = scoped?.totalCost ?? 0;
+  animateStatValue($('totalPanels'), panels, formatStatPanels);
+  animateStatValue($('coverageArea'), area, formatStatArea);
+  animateStatValue($('totalCost'), cost, formatStatCost);
+  const grand = partnerGrandTotal(bom, area, cost);
+  if (grand != null) animateStatValue($('partnerTotalCost'), grand, formatStatCost);
+  updateMobileSummary();
+}
+
+function setCalcButtonStale(_isStale) {
+  /* stale UI removed — kept as no-op for call sites */
+}
+
+function markResultsStale() {
+  if (!state.hasResults) return;
+  scheduleAutoRecalc();
+}
+
+function scheduleAutoRecalc() {
+  if (!state.inputMode) return;
+  markStatsRecalculating();
+  clearTimeout(autoRecalcTimer);
+  autoRecalcTimer = setTimeout(() => {
+    runCalculation({ silent: true });
+  }, AUTO_RECALC_MS);
+}
+
+function onAutoRecalcFieldChange() {
+  scheduleAutoRecalc();
+}
+
+function onExplicitChange() {
+  scheduleAutoRecalc();
+}
+
+function syncCalcButtons() {
+  const label = state.hasResults ? 'Пересчитать' : 'Готово — к результатам';
+  const labelEl = $('calculateBtnLabel');
+  if (labelEl) labelEl.textContent = isMobileLayout()
+    ? label
+    : (state.hasResults ? 'Пересчитать' : 'Рассчитать');
+  const btn = $('calculateBtn');
+  const wrap = document.querySelector('.sidebar-calc-wrap');
+  const show = !!state.inputMode;
+  if (btn) btn.hidden = !show;
+  if (wrap) wrap.hidden = !show;
+  syncMobileParamsBtn();
+}
+
+function updatePlanStats() {
+  const text = state.room.vertices?.length
+    ? `Площадь: ${state.room.getTotalArea().toFixed(2)} м² · Периметр: ${state.room.getPerimeter().toFixed(2)} м`
+    : 'Площадь: — · Периметр: —';
+  ['planStats', 'planStatsDims', 'planStatsDraw'].forEach((id) => {
+    const el = $(id);
+    if (el) el.textContent = text;
+  });
+}
+
+function updateLayoutMode() {
+  const workspace = $('appLayout');
+  if (!workspace) return;
+
+  const uiState = !resultsUnlockedForUi() ? 'empty' : 'ready';
+  workspace.setAttribute('data-state', uiState);
+  workspace.setAttribute('data-view', state.activeView || 'plan');
+
+  const downloadDisabled = !resultsUnlockedForUi();
+  if ($('downloadBtn')) $('downloadBtn').disabled = downloadDisabled;
+
+  syncCalcButtons();
+  updateStatCards();
+  syncChromeUi();
+}
+
+/** Спрятать шум: дубли, детали, кнопки — пока нет актуального расчёта */
+function syncChromeUi() {
+  const ready = resultsUnlockedForUi();
+  const mode = state.inputMode;
+  const drawReady = mode !== 'draw' || (state.room.vertices?.length >= 3);
+
+  document.querySelector('.workspace-section--panel-info')?.toggleAttribute('hidden', true);
+  $('projectLoadedBanner')?.classList.toggle('is-compact', true);
+
+  const stats = document.querySelector('.workspace-stats');
+
+  if (stats) stats.classList.toggle('is-idle', !ready);
+  syncResultsAsideVisibility();
+
+  if ($('downloadBtn')) $('downloadBtn').disabled = !ready;
+  if ($('shareBtnSecondary')) $('shareBtnSecondary').disabled = !ready;
+
+  // В draw до замкнутого контура — только высота/фото, без «что считать»
+  // В area поверхности уже заданы полями выше — блок не нужен
+  const sharedReveal = $('sharedReveal');
+  const shared = $('sharedCalcOptions');
+  const showShared = !!mode && mode !== 'area' && !(mode === 'draw' && !drawReady);
+  if (sharedReveal) {
+    sharedReveal.classList.toggle('is-open', showShared);
+    const collapse = sharedReveal.querySelector('.shared-reveal__collapse');
+    if (collapse) {
+      if (showShared) collapse.removeAttribute('inert');
+      else collapse.setAttribute('inert', '');
+    }
+  }
+  if (shared) {
+    shared.hidden = false;
+    shared.setAttribute('aria-hidden', showShared ? 'false' : 'true');
+  }
+
+  // Оверлеи схемы — только когда есть раскладка
+  $('planOverlayToggles')?.classList.toggle(
+    'is-hidden',
+    !ready || !isSketchMode() || state.activeView !== 'plan'
+  );
+
+  document.querySelector('.theme-toggle__label')?.toggleAttribute('hidden', !mode);
+  syncCalcButtons();
+}
+
+function clearResultsUi(message = '') {
+  state.hasResults = false;
+  state.mobileResultsUnlocked = false;
+  state.bom = null;
+  state.ceilingResult = null;
+  state.wallResult = null;
+  state.ceilingCalc = null;
+  state.resultsStale = false;
+  lastPanelsSnapshot = null;
+  const textEl = $('resultsText');
+  if (textEl) {
+    if (message) {
+      textEl.innerHTML = `<div class="rb-empty">${message.replace(/</g, '&lt;')}</div>`;
+    } else {
+      textEl.innerHTML = `<div class="rb-empty">${state.inputMode
+        ? 'Цифры появятся после расчёта'
+        : 'Выберите способ слева — здесь появятся детали'}</div>`;
+    }
+  }
+  sketchEditor?.clearPanelPreview?.();
+  updateResultsTabsVisibility();
+  updateStatCards();
+  updateResultsPreview();
+  syncChromeUi();
+}
+
+function renderPlanEditors() {
+  updatePlanStats();
+}
+
+function isRoomTooLargeForScheme(len, wid) {
+  const L = Number(len) || 0;
+  const W = Number(wid) || 0;
+  return L > 50 || W > 50 || L * W > 500;
+}
+
+function updateSchemeModeUi() {
+  const workspace = $('appLayout');
+  const hint = $('schemeModeHint');
+  const hintText = $('schemeModeHintText');
+  const areaPh = $('schemeAreaPlaceholder');
+  const host = $('sketchEditorHost');
+  const noMode = !state.inputMode;
+  const schemeTooBig = state.inputMode === 'dims' && state.forceAreaBySize;
+  const hideScheme = noMode || state.inputMode === 'area' || schemeTooBig;
+  const showAreaPh = !noMode && (state.inputMode === 'area' || schemeTooBig);
+  workspace?.setAttribute('data-calc-mode', state.inputMode || 'none');
+  if (hint) hint.hidden = !noMode;
+  if (hintText && noMode) hintText.textContent = getNoModeHint();
+  if (areaPh) {
+    areaPh.hidden = !showAreaPh;
+    if (schemeTooBig) {
+      areaPh.innerHTML = '<p>Помещение слишком большое для схемы — считаем по площади</p>';
+    } else {
+      areaPh.innerHTML = '<p>Расчёт по площади — схема не используется</p>';
+    }
+  }
+  if (host) host.hidden = hideScheme;
+  $('planOverlayToggles')?.classList.toggle('is-hidden', hideScheme || state.activeView !== 'plan');
+  const statusEl = $('schemeStatus');
+  if (statusEl && hideScheme) {
+    statusEl.hidden = true;
+    statusEl.classList.remove('is-computing');
+  }
+  if (hideScheme) {
+    sketchEditor?.clearPanelPreview?.();
+  }
+  syncModePanelsUi();
+  syncMobileParamsBtn();
+}
+
+function applyQuickRect() {
+  const len = parseFloat(els.form.quickLength.value) || 5;
+  const wid = parseFloat(els.form.quickWidth.value) || 4;
+  const h = parseFloat(els.form.quickHeight?.value) || 2.7;
+  state.forceAreaBySize = isRoomTooLargeForScheme(len, wid);
+  updateSchemeModeUi();
+
+  if (state.forceAreaBySize) {
+    const verts = createRectangleVertices(len, wid);
+    state.room.wallHeight = h;
+    els.form.wallHeight.value = h;
+    state.room.setVertices(verts, buildEdgeDimensionsFromVertices(verts), {});
+    if (els.form.areaOnlyInput) els.form.areaOnlyInput.value = (len * wid).toFixed(2);
+    state.areaValue = len * wid;
+    sketchEditor?.syncFromRoom?.(state.room, { settle: false });
+    updatePlanStats();
+    refreshWallSurfaceCheckboxes();
+    sketchEditor?.showToast?.('Помещение слишком большое для схемы — считаем по площади');
+    scheduleAutoRecalc();
+    return;
+  }
+
+  const verts = createRectangleVertices(len, wid);
+  state.room.wallHeight = h;
+  els.form.wallHeight.value = h;
+  state.room.setVertices(verts, buildEdgeDimensionsFromVertices(verts), {});
+  sketchEditor?.syncFromRoom?.(state.room, { settle: true, fit: true });
+  updatePlanStats();
+  refreshWallSurfaceCheckboxes();
+  onExplicitChange();
+}
+
+function syncFormToRoom() {
+  if (isSketchMode()) {
+    const h = state.inputMode === 'draw'
+      ? (parseFloat($('drawHeight')?.value) || parseFloat(els.form.wallHeight?.value) || 2.7)
+      : (parseFloat(els.form.quickHeight?.value) || parseFloat(els.form.wallHeight?.value) || 2.7);
+    state.room.wallHeight = h;
+    els.form.wallHeight.value = h;
+    if (els.form.quickHeight) els.form.quickHeight.value = h;
+    if ($('drawHeight')) $('drawHeight').value = h;
+  }
+}
+
+function applyRoomToForm(room) {
+  const f = els.form;
+  f.quickLength.value = room.mainLength;
+  f.quickWidth.value = room.mainWidth;
+  if (f.quickHeight) f.quickHeight.value = room.wallHeight;
+  f.wallHeight.value = room.wallHeight;
+  state.room = room.clone();
+  state.forceAreaBySize = isRoomTooLargeForScheme(room.mainLength, room.mainWidth);
+  if (state.inputMode === 'dims' && !state.forceAreaBySize) {
+    sketchEditor?.syncFromRoom?.(state.room, { settle: true });
+  } else if (state.inputMode === 'draw') {
+    sketchEditor?.syncFromRoom?.(state.room, { settle: true });
+  } else {
+    sketchEditor?.syncFromRoom?.(state.room, { settle: false });
+  }
+  updatePlanStats();
+  refreshWallSurfaceCheckboxes();
+  updateSchemeModeUi();
+}
+
+function showValidationErrors(errors) {
+  const box = $('validationErrors');
+  if (!errors.length) {
+    box.innerHTML = '';
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  box.innerHTML = errors.map((e) => `<div>${e}</div>`).join('');
+}
+
+function readSelectedWallIds() {
+  if (state.inputMode === 'area') {
+    return state.areaWalls.filter((w) => w.enabled && w.area > 0).map((w) => w.id);
+  }
+  const list = $('wallSurfacesList');
+  if (!list) return state.options.selectedWallIds ?? [];
+  return [...list.querySelectorAll('input[type="checkbox"]:checked')].map((el) => el.value);
+}
+
+function renderAreaWallsList() {
+  const list = $('areaWallsList');
+  if (!list) return;
+  list.innerHTML = state.areaWalls.map((w, i) => `
+    <div class="area-wall-row" data-wall-id="${w.id}">
+      <label class="area-wall-row__check">
+        <input type="checkbox" data-area-wall-check="${w.id}" ${w.enabled ? 'checked' : ''} />
+      </label>
+      <span class="area-wall-row__label">Стена ${i + 1}</span>
+      <input type="number" class="area-wall-row__input" data-area-wall-input="${w.id}"
+        value="${w.area || ''}" placeholder="м²" step="0.1" min="0.1" />
+      <button type="button" class="btn-link area-wall-row__remove" data-area-wall-remove="${w.id}" title="Удалить">×</button>
+    </div>`).join('');
+
+  list.querySelectorAll('[data-area-wall-check]').forEach((el) => {
+    el.addEventListener('change', () => {
+      const wall = state.areaWalls.find((w) => w.id === el.dataset.areaWallCheck);
+      if (wall) wall.enabled = el.checked;
+      updateSurfaceGroupsUi();
+      onAutoRecalcFieldChange();
+    });
+  });
+  list.querySelectorAll('[data-area-wall-input]').forEach((el) => {
+    el.addEventListener('input', () => {
+      const wall = state.areaWalls.find((w) => w.id === el.dataset.areaWallInput);
+      if (wall) wall.area = parseFloat(el.value) || 0;
+      onExplicitChange();
+    });
+  });
+  list.querySelectorAll('[data-area-wall-remove]').forEach((el) => {
+    el.addEventListener('click', () => {
+      state.areaWalls = state.areaWalls.filter((w) => w.id !== el.dataset.areaWallRemove);
+      renderAreaWallsList();
+      updateSurfaceGroupsUi();
+      onExplicitChange();
+    });
+  });
+}
+
+function addAreaWall() {
+  state.areaWalls.push({ id: `aw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, area: 0, enabled: true });
+  renderAreaWallsList();
+  updateSurfaceGroupsUi();
+  onExplicitChange();
+}
+
+function defaultWallSurfaceIdsWhenUnset() {
+  if (partnerCeilingOnlyHost() || state.options.calcWalls === false) return [];
+  return state.room.walls.map((w) => w.id);
+}
+
+function shouldRenderNoWallSurfaces() {
+  return partnerCeilingOnlyHost() || state.options.calcWalls === false;
+}
+
+function refreshWallSurfaceCheckboxes() {
+  if (state.inputMode === 'area') {
+    renderAreaWallsList();
+    updateSurfaceGroupsUi();
+    return;
+  }
+  syncFormToRoom();
+  const list = els.form.wallSurfacesList;
+  if (!list) return;
+
+  const prev = new Set(
+    state.options.selectedWallIds?.length
+      ? state.options.selectedWallIds
+      : defaultWallSurfaceIdsWhenUnset()
+  );
+
+  list.innerHTML = state.room.walls
+    .map(
+      (w) => `
+      <label class="surface-chip surface-chip--toggle">
+        <input type="checkbox" name="wallSurface" value="${w.id}" ${prev.has(w.id) ? 'checked' : ''} />
+        <span class="surface-chip__label">${w.label}</span>
+      </label>`
+    )
+    .join('');
+
+  state.options.selectedWallIds = readSelectedWallIds();
+  if (shouldRenderNoWallSurfaces()) {
+    list.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+      el.checked = false;
+    });
+    state.options.selectedWallIds = [];
+    state.options.calcWalls = false;
+  }
+  updateSurfaceGroupsUi();
+}
+
+function setAllWallSurfaces(checked) {
+  els.form.wallSurfacesList?.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+    el.checked = checked;
+  });
+  state.options.selectedWallIds = readSelectedWallIds();
+  state.options.calcWalls = checked && state.options.selectedWallIds.length > 0;
+  if (!checked) state.options.calcWalls = false;
+  updateSurfaceGroupsUi();
+  onAutoRecalcFieldChange();
+}
+
+function updateSurfaceGroupsUi() {
+  const f = els.form;
+  const ceilingOn = f.calcCeiling?.checked ?? false;
+  const wallsOn = readSelectedWallIds().length > 0;
+  f.ceilingMountingGroup?.classList.toggle('is-disabled', !ceilingOn);
+  f.wallMountingGroup?.classList.toggle('is-disabled', !wallsOn);
+
+  const isArea = state.inputMode === 'area';
+  $('areaWallsBlock')?.toggleAttribute('hidden', false);
+  if (isArea) renderAreaWallsList();
+
+  const refine = $('refineOpeningsCta');
+  if (refine) {
+    refine.hidden = !(isSketchMode() && state.hasResults && wallsOn);
+  }
+}
+
+/** Держит форму режима и «Что считать» рядом: shared сразу под открытым panel-slot. */
+function placeSharedReveal(mode) {
+  const shared = $('sharedReveal');
+  const flow = $('entryFlow');
+  if (!shared || !flow) return;
+
+  if (mode === 'dims' || mode === 'draw') {
+    const slot = document.querySelector(`.entry-panel-slot[data-entry="${mode}"]`);
+    if (slot && shared.previousElementSibling !== slot) {
+      slot.after(shared);
+    }
+    return;
+  }
+
+  // area / нет режима — паркуем в конце потока, чтобы не клинить между карточками
+  if (shared.parentElement !== flow || flow.lastElementChild !== shared) {
+    flow.appendChild(shared);
+  }
+}
+
+function syncModePanelsUi() {
+  const mode = state.inputMode;
+  const entry = $('entryPicker');
+  const flow = $('entryFlow');
+  const bar = $('activeModeBar');
+  const label = $('activeModeLabel');
+
+  if (entry) {
+    entry.hidden = false;
+    entry.classList.toggle('has-mode', !!mode);
+  }
+  if (flow) flow.classList.toggle('has-mode', !!mode);
+  // Аккордеон заменяет «сменить способ» — бар прячем
+  if (bar) bar.hidden = true;
+  if (label) label.textContent = MODE_LABELS[mode] || '—';
+
+  document.querySelectorAll('.entry-block').forEach((block) => {
+    const isOpen = !!mode && block.dataset.entry === mode;
+    block.classList.toggle('is-open', isOpen);
+    block.querySelector('.entry-card')?.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+
+  document.querySelectorAll('.entry-panel-slot').forEach((slot) => {
+    const isOpen = !!mode && slot.dataset.entry === mode;
+    slot.classList.toggle('is-open', isOpen);
+    if (isOpen) slot.removeAttribute('inert');
+    else slot.setAttribute('inert', '');
+  });
+
+  placeSharedReveal(mode);
+
+  const openSlot = mode
+    ? document.querySelector(`.entry-panel-slot[data-entry="${mode}"]`)
+    : null;
+  if (openSlot && typeof openSlot.scrollIntoView === 'function') {
+    requestAnimationFrame(() => {
+      openSlot.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }
+
+  const dimsCard = $('dimsCalcCard');
+  const drawCard = $('drawCalcCard');
+  const areaCard = $('quickCalcCard');
+  if (dimsCard) {
+    dimsCard.hidden = false;
+    const stats = $('planStatsDims');
+    if (stats) stats.hidden = true;
+  }
+  if (drawCard) drawCard.hidden = false;
+  if (areaCard) areaCard.hidden = false;
+
+  sketchEditor?.setGeometryLocked?.(mode === 'dims');
+  // В dims размеры уже слева и на рёбрах — нижняя строка площади дублирует
+  const bottomStats = document.getElementById('sketchBottomStats');
+  if (bottomStats) bottomStats.hidden = mode === 'dims';
+  syncChromeUi();
+}
+
+/** Открыть режим (взаимоисключение dims | draw | area) */
+function setInputMode(mode, { confirmSwitch = false, preserveGeometry = false } = {}) {
+  const next = mode === 'scheme' ? 'dims' : mode;
+  if (next && !['dims', 'draw', 'area'].includes(next)) return;
+
+  if (confirmSwitch && state.inputMode && state.inputMode !== next && state.hasResults) {
+    const ok = window.confirm('Сменить способ расчёта? Текущая схема и цифры будут пересобраны.');
+    if (!ok) return;
+  }
+
+  const prev = state.inputMode;
+  state.inputMode = next || null;
+
+  if (prev !== next && !onboardingDemoActive) {
+    dismissAppTourIfActive();
+  }
+
+  if (!next) {
+    exitMobileSketchStep({ markSummary: false });
+    clearResultsUi('Выберите способ слева');
+    syncModePanelsUi();
+    updateSchemeModeUi();
+    updateLayoutMode();
+    return;
+  }
+
+  if (!preserveGeometry) {
+    clearResultsUi(next === 'draw'
+      ? 'Нарисуйте и замкните контур — затем появятся цифры'
+      : 'Цифры появятся после расчёта');
+  }
+
+  if (next === 'dims') {
+    if (!preserveGeometry) applyQuickRect();
+    else {
+      sketchEditor?.setGeometryLocked?.(true);
+      sketchEditor?.syncFromRoom?.(state.room, { settle: true, fit: true });
+    }
+    sketchEditor?.setGeometryLocked?.(true);
+  } else if (next === 'draw') {
+    state.forceAreaBySize = false;
+    const h = parseFloat($('drawHeight')?.value) || state.room.wallHeight || 2.7;
+    state.room.wallHeight = h;
+    els.form.wallHeight.value = h;
+    if (els.form.quickHeight) els.form.quickHeight.value = h;
+    if ($('drawHeight')) $('drawHeight').value = h;
+    sketchEditor?.setGeometryLocked?.(false);
+    if (!preserveGeometry) {
+      sketchEditor?.clear?.();
+      state.room.setVertices([], {}, {});
+      updatePlanStats();
+      refreshWallSurfaceCheckboxes();
+      void $('sketchEditorHost')?.offsetWidth;
+      sketchEditor?.fitToScreen?.();
+    } else {
+      void $('sketchEditorHost')?.offsetWidth;
+      sketchEditor?.syncFromRoom?.(state.room, { settle: true, fit: true });
+    }
+    if (sketchEditor) {
+      sketchEditor.wallHeightValue = h;
+      sketchEditor._wallHeightConfirmed = h > 0;
+    }
+  } else if (next === 'area') {
+    sketchEditor?.setGeometryLocked?.(false);
+    if (!state.areaWalls.length) {
+      state.areaWalls = [];
+      renderAreaWallsList();
+    }
+  }
+
+  syncModePanelsUi();
+  refreshWallSurfaceCheckboxes();
+  applyGateCCeilingPreset();
+  updateSurfaceGroupsUi();
+  updateSchemeModeUi();
+
+  if (next === 'dims' && !state.forceAreaBySize && !preserveGeometry) {
+    void $('sketchEditorHost')?.offsetWidth;
+    sketchEditor?.syncFromRoom?.(state.room, { settle: true, fit: true });
+  }
+
+  if (prev !== next) scheduleAutoRecalc();
+
+  // Phone: dedicated fullscreen sketch step (not a short inline card)
+  if (next === 'draw' && isMobileLayout() && !onboardingDemoActive) {
+    enterMobileSketchStep();
+  } else if (prev === 'draw' && next !== 'draw') {
+    exitMobileSketchStep({ markSummary: false });
+  }
+
+  // Phone: после выбора способа сразу к блоку стен/монтажа (не к смете)
+  if (
+    isMobileLayout()
+    && next
+    && next !== 'draw'
+    && !onboardingDemoActive
+    && !state.mobileResultsUnlocked
+  ) {
+    requestAnimationFrame(() => openMobileParamsAfterSketch());
+  }
+}
+
+function setupModeToggles() {
+  const toggleEntry = (mode) => {
+    if (state.inputMode === mode) {
+      setInputMode(null, { confirmSwitch: !!state.hasResults });
+      return;
+    }
+    setInputMode(mode, { confirmSwitch: true });
+  };
+  $('entryDimsBtn')?.addEventListener('click', () => toggleEntry('dims'));
+  $('entryDrawBtn')?.addEventListener('click', () => toggleEntry('draw'));
+  $('entryAreaBtn')?.addEventListener('click', () => toggleEntry('area'));
+  $('changeModeBtn')?.addEventListener('click', () => setInputMode(null));
+
+  $('drawUploadPhotoBtn')?.addEventListener('click', () => {
+    $('sketchBgUploadBtn')?.click();
+  });
+  $('drawClearBtn')?.addEventListener('click', () => {
+    sketchEditor?.clear?.();
+    state.room.setVertices([], {}, {});
+    updatePlanStats();
+    refreshWallSurfaceCheckboxes();
+    scheduleAutoRecalc();
+  });
+  $('drawHeight')?.addEventListener('input', () => {
+    syncFormToRoom();
+    if (sketchEditor) {
+      sketchEditor.wallHeightValue = state.room.wallHeight;
+      sketchEditor._wallHeightConfirmed = state.room.wallHeight > 0;
+      sketchEditor.render?.();
+      sketchEditor._updateUi?.();
+    }
+    onExplicitChange();
+  });
+
+  $('refineOpeningsBtn')?.addEventListener('click', () => {
+    setSchemeView('walls');
+    sketchEditor?._openOpeningsModal?.();
+  });
+  $('shareBtnSecondary')?.addEventListener('click', () => handleShare());
+}
+
+function syncModeCardsUI() {
+  syncModePanelsUi();
+}
+
+function setModeCardExpanded(_mode, _expanded) {
+  /* legacy no-op — panels driven by inputMode */
+}
+
+function toggleModePanel(mode) {
+  setInputMode(mode === 'scheme' ? 'dims' : mode, { confirmSwitch: true });
+}
+
+function syncSegmentedFromSelect(selectId) {
+  const select = $(selectId);
+  if (!select) return;
+  const group = document.querySelector(`[data-segment-for="${selectId}"]`);
+  if (!group) return;
+  group.querySelectorAll('.segmented__btn').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.value === select.value);
+  });
+}
+
+function setupSegmentedMounting() {
+  document.querySelectorAll('[data-segment-for]').forEach((group) => {
+    const selectId = group.dataset.segmentFor;
+    const select = $(selectId);
+    if (!select) return;
+    group.querySelectorAll('.segmented__btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        select.value = btn.dataset.value;
+        syncSegmentedFromSelect(selectId);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    });
+    syncSegmentedFromSelect(selectId);
+  });
+}
+
+function updateResultsPreview() {
+  const card = document.querySelector('.results-card');
+  const preview = $('resultsPreview');
+  const textEl = $('resultsText');
+  if (!card || !preview || !textEl) return;
+
+  card.classList.add('is-expanded');
+  card.hidden = false;
+  preview.style.maxHeight = 'none';
+}
+
+function setupResultsExpand() {
+  // Правая колонка всегда показывает подробности целиком — без сворачивания
+}
+
+function setupFormListeners() {
+  const f = els.form;
+
+  ['quickLength', 'quickWidth', 'quickHeight'].forEach((id) => {
+    $(id)?.addEventListener('input', applyQuickRect);
+  });
+
+  $('addAreaWallBtn')?.addEventListener('click', addAreaWall);
+
+  f.areaOnlyInput?.addEventListener('input', () => {
+    state.areaValue = parseFloat(f.areaOnlyInput.value) || null;
+    onExplicitChange();
+  });
+
+  f.calcCeiling?.addEventListener('change', () => {
+    updateSurfaceGroupsUi();
+    onAutoRecalcFieldChange();
+  });
+
+  f.wallSurfacesList?.addEventListener('change', () => {
+    state.options.selectedWallIds = readSelectedWallIds();
+    updateSurfaceGroupsUi();
+    onAutoRecalcFieldChange();
+  });
+
+  f.selectAllWallsBtn?.addEventListener('click', () => setAllWallSurfaces(true));
+  f.deselectAllWallsBtn?.addEventListener('click', () => setAllWallSurfaces(false));
+
+  ['ceilingMounting', 'wallMounting'].forEach((id) => {
+    $(id)?.addEventListener('change', (e) => {
+      const val = e.target?.value;
+      const becameFramed = val === 'ceiling_framed' || val === 'wall_framed';
+      syncFrameToggleVisibility({ autoCheck: becameFramed });
+      if (becameFramed && isFrameOverlayRelevant()) {
+        $('showFrameLabel')?.classList.add('is-highlighted');
+        $('showFrameMobileLabel')?.classList.add('is-highlighted');
+        setTimeout(() => {
+          $('showFrameLabel')?.classList.remove('is-highlighted');
+          $('showFrameMobileLabel')?.classList.remove('is-highlighted');
+        }, 2400);
+      }
+      syncPlanOverlayOptions();
+      renderCeiling();
+      renderSelectedWall();
+      onAutoRecalcFieldChange();
+    });
+  });
+
+  $('calculateBtn')?.addEventListener('click', async () => {
+    if (isMobileLayout()) state.mobileResultsUnlocked = true;
+    const ok = await runCalculation();
+    if (!ok) return;
+    revealResultsAfterCalc();
+  });
+}
+
+function setupSketchEditor() {
+  const host = $('sketchEditorHost');
+  if (!host) return;
+  sketchEditor = new SketchEditor(host, {
+    inline: true,
+    dialogsEl: $('sketchEditorModal'),
+    onMobileStepDone: () => {
+      exitMobileSketchStep({ markSummary: true, openParams: true });
+    },
+    onApply: ({ vertices, edgeDimensions, diagonalDimensions, wallHeight }) => {
+      if (state.inputMode === 'dims') return;
+      state.room.setVertices(vertices, edgeDimensions, diagonalDimensions);
+      if (wallHeight > 0) {
+        state.room.wallHeight = wallHeight;
+        els.form.wallHeight.value = wallHeight;
+        if (els.form.quickHeight) els.form.quickHeight.value = wallHeight;
+        if ($('drawHeight')) $('drawHeight').value = wallHeight;
+      }
+      updatePlanStats();
+      refreshWallSurfaceCheckboxes();
+      onExplicitChange();
+    },
+    onRoomChange: ({ wallHeight } = {}) => {
+      if (wallHeight > 0) {
+        state.room.wallHeight = wallHeight;
+        els.form.wallHeight.value = wallHeight;
+        if (els.form.quickHeight) els.form.quickHeight.value = wallHeight;
+        if ($('drawHeight')) $('drawHeight').value = wallHeight;
+      }
+      // В dims контур только из L×W×H, но проёмы живут в том же room —
+      // без пересчёта схема стены остаётся без дверей/окон до ручного тогла.
+      if (state.inputMode !== 'dims') {
+        updatePlanStats();
+        refreshWallSurfaceCheckboxes();
+        syncChromeUi();
+      }
+      onExplicitChange();
+    },
+    onGeometryEdit: () => {
+      markPanelPreviewStale();
+    },
+    onGeometrySettle: async ({ reason } = {}) => {
+      const ok = await runCalculation({ silent: true });
+      if (!ok) return;
+      // Phone: после контура/проёмов — параметры (стены/монтаж), не смета
+      if (isMobileLayout() && !state.mobileResultsUnlocked && reason !== 'openings-done') {
+        openMobileParamsAfterSketch();
+        return;
+      }
+      if (ok) revealResultsAfterCalc();
+      // После «Готово» в проёмах сразу показать обновлённую развёртку стены
+      if (ok && reason === 'openings-done') {
+        setSchemeView('walls');
+        const wallId = sketchEditor?.selectedWallId;
+        if (wallId && $('wallViewSelect')) {
+          $('wallViewSelect').value = wallId;
+          syncWallChipsActive();
+          renderSelectedWall();
+        }
+      }
+    },
+  });
+  sketchEditor.activate({ room: state.room, startTutorial: false });
+}
+
+function markPanelPreviewStale() {
+  panelPreviewToken += 1;
+  lastCeilingLayoutKey = null;
+  document.querySelectorAll('.workspace-stats .stat-card:not(.stat-card-button)').forEach((card) => {
+    card.classList.add('is-recalculating');
+  });
+  ['totalPanels', 'coverageArea', 'totalCost', 'partnerTotalCost'].forEach((id) => {
+    $(id)?.classList.add('is-stale');
+  });
+}
+
+function markStatsRecalculating() {
+  document.querySelectorAll('.workspace-stats .stat-card:not(.stat-card-button)').forEach((card) => {
+    card.classList.add('is-recalculating');
+  });
+  ['totalPanels', 'coverageArea', 'totalCost', 'partnerTotalCost'].forEach((id) => {
+    $(id)?.classList.add('is-stale');
+  });
+}
+
+function runPanelPreviewLayout() {
+  /* full calc via runCalculation on settle */
+}
+
+function updatePreviewStatsFromCeiling(ceilingResult) {
+  if (!ceilingResult?.stats) return;
+  const panels = ceilingResult.stats.withReserve ?? ceilingResult.stats.total ?? 0;
+  const area = parseFloat(ceilingResult.stats.coverageArea || ceilingResult.stats.netArea || 0) || 0;
+  const cost = panels * PANEL.priceRub;
+  $('totalPanels').textContent = `${panels} шт.`;
+  $('coverageArea').textContent = `${area.toFixed(2)} м²`;
+  $('totalCost').textContent = `${cost.toLocaleString('ru-RU')} ₽`;
+  const grand = partnerGrandTotal(
+    {
+      total: {
+        panelsWithReserve: panels,
+        totalCost: cost,
+        dowelsWithReserve: Math.ceil(panels * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels)),
+      },
+    },
+    area,
+    cost,
+  );
+  if (grand != null && $('partnerTotalCost')) {
+    $('partnerTotalCost').textContent = `${Math.round(grand).toLocaleString('ru-RU')} ₽`;
+    $('partnerTotalCost').dataset.raw = String(grand);
+  }
+  ['totalPanels', 'coverageArea', 'totalCost', 'partnerTotalCost'].forEach((id) =>
+    $(id)?.classList.remove('is-stale'),
+  );
+}
+
+function setupTabs() {
+  document.querySelectorAll('#resultsTabs .tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      if (tab === 'walls' && !state.wallResult?.wallResults?.length) return;
+      setSchemeView(tab);
+    });
+  });
+
+  $('wallViewSelect')?.addEventListener('change', () => {
+    renderSelectedWall();
+    syncWallChipsActive();
+  });
+  $('showNumbers')?.addEventListener('change', () => {
+    if ($('showNumbersMobile')) $('showNumbersMobile').checked = $('showNumbers').checked;
+    syncPlanOverlayOptions();
+    renderSelectedWall();
+  });
+  $('showFrame')?.addEventListener('change', () => {
+    if ($('showFrameMobile')) $('showFrameMobile').checked = $('showFrame').checked;
+    syncPlanOverlayOptions();
+    renderCeiling();
+    renderSelectedWall();
+  });
+  $('showNumbersMobile')?.addEventListener('change', () => {
+    if ($('showNumbers')) $('showNumbers').checked = $('showNumbersMobile').checked;
+    syncPlanOverlayOptions();
+    renderSelectedWall();
+  });
+  $('showFrameMobile')?.addEventListener('change', () => {
+    if ($('showFrame')) $('showFrame').checked = $('showFrameMobile').checked;
+    syncPlanOverlayOptions();
+    renderCeiling();
+    renderSelectedWall();
+  });
+  $('sketchOpeningsBtn')?.addEventListener('click', () => {
+    sketchEditor?._openOpeningsModal?.();
+  });
+}
+
+/** Whether «Каркас» overlay toggle applies to the current scheme view. */
+function isFrameOverlayRelevant() {
+  const view = state.activeView || 'plan';
+  if (view === 'walls') {
+    return els.form.wallMounting?.value === 'wall_framed';
+  }
+  // plan / ceiling / sketch summary — ceiling mounting
+  return els.form.ceilingMounting?.value === 'ceiling_framed';
+}
+
+function syncFrameToggleVisibility({ autoCheck = false } = {}) {
+  const relevant = isFrameOverlayRelevant();
+  const label = $('showFrameLabel');
+  const mobileLabel = $('showFrameMobileLabel');
+  const cb = $('showFrame');
+  const cbMobile = $('showFrameMobile');
+
+  if (label) label.hidden = !relevant;
+  if (mobileLabel) mobileLabel.hidden = !relevant;
+
+  if (!relevant) {
+    if (cb) cb.checked = false;
+    if (cbMobile) cbMobile.checked = false;
+    label?.classList.remove('is-highlighted');
+    mobileLabel?.classList.remove('is-highlighted');
+  } else if (autoCheck) {
+    if (cb) cb.checked = true;
+    if (cbMobile) cbMobile.checked = true;
+  }
+}
+
+function syncPlanOverlayOptions() {
+  const ceilingFramed = els.form.ceilingMounting?.value === 'ceiling_framed';
+  const showFrame = ($('showFrame')?.checked ?? false) && ceilingFramed && isFrameOverlayRelevant();
+  sketchEditor?.setOverlayOptions?.({
+    showNumbers: $('showNumbers')?.checked ?? true,
+    showFrame,
+  });
+  sketchEditor?.render?.();
+}
+
+function setSchemeView(view) {
+  state.activeView = view || 'plan';
+  const workspace = $('appLayout');
+  workspace?.setAttribute('data-view', state.activeView);
+
+  document.querySelectorAll('#resultsTabs .tab-btn').forEach((btn) => {
+    const on = btn.dataset.tab === state.activeView;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+
+  const resultsStage = $('resultsStage');
+  if (resultsStage) {
+    resultsStage.hidden = state.activeView === 'plan';
+  }
+  updateSchemeModeUi();
+  syncFrameToggleVisibility();
+  syncPlanOverlayOptions();
+
+  if (state.activeView === 'walls') {
+    renderSelectedWall();
+    syncWallChipsActive();
+  }
+  if (state.activeView === 'plan') {
+    // Камеру не трогаем — иначе после drag/расчёта схема резко центрируется
+    requestAnimationFrame(() => sketchEditor?.render?.());
+  }
+}
+
+function buildAreaWallStats(walls) {
+  const netArea = walls.reduce((s, w) => s + w.area, 0);
+  const total = Math.ceil(netArea / PANEL_COVERAGE_AREA);
+  const withReserve = Math.ceil(total * (1 + RESERVES.panels));
+  const dowelsBase = total * RESERVES.dowelsPerPanel;
+  const dowelsWithReserve = Math.ceil(dowelsBase * (1 + RESERVES.dowels));
+  return {
+    total,
+    fullPanels: total,
+    cutPanels: 0,
+    panelsToPurchase: total,
+    coverageArea: netArea.toFixed(2),
+    coveragePercent: '100.0',
+    netArea: netArea.toFixed(2),
+    withReserve,
+    dowels: { base: dowelsBase, withReserve: dowelsWithReserve },
+  };
+}
+
+function validateBeforeCalc() {
+  if (!state.inputMode) {
+    return [getNoModeHint()];
+  }
+  syncFormToRoom();
+  const f = els.form;
+
+  if (state.inputMode === 'area') {
+    const ceilingArea = parseFloat(f.areaOnlyInput?.value) || 0;
+    const walls = state.areaWalls.filter((w) => w.enabled && w.area > 0);
+    if (ceilingArea <= 0 && walls.length === 0) {
+      return ['Укажите площадь потолка или хотя бы одну стену'];
+    }
+    return [];
+  }
+
+  const calcCeiling = f.calcCeiling.checked;
+  const selectedWallIds = readSelectedWallIds();
+
+  if (!calcCeiling && selectedWallIds.length === 0) {
+    return ['Выберите хотя бы одну поверхность для расчёта'];
+  }
+
+  const useArea = state.inputMode === 'dims' && state.forceAreaBySize;
+  if (useArea) {
+    if (calcCeiling) {
+      const area = (parseFloat(f.quickLength?.value) || 0) * (parseFloat(f.quickWidth?.value) || 0);
+      if (!area || area <= 0) return ['Укажите площадь потолка в м²'];
+    }
+    return [];
+  }
+
+  if (state.inputMode === 'draw' && (!state.room.vertices || state.room.vertices.length < 3)) {
+    return ['Нарисуйте и замкните контур схемы'];
+  }
+
+  return validateRoomForm(null, state.room);
+}
+
+function applyResultsToUi() {
+  const bom = state.bom;
+  const el = $('resultsText');
+  if (el) {
+    el.innerHTML = bom
+      ? renderResultsHtml(bom, { mode: state.inputMode })
+      : `<div class="rb-empty">Выполните расчёт, чтобы увидеть результаты.</div>`;
+  }
+  updateStatCards();
+  updateResultsPreview();
+  flashCalcReadyStatus();
+  if (state.hasResults) revealResultsAfterCalc();
+}
+
+function flashCalcReadyStatus() {
+  const statusEl = $('schemeStatus');
+  if (!state.hasResults || !state.bom?.total || !statusEl) return;
+  const panels = state.bom.total.panelsWithReserve ?? 0;
+  let msg = 'Расчёт готов';
+  if (lastPanelsSnapshot != null && lastPanelsSnapshot !== panels) {
+    msg = `Обновлено: ${lastPanelsSnapshot} → ${panels} пан.`;
+  }
+  lastPanelsSnapshot = panels;
+  statusEl.hidden = false;
+  statusEl.textContent = msg;
+  statusEl.classList.add('is-computing');
+  clearTimeout(flashCalcReadyStatus._t);
+  flashCalcReadyStatus._t = setTimeout(() => {
+    statusEl.classList.remove('is-computing');
+    statusEl.hidden = true;
+    statusEl.textContent = '';
+  }, 2200);
+  updateSurfaceGroupsUi();
+  syncChromeUi();
+}
+
+function runQuickAreaCalc(area) {
+  const panels = Math.ceil(area / PANEL_COVERAGE_AREA);
+  const withReserve = Math.ceil(panels * (1 + RESERVES.panels));
+  const dowels = Math.ceil(panels * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels));
+  const cost = withReserve * PANEL.priceRub;
+  // Не оставляем геометрические схемы от предыдущего режима —
+  // иначе PDF подхватит старый план/стены вместо оценки по площади.
+  state.ceilingResult = null;
+  state.wallResult = null;
+  state.ceilingCalc = null;
+  state.calcRoom = null;
+  state.bom = {
+    total: {
+      panelsWithReserve: withReserve,
+      totalCost: cost,
+      dowelsWithReserve: dowels,
+    },
+    ceiling: {
+      schemeName: 'По площади',
+      mountingLabel: 'Оценка по площади',
+      area,
+      stats: {
+        total: panels,
+        fullPanels: panels,
+        cutPanels: 0,
+        panelsToPurchase: panels,
+        withReserve,
+        coverageArea: area.toFixed(2),
+        netArea: area.toFixed(2),
+        dowels: { base: panels * RESERVES.dowelsPerPanel, withReserve: dowels },
+        totalCost: cost,
+      },
+    },
+    walls: null,
+    ceilingMounting: 'ceiling_frameless',
+    wallMounting: 'wall_frameless',
+  };
+  finalizePartnerBomTotals(state.bom);
+  state.hasResults = true;
+  state.resultsStale = false;
+  applyResultsToUi();
+  $('resultsTabs').style.display = 'flex';
+  document.querySelector('#resultsTabs .tab-btn[data-tab="ceiling"]')?.setAttribute('hidden', '');
+  document.querySelector('#resultsTabs .tab-btn[data-tab="walls"]')?.setAttribute('hidden', '');
+  setSchemeView('plan');
+  updateLayoutMode();
+}
+
+async function runCalculation(options = {}) {
+  const { silent = false } = options;
+  const errors = validateBeforeCalc();
+  if (errors.length) {
+    if (!silent) showValidationErrors(errors);
+    else clearResultsUi(errors[0] || '');
+    return false;
+  }
+  if (!silent) showValidationErrors([]);
+
+  const f = els.form;
+  if (partnerCeilingOnlyHost()) {
+    setAllWallSurfaces(false);
+    if (f.calcCeiling) f.calcCeiling.checked = true;
+    state.options.calcCeiling = true;
+    state.options.calcWalls = false;
+    state.options.selectedWallIds = [];
+  }
+  if (state.inputMode === 'area') {
+    const ceilingArea = parseFloat(f.areaOnlyInput?.value) || 0;
+    const wallIds = state.areaWalls.filter((w) => w.enabled && w.area > 0).map((w) => w.id);
+    state.options = {
+      calcCeiling: ceilingArea > 0,
+      selectedWallIds: wallIds,
+      calcWalls: wallIds.length > 0,
+      // По площади нет геометрии для каркаса — только бескаркасный
+      ceilingMounting: 'ceiling_frameless',
+      wallMounting: 'wall_frameless',
+    };
+  } else {
+    state.options = {
+      calcCeiling: f.calcCeiling.checked,
+      selectedWallIds: readSelectedWallIds(),
+      calcWalls: readSelectedWallIds().length > 0,
+      ceilingMounting: f.ceilingMounting.value,
+      wallMounting: f.wallMounting.value,
+    };
+  }
+
+  let calcRoom = state.room;
+  const useAreaPath =
+    state.inputMode === 'area' ||
+    (state.inputMode === 'dims' && state.forceAreaBySize) ||
+    shouldUseQuickDimsAreaPath();
+
+  if (useAreaPath) {
+    const ceilingArea = state.inputMode === 'area'
+      ? (parseFloat(f.areaOnlyInput.value) || 0)
+      : (parseFloat(f.quickLength?.value) || 0) * (parseFloat(f.quickWidth?.value) || 0);
+    state.areaValue = ceilingArea;
+
+    if (state.options.calcCeiling && state.options.selectedWallIds.length === 0) {
+      runQuickAreaCalc(ceilingArea);
+      scheduleCabinetPublish(options);
+      return true;
+    }
+
+    if (state.options.calcCeiling && ceilingArea > 0) {
+      const side = Math.sqrt(ceilingArea);
+      const verts = createRectangleVertices(side, side);
+      calcRoom = Room.createDefault();
+      calcRoom.setVertices(verts, buildEdgeDimensionsFromVertices(verts), {});
+    } else {
+      calcRoom = Room.createDefault();
+      calcRoom.setVertices(createRectangleVertices(1, 1), buildEdgeDimensionsFromVertices(createRectangleVertices(1, 1)), {});
+    }
+  }
+
+  state.calcRoom = calcRoom;
+
+  state.wallResult = null;
+
+  const gen = ++calcGeneration;
+
+  if (state.options.calcCeiling && !useAreaPath) {
+    const layoutKey = buildCeilingLayoutKey(calcRoom.vertices);
+    const canReuse =
+      lastCeilingLayoutKey === layoutKey &&
+      state.ceilingResult?.panels &&
+      state.ceilingCalc;
+    if (!canReuse) {
+      markStatsRecalculating();
+      const calc = new PolygonPanelCalculator(calcRoom.vertices);
+      const lowEnd = prefersLowEndCalc();
+      // Yield between candidates so sketch UI can paint on weak phones
+      const ceilingResult = await calc.calculateBestSchemeAsync({
+        fast: lowEnd,
+        yieldFn: () =>
+          new Promise((resolve) => {
+            if (typeof requestAnimationFrame === 'function') {
+              requestAnimationFrame(() => resolve());
+            } else {
+              setTimeout(resolve, 0);
+            }
+          }),
+      });
+      if (gen !== calcGeneration) return false;
+      state.ceilingCalc = calc;
+      state.ceilingResult = ceilingResult;
+      lastCeilingLayoutKey = layoutKey;
+    }
+  } else if (state.options.calcCeiling && useAreaPath) {
+    state.ceilingResult = null;
+    state.ceilingCalc = null;
+    lastCeilingLayoutKey = null;
+
+    const area = state.areaValue || parseFloat(f.areaOnlyInput?.value) || 0;
+    const panels = Math.ceil(area / PANEL_COVERAGE_AREA);
+    const withReserve = Math.ceil(panels * (1 + RESERVES.panels));
+    state.ceilingResult = {
+      name: 'По площади',
+      panels: [],
+      stats: {
+        total: panels,
+        withReserve,
+        panelsToPurchase: panels,
+        fullPanels: panels,
+        cutPanels: 0,
+        coverageArea: area.toFixed(2),
+        netArea: area.toFixed(2),
+        dowels: {
+          base: panels * RESERVES.dowelsPerPanel,
+          withReserve: Math.ceil(panels * RESERVES.dowelsPerPanel * (1 + RESERVES.dowels)),
+        },
+      },
+    };
+    state.ceilingCalc = new PolygonPanelCalculator(calcRoom.vertices);
+  } else if (!state.options.calcCeiling) {
+    state.ceilingResult = null;
+    state.ceilingCalc = null;
+    lastCeilingLayoutKey = null;
+  }
+
+  if (gen !== calcGeneration) return false;
+
+  if (state.options.selectedWallIds.length > 0 && state.inputMode === 'area') {
+    const walls = state.areaWalls.filter((w) => w.enabled && w.area > 0);
+    state.wallResult = {
+      wallResults: walls.map((w, i) => {
+        const panelCount = Math.ceil(w.area / PANEL_COVERAGE_AREA);
+        return {
+          wall: { id: w.id, label: `Стена ${i + 1}`, length: Math.sqrt(w.area) },
+          netArea: w.area,
+          panelCount,
+          panels: [],
+          openings: [],
+        };
+      }),
+      stats: buildAreaWallStats(walls),
+    };
+  } else if (state.options.selectedWallIds.length > 0 && !useAreaPath) {
+    const wc = new WallCalculator(calcRoom);
+    const allResults = wc.calculateAllWalls();
+    const selected = new Set(state.options.selectedWallIds);
+    const wallResults = allResults.filter((wr) => selected.has(wr.wall.id));
+    state.wallResult = {
+      wallResults,
+      stats: wc.getCombinedStatistics(wallResults),
+    };
+  } else if (state.options.selectedWallIds.length > 0 && state.inputMode === 'dims' && state.forceAreaBySize) {
+    const L = parseFloat(f.quickLength?.value) || 0;
+    const W = parseFloat(f.quickWidth?.value) || 0;
+    const H = parseFloat(f.quickHeight?.value) || 2.7;
+    let walls = state.room.walls
+      .filter((w) => state.options.selectedWallIds.includes(w.id))
+      .map((w) => ({ id: w.id, area: w.length * H, enabled: true }));
+    if (!walls.length) {
+      walls = [
+        { id: 'aw-a', area: L * H, enabled: true },
+        { id: 'aw-b', area: W * H, enabled: true },
+        { id: 'aw-c', area: L * H, enabled: true },
+        { id: 'aw-d', area: W * H, enabled: true },
+      ];
+    }
+    state.wallResult = {
+      wallResults: walls.map((w, i) => {
+        const panelCount = Math.ceil(w.area / PANEL_COVERAGE_AREA);
+        return {
+          wall: { id: w.id, label: `Стена ${i + 1}`, length: Math.sqrt(Math.max(w.area, 0.01)) },
+          netArea: w.area,
+          panelCount,
+          panels: [],
+          openings: [],
+        };
+      }),
+      stats: buildAreaWallStats(walls),
+    };
+  }
+
+  state.bom = buildBOM({
+    room: calcRoom,
+    ceilingResult: state.ceilingResult,
+    wallResult: state.wallResult,
+    options: state.options,
+  });
+
+  state.hasResults = true;
+  state.resultsStale = false;
+  applyResultsToUi();
+  $('resultsTabs').style.display = 'flex';
+  trackPartnerCalcEvent('calc_done');
+
+  populateWallSelect();
+  if (state.ceilingResult && state.ceilingCalc && !useAreaPath) {
+    sketchEditor?.setPanelLayout?.({
+      panels: state.ceilingResult.panels,
+      offsetX: state.ceilingCalc.offsetX,
+      offsetY: state.ceilingCalc.offsetY,
+      stats: state.ceilingResult.stats,
+    });
+  }
+  syncPlanOverlayOptions();
+  renderCeiling();
+  renderSelectedWall();
+  updateResultsTabsVisibility();
+  if (state.activeView !== 'walls') setSchemeView('plan');
+
+  updateLayoutMode();
+  updateSchemeModeUi();
+  scheduleCabinetPublish(options);
+  return true;
+}
+
+function populateWallSelect() {
+  const sel = $('wallViewSelect');
+  const chips = $('wallChips');
+  if (!state.wallResult) return;
+  const walls = state.wallResult.wallResults;
+  if (sel) {
+    sel.innerHTML = walls.map((w) => `<option value="${w.wall.id}">${w.wall.label}</option>`).join('');
+  }
+  if (chips) {
+    chips.innerHTML = '';
+    walls.forEach((w, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'wall-chip' + (i === 0 ? ' is-active' : '');
+      btn.dataset.wallId = w.wall.id;
+      btn.textContent = w.wall.label;
+      btn.addEventListener('click', () => {
+        if (sel) sel.value = w.wall.id;
+        syncWallChipsActive();
+        renderSelectedWall();
+      });
+      chips.appendChild(btn);
+    });
+  }
+}
+
+function syncWallChipsActive() {
+  const id = $('wallViewSelect')?.value;
+  document.querySelectorAll('#wallChips .wall-chip').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.wallId === id);
+  });
+}
+
+function updateResultsTabsVisibility() {
+  const hasWalls = !!state.wallResult?.wallResults?.length && state.hasResults;
+
+  document.querySelectorAll('#resultsTabs .tab-btn').forEach((btn) => {
+    const tab = btn.dataset.tab;
+    if (tab === 'plan') {
+      btn.hidden = false;
+      return;
+    }
+    if (tab === 'walls') {
+      btn.hidden = !hasWalls;
+    }
+  });
+
+  if (state.activeView === 'walls' && !hasWalls) setSchemeView('plan');
+  if (state.activeView === 'ceiling') setSchemeView('plan');
+}
+
+function renderCeiling() {
+  if (!state.ceilingResult || !ceilingViz || !state.ceilingCalc) return;
+  const room = state.calcRoom ?? state.room;
+  ceilingViz.setRoom({
+    vertices: room.vertices,
+    offsetX: state.ceilingCalc.offsetX,
+    offsetY: state.ceilingCalc.offsetY,
+  });
+  ceilingViz.setPanels(state.ceilingResult.panels);
+  const showFrame = $('showFrame')?.checked && state.options.ceilingMounting === 'ceiling_framed';
+  const localBounds = getCeilingFrameBounds(room);
+  ceilingViz.setFrameOverlay(showFrame, showFrame ? localBounds : null);
+  ceilingViz.render({ showNumbers: $('showNumbers')?.checked ?? true });
+}
+
+function renderSelectedWall() {
+  if (!state.wallResult || !wallViz) return;
+  const wallId = $('wallViewSelect')?.value || state.wallResult.wallResults[0]?.wall.id;
+  const wr = state.wallResult.wallResults.find((w) => w.wall.id === wallId);
+  if (!wr) return;
+  const room = state.calcRoom ?? state.room;
+  wallViz.setWallResult(wr, room.wallHeight);
+  wallViz.setFrameOverlay(
+    ($('showFrame')?.checked ?? false) && state.options.wallMounting === 'wall_framed'
+  );
+  wallViz.render({ showNumbers: $('showNumbers')?.checked ?? true });
+}
+
+function readOptionsFromForm() {
+  const f = els.form;
+  const selectedWallIds = readSelectedWallIds();
+  return {
+    calcCeiling: f.calcCeiling.checked,
+    selectedWallIds,
+    calcWalls: selectedWallIds.length > 0,
+    ceilingMounting: f.ceilingMounting.value,
+    wallMounting: f.wallMounting.value,
+  };
+}
+
+function applyOptionsToForm(options) {
+  if (!options) return;
+  const f = els.form;
+  f.calcCeiling.checked = options.calcCeiling !== false;
+
+  if (options.selectedWallIds?.length) {
+    state.options.selectedWallIds = [...options.selectedWallIds];
+    state.options.calcWalls = true;
+  } else if (options.calcWalls === false || partnerCeilingOnlyHost()) {
+    state.options.selectedWallIds = [];
+    state.options.calcWalls = false;
+  } else {
+    state.options.selectedWallIds = state.room.walls.map((w) => w.id);
+    state.options.calcWalls = true;
+  }
+
+  if (options.ceilingMounting) f.ceilingMounting.value = options.ceilingMounting;
+  if (options.wallMounting) f.wallMounting.value = options.wallMounting;
+  syncSegmentedFromSelect('ceilingMounting');
+  syncSegmentedFromSelect('wallMounting');
+  syncFrameToggleVisibility();
+  syncPlanOverlayOptions();
+  refreshWallSurfaceCheckboxes();
+  state.options = { ...state.options, ...readOptionsFromForm() };
+}
+
+function buildProjectState() {
+  syncFormToRoom();
+  return buildProjectPayload({
+    room: state.room.toJSON(),
+    options: readOptionsFromForm(),
+    inputMode: state.inputMode,
+    areaValue: parseFloat(els.form.areaOnlyInput?.value) || null,
+    areaWalls: state.areaWalls,
+  });
+}
+
+function showProjectLoadedBanner(message = 'Проект из ссылки загружен') {
+  const banner = $('projectLoadedBanner');
+  if (!banner) return;
+  banner.hidden = false;
+  banner.textContent = message;
+  clearTimeout(showProjectLoadedBanner._t);
+  showProjectLoadedBanner._t = setTimeout(() => {
+    banner.hidden = true;
+  }, 4200);
+}
+
+async function handleShare() {
+  const url = buildShareUrl(buildProjectState());
+  try {
+    await navigator.clipboard.writeText(url);
+    alert('Ссылка на проект скопирована.\n\nОткройте её на этом или другом устройстве — все параметры помещения, проёмы и настройки монтажа сохранятся.');
+  } catch {
+    prompt('Скопируйте ссылку на проект:', url);
+  }
+}
+
+function isAreaEstimateMode() {
+  return (
+    state.inputMode === 'area' ||
+    (state.inputMode === 'dims' && state.forceAreaBySize) ||
+    shouldUseQuickDimsAreaPath()
+  );
+}
+
+function partnerCeilingOnlyHost() {
+  const params = new URLSearchParams(window.location.search);
+  return (
+    params.get('partner') === '1' &&
+    (params.get('walls') === '0' || params.get('surfaces') === 'ceiling')
+  );
+}
+
+/** Gate C host: L×W with walls off → ceiling area only (not full room shell). */
+function shouldUseQuickDimsAreaPath() {
+  if (!partnerCeilingOnlyHost()) return false;
+  if (state.inputMode !== 'dims') return false;
+  const f = els.form;
+  return !!(f.calcCeiling?.checked) && readSelectedWallIds().length === 0;
+}
+
+function rememberCalcOffline(event) {
+  if (event.action !== 'calc_done' && event.action !== 'result') return Promise.resolve();
+  return new Promise((resolve) => {
+    const req = indexedDB.open('mf-partner-offline', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('objects')) db.createObjectStore('objects', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('calculations')) db.createObjectStore('calculations', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('analytics')) db.createObjectStore('analytics', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+    };
+    req.onerror = () => resolve();
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction(['calculations', 'analytics'], 'readwrite');
+      tx.objectStore('analytics').put(event);
+      tx.objectStore('calculations').put({
+        id: event.id,
+        at: event.at,
+        tool: 'calculator',
+        action: event.action,
+        login: event.login,
+        companyName: event.companyName,
+        orgId: event.orgId,
+        userId: event.userId,
+        areaM2: event.object?.areaM2 ?? null,
+        panels: event.object?.panels ?? null,
+        label: event.object?.label || event.object?.mode || null,
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    };
+  });
+}
+
+function trackPartnerCalcEvent(action) {
+  try {
+    const raw = localStorage.getItem('mf_partner_session_v2');
+    if (!raw) return;
+    const session = JSON.parse(raw);
+    if (!session?.login) return;
+    const panels = state.bom?.total?.panels ?? state.ceilingResult?.stats?.panelCount ?? null;
+    const area =
+      state.bom?.total?.areaM2 ??
+      state.ceilingResult?.stats?.netArea ??
+      state.areaValue ??
+      null;
+    const mode = state.inputMode || null;
+    const event = {
+      id: `ae_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`,
+      at: new Date().toISOString(),
+      orgId: session.orgId || null,
+      userId: session.id || null,
+      login: session.login,
+      role: session.role || 'partner',
+      companyName: session.org?.companyName || session.displayName || '',
+      tool: 'calculator',
+      action,
+      object: { areaM2: area, panels, mode },
+    };
+    const key = 'mf_partner_analytics_v1';
+    const prev = JSON.parse(localStorage.getItem(key) || '[]');
+    localStorage.setItem(key, JSON.stringify([event, ...(Array.isArray(prev) ? prev : [])].slice(0, 2000)));
+    const queueOffline = () => {
+      const qKey = 'mf_partner_analytics_queue_v1';
+      const queued = JSON.parse(localStorage.getItem(qKey) || '[]');
+      localStorage.setItem(qKey, JSON.stringify([event, ...(Array.isArray(queued) ? queued : [])].slice(0, 500)));
+    };
+    void rememberCalcOffline(event);
+    const api = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '';
+    if (!api || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+      queueOffline();
+      return;
+    }
+    fetch(`${String(api).replace(/\/$/, '')}/analytics/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events: [event] }),
+    }).catch(() => queueOffline());
+  } catch {
+    /* ignore */
+  }
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = () => reject(reader.error || new Error('read'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function calcSignature() {
+  const panels = state.bom?.total?.panelsWithReserve ?? 0;
+  const dowels = state.bom?.total?.dowelsWithReserve ?? 0;
+  const area = (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0);
+  return `${state.inputMode}|${isAreaEstimateMode() ? 1 : 0}|${panels}|${dowels}|${area}`;
+}
+
+async function collectPdfInput() {
+  const areaEstimate = isAreaEstimateMode();
+  if (areaEstimate) {
+    const wallSurfaces = (state.wallResult?.wallResults ?? []).map((wr) => ({
+      wallResult: wr,
+      image: null,
+    }));
+    return {
+      bom: state.bom,
+      room: state.room,
+      ceilingImage: null,
+      wallSurfaces,
+      planImage: null,
+      areaEstimate: true,
+      hasScheme: false,
+    };
+  }
+  syncFormToRoom();
+  const room = state.calcRoom ?? state.room;
+  const { buildPdfSchemeImages } = await import('../export/pdf-scheme-render.js');
+  const showNumbers = $('showNumbers')?.checked ?? true;
+  const showFrame = $('showFrame')?.checked ?? false;
+  const { planImage, ceilingImage, wallSurfaces } = buildPdfSchemeImages({
+    room,
+    ceilingCalc: state.ceilingCalc,
+    ceilingResult: state.ceilingResult,
+    wallResults: state.wallResult?.wallResults ?? [],
+    options: state.options,
+    showNumbers,
+    showFrame,
+  });
+  const hasScheme = Boolean(planImage || ceilingImage || wallSurfaces.some((w) => w.image));
+  return {
+    bom: state.bom,
+    room: state.room,
+    ceilingImage,
+    wallSurfaces,
+    planImage,
+    areaEstimate: false,
+    hasScheme,
+  };
+}
+
+let publishTimer = 0;
+let publishLock = false;
+let lastPublishedSig = '';
+
+function triggerPdfDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function partnerBindUsesCeilingScopeOnly() {
+  return partnerCeilingOnlyHost() && !state.options.calcWalls;
+}
+
+function cabinetBindAreaM2() {
+  if (partnerBindUsesCeilingScopeOnly()) {
+    const net = parseFloat(state.ceilingResult?.stats?.netArea);
+    const ceilingArea =
+      (net > 0 ? net : null) ??
+      state.bom?.ceiling?.area ??
+      state.areaValue ??
+      0;
+    if (ceilingArea > 0) return ceilingArea;
+  }
+  if (partnerCeilingOnlyHost() && state.bom?.ceiling?.area > 0) {
+    return state.bom.ceiling.area;
+  }
+  const fromBom = (state.bom?.ceiling?.area ?? 0) + (state.bom?.walls?.area ?? 0);
+  if (fromBom > 0) return fromBom;
+  if (state.areaValue > 0) return state.areaValue;
+  return null;
+}
+
+/** Amount shown as partner «Итого» — same field Gate C bind uses as preliminary. */
+function cabinetBindAmount() {
+  const bom = state.bom;
+  if (!bom) return null;
+  const area = cabinetBindAreaM2();
+  const scoped = bomTotalsForPartnerBind(bom);
+  const panelsOnly = scoped?.totalCost ?? null;
+  if (PARTNER_PRICING.enabled) {
+    const grand = partnerGrandTotal(bom, area, panelsOnly);
+    if (grand != null) return grand;
+  }
+  return panelsOnly;
+}
+
+function cabinetBindPanels() {
+  const bom = state.bom;
+  if (!bom) return null;
+  if (partnerBindUsesCeilingScopeOnly() && bom.ceiling?.stats) {
+    return bom.ceiling.stats.withReserve ?? bom.ceiling.stats.panelsToPurchase ?? null;
+  }
+  return bom.total?.panelsWithReserve ?? bom.total?.panels ?? null;
+}
+
+function cabinetBindDowels() {
+  const bom = state.bom;
+  if (!bom) return null;
+  if (partnerBindUsesCeilingScopeOnly() && bom.ceiling?.stats?.dowels) {
+    return bom.ceiling.stats.dowels.withReserve ?? null;
+  }
+  return bom.total?.dowelsWithReserve ?? null;
+}
+
+function postCabinetCalcPayload(extra = {}) {
+  const params = new URLSearchParams(window.location.search);
+  const scoped = bomTotalsForPartnerBind(state.bom);
+  const panels = scoped?.panelsWithReserve ?? scoped?.panels ?? null;
+  const dowels = scoped?.dowelsWithReserve ?? null;
+  const areaM2 = cabinetBindAreaM2();
+  const panelsCost = cabinetBindAmount();
+  const targetOrigin =
+    window.location.origin && window.location.origin !== 'null'
+      ? window.location.origin
+      : '*';
+  window.parent.postMessage(
+    {
+      type: 'mf-cabinet-calc',
+      objectId: params.get('objectId') || null,
+      inputMode: state.inputMode,
+      areaEstimate: isAreaEstimateMode(),
+      hasScheme: extra.hasScheme ?? false,
+      panels,
+      dowels,
+      areaM2,
+      panelsCost,
+      ...extra,
+    },
+    targetOrigin,
+  );
+}
+
+/** Смета (цены, количество и схема раскладки) уходит в кабинет (родительское окно). */
+async function publishCalcToCabinet() {
+  if (window.parent === window) return;
+  if (!state.bom) return;
+  if (onboardingDemoActive) return;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('partner') !== '1') return;
+  const sig = calcSignature();
+  if (sig === lastPublishedSig || publishLock) return;
+  publishLock = true;
+  const statusEl = $('schemeStatus');
+  if (statusEl) {
+    statusEl.hidden = false;
+    statusEl.textContent = 'Сохраняем смету в объект…';
+  }
+  try {
+    if (calcSignature() !== sig) return;
+
+    const areaEstimate = isAreaEstimateMode();
+    if (areaEstimate) {
+      postCabinetCalcPayload({ hasScheme: false, pdfBase64: null, filename: null });
+      lastPublishedSig = sig;
+      if (statusEl) statusEl.textContent = 'Смета отправлена в кабинет';
+      return;
+    }
+
+    const input = await collectPdfInput();
+    if (calcSignature() !== sig) return;
+    if (!input.hasScheme) return;
+
+    const { exportCalculationPDF } = await import('../export/pdf-export.js');
+    const fileLabel = params.get('client') || '';
+    const priced = await exportCalculationPDF({
+      ...input,
+      hidePrices: false,
+      download: false,
+      fileLabel,
+    });
+    const pdfBase64 = await blobToBase64(priced.blob);
+    postCabinetCalcPayload({
+      areaEstimate: false,
+      hasScheme: true,
+      filename: priced.filename,
+      pdfBase64,
+    });
+    lastPublishedSig = sig;
+    if (statusEl) statusEl.textContent = 'Смета отправлена в кабинет';
+  } catch (err) {
+    console.warn('[cabinet-pdf]', err);
+    if (statusEl) statusEl.textContent = 'Не удалось приложить PDF';
+  } finally {
+    publishLock = false;
+    if (statusEl) {
+      clearTimeout(publishCalcToCabinet._t);
+      publishCalcToCabinet._t = setTimeout(() => {
+        statusEl.hidden = true;
+      }, 2400);
+    }
+  }
+}
+
+function scheduleCabinetPublish(options = {}) {
+  if (options.skipCabinet || onboardingDemoActive) return;
+  if (window.parent === window) return;
+  clearTimeout(publishTimer);
+  if (options.silent) {
+    publishTimer = setTimeout(() => {
+      void publishCalcToCabinet();
+    }, 2200);
+    return;
+  }
+  void publishCalcToCabinet();
+}
+
+async function handlePDF() {
+  if (!state.bom) {
+    alert('Сначала выполните расчёт');
+    return;
+  }
+  const { exportCalculationPDF } = await import('../export/pdf-export.js');
+  const input = await collectPdfInput();
+  trackPartnerCalcEvent('pdf');
+  const file = await exportCalculationPDF({
+    ...input,
+    hidePrices: false,
+    download: false,
+    fileLabel: new URLSearchParams(window.location.search).get('client') || '',
+  });
+  triggerPdfDownload(file.blob, file.filename);
+  scheduleCabinetPublish({ silent: false });
+}
+
+function setupMobileActions() {
+  $('mobileParamsBtn')?.addEventListener('click', () => {
+    document.body.classList.add('mobile-sidebar-open');
+    // Bring calc CTA into view when reopening params after results
+    requestAnimationFrame(() => {
+      const wrap = document.querySelector('.sidebar-calc-wrap');
+      wrap?.scrollIntoView?.({ block: 'nearest' });
+    });
+  });
+  $('mobileSidebarClose')?.addEventListener('click', () => {
+    closeMobileSidebar();
+    if (resultsUnlockedForUi()) scrollMobileResultsIntoView();
+  });
+  $('mobileResultsBtn')?.addEventListener('click', () => {
+    if (!resultsUnlockedForUi()) {
+      openMobileParamsAfterSketch();
+      return;
+    }
+    closeMobileSidebar();
+    scrollMobileResultsIntoView();
+  });
+  $('openResultsDrawerBtn')?.addEventListener('click', () => {
+    if (document.body.classList.contains('results-sheet-open')) closeResultsDrawer();
+    else openResultsDrawer();
+  });
+  $('resultsDrawerCloseBtn')?.addEventListener('click', () => closeResultsDrawer());
+  $('resultsDrawerBackdrop')?.addEventListener('click', () => closeResultsDrawer());
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeMobileSidebar();
+      if (document.body.classList.contains('results-sheet-open')) closeResultsDrawer();
+    }
+  });
+  window.matchMedia(MOBILE_MQ).addEventListener('change', () => {
+    if (!isMobileLayout()) {
+      closeMobileSidebar();
+      exitMobileSketchStep({ markSummary: false });
+    } else if (state.inputMode === 'draw' && !onboardingDemoActive) {
+      enterMobileSketchStep();
+    }
+    syncResultsAsideVisibility();
+    updateSchemeModeUi();
+    syncCalcButtons();
+    fitSketchAfterLayoutChange();
+  });
+  window.matchMedia(LAPTOP_MQ).addEventListener('change', () => {
+    syncResultsAsideVisibility();
+    if (!isLaptopLayout()) closeResultsDrawer();
+    fitSketchAfterLayoutChange();
+  });
+  window.matchMedia(WIDE_MQ).addEventListener('change', () => {
+    syncResultsAsideVisibility();
+    fitSketchAfterLayoutChange();
+  });
+  window.addEventListener('resize', () => {
+    syncResultsAsideVisibility();
+  });
+
+  $('sketchMobileEditBtn')?.addEventListener('click', () => {
+    enterMobileSketchStep();
+  });
+
+  $('sketchEditorHost')?.addEventListener('pointerdown', (e) => {
+    if (!isMobileLayout() || state.inputMode !== 'draw') return;
+    if (sketchEditor?.isFullscreen?.()) return;
+    if (e.target.closest('#sketchMobileEditBtn, #sketchDoneBtn, #sketchMobileDoneBtn, #sketchMobileBackBtn')) return;
+    enterMobileSketchStep();
+  });
+}
+
+function loadFromUrl() {
+  const data = readShareFromUrl();
+  if (data?.room) {
+    const room = Room.fromJSON(data.room);
+    applyRoomToForm(room);
+    applyOptionsToForm(data.options);
+    if (data.inputMode) {
+      setInputMode(data.inputMode, { preserveGeometry: true });
+    }
+    if (data.areaValue && els.form.areaOnlyInput) {
+      els.form.areaOnlyInput.value = data.areaValue;
+      state.areaValue = data.areaValue;
+    }
+    if (data.areaWalls?.length) {
+      state.areaWalls = data.areaWalls;
+      renderAreaWallsList();
+    }
+    showProjectLoadedBanner();
+    return;
+  }
+
+  applyQueryHandoff();
+}
+
+/**
+ * Deep-link from Проблемомер / marketing:
+ * ?area=18&mode=area&walls=0&source=problemomer → ceiling-only area calc.
+ */
+/** Gate C / partner host: ceiling-only by default (walls off), no UI redesign. */
+function applyGateCCeilingPreset() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('partner') !== '1') return;
+  const ceilingOnly =
+    params.get('walls') === '0' ||
+    params.get('surfaces') === 'ceiling' ||
+    params.get('source') === 'problemomer' ||
+    params.get('source') === 'cabinet';
+  if (!ceilingOnly) return;
+  state.options.calcWalls = false;
+  state.options.selectedWallIds = [];
+  setAllWallSurfaces(false);
+  if (els.form?.calcCeiling) els.form.calcCeiling.checked = true;
+  state.options.calcCeiling = true;
+}
+
+function applyQueryHandoff() {
+  const params = new URLSearchParams(window.location.search);
+  const area = parseFloat(params.get('area') || '');
+  if (!(area > 0) || !Number.isFinite(area)) return;
+
+  const rawMode = params.get('mode');
+  const mode = rawMode === 'dims' || rawMode === 'draw' ? rawMode : 'area';
+  const source = params.get('source') || '';
+  const ceilingOnly =
+    params.get('walls') === '0' ||
+    params.get('surfaces') === 'ceiling' ||
+    source === 'problemomer';
+
+  setInputMode(mode, { preserveGeometry: true });
+
+  if (mode === 'area') {
+    if (els.form.areaOnlyInput) {
+      els.form.areaOnlyInput.value = area.toFixed(2);
+    }
+    state.areaValue = area;
+    if (ceilingOnly) {
+      state.areaWalls = [];
+      renderAreaWallsList();
+    }
+    if (els.form.calcCeiling) els.form.calcCeiling.checked = true;
+  }
+
+  const banner =
+    source === 'problemomer'
+      ? `Площадь потолка ${area.toFixed(1)} м² из Проблемомера`
+      : source === 'cabinet'
+        ? `Площадь помещения ${area.toFixed(1)} м² из карточки. Можно уточнить перед расчётом.`
+        : `Площадь ${area.toFixed(1)} м² из ссылки`;
+  showProjectLoadedBanner(banner);
+
+  window.setTimeout(() => {
+    void runCalculation({ silent: true });
+  }, 0);
+}
+
+function initTheme() {
+  try {
+    const savedTheme = localStorage.getItem('mf_theme');
+    const isDark = savedTheme === 'dark';
+    document.body.classList.toggle('theme-dark', isDark);
+    sketchEditor?.render?.();
+    if (state.hasResults) {
+      renderCeiling();
+      renderSelectedWall();
+    }
+    const switchEl = $('themeSwitch');
+    if (switchEl) {
+      switchEl.checked = isDark;
+      switchEl.addEventListener('change', () => {
+        const dark = switchEl.checked;
+        document.body.classList.toggle('theme-dark', dark);
+        localStorage.setItem('mf_theme', dark ? 'dark' : 'light');
+        renderPlanEditors();
+        if (state.hasResults) {
+          renderCeiling();
+          renderSelectedWall();
+        }
+        sketchEditor?.render?.();
+      });
+    }
+  } catch {
+    document.body.classList.remove('theme-dark');
+  }
+}
+
+function mountPartnerBanner() {
+  if (!PARTNER_PRICING.enabled) return;
+  if (document.getElementById('partnerCalcBanner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'partnerCalcBanner';
+  banner.className = 'partner-calc-banner';
+  const pricing = getPartnerPricing();
+  const company = pricing.company ? pricing.company : 'Партнёрский режим';
+  const install =
+    pricing.installPerM2 != null ? ` · монтаж ${pricing.installPerM2} ₽/м²` : '';
+  banner.innerHTML = `<strong>${company}</strong><span>РРЦ ${PANEL.priceRub} ₽/панель · ${PANEL.pricePerM2} ₽/м²${install}</span><span class="partner-calc-banner__hint">Офиц. ${pricing.officialPanelPrice} ₽</span>`;
+  const shell = document.querySelector('.app-shell');
+  if (shell) shell.prepend(banner);
+  else document.body.prepend(banner);
+}
+
+/** Replace store CTA with green «Итого» card — one grand total; breakdown lives in results. */
+function mountPartnerTotalCard() {
+  if (!PARTNER_PRICING.enabled) return;
+  if (document.getElementById('partnerTotalCard')) return;
+  const buy = document.getElementById('buyMultiframeBtn');
+  if (!buy) return;
+  const card = document.createElement('div');
+  card.id = 'partnerTotalCard';
+  card.className = 'stat-card stat-card--partner-total';
+  card.dataset.stat = 'partner-total';
+  card.innerHTML = `
+    <div class="stat-label">Итого</div>
+    <div class="stat-value" id="partnerTotalCost" data-raw="0">0 ₽</div>
+    <div class="stat-label__hint">панели · монтаж · крепёж</div>
+  `;
+  buy.replaceWith(card);
+  document.body.classList.add('partner-calc-mode');
+}
+
+function init() {
+  mountPartnerBanner();
+  mountPartnerTotalCard();
+  cacheElements();
+  setupSketchEditor();
+
+  ceilingViz = new CeilingVisualizer($('ceilingCanvas'));
+  wallViz = new WallVisualizer($('wallCanvas'));
+
+  setupModeToggles();
+  setupSegmentedMounting();
+  setupResultsExpand();
+  setupFormListeners();
+  setupTabs();
+  setupMobileActions();
+  initTheme();
+
+  $('shareBtn')?.addEventListener('click', handleShare);
+  $('downloadBtn')?.addEventListener('click', handlePDF);
+
+  state.inputMode = null;
+  syncModePanelsUi();
+  applyRoomToForm(state.room);
+  refreshWallSurfaceCheckboxes();
+  setSchemeView('plan');
+  updateSchemeModeUi();
+  updateLayoutMode();
+  updateResultsPreview();
+  loadFromUrl();
+  if (!state.inputMode) updateSchemeModeUi();
+  applyGateCCeilingPreset();
+
+  const appOnboarding = setupAppOnboarding({
+    getInputMode: () => state.inputMode,
+    setInputMode: (mode, opts) => setInputMode(mode, opts),
+    runCalculation: (opts) => runCalculation({ silent: true, ...(opts || {}), skipCabinet: true }),
+    applySketchTemplate: (name) => sketchEditor?._applyTemplate?.(name),
+    getSketchEditor: () => sketchEditor,
+    setSchemeView: (view) => setSchemeView(view),
+    enterMobileSketchStep: () => enterMobileSketchStep({ force: true }),
+    exitMobileSketchStep: (opts) => exitMobileSketchStep(opts || { markSummary: true }),
+    openMobileParamsAfterSketch: () => openMobileParamsAfterSketch(),
+    unlockMobileResults: () => {
+      state.mobileResultsUnlocked = true;
+      syncChromeUi();
+      syncResultsAsideVisibility();
+      updateStatCards();
+    },
+    onDemoStart: () => { onboardingDemoActive = true; },
+    onDemoEnd: () => { onboardingDemoActive = false; },
+    resetAfterDemo: () => resetUiAfterOnboarding(),
+  });
+  // Общее обучение стартует только по кнопке «Как работает?»
+}
+
+
+function resetUiAfterOnboarding() {
+  onboardingDemoActive = true;
+  try {
+    closeMobileSidebar();
+    exitMobileSketchStep({ markSummary: false });
+    document.querySelectorAll('.tour-demo-pulse').forEach((el) => el.classList.remove('tour-demo-pulse'));
+
+    if (sketchEditor) {
+      sketchEditor.openingsModalOpen = false;
+      if (sketchEditor.openingsModal) {
+        sketchEditor.openingsModal.classList.remove('is-open');
+        sketchEditor.openingsModal.hidden = true;
+      }
+      sketchEditor.geometryLocked = false;
+      sketchEditor.host?.classList.remove('sketch-geometry-locked');
+      sketchEditor.vertices = [];
+      sketchEditor.edgeDimensions = {};
+      sketchEditor.diagonalDimensions = {};
+      sketchEditor.closed = false;
+      sketchEditor._previewPoint = null;
+      sketchEditor._clearPanelOverlay?.();
+      sketchEditor._hideEdgeActions?.();
+      sketchEditor.keypad?.hide?.();
+    }
+
+    state.room.setVertices([], {}, {});
+    state.room.openings = [];
+    state.areaWalls = [];
+    state.areaValue = null;
+    state.forceAreaBySize = false;
+
+    if (els.form.calcCeiling) els.form.calcCeiling.checked = true;
+    if (els.form.quickLength) els.form.quickLength.value = '5';
+    if (els.form.quickWidth) els.form.quickWidth.value = '4';
+    if (els.form.quickHeight) els.form.quickHeight.value = '2.7';
+    if (els.form.wallHeight) els.form.wallHeight.value = '2.7';
+    if ($('drawHeight')) $('drawHeight').value = '2.7';
+    if (els.form.ceilingMounting) els.form.ceilingMounting.value = 'ceiling_frameless';
+    if (els.form.wallMounting) els.form.wallMounting.value = 'wall_framed';
+    document.querySelectorAll('[data-segment-for="ceilingMounting"] .segmented__btn').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.value === 'ceiling_frameless');
+    });
+    document.querySelectorAll('[data-segment-for="wallMounting"] .segmented__btn').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.value === 'wall_framed');
+    });
+
+    state.inputMode = null;
+    clearResultsUi('Выберите способ слева');
+    refreshWallSurfaceCheckboxes();
+    setAllWallSurfaces(true);
+    syncModePanelsUi();
+    updateSchemeModeUi();
+    updateLayoutMode();
+    setSchemeView('plan');
+    updatePlanStats();
+    sketchEditor?.fitToScreen?.();
+    sketchEditor?.render?.();
+    sketchEditor?._updateUi?.();
+    try {
+      window.scrollTo(0, 0);
+    } catch { /* ignore */ }
+  } finally {
+    onboardingDemoActive = false;
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

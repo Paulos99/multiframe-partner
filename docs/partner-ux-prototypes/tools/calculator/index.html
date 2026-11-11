@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="description" content="Калькулятор MultiFRAME — расчёт материалов для потолка и стен">
+  <meta name="theme-color" content="#01644f">
+  <title>Калькулятор MultiFRAME · кабинет партнёра</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <img src="./logo.png" alt="StP" class="app-header__logo" onerror="this.style.display='none'" />
+      <div class="app-header__text">
+        <h1>КАЛЬКУЛЯТОР</h1>
+        <img src="./logo-multiframe.png?v=6" alt="MultiFRAME" class="app-header__brand-logo" />
+      </div>
+      <button type="button" id="appHelpBtn" class="app-header__help" aria-label="Как работает калькулятор" title="Как работает?">
+        <span class="app-header__help-full">Как работает?</span>
+        <span class="app-header__help-short" aria-hidden="true">?</span>
+      </button>
+    </header>
+
+    <main class="app-main">
+      <div class="workspace" id="appLayout" data-state="empty" data-view="plan">
+        <aside class="workspace-sidebar">
+          <button type="button" class="btn btn-secondary workspace-sidebar__close" id="mobileSidebarClose" aria-label="Закрыть">Закрыть</button>
+          <div class="workspace-sidebar__scroll">
+            <div id="entryPicker" class="entry-picker">
+              <h2 class="entry-picker__title">Что вы знаете о помещении?</h2>
+              <p class="entry-picker__lead">Выберите способ — от него зависит, как считать материалы</p>
+
+              <div class="entry-flow" id="entryFlow">
+                <div class="entry-block" data-entry="dims">
+                  <button type="button" class="entry-card" data-entry="dims" id="entryDimsBtn" aria-expanded="false" aria-controls="dimsCalcCard">
+                    <span class="entry-card__body">
+                      <span class="entry-card__title">Ввести размеры</span>
+                      <span class="entry-card__desc">Знаю длину и ширину — прямоугольная комната</span>
+                    </span>
+                    <span class="entry-card__chevron" aria-hidden="true"></span>
+                  </button>
+                  <div class="entry-panel-slot" data-entry="dims" id="dimsPanelSlot">
+                    <div class="entry-block__inner">
+                      <div class="card input-panel expanded active entry-panel" id="dimsCalcCard" data-mode-panel="dims">
+                        <h2 class="calc-panel-title">Размеры комнаты</h2>
+                        <div class="form-group">
+                          <label for="quickLength">Длина, м</label>
+                          <input type="number" id="quickLength" value="5" step="0.01" min="0.1" max="100" />
+                        </div>
+                        <div class="form-group">
+                          <label for="quickWidth">Ширина, м</label>
+                          <input type="number" id="quickWidth" value="4" step="0.01" min="0.1" max="100" />
+                        </div>
+                        <div class="form-group">
+                          <label for="quickHeight">Высота, м</label>
+                          <input type="number" id="quickHeight" value="2.7" step="0.01" min="0.1" max="10" />
+                        </div>
+                        <div class="plan-stats" id="planStatsDims">Площадь: — · Периметр: —</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="entry-block" data-entry="draw">
+                  <button type="button" class="entry-card" data-entry="draw" id="entryDrawBtn" aria-expanded="false" aria-controls="drawCalcCard">
+                    <span class="entry-card__body">
+                      <span class="entry-card__title">Нарисовать схему</span>
+                      <span class="entry-card__desc">Сложная форма или есть чертёж — рисуем с нуля</span>
+                    </span>
+                    <span class="entry-card__chevron" aria-hidden="true"></span>
+                  </button>
+                  <div class="entry-panel-slot" data-entry="draw" id="drawPanelSlot">
+                    <div class="entry-block__inner">
+                      <div class="card input-panel expanded active entry-panel" id="drawCalcCard" data-mode-panel="draw">
+                        <h2 class="calc-panel-title">Своя схема</h2>
+                        <div class="form-group">
+                          <label for="drawHeight">Высота стен, м</label>
+                          <input type="number" id="drawHeight" value="2.7" step="0.01" min="0.1" max="10" />
+                        </div>
+                        <div class="plan-stats" id="planStatsDraw">Площадь: — · Периметр: —</div>
+                        <div class="draw-actions">
+                          <button type="button" class="btn btn-secondary btn-sm" id="drawUploadPhotoBtn">Фото плана</button>
+                          <button type="button" class="btn-link" id="drawClearBtn">Очистить</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="entry-block" data-entry="area">
+                  <button type="button" class="entry-card entry-card--secondary" data-entry="area" id="entryAreaBtn" aria-expanded="false" aria-controls="quickCalcCard">
+                    <span class="entry-card__body">
+                      <span class="entry-card__title">По площади</span>
+                      <span class="entry-card__desc">Нет размеров стен — примерная оценка в м²</span>
+                    </span>
+                    <span class="entry-card__chevron" aria-hidden="true"></span>
+                  </button>
+                  <div class="entry-panel-slot" data-entry="area" id="areaPanelSlot">
+                    <div class="entry-block__inner">
+                      <div class="card input-panel expanded active entry-panel" id="quickCalcCard" data-mode-panel="area">
+                        <h2 class="calc-panel-title">Оценка по площади</h2>
+                        <p class="hint-text">Приблизительный расчёт без схемы — когда нет точных размеров.</p>
+                        <div class="form-group">
+                          <label for="areaOnlyInput">Площадь потолка, м²</label>
+                          <input type="number" id="areaOnlyInput" placeholder="35" step="0.1" min="0.1" />
+                        </div>
+                        <div id="areaWallsBlock">
+                          <p class="hint-text">Стены (площадь каждой, м²)</p>
+                          <div id="areaWallsList" class="area-walls-list"></div>
+                          <button type="button" class="btn btn-secondary btn-sm area-add-wall-btn" id="addAreaWallBtn">+ Добавить стену</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- JS переносит #sharedReveal сразу под открытый entry-panel-slot (dims/draw) -->
+                <div id="sharedReveal" class="shared-reveal">
+                  <div class="shared-reveal__collapse">
+                    <div class="shared-reveal__inner">
+                      <div id="sharedCalcOptions" class="card input-panel expanded active shared-calc-options">
+                        <h3 class="calc-panel-title">Что считать</h3>
+                        <div class="surface-chips" id="surfaceChips">
+                          <label class="surface-chip surface-chip--toggle">
+                            <input type="checkbox" id="calcCeiling" checked />
+                            <span class="surface-chip__label">Потолок</span>
+                          </label>
+                          <div id="wallSurfacesList" class="surface-chips surface-chips--walls"></div>
+                        </div>
+                        <div class="surface-group-actions surface-group-actions--compact">
+                          <button type="button" class="btn-link" id="selectAllWallsBtn">Все стены</button>
+                          <button type="button" class="btn-link" id="deselectAllWallsBtn">Снять</button>
+                        </div>
+
+                        <h3 class="calc-panel-title">Тип монтажа</h3>
+                        <div class="form-group" id="ceilingMountingGroup">
+                          <label>Потолок</label>
+                          <div class="segmented" data-segment-for="ceilingMounting" role="group" aria-label="Монтаж потолка">
+                            <button type="button" class="segmented__btn is-active" data-value="ceiling_frameless">Бескаркасный</button>
+                            <button type="button" class="segmented__btn" data-value="ceiling_framed">Каркасный</button>
+                          </div>
+                          <select id="ceilingMounting" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                            <option value="ceiling_frameless" selected>Бескаркасный</option>
+                            <option value="ceiling_framed">Каркасный</option>
+                          </select>
+                        </div>
+                        <div class="form-group" id="wallMountingGroup">
+                          <label>Стены</label>
+                          <div class="segmented" data-segment-for="wallMounting" role="group" aria-label="Монтаж стен">
+                            <button type="button" class="segmented__btn is-active" data-value="wall_frameless">Бескаркасный</button>
+                            <button type="button" class="segmented__btn" data-value="wall_framed">Каркасный</button>
+                          </div>
+                          <select id="wallMounting" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                            <option value="wall_frameless" selected>Бескаркасный</option>
+                            <option value="wall_framed">Каркасный</option>
+                          </select>
+                        </div>
+
+                        <div id="refineOpeningsCta" class="refine-cta" hidden>
+                          <p>Без дверей и окон цифра может быть неточной</p>
+                          <button type="button" class="btn btn-secondary btn-sm" id="refineOpeningsBtn">Уточнить: двери и окна</button>
+                        </div>
+                        <div id="schemeWallsBlock" hidden aria-hidden="true"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="activeModeBar" class="active-mode-bar" hidden>
+              <div class="active-mode-bar__text">
+                <span class="active-mode-bar__label">Способ</span>
+                <strong id="activeModeLabel">—</strong>
+              </div>
+              <button type="button" class="btn-link" id="changeModeBtn">Свернуть</button>
+            </div>
+
+            <button type="button" id="toggleParamsCalc" hidden aria-hidden="true"></button>
+            <button type="button" id="toggleAreaCalc" hidden aria-hidden="true"></button>
+            <div id="paramsCalcCard" hidden aria-hidden="true"></div>
+            <div id="planStats" hidden aria-hidden="true"></div>
+
+            <div id="projectLoadedBanner" class="project-loaded-banner" hidden>
+              Проект загружен из ссылки — можно редактировать и пересчитать.
+            </div>
+            <div id="validationErrors" class="validation-errors"></div>
+
+            <div class="card workspace-section--panel-info" hidden>
+              <h2>Параметры одной панели</h2>
+              <div class="form-group">
+                <label>Размер</label>
+                <div class="static-field">0,75 × 0,55 м</div>
+              </div>
+              <div class="form-group">
+                <label>Площадь покрытия</label>
+                <div class="static-field">0,40 м²</div>
+              </div>
+              <div class="form-group">
+                <label>РРЦ (рекомендованная розничная цена)</label>
+                <div class="static-field">
+                  <div>за единицу: 2&nbsp;396 ₽</div>
+                  <div>за м²: 5&nbsp;990 ₽</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-calc-wrap" hidden>
+            <button type="button" class="btn btn-primary sidebar-calc-btn" id="calculateBtn" hidden>
+              <span id="calculateBtnLabel">Рассчитать</span>
+            </button>
+          </div>
+        </aside>
+
+        <div class="workspace-canvas" id="resultsPanel">
+          <div class="scheme-card card">
+            <div class="scheme-header">
+              <div class="scheme-header__titles">
+                <h2 id="schemeTitle">Схема монтажа</h2>
+                <span id="schemeStatus" class="scheme-status" hidden></span>
+              </div>
+              <div class="results-tabs results-tabs--underline" id="resultsTabs" role="tablist" aria-label="Вид схемы">
+                <button type="button" class="tab-btn active" data-tab="plan" role="tab" aria-selected="true">Потолок</button>
+                <button type="button" class="tab-btn" data-tab="walls" role="tab" aria-selected="false" hidden>Стены</button>
+              </div>
+              <div class="scheme-header__right">
+                <div class="plan-overlay-toggles" id="planOverlayToggles">
+                  <label class="canvas-checkbox"><input type="checkbox" id="showNumbers" checked /> №</label>
+                  <label class="canvas-checkbox" id="showFrameLabel"><input type="checkbox" id="showFrame" /> Каркас</label>
+                </div>
+                <div class="theme-toggle">
+                  <span class="theme-toggle__label">Тема</span>
+                  <label class="theme-switch" title="Светлая / тёмная тема">
+                    <input type="checkbox" id="themeSwitch" aria-label="Переключить тёмную тему">
+                    <span class="switch-track">
+                      <span class="icon-sun" aria-hidden="true"></span>
+                      <span class="icon-moon" aria-hidden="true"></span>
+                      <span class="switch-thumb"></span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="canvas-stage" id="canvasStage">
+              <div class="canvas-stage__plan" id="planPreviewStage" data-tab-panel="plan">
+                <div id="schemeModeHint" class="scheme-mode-hint">
+                  <p id="schemeModeHintText">Выберите способ расчёта слева: размеры, схема или площадь</p>
+                </div>
+                <div id="schemeAreaPlaceholder" class="scheme-area-placeholder" hidden>
+                  <p>Расчёт по площади — схема не используется</p>
+                </div>
+                <div id="sketchEditorHost" class="sketch-inline">
+                  <header class="sketch-mobile-step-bar" id="sketchMobileStepBar" hidden>
+                    <button type="button" class="sketch-tool-btn sketch-mobile-step-bar__back" id="sketchMobileBackBtn" title="Назад" aria-label="Назад">‹</button>
+                    <span class="sketch-mobile-step-bar__title">Нарисовать схему</span>
+                    <button type="button" class="btn btn-primary btn-sm" id="sketchMobileDoneBtn">Готово</button>
+                  </header>
+                  <div class="sketch-hint-bar sketch-hint-bar--inline">
+                    <span id="sketchHintText" class="sketch-hint-text">Тап — точка, сдвиг — панорама · шаг 1 м</span>
+                    <input type="file" id="sketchBgUploadInput" accept="image/*" hidden>
+                  </div>
+
+                  <div class="sketch-stage">
+                    <div class="sketch-float-toolbar">
+                      <button type="button" class="sketch-tool-btn" id="sketchUndoBtn" title="Отменить" aria-label="Отменить">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14H4V9"/><path d="M4 14c1.5-4 5-7 10-7 4 0 7 2 9 5"/></svg>
+                      </button>
+                      <button type="button" class="sketch-tool-btn" id="sketchRedoBtn" title="Повторить" aria-label="Повторить">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 14h5v-5"/><path d="M20 14c-1.5-4-5-7-10-7-4 0-7 2-9 5"/></svg>
+                      </button>
+                      <button type="button" class="sketch-tool-btn" id="sketchClearBtn" title="Очистить" aria-label="Очистить">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>
+                      </button>
+                      <span class="sketch-toolbar-sep"></span>
+                      <div class="sketch-dropdown" id="sketchTemplatesDropdown">
+                        <button type="button" class="sketch-tool-btn sketch-tool-btn--text" id="sketchTemplatesBtn" title="Шаблоны">▭ Шаблоны</button>
+                        <div class="sketch-dropdown-menu" hidden>
+                          <button type="button" data-template="l-shape">Г-форма</button>
+                          <button type="button" data-template="l-shape-mirror">Г-форма, выступ справа</button>
+                          <button type="button" data-template="u-shape">П-форма</button>
+                          <button type="button" data-template="t-shape">Т-форма</button>
+                          <button type="button" data-template="cut-corner">Со срезанным углом</button>
+                          <button type="button" data-template="z-shape">Ступенчатая</button>
+                          <button type="button" data-template="plus-shape">Крестообразная</button>
+                        </div>
+                      </div>
+                      <button type="button" class="sketch-tool-btn" id="sketchHelpBtn" title="Обучение" aria-label="Обучение">?</button>
+                    </div>
+
+                    <div class="sketch-canvas-wrap">
+                      <canvas id="sketchCanvas"></canvas>
+                      <div id="sketchEdgeActions" class="sketch-edge-actions" hidden>
+                        <button type="button" class="sketch-edge-action" id="sketchEdgeEditSize">Изменить размер</button>
+                        <button type="button" class="sketch-edge-action" id="sketchEdgeOpenings">Проёмы</button>
+                      </div>
+                      <div id="sketchBgPanel" class="sketch-bg-panel" hidden>
+                        <div class="sketch-bg-panel__title">Фото плана</div>
+                        <p class="sketch-bg-panel__hint" id="sketchBgHint">
+                          1) Калибруйте по размеру стены · 2) сдвиньте план · 3) «Зафиксировать и чертить». Колёсико только отдаляет вид, не меняет масштаб плана.
+                        </p>
+                        <div id="sketchBgLockedBadge" class="sketch-bg-panel__locked" hidden>Масштаб зафиксирован калибровкой</div>
+                        <label class="sketch-bg-panel__row">
+                          <span>Прозрачность</span>
+                          <input type="range" id="sketchBgOpacity" min="10" max="90" value="45">
+                        </label>
+                        <label class="sketch-bg-panel__row" id="sketchBgScaleRow">
+                          <span>Размер</span>
+                          <input type="range" id="sketchBgScale" min="10" max="400" value="100">
+                        </label>
+                        <label class="sketch-bg-panel__row" id="sketchBgWidthRow">
+                          <span>Ширина, м</span>
+                          <input type="number" id="sketchBgWidthM" class="sketch-bg-panel__width" min="0.5" max="200" step="0.05" value="10">
+                        </label>
+                        <div class="sketch-bg-panel__actions">
+                          <button type="button" class="sketch-bg-panel__calib" id="sketchBgCalibBtn">Калибровать по размеру</button>
+                          <button type="button" class="sketch-bg-panel__toggle" id="sketchBgAdjustBtn">Зафиксировать и чертить</button>
+                        </div>
+                        <div id="sketchBgCalibRow" class="sketch-bg-panel__calib-row" hidden>
+                          <label class="sketch-bg-panel__row">
+                            <span>Длина</span>
+                            <input type="text" id="sketchBgCalibLength" class="sketch-bg-panel__width" placeholder="4,8 или 4800" inputmode="decimal">
+                          </label>
+                          <div class="sketch-bg-panel__actions">
+                            <button type="button" class="sketch-bg-panel__calib-apply" id="sketchBgCalibApply">Применить</button>
+                            <button type="button" class="sketch-bg-panel__calib-cancel" id="sketchBgCalibCancel">Отмена</button>
+                          </div>
+                        </div>
+                        <button type="button" class="sketch-bg-panel__remove" id="sketchBgRemoveBtn">Удалить</button>
+                      </div>
+                      <div id="sketchEmptyHint" class="sketch-empty-hint" hidden>
+                        <p>Нарисуйте свою схему с нуля</p>
+                        <span>Тап по сетке (1 м) · шаблон сверху · или фото плана</span>
+                      </div>
+                      <div id="sketchToast" class="sketch-toast" hidden></div>
+                      <div id="sketchGridLegend" class="sketch-grid-legend">1 клетка = 1 м</div>
+                      <div id="sketchKeypadHost"></div>
+                    </div>
+
+                    <div class="sketch-float-zoom">
+                      <button type="button" class="sketch-tool-btn" id="sketchZoomOutBtn" title="Уменьшить" aria-label="Уменьшить">−</button>
+                      <span id="sketchZoomLabel" class="sketch-zoom-label">100%</span>
+                      <button type="button" class="sketch-tool-btn" id="sketchZoomInBtn" title="Увеличить" aria-label="Увеличить">+</button>
+                      <span class="sketch-toolbar-sep"></span>
+                      <label class="canvas-checkbox sketch-float-overlay"><input type="checkbox" id="showNumbersMobile" checked /> №</label>
+                      <label class="canvas-checkbox sketch-float-overlay" id="showFrameMobileLabel"><input type="checkbox" id="showFrameMobile" /> Каркас</label>
+                      <span class="sketch-toolbar-sep sketch-float-overlay-sep"></span>
+                      <button type="button" class="sketch-tool-btn" id="sketchBgUploadBtn" title="Добавить фото схемы" aria-label="Добавить фото схемы">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <rect x="3" y="5" width="18" height="14" rx="2"/>
+                          <circle cx="8.5" cy="10" r="1.5"/>
+                          <path d="M21 16l-5-5-4 4-2-2-5 5"/>
+                        </svg>
+                      </button>
+                      <button type="button" class="sketch-tool-btn" id="sketchFitBtn" title="На весь экран" aria-label="На весь экран">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H3v5"/><path d="M16 3h5v5"/><path d="M8 21H3v-5"/><path d="M16 21h5v-5"/></svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="sketch-mobile-summary-stub" id="sketchMobileSummaryStub" hidden>
+                    <p class="sketch-mobile-summary-stub__title" id="sketchMobileSummaryTitle">Схема готова</p>
+                    <p class="sketch-mobile-summary-stub__stats" id="sketchMobileSummaryStats">—</p>
+                  </div>
+
+                  <div class="sketch-inline-footer">
+                    <span id="sketchBottomStats" class="sketch-bottom-stats">—</span>
+                    <button type="button" class="btn btn-primary btn-sm sketch-mobile-done-footer" id="sketchDoneBtn" hidden>Готово</button>
+                    <button type="button" class="btn btn-primary btn-sm sketch-mobile-edit-footer" id="sketchMobileEditBtn" hidden>Изменить схему</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="canvas-stage__results" id="resultsStage" hidden>
+                <div class="tab-content" data-tab-content="ceiling" hidden>
+                  <div class="canvas-wrapper canvas-wrapper--hero">
+                    <canvas id="ceilingCanvas"></canvas>
+                  </div>
+                </div>
+
+                <div class="tab-content" data-tab-content="walls">
+                  <div class="wall-view-bar">
+                    <div id="wallChips" class="wall-chips" role="tablist" aria-label="Стены"></div>
+                    <button type="button" class="btn btn-primary btn-sm" id="sketchOpeningsBtn">Добавить окна и двери</button>
+                    <select id="wallViewSelect" class="visually-hidden" tabindex="-1" aria-hidden="true"></select>
+                  </div>
+                  <div class="canvas-wrapper canvas-wrapper--hero">
+                    <canvas id="wallCanvas"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="workspace-canvas__secondary">
+            <div class="stats-panel workspace-stats">
+              <div class="stat-card" data-stat="coverage">
+                <div class="stat-label">Площадь покрытия</div>
+                <div class="stat-value" id="coverageArea" data-raw="0">0 м²</div>
+              </div>
+              <div class="stat-card" data-stat="panels">
+                <div class="stat-label">Всего панелей к закупке</div>
+                <div class="stat-value" id="totalPanels" data-raw="0">0 шт.</div>
+              </div>
+              <div class="stat-card" data-stat="cost">
+                <div class="stat-label">Стоимость панелей</div>
+                <div class="stat-value" id="totalCost" data-raw="0">0 ₽</div>
+              </div>
+              <a class="stat-card stat-card-button" id="buyMultiframeBtn" href="https://stp.store/catalog/zvukoizolyatsiya-pomeshcheniy/zvukoizolyatsiya-dlya-potolka/zvukoizolyatsionnaya-panel-dlya-potolka-stp-multiframe/" target="_blank" rel="noopener noreferrer">
+                <img src="./buy.png" alt="" class="stat-card-button__icon" width="22" height="22" onerror="this.style.display='none'">
+                <span class="stat-card-button__text">Купить MultiFRAME</span>
+              </a>
+            </div>
+
+            <button type="button" class="results-sheet-toggle" id="openResultsDrawerBtn" hidden aria-expanded="false">
+              Результаты
+            </button>
+
+            <aside class="workspace-results" id="resultsAside" hidden>
+              <div class="workspace-results__scroll">
+                <div class="results-card card is-expanded">
+                  <div class="results-header">
+                    <h2>Результаты</h2>
+                    <button type="button" class="btn-link workspace-results__close" id="resultsDrawerCloseBtn" hidden aria-label="Скрыть">Скрыть</button>
+                    <button type="button" class="btn-share-compact" id="shareBtn" hidden aria-hidden="true"></button>
+                    <button type="button" class="btn-link results-collapse-btn" id="resultsCollapseBtn" hidden></button>
+                    <button type="button" class="btn-link secondary-results-toggle" id="resultsExpandBtn" hidden></button>
+                  </div>
+                  <div class="results-preview" id="resultsPreview">
+                    <div id="resultsText" class="results-text">
+                      <div class="rb-empty">Выберите способ слева — здесь появятся детали</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="workspace-results__actions">
+                <button type="button" class="btn btn-primary workspace-results__btn" id="downloadBtn" disabled>
+                  <svg class="btn-print-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M7 9L12 14L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M7 14L12 19L17 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Скачать PDF
+                </button>
+                <button type="button" class="btn btn-secondary workspace-results__btn" id="shareBtnSecondary" title="Скопировать ссылку на расчёт">
+                  Поделиться
+                </button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <button type="button" id="resultsDrawerBackdrop" class="results-drawer-backdrop" hidden aria-label="Закрыть результаты"></button>
+
+    <footer class="app-footer mobile-toolbar">
+      <div class="app-footer__inner">
+        <button type="button" class="btn btn-primary btn-mobile-params" id="mobileParamsBtn">Ввести параметры расчёта</button>
+        <button type="button" class="btn btn-secondary btn-mobile-results" id="mobileResultsBtn" hidden>Результаты</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Nested sketch dialogs (outside shell scroll) -->
+  <div id="sketchEditorModal" class="sketch-dialogs-root">
+    <div id="sketchWallHeightModal" class="sketch-wall-height-modal" hidden>
+      <div class="sketch-wall-height-modal__backdrop"></div>
+      <div class="sketch-wall-height-modal__sheet">
+        <h3>Высота стен</h3>
+        <p class="hint-text">Контур замкнут — укажите высоту для расчёта стен</p>
+        <div class="sketch-wall-height-modal__field form-group">
+          <label for="sketchWallHeightPopup">Высота, м</label>
+          <input type="number" id="sketchWallHeightPopup" class="sketch-wall-height-input" value="2.7" step="0.01" min="0.1" max="10" />
+        </div>
+        <button type="button" class="btn btn-primary" id="sketchWallHeightConfirm">Продолжить</button>
+      </div>
+    </div>
+
+    <div id="sketchOpeningsModal" class="sketch-openings-modal" hidden>
+      <div class="sketch-openings-modal__backdrop" id="sketchOpeningsBackdrop"></div>
+      <div class="sketch-openings-modal__sheet">
+        <header class="sketch-openings-modal__head">
+          <h3>Настройка стен</h3>
+          <button type="button" class="sketch-tool-btn sketch-tool-btn--close" id="sketchOpeningsCloseBtn" aria-label="Закрыть">×</button>
+        </header>
+        <div class="sketch-openings-modal__body">
+          <div id="sketchWallChips" class="sketch-wall-chips"></div>
+          <div class="sketch-openings-actions sketch-openings-actions--toolbar" role="group" aria-label="Добавить проём">
+            <button type="button" class="sketch-add-btn sketch-add-btn--door" id="sketchAddDoorBtn">+ Дверь</button>
+            <button type="button" class="sketch-add-btn sketch-add-btn--window" id="sketchAddWindowBtn">+ Окно</button>
+          </div>
+          <div class="sketch-openings-modal__workspace">
+            <div class="sketch-openings-plan">
+              <canvas id="sketchOpeningsPlanCanvas"></canvas>
+            </div>
+            <div class="sketch-openings-elevation">
+              <div class="sketch-elevation-pane__head">
+                <span id="sketchElevationLabel">Стена</span>
+              </div>
+              <div class="sketch-elevation-wrap">
+                <canvas id="sketchWallCanvas"></canvas>
+              </div>
+              <div id="sketchOpeningProps" class="sketch-opening-props" hidden>
+                <div class="sketch-opening-props__title">Параметры проёма</div>
+                <label>Отступ, м<input type="text" id="sketchOpeningOffset" inputmode="decimal"></label>
+                <label>Ширина, м<input type="text" id="sketchOpeningWidth" inputmode="decimal"></label>
+                <label>Высота, м<input type="text" id="sketchOpeningHeight" inputmode="decimal"></label>
+                <label id="sketchSillWrap" hidden>Подоконник, м<input type="text" id="sketchOpeningSill" inputmode="decimal"></label>
+                <button type="button" class="btn-link sketch-opening-delete" id="sketchOpeningDeleteBtn">Удалить проём</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <footer class="sketch-openings-modal__foot">
+          <button type="button" class="btn btn-primary" id="sketchOpeningsDoneBtn">Готово</button>
+        </footer>
+      </div>
+    </div>
+
+    <div id="sketchDeleteDialog" class="sketch-delete-dialog" hidden>
+      <p id="sketchDeleteLabel">Удалить угол?</p>
+      <div class="sketch-delete-actions">
+        <button type="button" class="btn btn-secondary" id="sketchDeleteCancel">Отмена</button>
+        <button type="button" class="btn btn-danger" id="sketchDeleteConfirm">Удалить</button>
+      </div>
+    </div>
+    <div id="sketchTutorial" class="tutorial-overlay" hidden>
+      <div class="tutorial-card">
+        <div class="tutorial-title"></div>
+        <div class="tutorial-subtitle"></div>
+        <p class="tutorial-text"></p>
+        <div class="tutorial-demo tutorial-demo--draw"></div>
+        <div class="tutorial-nav">
+          <button type="button" class="tutorial-nav-btn tutorial-prev" aria-label="Назад">‹</button>
+          <span class="tutorial-step-indicator"></span>
+          <button type="button" class="tutorial-nav-btn tutorial-next" aria-label="Далее">›</button>
+        </div>
+        <button type="button" class="tutorial-skip btn-link">Пропустить обучение</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden sync field -->
+  <input type="hidden" id="wallHeight" value="2.7" />
+
+  <div id="guidedTourRoot" class="tour-root" hidden>
+    <div class="tour-blocker" hidden aria-hidden="true"></div>
+    <div class="tour-spotlight is-hidden" aria-hidden="true"></div>
+    <div class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+      <div class="tour-card__body">
+        <h3 class="tour-title" id="tourTitle" aria-live="polite"></h3>
+        <p class="tour-text" id="tourText"></p>
+      </div>
+      <div class="tour-nav">
+        <button type="button" class="tour-btn tour-btn--ghost tour-prev" aria-label="Назад">Назад</button>
+        <span class="tour-step" id="tourStep"></span>
+        <button type="button" class="tour-btn tour-btn--primary tour-next" aria-label="Далее">Далее</button>
+      </div>
+      <button type="button" class="tour-skip">Пропустить</button>
+    </div>
+  </div>
+
+  <script type="module" src="./src/ui/app.js"></script>
+</body>
+</html>
