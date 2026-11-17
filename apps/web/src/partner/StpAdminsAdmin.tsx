@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Button } from '../ui/Button';
+import { PasswordInput } from '../ui/PasswordInput';
 import { Skeleton } from './Skeleton';
 import { generatePassword } from './PartnerContext';
 import { ActivationLinkButton } from './ActivationLinkButton';
@@ -133,7 +134,7 @@ export function StpAdminsAdmin() {
               </label>
               <label className={styles.field}>
                 Временный пароль
-                <input
+                <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required={!canIssueLinks()}
