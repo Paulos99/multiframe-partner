@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '../ui/Button';
+import { PasswordInput } from '../ui/PasswordInput';
 import { FadeRise, ShakeBox } from './motionBits';
 import { usePartner } from './PartnerContext';
 import { openRegister } from './registration';
@@ -62,8 +63,7 @@ export function LoginScreen({ notice }: { notice?: string } = {}) {
               </label>
               <label className={styles.field}>
                 Пароль
-                <input
-                  type="password"
+                <PasswordInput
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   autoComplete="current-password"

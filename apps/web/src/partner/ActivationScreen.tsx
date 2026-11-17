@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { PASSWORD_MIN } from '../../../../packages/shared/passwordPolicy.js';
 import { Button } from '../ui/Button';
+import { PasswordInput } from '../ui/PasswordInput';
 import { FadeRise } from './motionBits';
 import { apiActivate, passwordProblem, removeActivationFromUrl } from './activation';
 import styles from './LoginScreen.module.css';
@@ -76,8 +77,7 @@ export function ActivationScreen({
             </label>
             <label className={styles.field}>
               Новый пароль
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="new-password"

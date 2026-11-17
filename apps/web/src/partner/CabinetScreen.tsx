@@ -10,6 +10,7 @@ import {
 } from '../../../../packages/shared/partner';
 import { personName } from '../../../../packages/shared/personName.js';
 import { Button } from '../ui/Button';
+import { PasswordInput } from '../ui/PasswordInput';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { redirectLegacyCasesHash, useCabinetSection } from './analyticsRoute';
 import { CityField } from './CityField';
@@ -388,7 +389,7 @@ function AdminCabinet({ onNavigate }: { onNavigate: (r: Route) => void }) {
                       </label>
                       <label className={styles.field}>
                         Пароль
-                        <input
+                        <PasswordInput
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required={!canIssueLinks()}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PASSWORD_MIN } from '../../../../packages/shared/passwordPolicy.js';
 import { Button } from '../ui/Button';
+import { PasswordInput } from '../ui/PasswordInput';
 import { passwordProblem } from './activation';
 import { CityField } from './CityField';
 import { FadeRise } from './motionBits';
@@ -140,8 +141,7 @@ export function RegisterScreen() {
             <div className={styles.pair}>
               <label className={styles.field}>
                 Пароль
-                <input
-                  type="password"
+                <PasswordInput
                   value={form.password}
                   onChange={(event) => set('password')(event.target.value)}
                   autoComplete="new-password"
@@ -150,8 +150,7 @@ export function RegisterScreen() {
               </label>
               <label className={styles.field}>
                 Повторите пароль
-                <input
-                  type="password"
+                <PasswordInput
                   value={form.passwordRepeat}
                   onChange={(event) => set('passwordRepeat')(event.target.value)}
                   autoComplete="new-password"

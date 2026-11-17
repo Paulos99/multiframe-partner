@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PasswordInput } from '../ui/PasswordInput';
 import { passwordProblem } from './activation';
 import { generatePassword } from './localStore';
 import { usePartner } from './PartnerContext';
@@ -12,12 +13,14 @@ export function NewPasswordButton({ staffId, staffName }: { staffId: string; sta
   const [once, setOnce] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
 
   function close() {
     setOpen(false);
     setValue('');
     setErr(null);
     setOnce(null);
+    setRevealed(false);
   }
 
   async function apply(next: string) {
@@ -67,13 +70,13 @@ export function NewPasswordButton({ staffId, staffName }: { staffId: string; sta
     <div className={styles.oncePassword}>
       <label className={styles.field}>
         Новый пароль для {staffName}
-        <input
-          type="text"
+        <PasswordInput
           value={value}
           onChange={(e) => setValue(e.target.value)}
           autoComplete="new-password"
-          spellCheck={false}
           placeholder="Задайте или сгенерируйте"
+          revealed={revealed}
+          onRevealedChange={setRevealed}
         />
       </label>
       {err ? (
@@ -88,6 +91,7 @@ export function NewPasswordButton({ staffId, staffName }: { staffId: string; sta
           onClick={() => {
             setErr(null);
             setValue(generatePassword());
+            setRevealed(true);
           }}
         >
           Сгенерировать

@@ -11,8 +11,9 @@ import {
 import { compressAvatar } from './avatar';
 import { m, motionPresets, usePrefersReducedMotion } from './motionBits';
 import { Button } from '../ui/Button';
+import { PasswordInput } from '../ui/PasswordInput';
 import styles from './ProfilePanel.module.css';
-import { CloseIcon, EyeIcon as EyeGlyph, EyeOffIcon as EyeOffGlyph } from '../icons';
+import { CloseIcon } from '../icons';
 
 type Pending = 'login' | 'password';
 
@@ -297,8 +298,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
         <form onSubmit={askPassword}>
           <label>
             Новый пароль
-            <input
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               minLength={10}
               required
@@ -308,8 +308,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
           </label>
           <label>
             Повторите пароль
-            <input
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               required
               value={confirm}
@@ -366,7 +365,6 @@ function ConfirmPassword({
   const ref = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState('');
-  const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const reduce = usePrefersReducedMotion();
@@ -416,33 +414,18 @@ function ConfirmPassword({
         <p className={styles.confirmNote}>{note}</p>
         <label className={styles.confirmLabel}>
           Текущий пароль
-          <span className={styles.secret}>
-            <input
-              ref={input}
-              type={show ? 'text' : 'password'}
-              autoComplete="current-password"
-              value={value}
-              required
-              aria-invalid={error ? 'true' : undefined}
-              aria-describedby={error ? errorId : undefined}
-              onChange={(e) => {
-                setValue(e.target.value);
-                if (error) setError('');
-              }}
-            />
-            <button
-              type="button"
-              className={styles.eye}
-              aria-pressed={show}
-              aria-label={show ? 'Скрыть пароль' : 'Показать пароль'}
-              onClick={() => {
-                setShow((v) => !v);
-                input.current?.focus();
-              }}
-            >
-              {show ? <EyeOffIcon /> : <EyeIcon />}
-            </button>
-          </span>
+          <PasswordInput
+            ref={input}
+            autoComplete="current-password"
+            value={value}
+            required
+            aria-invalid={error ? 'true' : undefined}
+            aria-describedby={error ? errorId : undefined}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (error) setError('');
+            }}
+          />
         </label>
         {error ? (
           <p id={errorId} role="alert" className={styles.error}>
@@ -460,12 +443,4 @@ function ConfirmPassword({
       </form>
     </m.dialog>
   );
-}
-
-function EyeIcon() {
-  return <EyeGlyph />;
-}
-
-function EyeOffIcon() {
-  return <EyeOffGlyph />;
 }
