@@ -84,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           # Проверяем с самой ВМ (локальный nginx web и через Caddy)
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" bash -s <<'REMOTE'
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes "$TARGET" "TAG='$TAG' bash -s" <<'REMOTE'
           set -euo pipefail
           for i in 1 2 3 4 5 6 7 8 9 10; do
             VER=$(curl -fsS http://127.0.0.1:8081/cabinet/version.json || true)
