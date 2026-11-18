@@ -5,6 +5,7 @@ import {
   keyBandHz,
   MASTER_PLAYBACK_GAIN,
   PLAYBACK_LEVEL,
+  groupLevel,
   stemSideGain,
   STEM_CALIBRATION,
   stemIdFromSrc,
@@ -429,7 +430,7 @@ function roomProcess(
 
   const limiter = softLimiter(ctx);
   const ceiling = ctx.createGain();
-  ceiling.gain.value = MASTER_PLAYBACK_GAIN * stemSideGain(stemId, isAfter ? 'after' : 'before');
+  ceiling.gain.value = MASTER_PLAYBACK_GAIN * stemSideGain(stemId, isAfter ? 'after' : 'before') * groupLevel(opts.group);
 
   // trim → muffler×2 → room → after → EQ → split dry/wet → merge → limiter
   trim.connect(muffler1);

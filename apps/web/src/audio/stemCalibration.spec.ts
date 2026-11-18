@@ -30,3 +30,13 @@ describe('общая громкость «До» и «После»', () => {
     expect(MASTER_PLAYBACK_GAIN).toBe(0.62);
   });
 });
+
+describe('громкость по типу шума', () => {
+  it('ударный и смешанный ×1/3, воздушный ×0,7, эхо ×1', async () => {
+    const { groupLevel } = await import('./stemCalibration');
+    expect(groupLevel('impact')).toBeCloseTo(1 / 3, 6);
+    expect(groupLevel('mixed')).toBeCloseTo(1 / 3, 6);
+    expect(groupLevel('air')).toBe(0.7);
+    expect(groupLevel('echo')).toBe(1);
+  });
+});
