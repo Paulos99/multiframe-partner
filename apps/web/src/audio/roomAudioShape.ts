@@ -159,19 +159,6 @@ function isolationAfterGainDb(
   return clamp(round1(strongest), MARKETING_AFTER_GAIN_MIN, MARKETING_AFTER_GAIN_MAX);
 }
 
-/**
- * Воздушный шум (музыка, голоса): «После» не почти тишина, а приглушённый звук за перекрытием —
- * слышно, но глухо, остаётся в основном низ. Поэтому вместо глубокого общего среза:
- * мягче общий срез, неглубокий срез средних и верхних полос и более низкий фильтр верхних частот.
- */
-export const AIR_AFTER_GAIN_SCALE = 0.6;
-export const AIR_AFTER_GAIN_MIN_DB = -8;
-export const AIR_AFTER_GAIN_MAX_DB = -5;
-export const AIR_AFTER_EQ_FLOOR_DB = -6;
-export const AIR_AFTER_MUFFLING_SCALE = 0.6;
-export const AIR_AFTER_MUFFLING_MIN_HZ = 600;
-export const AIR_AFTER_MUFFLING_MAX_HZ = 1200;
-
 export function buildRoomAudioShape(
   sim: DerivedSimulation,
   group: AudioPlayGroup,
@@ -206,16 +193,8 @@ export function buildRoomAudioShape(
     playbackGainForReceivedDb(targetBeforeDb, group) +
       (group === 'air' ? AIR_BEFORE_EXTRA_DB : 0),
   );
-  const isAir = group === 'air';
-  const isolationAfter = isolationAfterGainDb(sim, group, targetBeforeDb, targetAfterDb);
-  const afterGainDb = isAir
-    ? clamp(round1(isolationAfter * AIR_AFTER_GAIN_SCALE), AIR_AFTER_GAIN_MIN_DB, AIR_AFTER_GAIN_MAX_DB)
-    : isolationAfter;
+  const afterGainDb = isolationAfterGainDb(sim, group, targetBeforeDb, targetAfterDb);
   const slabHz = mufflingHz(sim, group);
-  const afterHz = isAir
-    ? round1(clamp(slabHz * AIR_AFTER_MUFFLING_SCALE, AIR_AFTER_MUFFLING_MIN_HZ, AIR_AFTER_MUFFLING_MAX_HZ))
-    : slabHz;
-  const eqFloor = isAir ? AIR_AFTER_EQ_FLOOR_DB : -14;
   const rawDelta = targetAfterDb - targetBeforeDb;
   // Residual EQ on После only — never brighten vs До (no positive gains).
   const deltaEqDb = KEY_BAND_INDICES.map((i) => {
@@ -223,7 +202,7 @@ export function buildRoomAudioShape(
     const residual = bandDelta - rawDelta;
     const cut = Math.min(0, scaleAudioDelta(residual));
     const tilt = i >= 4 ? -0.8 : i >= 2 ? -0.4 : 0;
-    return clamp(cut + tilt, eqFloor, 0);
+    return clamp(cut + tilt, -14, 0);
   });
 
   return {
@@ -232,7 +211,7 @@ export function buildRoomAudioShape(
     beforeGainDb,
     afterGainDb,
     mufflingHzBefore: slabHz,
-    mufflingHzAfter: afterHz,
+    mufflingHzAfter: slabHz,
     deltaEqDb,
     // Light room air on isolation demos too (tails shorter than clap)
     rt60Before: round1(rev.rt60Before * 0.55),
