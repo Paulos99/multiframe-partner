@@ -13,9 +13,11 @@ import { canSaveToProject } from './partner/toolSave';
 import { freshSurveyFromRoom, sessionFromRoom } from './partner/roomLink';
 import { calcUrlFromOrg, PartnerProvider, usePartner } from './partner/PartnerContext';
 import { WelcomeVideo } from './partner/WelcomeVideo';
+import { JoinStatusScreen } from './partner/JoinStatusScreen';
 import { LoginScreen } from './partner/LoginScreen';
 import { RegisterScreen } from './partner/RegisterScreen';
 import { isRegisterHash } from './partner/registration';
+import { isAwaitingJoin } from './partner/staffJoin';
 import { ActivationScreen } from './partner/ActivationScreen';
 import { ACTIVATED_MESSAGE, activationTokenFromSearch } from './partner/activation';
 import { CabinetScreen } from './partner/CabinetScreen';
@@ -327,6 +329,8 @@ function PartnerShell() {
     );
   } else if (!user) {
     body = <LoginScreen notice={activated ? ACTIVATED_MESSAGE : undefined} />;
+  } else if (isAwaitingJoin(user)) {
+    body = <JoinStatusScreen />;
   } else if (route === 'cabinet') {
     body = (
       <CabinetScreen

@@ -111,3 +111,13 @@
 curl -s https://stp-multiframe.ru/cabinet-api/health
 curl -s -o /dev/null -w "%{http_code}\n" https://stp-multiframe.ru/cabinet-api/admin/stp-managers   # 401 без входа, не 404
 ```
+
+
+## Заявки сотрудников на подключение
+
+- `GET /auth/companies?q=` — публичный поиск компаний по подстроке (от 2 символов, не больше 10 совпадений, только `id` и `name`). Ограничение частоты.
+- `POST /auth/register-staff` — регистрация сотрудника: учётка без `orgId` и заявка `pending`.
+- `GET /auth/me` — для такой учётки возвращает `staffJoin` (`pending` или `rejected`). Остальные маршруты кабинета отвечают 403.
+- `POST /me/staff-join` — новая заявка, если предыдущую отклонили.
+- `GET /org/staff-join-requests` — заявки своей компании (владелец и менеджер).
+- `POST /org/staff-join-requests/{id}/approve` и `/reject` — только владелец и менеджер этой компании. При одобрении можно сменить роль.

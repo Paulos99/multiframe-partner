@@ -55,6 +55,26 @@ import {
   registrationStatus,
   rejectionError,
 } from './registration.js';
+import {
+  COMPANY_SEARCH_LIMIT,
+  COMPANY_SEARCH_MIN,
+  blockedJoinOf,
+  canDecideStaffJoin,
+  companySearchRateLimit,
+  decideStaffJoin,
+  ensureJoinRequests,
+  hasPendingJoin,
+  isAssignableStaffRole,
+  isSearchableCompany,
+  joinAccessError,
+  listCompanyJoins,
+  newStaffJoin,
+  orgDisplayName,
+  pendingJoinForUser,
+  publicJoinRow,
+  publicStaffJoin,
+  searchCompanies,
+} from './staffJoin.js';
 import { handleTraining } from './training.js';
 import { handleRoomPhotos, photoCountsForObject, removePhotoFiles, clientReport } from './roomPhotos.js';
 import { handleCalendar } from './calendar.js';
@@ -204,11 +224,18 @@ function publicUser(user, org) {
  * Ссылка подписывается заново при каждом запросе (срок жизни ограничен), поэтому
  * шапка кабинета показывает фото сразу после загрузки страницы. Сбой подписи не ломает вход. */
 async function sessionUser(user, platform) {
+  let session;
   try {
-    return await profileWithAvatar(user, platform, { publicUser });
+    session = await profileWithAvatar(user, platform, { publicUser });
   } catch {
-    return publicUser(user, user.orgId ? findOrg(platform, user.orgId) : null);
+    session = publicUser(user, user.orgId ? findOrg(platform, user.orgId) : null);
   }
+  const join = blockedJoinOf(platform, user);
+  if (join) {
+    session.staffJoin = publicStaffJoin(join, findOrg(platform, join.orgId));
+    delete session.welcomeVideoPending;
+  }
+  return session;
 }
 
 /** Демо-данные нужны только пока нет своего хранилища или явно включён DEMO_SEED=1.
@@ -758,7 +785,7 @@ async function signToken(user) {
 }
 
 /** { readonly: true } — platform в ответе общий и неизменяемый: для обработчиков, которые только читают. */
-async function requireAuth(event, { readonly = false } = {}) {
+async function requireAuth(event, { readonly = false, allowPendingJoin = false } = {}) {
   const token = getAuth(event);
   if (!token) throw Object.assign(new Error('Unauthorized'), { status: 401 });
   const { payload, usedPreviousKey } = await verifyToken(token);
@@ -777,6 +804,11 @@ async function requireAuth(event, { readonly = false } = {}) {
   if (!user || user.loginDisabled || (payload.sessionVersion || 0) !== (user.sessionVersion || 0)) throw Object.assign(new Error('Unauthorized'), { status: 401 });
   const role = normalizeRole(user.role);
   if (user.orgId && registrationRejected(findOrg(platform, user.orgId))) throw rejectionError(findOrg(platform, user.orgId));
+  // Заявка сотрудника ещё не одобрена: кабинет закрыт, кроме проверки сеанса и повторной заявки.
+  if (!allowPendingJoin) {
+    const blocked = blockedJoinOf(platform, user);
+    if (blocked) throw joinAccessError(blocked);
+  }
   // Менеджеру StP закрыто всё, чего нет в списке разрешённого (packages/shared/rolePermissions.js).
   if (isStpManager(role) && !stpManagerMayCall(getMethod(event), getPath(event))) {
     throw Object.assign(new Error('Недостаточно прав'), { status: 403 });
@@ -1737,7 +1769,7 @@ async function handleRequest(event = {}) {
     }
 
     if (method === 'GET' && path.endsWith('/auth/me')) {
-      const { platform, user, payload, usedPreviousKey } = await requireAuth(event, { readonly: true });
+      const { platform, user, payload, usedPreviousKey } = await requireAuth(event, { readonly: true, allowPendingJoin: true });
       // Скользящая сессия: токен старше часа обновляется, чтобы активный пользователь не упирался в 12 ч.
       const stale = Number(payload?.iat) > 0 && Date.now() / 1000 - Number(payload.iat) > 3600;
       return json(200, { user: await sessionUser(user, platform), ...(usedPreviousKey || stale ? { token: await signToken(user) } : {}) });
@@ -1915,6 +1947,139 @@ async function handleRequest(event = {}) {
       await savePlatform(platform);
       const token = await signToken(owner);
       return json(200, { token, user: await sessionUser(owner, platform) });
+    }
+
+    /* Поиск компании для регистрации сотрудника: только id и название, не больше 10 совпадений. */
+    if (method === 'GET' && path.endsWith('/auth/companies')) {
+      const ip = clientIp(event) || 'unknown';
+      const limit = companySearchRateLimit();
+      const check = rateHit(`company-search:${ip}`, limit);
+      if (!check.allowed) {
+        return json(
+          429,
+          { message: 'Слишком много запросов. Подождите и повторите.' },
+          { 'Retry-After': String(check.retryAfter) },
+        );
+      }
+      const q = String(getQuery(event).q || '').trim();
+      if (q.length < COMPANY_SEARCH_MIN) {
+        return json(400, { message: 'Введите не меньше двух букв названия компании' });
+      }
+      const platform = await loadPlatformView();
+      return json(200, { companies: searchCompanies(platform.orgs, q, COMPANY_SEARCH_LIMIT) });
+    }
+
+    if (method === 'POST' && path.endsWith('/auth/register-staff')) {
+      const ip = clientIp(event) || 'unknown';
+      const limit = registerRateLimit();
+      const tries = rateHit(`register-try:${ip}`, { limit: limit.limit * 6, windowMs: limit.windowMs });
+      const check = tries.allowed ? rateCheck(`register-ip:${ip}`, limit) : tries;
+      if (!check.allowed) {
+        return json(
+          429,
+          { message: 'Слишком много регистраций с этого адреса. Повторите через час.' },
+          { 'Retry-After': String(check.retryAfter) },
+        );
+      }
+      const form = parseBody(schemas.staffRegister, getBody(event));
+      if (form.trap) {
+        rateHit(`register-ip:${ip}`, limit);
+        pushActivity(null, { orgId: null, userId: null, login: '', action: 'register_staff_trap', detail: ip });
+        return json(400, { message: 'Не удалось отправить заявку. Обновите страницу и попробуйте ещё раз.' });
+      }
+      const weak = passwordProblem(form.password);
+      if (weak) return json(400, { message: weak });
+      const platform = await loadPlatform();
+      const org = findOrg(platform, form.orgId);
+      if (!org || !isSearchableCompany(org)) {
+        return json(400, { message: 'Компания не зарегистрирована' });
+      }
+      if (loginTaken(platform, form.login)) {
+        return json(409, { message: 'Такой логин уже занят. Придумайте другой.', code: 'login_taken' });
+      }
+      if (hasPendingJoin(platform, { login: form.login })) {
+        return json(409, { message: 'Заявка с этим логином уже на рассмотрении.', code: 'join_pending' });
+      }
+      rateHit(`register-ip:${ip}`, limit);
+      const now = new Date().toISOString();
+      const staff = {
+        id: uid('u'),
+        login: form.login,
+        passwordHash: await hashPassword(form.password),
+        role: form.role,
+        displayName: `${form.firstName} ${form.lastName}`.trim(),
+        phone: form.phone || '',
+        orgId: null,
+        createdAt: now,
+      };
+      const requestRow = newStaffJoin({
+        id: uid('sjr'),
+        userId: staff.id,
+        orgId: org.id,
+        role: form.role,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        displayName: staff.displayName,
+        login: staff.login,
+        phone: form.phone || '',
+        at: now,
+      });
+      platform.users.push(staff);
+      ensureJoinRequests(platform).push(requestRow);
+      pushActivity(platform, {
+        orgId: org.id,
+        userId: staff.id,
+        login: staff.login,
+        action: 'register_staff_join',
+        detail: `${staff.login} · ${form.role} · ${orgDisplayName(org)}`,
+      });
+      await savePlatform(platform);
+      const token = await signToken(staff);
+      return json(200, { token, user: await sessionUser(staff, platform) });
+    }
+
+    if (method === 'POST' && path.endsWith('/me/staff-join')) {
+      const { platform, user } = await requireAuth(event, { allowPendingJoin: true });
+      if (user.orgId) return json(409, { message: 'Вы уже состоите в компании' });
+      if (pendingJoinForUser(platform, user.id)) {
+        return json(409, { message: 'Заявка уже на рассмотрении' });
+      }
+      const form = parseBody(schemas.staffJoinAgain, getBody(event));
+      const org = findOrg(platform, form.orgId);
+      if (!org || !isSearchableCompany(org)) {
+        return json(400, { message: 'Компания не зарегистрирована' });
+      }
+      const now = new Date().toISOString();
+      const idx = platform.users.findIndex((row) => row.id === user.id);
+      if (idx < 0) return json(404, { message: 'Пользователь не найден' });
+      const nextUser = {
+        ...platform.users[idx],
+        role: form.role,
+        updatedAt: now,
+      };
+      platform.users[idx] = nextUser;
+      const requestRow = newStaffJoin({
+        id: uid('sjr'),
+        userId: nextUser.id,
+        orgId: org.id,
+        role: form.role,
+        firstName: String(nextUser.displayName || '').split(/\s+/)[0] || nextUser.displayName || nextUser.login,
+        lastName: String(nextUser.displayName || '').split(/\s+/).slice(1).join(' '),
+        displayName: nextUser.displayName || nextUser.login,
+        login: nextUser.login,
+        phone: nextUser.phone || '',
+        at: now,
+      });
+      ensureJoinRequests(platform).push(requestRow);
+      pushActivity(platform, {
+        orgId: org.id,
+        userId: nextUser.id,
+        login: nextUser.login,
+        action: 'register_staff_join',
+        detail: `${nextUser.login} · ${form.role} · ${orgDisplayName(org)}`,
+      });
+      await savePlatform(platform);
+      return json(200, { user: await sessionUser(nextUser, platform) });
     }
 
     if (method === 'POST' && /\/admin\/partners\/[^/]+\/(approve|reject)$/.test(path)) {
@@ -2448,6 +2613,74 @@ async function handleRequest(event = {}) {
     }
 
     /* —— Staff —— */
+    if (method === 'GET' && path.endsWith('/org/staff-join-requests')) {
+      const { platform, user } = await requireAuth(event, { readonly: true });
+      assertRole(user, STAFF_MANAGER_ROLES);
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const requests = listCompanyJoins(platform, user.orgId).map(publicJoinRow);
+      return json(200, { requests });
+    }
+
+    const joinDecision = path.match(/^\/org\/staff-join-requests\/([^/]+)\/(approve|reject)$/);
+    if (method === 'POST' && joinDecision) {
+      const { platform, user } = await requireAuth(event);
+      assertRole(user, STAFF_MANAGER_ROLES);
+      if (!user.orgId) return json(400, { message: 'Нет организации' });
+      const requestId = decodeURIComponent(joinDecision[1]);
+      const action = joinDecision[2];
+      const list = ensureJoinRequests(platform);
+      const idx = list.findIndex((row) => row.id === requestId);
+      if (idx < 0 || list[idx].orgId !== user.orgId) {
+        return json(404, { message: 'Заявка не найдена' });
+      }
+      const current = list[idx];
+      if (!canDecideStaffJoin(user, current)) {
+        return json(403, { message: 'Недостаточно прав' });
+      }
+      if (current.status !== 'pending') {
+        return json(409, { message: 'Заявка уже разобрана' });
+      }
+      const now = new Date().toISOString();
+      if (action === 'approve') {
+        const body = parseBody(schemas.staffJoinApprove, getBody(event) || {});
+        const role = body.role || current.role;
+        if (!isAssignableStaffRole(role)) {
+          return json(400, { message: 'Роль: менеджер, замерщик или монтажник' });
+        }
+        const userIdx = platform.users.findIndex((row) => row.id === current.userId);
+        if (userIdx < 0) return json(404, { message: 'Сотрудник не найден' });
+        const target = platform.users[userIdx];
+        if (target.orgId) return json(409, { message: 'Этот человек уже в компании' });
+        platform.users[userIdx] = {
+          ...target,
+          orgId: user.orgId,
+          role,
+          updatedAt: now,
+        };
+        list[idx] = decideStaffJoin(current, { status: 'approved', role, by: user.id, at: now });
+        pushActivity(platform, {
+          orgId: user.orgId,
+          userId: user.id,
+          login: user.login,
+          action: 'approve_staff_join',
+          detail: `${target.login} · ${role}`,
+        });
+        await savePlatform(platform);
+        return json(200, { request: publicJoinRow(list[idx]) });
+      }
+      const reason = parseBody(schemas.registrationReject, getBody(event) || {}).reason;
+      list[idx] = decideStaffJoin(current, { status: 'rejected', reason, by: user.id, at: now });
+      pushActivity(platform, {
+        orgId: user.orgId,
+        userId: user.id,
+        login: user.login,
+        action: 'reject_staff_join',
+        detail: `${current.login}${reason ? ` · ${reason}` : ''}`,
+      });
+      await savePlatform(platform);
+      return json(200, { request: publicJoinRow(list[idx]) });
+    }
+
     if (method === 'GET' && path.endsWith('/org/staff')) {
       const { platform, user } = await requireAuth(event, { readonly: true });
       assertRole(user, ['owner', 'sales']);

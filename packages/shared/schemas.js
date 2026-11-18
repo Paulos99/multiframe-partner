@@ -144,6 +144,54 @@ export function createSchemas(z) {
     reason: textOf(raw.reason).trim().replace(/\s+/g, ' ').slice(0, 300),
   }));
 
+  /**
+   * POST /auth/register-staff: сотрудник просит подключить его к компании.
+   * Компания выбирается по идентификатору из поиска, роль — только сотрудники.
+   */
+  const staffRegister = body().transform((raw, ctx) => {
+    const firstName = textOf(raw.firstName).trim().replace(/\s+/g, ' ');
+    const lastName = textOf(raw.lastName).trim().replace(/\s+/g, ' ');
+    const orgId = textOf(raw.orgId).trim();
+    const role = textOf(raw.role).trim();
+    const login = textOf(raw.login).trim();
+    const password = textOf(raw.password);
+    const passwordRepeat = textOf(raw.passwordRepeat);
+    const phone = textOf(raw.phone).trim().replace(/\s+/g, ' ');
+    if (!firstName) return issue(ctx, 'Укажите имя'), z.NEVER;
+    if (firstName.length > REGISTER_LIMITS.name) return issue(ctx, 'Имя слишком длинное'), z.NEVER;
+    if (!lastName) return issue(ctx, 'Укажите фамилию'), z.NEVER;
+    if (lastName.length > REGISTER_LIMITS.name) return issue(ctx, 'Фамилия слишком длинная'), z.NEVER;
+    if (!orgId) return issue(ctx, 'Выберите компанию из списка'), z.NEVER;
+    if (orgId.length > 80) return issue(ctx, 'Некорректная компания'), z.NEVER;
+    if (!STAFF_ASSIGNABLE_ROLES.includes(role)) return issue(ctx, 'Выберите роль: менеджер, замерщик или монтажник'), z.NEVER;
+    if (!login) return issue(ctx, 'Укажите логин'), z.NEVER;
+    if (login.length > REGISTER_LIMITS.login) return issue(ctx, 'Логин слишком длинный'), z.NEVER;
+    if (/\s/.test(login)) return issue(ctx, 'Логин без пробелов'), z.NEVER;
+    if (!password) return issue(ctx, 'Придумайте пароль'), z.NEVER;
+    if (password !== passwordRepeat) return issue(ctx, 'Пароли не совпадают'), z.NEVER;
+    if (phone.length > 40) return issue(ctx, 'Телефон слишком длинный'), z.NEVER;
+    return { firstName, lastName, orgId, role, login, password, phone, trap: textOf(raw[REGISTER_TRAP_FIELD]) };
+  });
+
+  /** POST /me/staff-join: новая заявка от уже созданной учётки (после отклонения). */
+  const staffJoinAgain = body().transform((raw, ctx) => {
+    const orgId = textOf(raw.orgId).trim();
+    const role = textOf(raw.role).trim();
+    if (!orgId) return issue(ctx, 'Выберите компанию из списка'), z.NEVER;
+    if (orgId.length > 80) return issue(ctx, 'Некорректная компания'), z.NEVER;
+    if (!STAFF_ASSIGNABLE_ROLES.includes(role)) return issue(ctx, 'Выберите роль: менеджер, замерщик или монтажник'), z.NEVER;
+    return { orgId, role };
+  });
+
+  /** POST /org/staff-join-requests/{id}/approve: роль можно поменять перед одобрением. */
+  const staffJoinApprove = body().transform((raw, ctx) => {
+    const role = textOf(raw.role).trim();
+    if (role && !STAFF_ASSIGNABLE_ROLES.includes(role)) {
+      return issue(ctx, 'Роль: менеджер, замерщик или монтажник'), z.NEVER;
+    }
+    return { role: role || '' };
+  });
+
   /** POST /admin/stp-managers. */
   const stpManagerCreate = credentials({ checkLength: false }).transform((value) => ({
     ...value,
@@ -290,6 +338,9 @@ export function createSchemas(z) {
     partnerCreate,
     ownerRegister,
     registrationReject,
+    staffRegister,
+    staffJoinAgain,
+    staffJoinApprove,
     stpManagerCreate,
     stpAdminCreate,
     staffCreate,

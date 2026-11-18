@@ -29,6 +29,7 @@ import { ToolsPanel } from './ToolsPanel';
 import { StpAdminsAdmin } from './StpAdminsAdmin';
 import { RegistrationRequests } from './RegistrationRequests';
 import { pendingRegistrations, registrationOf } from './registration';
+import { pendingStaffJoins } from './staffJoin';
 import { requestStaffAdd } from './staffAddRequest';
 import { StpManagersAdmin } from './StpManagersAdmin';
 import { FeedbackAdminPanel } from './feedback/FeedbackAdminPanel';
@@ -671,11 +672,17 @@ function OwnerCabinet({
     }
   }
 
+  const staffJoinCount = pendingStaffJoins(api.listStaffJoins()).length;
+  const companyLabel = staffJoinCount > 0 ? `Компания · ${staffJoinCount}` : 'Компания';
+  const openStaffJoins = () => {
+    navigateCompany('staff');
+    setTab('company');
+  };
   const ownerNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
-    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { navigateCompany('about', 'replace'); setTab('company'); } },
+    { id: 'company', label: companyLabel, active: tab === 'company', onSelect: () => { navigateCompany('about', 'replace'); setTab('company'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
@@ -836,6 +843,7 @@ function OwnerCabinet({
               navigateCompany('staff');
               setTab('company');
             }}
+            onOpenStaffJoins={openStaffJoins}
           />
         </TabPanel>
       ) : null}
@@ -912,11 +920,17 @@ function SalesCabinet({
   useFollowCompanyHash(showCompany);
   const openTarget = useOpenCalendarTarget(showProjects);
 
+  const staffJoinCount = pendingStaffJoins(api.listStaffJoins()).length;
+  const companyLabel = staffJoinCount > 0 ? `Компания · ${staffJoinCount}` : 'Компания';
+  const openStaffJoins = () => {
+    navigateCompany('staff');
+    setTab('company');
+  };
   const salesNav: SideItem[] = [
     { id: 'today', label: 'Сегодня', active: tab === 'today', onSelect: () => { leaveProjectHash(); setTab('today'); } },
     { id: 'projects', label: 'Проекты', active: tab === 'projects', onSelect: () => { navigateProject({ kind: 'desk' }, 'replace'); setTab('projects'); } },
     { id: 'tools', label: 'Инструменты', active: tab === 'tools', onSelect: () => { leaveProjectHash(); setTab('tools'); } },
-    { id: 'company', label: 'Компания', active: tab === 'company', onSelect: () => { navigateCompany('staff', 'replace'); setTab('company'); } },
+    { id: 'company', label: companyLabel, active: tab === 'company', onSelect: () => { navigateCompany('staff', 'replace'); setTab('company'); } },
     { id: 'analytics', label: 'Аналитика', active: tab === 'analytics', onSelect: () => { leaveProjectHash(); setTab('analytics'); } },
     { id: 'help', label: 'Обучение', active: tab === 'help', onSelect: () => { leaveProjectHash(); setTab('help'); } },
   ];
@@ -959,6 +973,7 @@ function SalesCabinet({
             onCalculator={onOpenCalc}
             onTraining={() => setTab('help')}
             onOpenLesson={(route) => openTrainerLesson(() => setTab('help'), route)}
+            onOpenStaffJoins={openStaffJoins}
           />
         </TabPanel>
       ) : null}

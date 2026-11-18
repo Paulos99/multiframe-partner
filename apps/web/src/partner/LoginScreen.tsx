@@ -81,7 +81,7 @@ export function LoginScreen({ notice }: { notice?: string } = {}) {
             </form>
             {remote ? (
               <div className={styles.divider}>
-                <p className={styles.hint}>Владелец компании и ещё нет кабинета?</p>
+                <p className={styles.hint}>Ещё нет кабинета?</p>
                 <button type="button" className={styles.linkButton} onClick={openRegister}>
                   Зарегистрироваться
                 </button>

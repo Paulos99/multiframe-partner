@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import { ActivationLinkButton } from './ActivationLinkButton';
 import { NewPasswordButton } from './NewPasswordButton';
 import { usePartner } from './PartnerContext';
+import { StaffJoinRequests } from './StaffJoinRequests';
 import { clearStaffAdd, peekStaffAdd } from './staffAddRequest';
 import { navigateCompany, navigateStaff, parseStaffHash, type StaffRoute } from './projectRoute';
 import styles from './partner.module.css';
@@ -186,6 +187,8 @@ export function StaffPanel() {
   }
 
   return (
+    <>
+    <StaffJoinRequests />
     <section className={`${styles.card} ${styles.panelCard}`}>
       <h2>Сотрудники</h2>
       <p className={styles.lead}>
@@ -260,5 +263,6 @@ export function StaffPanel() {
         {!api.staffLoading && !staff.length ? <p className={styles.lead}>Пока нет сотрудников</p> : null}
       </div>
     </section>
+    </>
   );
 }

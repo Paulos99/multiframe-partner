@@ -24,6 +24,8 @@ test('на входе глазок показывает и скрывает па
 
 test('на регистрации глазок есть у пароля и у повтора', async ({ page }) => {
   await page.goto('/#/register');
+  await expect(page.getByRole('heading', { name: 'Регистрация', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Владелец', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Регистрация компании' })).toBeVisible();
 
   const password = page.getByLabel('Пароль', { exact: true });
