@@ -81,6 +81,21 @@ async function scrollSettled(page: Page, target: ReturnType<Page['locator']>, bl
 const folderCard = (page: Page, name: string) =>
   page.locator('article[data-material-id]', { has: page.getByText(name, { exact: true }) });
 
+/**
+ * Обычный click() вызывает scrollIntoView. Меню закрывается на любой scroll
+ * (capture), пункт сразу отцепляется от DOM, и Playwright ждёт его 90 секунд.
+ * Если пункт уже в фокусе — подтверждаем Enter. Иначе force: без прокрутки.
+ */
+async function pickMenuItem(menu: ReturnType<Page['getByRole']>, name: string) {
+  const item = menu.getByRole('menuitem', { name });
+  await expect(item).toBeVisible();
+  if (await item.evaluate((el) => el === document.activeElement)) {
+    await item.press('Enter');
+    return;
+  }
+  await item.click({ force: true });
+}
+
 test('админ: правый клик по папке → «Удалить» → подтверждение → папки нет и после перезагрузки', async ({ page, request }) => {
   await seed(request);
   await enter(page, 'admin');
@@ -98,7 +113,7 @@ test('админ: правый клик по папке → «Удалить» �
   await scrollSettled(page, card);
   await card.click({ button: 'right' });
   await menuSettled(menu);
-  await menu.getByRole('menuitem', { name: 'Удалить' }).click();
+  await pickMenuItem(menu, 'Удалить');
   const dialog = page.getByRole('dialog', { name: 'Удалить папку «Старые инструкции»?' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Вместе с ней удалятся 2 файла и 1 вложенная папка.');
@@ -130,7 +145,7 @@ test('админ: правый клик по пустому месту → «С�
   await page.mouse.click(box.x + box.width / 2, box.y + box.height - 6, { button: 'right' });
   const menu = page.getByRole('menu', { name: 'Материалы' });
   await menuSettled(menu);
-  await menu.getByRole('menuitem', { name: 'Создать папку' }).click();
+  await pickMenuItem(menu, 'Создать папку');
   const input = page.getByLabel('Название папки');
   await expect(input).toBeFocused();
   await input.fill('Новая из меню');
