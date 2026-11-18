@@ -25,9 +25,18 @@
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …): длинные ответы не раздвигают сетку шире экрана. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   animation: fadeUp var(--duration-normal) var(--ease-out);
+}
+
+/* Очень узкий экран (эмуляция в F12, маленькие телефоны): ответы в одну колонку,
+   иначе страница шире экрана и нижняя панель с «Далее» уходит за край. */
+@media (max-width: 319px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

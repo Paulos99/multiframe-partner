@@ -88,6 +88,38 @@ export const STEM_SIDE_GAIN: Record<StemId, { before: number; after: number }> =
   talk: { before: 1, after: 1 },
 };
 
+/**
+ * Общая громкость всех звуков «До» и «После»: ×0,5 к исходному уровню (вдвое тише).
+ * Применяется одним множителем на выходе, поэтому разница «До/После» и поправки пылесоса сохраняются.
+ * Это усиление внутри Web Audio, а не audio.volume, — на iPhone оно тоже действует.
+ */
+export const PLAYBACK_LEVEL = 0.5;
+
+/**
+ * Громкость по типу шума, сверху на PLAYBACK_LEVEL, одинаково для «До» и «После» (разница сохраняется).
+ * Ударный и смешанный (в т.ч. пылесос) — ещё в 3 раза тише, воздушный и эхо — ещё на 30% тише.
+ */
+export const GROUP_LEVEL: Record<'air' | 'impact' | 'mixed' | 'echo', number> = {
+  air: 0.7,
+  impact: 1 / 3,
+  mixed: 1 / 3,
+  echo: 0.7,
+};
+
+/** Поправка только для одной стороны: воздушный «До» — ещё вдвое тише, «После» как было. */
+export const GROUP_SIDE_LEVEL: Partial<
+  Record<'air' | 'impact' | 'mixed' | 'echo', { before: number; after: number }>
+> = {
+  air: { before: 0.5, after: 1 },
+};
+
+export function groupLevel(
+  group: 'air' | 'impact' | 'mixed' | 'echo',
+  side: 'before' | 'after' = 'before',
+): number {
+  return (GROUP_LEVEL[group] ?? 1) * (GROUP_SIDE_LEVEL[group]?.[side] ?? 1);
+}
+
 export function stemSideGain(stemId: StemId, side: 'before' | 'after'): number {
   return (STEM_SIDE_GAIN[stemId] ?? STEM_SIDE_GAIN.music)[side];
 }

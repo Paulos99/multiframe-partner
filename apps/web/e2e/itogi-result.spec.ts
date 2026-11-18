@@ -58,9 +58,14 @@ const GONE_BUTTONS = [
   'Отправить КП',
 ];
 
-async function expectFullResult(page: Page, withSave: boolean) {
+// На телефоне «Рекомендации» и «Что такое MultiFrame» стоят отдельными блоками (свой порядок).
+const MOBILE_SECTIONS = SECTIONS.flatMap((name) =>
+  name === 'Рекомендации и продукт' ? ['Рекомендации', 'Что такое MultiFrame'] : [name],
+);
+
+async function expectFullResult(page: Page, withSave: boolean, mobile = false) {
   // Секции до/после должны стать видимыми (opacity 1), а не остаться прозрачными.
-  for (const name of SECTIONS) {
+  for (const name of mobile ? MOBILE_SECTIONS : SECTIONS) {
     const section = page.getByRole('region', { name, exact: true }).or(page.getByLabel(name, { exact: true })).first();
     await section.scrollIntoViewIfNeeded();
     await expect(section, name).toHaveCSS('opacity', '1', { timeout: 5000 });
@@ -156,7 +161,7 @@ test('Итог Проблемомера на телефоне: блоки вид
   await page.setViewportSize({ width: 390, height: 844 });
   await enter(page, 'owner');
   await walkToResult(page);
-  await expectFullResult(page, true);
+  await expectFullResult(page, true, true);
   await expectResultScrolls(page, 'wheel');
   await expectResultScrolls(page, 'touch');
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/mobile-owner-full.png`, fullPage: true });
