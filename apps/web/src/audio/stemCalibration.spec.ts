@@ -22,3 +22,11 @@ describe('громкость пылесоса «До» и «После»', () =>
     expect(MASTER_PLAYBACK_GAIN * stemSideGain('vacuum', 'before')).toBeCloseTo(0.496, 3);
   });
 });
+
+describe('общая громкость «До» и «После»', () => {
+  it('×0,7 одним множителем для всех звуков', async () => {
+    const { PLAYBACK_LEVEL } = await import('./stemCalibration');
+    expect(PLAYBACK_LEVEL).toBe(0.7);
+    expect(MASTER_PLAYBACK_GAIN).toBe(0.62);
+  });
+});

@@ -247,17 +247,19 @@ export function assertModelAnchors(): string[] {
       `afterGain should cut ≥ marketing-scaled dBA Δ (got ${shapeLoud.afterGainDb}, floor ${expectedAfter})`,
     );
   }
-  if (shapeLoud.afterGainDb > -7.5) {
-    errors.push(`air После should be clearly quieter on dry stems (got ${shapeLoud.afterGainDb})`);
+  // Воздушный «После»: мягче общий срез (−5…−8), но глуше по верхам — слышно, а не тишина.
+  if (shapeLoud.afterGainDb > -5 || shapeLoud.afterGainDb < -8) {
+    errors.push(`air После broadband cut should stay audible (−5…−8, got ${shapeLoud.afterGainDb})`);
   }
   if (shapeLoud.mufflingHzBefore > 2400) {
     errors.push(
       `До muffling too open for dry stems (${shapeLoud.mufflingHzBefore} Hz)`,
     );
   }
-  if (Math.abs(shapeLoud.mufflingHzAfter - shapeLoud.mufflingHzBefore) > 1) {
+  // Воздушный «После» звучит глуше «До»: фильтр верхних частот ниже, никогда не ярче.
+  if (shapeLoud.mufflingHzAfter >= shapeLoud.mufflingHzBefore) {
     errors.push(
-      `После muffling should match До timbre (${shapeLoud.mufflingHzBefore} → ${shapeLoud.mufflingHzAfter})`,
+      `air После should be more muffled than До (${shapeLoud.mufflingHzBefore} → ${shapeLoud.mufflingHzAfter})`,
     );
   }
   if (shapeLoud.deltaEqDb.some((d) => d > 0.05)) {

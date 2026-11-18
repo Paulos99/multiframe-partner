@@ -4,9 +4,10 @@ import { impulseToAudioBuffer } from './reverbImpulse';
 import {
   keyBandHz,
   MASTER_PLAYBACK_GAIN,
+  PLAYBACK_LEVEL,
+  stemSideGain,
   STEM_CALIBRATION,
   stemIdFromSrc,
-  stemSideGain,
   type StemId,
 } from './stemCalibration';
 import type { RoomAudioShape } from './roomAudioShape';
@@ -34,9 +35,116 @@ function prefersReducedMotion(): boolean {
   );
 }
 
+type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
+type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
+
 function getCtx(): AudioContext {
-  if (!sharedCtx) sharedCtx = new AudioContext();
+  if (!sharedCtx) {
+    // iOS < 14.5 знает только webkitAudioContext.
+    const Ctor = window.AudioContext ?? (window as WebkitWindow).webkitAudioContext;
+    sharedCtx = new Ctor!();
+  }
   return sharedCtx;
+}
+
+/**
+ * iPhone: Web Audio по умолчанию молчит при включённом беззвучном режиме (переключатель сбоку).
+ * 1) Safari 16.4+/iOS 17+: audioSession.type = 'playback' — звук идёт как у видео, без учёта переключателя.
+ * 2) Старые iOS: параллельно играем беззвучный <audio> по кругу — это переводит сессию страницы
+ *    в режим воспроизведения, и Web Audio тоже перестаёт глушиться. Громкость и обработка
+ *    «До/После» не меняются: сам звук по-прежнему идёт через Web Audio.
+ * Вызывать синхронно в обработчике нажатия.
+ */
+function setPlaybackSession(): void {
+  try {
+    const session = (navigator as AudioSessionNavigator).audioSession;
+    if (session && session.type !== 'playback') session.type = 'playback';
+  } catch {
+    /* ignore */
+  }
+}
+
+let silentTag: HTMLAudioElement | null = null;
+
+function silentWavDataUri(): string {
+  // 0.5 с тишины, 8 кГц, моно, 8 бит (тишина = 128).
+  const rate = 8000;
+  const n = rate / 2;
+  const bytes = new Uint8Array(44 + n);
+  const view = new DataView(bytes.buffer);
+  const str = (o: number, t: string) => {
+    for (let i = 0; i < t.length; i++) bytes[o + i] = t.charCodeAt(i);
+  };
+  str(0, 'RIFF');
+  view.setUint32(4, 36 + n, true);
+  str(8, 'WAVE');
+  str(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  str(36, 'data');
+  view.setUint32(40, n, true);
+  bytes.fill(128, 44);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  return `data:audio/wav;base64,${btoa(bin)}`;
+}
+
+function startSilentTag(): void {
+  if (typeof document === 'undefined') return;
+  try {
+    if (!silentTag) {
+      const tag = document.createElement('audio');
+      tag.setAttribute('x-webkit-airplay', 'deny');
+      tag.setAttribute('playsinline', '');
+      (tag as HTMLAudioElement & { disableRemotePlayback?: boolean }).disableRemotePlayback = true;
+      tag.preload = 'auto';
+      tag.loop = true;
+      tag.src = silentWavDataUri();
+      silentTag = tag;
+    }
+    if (silentTag.paused) void silentTag.play().catch(() => undefined);
+  } catch {
+    /* ignore */
+  }
+}
+
+function stopSilentTag(): void {
+  try {
+    if (silentTag && !silentTag.paused) silentTag.pause();
+  } catch {
+    /* ignore */
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopSilentTag();
+  });
+}
+
+/** Синхронно в жесте: режим воспроизведения + запуск контекста (в т.ч. из 'interrupted'). */
+function unlockInGesture(ctx: AudioContext): Promise<void> | null {
+  setPlaybackSession();
+  startSilentTag();
+  if (ctx.state === 'running') return null;
+  try {
+    return ctx.resume().catch(() => undefined);
+  } catch {
+    return null;
+  }
+}
+
+function decode(ctx: AudioContext, raw: ArrayBuffer): Promise<AudioBuffer> {
+  // Старый WebKit поддерживает только форму с колбэками.
+  return new Promise((resolve, reject) => {
+    const p = ctx.decodeAudioData(raw, resolve, reject);
+    if (p && typeof p.then === 'function') p.then(resolve, reject);
+  });
 }
 
 function dbToGain(db: number): number {
@@ -60,7 +168,7 @@ function playStub(
 ): () => void {
   const now = ctx.currentTime;
   const master = ctx.createGain();
-  master.gain.value = DEMO_CONTRAST.master;
+  master.gain.value = DEMO_CONTRAST.master * PLAYBACK_LEVEL;
   master.connect(ctx.destination);
   const duration = scene === 'steps' ? 2.4 : 2.8;
   const isAfter = kind === 'after';
@@ -151,7 +259,7 @@ async function loadBuffer(ctx: AudioContext, url: string): Promise<AudioBuffer> 
     const res = await fetch(url, { cache: 'force-cache' });
     if (!res.ok) throw new Error(`audio fetch ${res.status}`);
     const raw = await res.arrayBuffer();
-    const buf = await ctx.decodeAudioData(raw.slice(0));
+    const buf = await decode(ctx, raw.slice(0));
     bufferCache.set(url, buf);
     pendingLoads.delete(url);
     return buf;
@@ -181,7 +289,8 @@ export function preloadDemoAudio(urls: readonly string[]): Promise<void> {
 /** Unlock AudioContext on a user gesture (e.g. «Пропустить» на расчёте). */
 export function unlockDemoAudio(): void {
   const ctx = getCtx();
-  if (ctx.state === 'suspended') void ctx.resume();
+  setPlaybackSession();
+  if (ctx.state !== 'running') void ctx.resume().catch(() => undefined);
 }
 
 type Chain = {
@@ -320,7 +429,7 @@ function roomProcess(
 
   const limiter = softLimiter(ctx);
   const ceiling = ctx.createGain();
-  ceiling.gain.value = MASTER_PLAYBACK_GAIN * stemSideGain(stemId, opts.side);
+  ceiling.gain.value = MASTER_PLAYBACK_GAIN * stemSideGain(stemId, isAfter ? 'after' : 'before');
 
   // trim → muffler×2 → room → after → EQ → split dry/wet → merge → limiter
   trim.connect(muffler1);
@@ -393,7 +502,7 @@ function playStem(
   src.buffer = buffer;
 
   const master = ctx.createGain();
-  master.gain.value = 1;
+  master.gain.value = PLAYBACK_LEVEL;
   master.connect(ctx.destination);
 
   let teardownProcess: (() => void) | null = null;
@@ -473,6 +582,7 @@ export function useDemoPlayer() {
 
   const stop = useCallback(() => {
     generationRef.current += 1;
+    if (stopRef.current || activeIdRef.current) stopSilentTag();
     stopRef.current?.();
     stopRef.current = null;
     clearRaf();
@@ -491,15 +601,13 @@ export function useDemoPlayer() {
       stopRef.current = null;
       clearRaf();
 
-      const stub = parseStubSrc(src);
       const ctx = getCtx();
-      // Resume only if needed; already-running ctx keeps clicks instant.
-      if (ctx.state === 'suspended') {
-        try {
-          await ctx.resume();
-        } catch {
-          /* ignore — play may still work after next gesture */
-        }
+      // Всё до первого await выполняется внутри нажатия — iOS требует этого для звука.
+      const resuming = unlockInGesture(ctx);
+      const stub = parseStubSrc(src);
+      if (resuming) {
+        // Не ждём вечно: на iOS resume() из 'interrupted' может зависнуть.
+        await Promise.race([resuming, new Promise((r) => setTimeout(r, 600))]);
       }
       if (gen !== generationRef.current) return;
 
@@ -507,6 +615,7 @@ export function useDemoPlayer() {
         if (gen !== generationRef.current) return;
         if (activeIdRef.current !== id) return;
         clearRaf();
+        stopSilentTag();
         activeIdRef.current = null;
         setActiveId(null);
         setProgress(0);
@@ -553,6 +662,7 @@ export function useDemoPlayer() {
         stopRef.current = playStem(ctx, buffer, src, opts, clearUiIfMine);
       } catch {
         if (gen !== generationRef.current) return;
+        stopSilentTag();
         activeIdRef.current = null;
         setActiveId(null);
         setProgress(0);
