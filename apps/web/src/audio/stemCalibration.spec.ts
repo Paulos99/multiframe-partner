@@ -22,3 +22,24 @@ describe('громкость пылесоса «До» и «После»', () =>
     expect(MASTER_PLAYBACK_GAIN * stemSideGain('vacuum', 'before')).toBeCloseTo(0.496, 3);
   });
 });
+
+describe('общая громкость «До» и «После»', () => {
+  it('×0,5 одним множителем для всех звуков', async () => {
+    const { PLAYBACK_LEVEL } = await import('./stemCalibration');
+    expect(PLAYBACK_LEVEL).toBe(0.5);
+    expect(MASTER_PLAYBACK_GAIN).toBe(0.62);
+  });
+});
+
+describe('громкость по типу шума', () => {
+  it('ударный и смешанный ×1/3, воздушный «До» ×0,35 и «После» ×0,7, эхо ×0,7', async () => {
+    const { groupLevel } = await import('./stemCalibration');
+    for (const side of ['before', 'after'] as const) {
+      expect(groupLevel('impact', side)).toBeCloseTo(1 / 3, 6);
+      expect(groupLevel('mixed', side)).toBeCloseTo(1 / 3, 6);
+      expect(groupLevel('echo', side)).toBe(0.7);
+    }
+    expect(groupLevel('air', 'after')).toBe(0.7);
+    expect(groupLevel('air', 'before')).toBe(0.35);
+  });
+});

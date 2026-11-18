@@ -68,7 +68,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  padding: 22px 14px 22px 20px;
+  padding: 14px 14px 14px 18px;
   min-width: 6.5rem;
   max-width: 7.25rem;
   border-right: 1px solid rgba(255, 255, 255, 0.12);
@@ -83,19 +83,19 @@
 
 .objectSpecGrid {
   margin: 0;
-  padding: 14px 14px 14px 6px;
+  padding: 10px 10px 10px 4px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
 }
 
 .objectSpecGrid div {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
-  padding: 12px 12px;
-  border-radius: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(6px);
@@ -1439,7 +1439,7 @@
   }
 
   .objectSpecGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
 }
 
@@ -1469,11 +1469,11 @@
   .objectSpecLabel {
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    padding: 16px 18px 12px 22px;
+    padding: 12px 16px 8px 18px;
   }
 
   .objectSpecGrid {
-    padding: 12px 14px 16px;
+    padding: 8px 12px 12px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1564,24 +1564,29 @@
     flex-direction: row;
     align-items: baseline;
     gap: 8px;
-    padding: 14px 14px 10px;
+    padding: 10px 12px 6px;
     min-width: 0;
     max-width: none;
   }
 
   .objectSpecLabel strong {
-    font-size: 16px;
+    font-size: 15px;
   }
 
   .objectSpecGrid {
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    padding: 0 12px 12px;
+    gap: 5px;
+    padding: 6px 10px 10px;
   }
 
   .objectSpecGrid div {
-    padding: 10px 10px;
-    border-radius: 10px;
+    padding: 6px 9px;
+    border-radius: 9px;
+  }
+
+  /* Длинное «Перекрытие» — на всю ширину, остальное парами. */
+  .objectSpecGrid div:first-child {
+    grid-column: 1 / -1;
   }
 
   .objectSpecGrid dd {
@@ -1665,10 +1670,6 @@
 
 @media (max-width: 420px) {
   .kpiRow {
-    grid-template-columns: 1fr;
-  }
-
-  .objectSpecGrid {
     grid-template-columns: 1fr;
   }
 
