@@ -97,17 +97,27 @@ export const PLAYBACK_LEVEL = 0.5;
 
 /**
  * Громкость по типу шума, сверху на PLAYBACK_LEVEL, одинаково для «До» и «После» (разница сохраняется).
- * Ударный и смешанный (в т.ч. пылесос) — ещё в 3 раза тише, воздушный — ещё на 30% тише. Эхо без изменений.
+ * Ударный и смешанный (в т.ч. пылесос) — ещё в 3 раза тише, воздушный и эхо — ещё на 30% тише.
  */
 export const GROUP_LEVEL: Record<'air' | 'impact' | 'mixed' | 'echo', number> = {
   air: 0.7,
   impact: 1 / 3,
   mixed: 1 / 3,
-  echo: 1,
+  echo: 0.7,
 };
 
-export function groupLevel(group: 'air' | 'impact' | 'mixed' | 'echo'): number {
-  return GROUP_LEVEL[group] ?? 1;
+/** Поправка только для одной стороны: воздушный «До» — ещё вдвое тише, «После» как было. */
+export const GROUP_SIDE_LEVEL: Partial<
+  Record<'air' | 'impact' | 'mixed' | 'echo', { before: number; after: number }>
+> = {
+  air: { before: 0.5, after: 1 },
+};
+
+export function groupLevel(
+  group: 'air' | 'impact' | 'mixed' | 'echo',
+  side: 'before' | 'after' = 'before',
+): number {
+  return (GROUP_LEVEL[group] ?? 1) * (GROUP_SIDE_LEVEL[group]?.[side] ?? 1);
 }
 
 export function stemSideGain(stemId: StemId, side: 'before' | 'after'): number {

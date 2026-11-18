@@ -430,7 +430,7 @@ function roomProcess(
 
   const limiter = softLimiter(ctx);
   const ceiling = ctx.createGain();
-  ceiling.gain.value = MASTER_PLAYBACK_GAIN * stemSideGain(stemId, isAfter ? 'after' : 'before') * groupLevel(opts.group);
+  ceiling.gain.value = MASTER_PLAYBACK_GAIN * stemSideGain(stemId, isAfter ? 'after' : 'before') * groupLevel(opts.group, isAfter ? 'after' : 'before');
 
   // trim → muffler×2 → room → after → EQ → split dry/wet → merge → limiter
   trim.connect(muffler1);

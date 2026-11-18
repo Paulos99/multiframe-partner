@@ -32,11 +32,14 @@ describe('общая громкость «До» и «После»', () => {
 });
 
 describe('громкость по типу шума', () => {
-  it('ударный и смешанный ×1/3, воздушный ×0,7, эхо ×1', async () => {
+  it('ударный и смешанный ×1/3, воздушный «До» ×0,35 и «После» ×0,7, эхо ×0,7', async () => {
     const { groupLevel } = await import('./stemCalibration');
-    expect(groupLevel('impact')).toBeCloseTo(1 / 3, 6);
-    expect(groupLevel('mixed')).toBeCloseTo(1 / 3, 6);
-    expect(groupLevel('air')).toBe(0.7);
-    expect(groupLevel('echo')).toBe(1);
+    for (const side of ['before', 'after'] as const) {
+      expect(groupLevel('impact', side)).toBeCloseTo(1 / 3, 6);
+      expect(groupLevel('mixed', side)).toBeCloseTo(1 / 3, 6);
+      expect(groupLevel('echo', side)).toBe(0.7);
+    }
+    expect(groupLevel('air', 'after')).toBe(0.7);
+    expect(groupLevel('air', 'before')).toBe(0.35);
   });
 });
