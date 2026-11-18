@@ -8,6 +8,9 @@ export interface Schemas {
   partnerCreate: RequestSchema;
   ownerRegister: RequestSchema;
   registrationReject: RequestSchema;
+  staffRegister: RequestSchema;
+  staffJoinAgain: RequestSchema;
+  staffJoinApprove: RequestSchema;
   stpManagerCreate: RequestSchema;
   stpAdminCreate: RequestSchema;
   staffCreate: RequestSchema;

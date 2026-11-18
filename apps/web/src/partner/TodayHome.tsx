@@ -12,6 +12,7 @@ import { usePartner } from './PartnerContext';
 import { groupRoomsByProjectStage, nearestFlat, openRoomsForRole } from './todayNearest';
 import { TodayTrainingCard } from './TodayTrainingCard';
 import { pendingRegistrations } from './registration';
+import { pendingStaffJoins } from './staffJoin';
 import type { TrainerRoute } from '../trainer/route';
 import styles from './partner.module.css';
 
@@ -41,6 +42,7 @@ export function TodayHome({
   onAddPartner,
   onAddManager,
   onOpenRequests,
+  onOpenStaffJoins,
 }: {
   onOpenRoom?: (id: string) => void;
   onProjects?: () => void;
@@ -54,6 +56,8 @@ export function TodayHome({
   onAddManager?: () => void;
   /** Админ StP: перейти к новым заявкам на регистрацию. */
   onOpenRequests?: () => void;
+  /** Владелец и менеджер: заявки сотрудников на подключение. */
+  onOpenStaffJoins?: () => void;
 }) {
   const api = usePartner();
   const user = api.user!;
@@ -105,6 +109,7 @@ export function TodayHome({
   const staff = role === 'owner' ? api.partnerListStaff() : [];
   const needsManager =
     role === 'owner' && Boolean(onAddManager) && !(api.staffLoading && !staff.length) && !staff.some((p) => p.role === 'sales');
+  const staffJoins = role === 'owner' || role === 'sales' ? pendingStaffJoins(api.listStaffJoins()) : [];
   const named = Boolean(greetingName(user.displayName));
 
   return (
@@ -153,7 +158,29 @@ export function TodayHome({
         </section>
       ) : null}
 
+
+      {staffJoins.length && onOpenStaffJoins ? (
+        <section className={`${styles.todayLesson} ${styles.todayAttention}`} aria-label="Заявки на подключение" data-testid="today-staff-joins">
+          <div className={styles.todayLessonRemind}>
+            <div className={styles.todayLessonBody}>
+              <strong>Заявки на подключение: {staffJoins.length}</strong>
+              <span>
+                {staffJoins
+                  .slice(0, 3)
+                  .map((row) => row.displayName)
+                  .join(', ')}
+                {staffJoins.length > 3 ? ' и другие' : ''}. Люди ждут, пока их добавят в компанию.
+              </span>
+            </div>
+            <button type="button" className={styles.primary} onClick={onOpenStaffJoins}>
+              Разобрать заявки
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {needsManager ? (
+
         <section className={`${styles.todayLesson} ${styles.todayAttention}`} aria-label="Первый шаг: менеджер" data-testid="today-add-manager">
           <div className={styles.todayLessonRemind}>
             <div className={styles.todayLessonBody}>

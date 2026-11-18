@@ -45,3 +45,12 @@ https://partner.stp-multiframe.ru/cabinet/#/register
 У компаний, заведённых админом, поля нет: для них ничего не меняется. Журнал действий: `register_owner`, `approve_registration`, `reject_registration`, `register_trap` (сработала ловушка).
 
 Код: `apps/api/registration.js`, маршруты в `apps/api/index.js`; интерфейс — `RegisterScreen.tsx`, `RegistrationRequests.tsx`, `registration.ts`. Проверки: `apps/api/registration.test.js`, `apps/web/src/partner/registration.spec.ts`, `apps/web/e2e/owner-registration.spec.ts`.
+
+
+## Регистрация сотрудника
+
+На той же странице `#/register` человек сначала выбирает роль. Для владельца форма не меняется. Для менеджера, замерщика и монтажника открывается другая форма: компания ищется по названию (как город), без полного списка. Если подходящих нет, показывается «Компания не зарегистрирована».
+
+После отправки создаётся учётка и заявка на подключение. В компанию человек не попадает, пока владелец или менеджер не нажмёт «Одобрить» в разделе «Компания → Сотрудники». До решения при входе показывается «Заявка на рассмотрении», после отклонения — «Заявка отклонена». Можно отправить новую заявку.
+
+Код: `apps/api/staffJoin.js`, маршруты в `apps/api/index.js`; интерфейс — `RegisterScreen.tsx`, `CompanyField.tsx`, `StaffJoinRequests.tsx`, `JoinStatusScreen.tsx`. Проверки: `apps/api/staffJoin.test.js`, `apps/web/src/partner/staffJoin.spec.ts`, `apps/web/e2e/staff-join.spec.ts`.

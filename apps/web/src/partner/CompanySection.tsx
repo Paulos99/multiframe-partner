@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { StaffPanel } from './StaffPanel';
+import { usePartner } from './PartnerContext';
+import { pendingStaffJoins } from './staffJoin';
 import {
   isLegacyStaffList,
   navigateCompany,
@@ -26,7 +28,7 @@ function readPerson(): boolean {
 }
 
 /** Вкладки компании: выбранная подсвечивается плавно переезжающей подложкой. */
-function CompanyTabs({ tab }: { tab: CompanyTab }) {
+function CompanyTabs({ tab, joinCount }: { tab: CompanyTab; joinCount: number }) {
   const { boxRef, pillRef } = useSlidingPill(tab);
   return (
     <div className={styles.tabs} role="tablist" aria-label="Разделы компании" ref={boxRef}>
@@ -40,7 +42,7 @@ function CompanyTabs({ tab }: { tab: CompanyTab }) {
           aria-selected={tab === id}
           onClick={() => navigateCompany(id, 'replace')}
         >
-          {label}
+          {id === 'staff' && joinCount > 0 ? `${label} · ${joinCount}` : label}
         </button>
       ))}
     </div>
@@ -52,6 +54,7 @@ function CompanyTabs({ tab }: { tab: CompanyTab }) {
  * Карточка сотрудника (#staff/<id>) открывается страницей в той же основной части.
  */
 export function CompanySection({ about }: { about: ReactNode }) {
+  const joinCount = pendingStaffJoins(usePartner().listStaffJoins()).length;
   const [tab, setTab] = useState<CompanyTab>(readTab);
   const [person, setPerson] = useState(readPerson);
 
@@ -84,7 +87,7 @@ export function CompanySection({ about }: { about: ReactNode }) {
           <p className={styles.lead}>Данные и прайс компании, команда.</p>
         </div>
       </header>
-      <CompanyTabs tab={tab} />
+      <CompanyTabs tab={tab} joinCount={joinCount} />
       <div className={styles.pageBody}>{tab === 'staff' ? <StaffPanel /> : about}</div>
     </section>
   );

@@ -160,6 +160,13 @@ export type SessionUser = {
   org: OrgSettings | null;
   /** Только у владельца компании, зарегистрированной самостоятельно: статус заявки в StP. */
   registration?: { status: 'pending' | 'approved' | 'rejected'; reason?: string } | null;
+  /** Заявка сотрудника на подключение: кабинет закрыт, пока её не одобрят. */
+  staffJoin?: {
+    status: 'pending' | 'rejected';
+    role?: UserRole | string;
+    companyName?: string;
+    reason?: string;
+  } | null;
   /** Первый вход: показать окно с обучающим видео роли. Сервер снимает флаг после POST /me/welcome-video. */
   welcomeVideoPending?: boolean;
 };

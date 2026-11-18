@@ -54,6 +54,8 @@ async function register(page: Page, login: string, shots: { prefix: string } | n
   await page.goto('/');
   await page.getByRole('button', { name: 'Зарегистрироваться', exact: true }).click();
   await expect(page).toHaveURL(/#\/register$/);
+  await expect(page.getByRole('heading', { name: 'Регистрация', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Владелец', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Регистрация компании' })).toBeVisible();
   if (shots) await shoot(page, `${shots.prefix}-1-form`);
   // Занятый логин — понятная ошибка, форма остаётся заполненной.

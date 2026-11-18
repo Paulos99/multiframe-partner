@@ -205,3 +205,45 @@
   gap: 2px;
   text-align: center;
 }
+
+.roles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.roleBtn,
+.roleBtnOn {
+  min-height: var(--touch-min);
+  padding: 10px 12px;
+  border: 1px solid var(--cab-border-strong);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-field);
+  color: inherit;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.roleBtnOn {
+  border-color: var(--cab-accent);
+  background: var(--cab-accent-softer);
+}
+
+.roleBtn:focus-visible,
+.roleBtnOn:focus-visible {
+  outline: 2px solid var(--cab-accent);
+  outline-offset: 2px;
+}
+
+.field select {
+  width: 100%;
+  min-height: var(--touch-min);
+  padding: 10px 12px;
+  border: 1px solid var(--cab-border-strong);
+  border-radius: var(--cab-radius-md);
+  background: var(--cab-field);
+  font-size: 16px;
+  font-weight: 500;
+}

@@ -74,6 +74,14 @@ import { withDemoDocuments } from './demoDocuments';
 import { isDemoModeEnabled } from './demoMode';
 import { allowDeviceLogin } from './loginFallback';
 import { apiDecideRegistration, apiRegister, type OrgRegistration, type RegisterForm } from './registration';
+import {
+  apiDecideStaffJoin,
+  apiListStaffJoins,
+  apiRegisterStaff,
+  apiSubmitStaffJoin,
+  type StaffJoinForm,
+  type StaffJoinRequest,
+} from './staffJoin';
 import { useOfflineMaterialsAutoSync } from './offlineAutoSync';
 import {
   bootstrapHistoryReset,
@@ -245,6 +253,16 @@ type PartnerApi = {
   adminDecideRegistration: (partnerUserId: string, decision: 'approve' | 'reject', reason?: string) => Promise<void>;
   /** Регистрация владельца со страницы #/register: кабинет создаётся и сразу открывается. */
   registerOwner: (form: RegisterForm) => Promise<void>;
+  /** Регистрация сотрудника: создаётся заявка, кабинет закрыт до одобрения. */
+  registerStaff: (form: StaffJoinForm) => Promise<void>;
+  /** Новая заявка от учётки, чью предыдущую заявку отклонили. */
+  submitStaffJoin: (orgId: string, role: UserRole) => Promise<void>;
+  listStaffJoins: () => StaffJoinRequest[];
+  decideStaffJoin: (
+    requestId: string,
+    decision: 'approve' | 'reject',
+    options?: { role?: UserRole; reason?: string },
+  ) => Promise<void>;
   adminActivity: () => ActivityEvent[];
   partnerCreateStaff: (input: {
     login: string;
@@ -357,6 +375,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [calculations, setCalculations] = useState<CachedCalculation[]>([]);
   const [authHold, setAuthHold] = useState(false);
   const [staffCache, setStaffCache] = useState<StaffMember[]>([]);
+  const [staffJoinCache, setStaffJoinCache] = useState<StaffJoinRequest[]>([]);
   const [calcRequest, setCalcRequest] = useState<{ objectId: string | null; nonce: number; areaM2?: number | null } | null>(
     null,
   );
@@ -857,6 +876,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
     setProjectsError(null);
     setProjectsUnavailable(false);
     setStaffCache([]);
+    setStaffJoinCache([]);
     setCalculations([]);
   }, [user, remote]);
 
@@ -976,8 +996,59 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       setObjects([]);
       setProjects([]);
       setStaffCache([]);
+    setStaffJoinCache([]);
       await rememberSession({ token: loadToken(), apiBase: apiBase(), userId: res.user.id });
       trackPartnerAnalytics({ tool: 'cabinet', action: 'login' });
+    },
+    [user, remote],
+  );
+
+  const registerStaff = useCallback(
+    async (form: StaffJoinForm) => {
+      if (!remote) throw new Error('Регистрация работает только на рабочем сервисе');
+      setError(null);
+      if (user) {
+        void apiLogout();
+        localLogout(user);
+      }
+      const res = await apiRegisterStaff(form);
+      saveSession(res.user);
+      setLocalOnlySession(false);
+      setUser(res.user);
+      setAuthHold(false);
+      setObjects([]);
+      setProjects([]);
+      setStaffCache([]);
+      setStaffJoinCache([]);
+      await rememberSession({ token: loadToken(), apiBase: apiBase(), userId: res.user.id });
+    },
+    [user, remote],
+  );
+
+  const submitStaffJoin = useCallback(
+    async (orgId: string, role: UserRole) => {
+      if (!remote) throw new Error('Регистрация работает только на рабочем сервисе');
+      const next = await apiSubmitStaffJoin(orgId, role);
+      saveSession(next);
+      setUser(next);
+    },
+    [remote],
+  );
+
+  const decideStaffJoin = useCallback(
+    async (requestId: string, decision: 'approve' | 'reject', options: { role?: UserRole; reason?: string } = {}) => {
+      if (!user) throw new Error('Нет сессии');
+      if (!(remote && loadToken())) throw new Error('Заявки разбираются только на сервере');
+      await apiDecideStaffJoin(requestId, decision, options);
+      setStaffJoinCache(await apiListStaffJoins());
+      if (decision === 'approve') {
+        try {
+          setStaffCache(await apiListStaff());
+        } catch {
+          /* список сотрудников обновится при следующем заходе */
+        }
+      }
+      setTick((n) => n + 1);
     },
     [user, remote],
   );
@@ -1123,7 +1194,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         setStaffLoading(true);
         void apiListStaff().then(list=>{if(!cancelled)setStaffCache(list);})
           .catch(()=>{}).finally(()=>{if(!cancelled)setStaffLoading(false);});
+        void apiListStaffJoins().then(list=>{if(!cancelled)setStaffJoinCache(list);}).catch(()=>{});
       } else if(user.orgId) setStaffCache(listStaffForOrg(user.orgId));
+    } else {
+      setStaffJoinCache([]);
     }
     if(user.role==='admin') {
       if(remote&&loadToken()) {
@@ -1466,6 +1540,10 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminDeletePartner,
       adminDecideRegistration,
       registerOwner,
+      registerStaff,
+      submitStaffJoin,
+      listStaffJoins: () => staffJoinCache,
+      decideStaffJoin,
       adminUpdatePartnerCity,
       adminListPartners: () => (remote ? partnersCache : listPartners()),
       adminActivity: () => listActivity(),
@@ -1565,6 +1643,9 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       adminDeletePartner,
       adminDecideRegistration,
       registerOwner,
+      registerStaff,
+      submitStaffJoin,
+      decideStaffJoin,
       adminUpdatePartnerCity,
       partnerCreateStaff,
       partnerResetStaffPassword,
@@ -1605,6 +1686,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
       refresh,
       tick,
       staffCache,
+      staffJoinCache,
       partnersCache,
     ],
   );
