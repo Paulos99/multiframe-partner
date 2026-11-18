@@ -6,12 +6,24 @@ const API = 'http://127.0.0.1:4181';
 const fixturePassword = 'ui-fixture-password-only';
 const staffPassword = 'Staff-Join-2026';
 const nav = (page: Page) => page.getByRole('complementary', { name: 'Разделы кабинета' });
-const OUT = process.env.STAFF_JOIN_SHOT_DIR || '/workspace/mfp-shots';
-const shoot = (page: Page, name: string) =>
-  page.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: (page.viewportSize()?.width ?? 1440) >= 720 });
+/** Кадры для Павла на боксе; в CI каталога нет — съёмку пропускаем, тест идёт дальше. */
+function shotDir(): string | null {
+  const dest = process.env.STAFF_JOIN_SHOT_DIR || '/workspace/mfp-shots';
+  try {
+    fs.mkdirSync(dest, { recursive: true });
+    fs.accessSync(dest, fs.constants.W_OK);
+    return dest;
+  } catch {
+    return null;
+  }
+}
+const shoot = (page: Page, name: string) => {
+  const dest = shotDir();
+  if (!dest) return Promise.resolve();
+  return page.screenshot({ path: path.join(dest, `${name}.png`), fullPage: (page.viewportSize()?.width ?? 1440) >= 720 });
+};
 
 test.beforeEach(async ({ request }) => {
-  fs.mkdirSync(OUT, { recursive: true });
   await request.post(`${API}/__reset`);
 });
 
